@@ -6,23 +6,22 @@
 Server: 65.109.65.169
 Role: Codestra Application Server A
 Repository: appolon1908-hue/Middleware-
-Target checkout: /srv/codestra-middleware/repository
+Read-only checkout: /srv/codestra-middleware/repository
 Deployment account: middleware-deploy
 ```
 
-The middleware shares this host with Odoo and related Codestra services. Every discovery and deployment command must be scoped to the exact middleware Compose project and service names. Never restart the entire Docker host or an entire shared Compose project merely to deploy the middleware.
+The middleware shares this host with Odoo, n8n, PostgreSQL, Redis, Keycloak, Caddy, Kong, and related Codestra services. Discovery and deployment must target the exact middleware Compose project and service names. Never restart the entire Docker host or a shared Compose project merely to deploy this application.
 
 ## Mandatory safety boundary
 
 The repository is currently public. Change it to **private** before importing live source or operational configuration.
 
-GitHub is the source of truth for application code, workers, migrations, tests, Dockerfiles, non-secret Compose templates, and documentation. Keep these outside Git:
+Git may contain application code, workers, migrations, tests, Dockerfiles, non-secret Compose templates, workflow exports without credentials, and operational documentation. Keep these outside Git:
 
-- `.env` and live Compose override files;
-- database, Redis, outbox, inbox, queue, dead-letter, or webhook payload data;
-- Keycloak, Odoo, n8n, VICIdial, Kong, Caddy, SMTP, SMS, provider, or database credentials;
-- TLS certificates and private keys;
-- customer or agent personally identifiable information;
+- live `.env` or Compose override files;
+- database, Redis, outbox, inbox, queue, dead-letter, webhook, or customer data;
+- Keycloak, Odoo, n8n, VICIdial, Kong, Caddy, SMS, email, provider, or database credentials;
+- private keys, private-key bundles, and live certificates;
 - production logs, packet captures, backups, and secret-bearing evidence.
 
 A Git rollback cannot reverse a database migration, an externally delivered event, or a consumed queue message. Data-changing releases require matching recovery points and tested rollback procedures.
@@ -38,14 +37,14 @@ feature branch
   -> build image once for exact commit SHA
   -> publish immutable image digest
   -> deploy digest to staging with all external writes disabled
-  -> run smoke, replay, idempotency, cross-system, and rollback tests
+  -> run smoke, replay, idempotency, integration, and rollback tests
   -> explicit production approval
   -> deploy the identical accepted image digest to production
 ```
 
 Do not deploy a mutable branch, `latest` tag, locally edited checkout, or image rebuilt after staging acceptance.
 
-## 1. Change repository visibility
+## 1. Make the repository private
 
 In GitHub:
 
@@ -111,7 +110,7 @@ chown middleware-deploy:middleware-deploy \
 chmod 0600 /home/middleware-deploy/.ssh/config
 ```
 
-Capture GitHub's host key into a temporary file and compare its fingerprint with GitHub's official published SSH fingerprints before installing it:
+Capture GitHub's host key and compare its fingerprint with GitHub's officially published SSH fingerprints before installing it:
 
 ```bash
 ssh-keyscan -t ed25519 github.com 2>/dev/null \
@@ -119,7 +118,7 @@ ssh-keyscan -t ed25519 github.com 2>/dev/null \
 ssh-keygen -lf /tmp/github-middleware-ed25519-known-host
 ```
 
-After the fingerprint is verified:
+After verifying the fingerprint:
 
 ```bash
 install \
@@ -134,9 +133,9 @@ sudo -u middleware-deploy -H git ls-remote \
   git@github-middleware:appolon1908-hue/Middleware-.git HEAD
 ```
 
-Do not add `middleware-deploy` to the `docker` group. Docker access is effectively root access. Later automation should invoke one root-owned, allowlisted deployment command through tightly restricted `sudo`.
+Do not add `middleware-deploy` to the `docker` group. Docker access is effectively root access. Future automation should invoke one root-owned, allowlisted deployment command through tightly restricted `sudo`.
 
-## 3. Clone the bootstrap checkout
+## 3. Clone the read-only server checkout
 
 ```bash
 install -d \
@@ -155,9 +154,9 @@ sudo -u middleware-deploy -H \
   git -C /srv/codestra-middleware/repository rev-parse HEAD
 ```
 
-The checkout is a deployment input, not a place for manual production editing.
+This checkout is a deployment input, not a place for manual production editing. Its deploy key must remain read-only.
 
-## 4. Discover the live middleware runtime without changing it
+## 4. Discover the live runtime without changing it
 
 Run the included read-only inventory:
 
@@ -170,7 +169,7 @@ sudo bash \
 When automatic selection finds the wrong container, specify the exact running middleware container:
 
 ```bash
-sudo MIDDLEWARE_CONTAINER=<exact_container_name_or_id> bash \
+sudo env MIDDLEWARE_CONTAINER=<exact_container_name_or_id> bash \
   /srv/codestra-middleware/repository/scripts/discover_middleware_runtime.sh \
   | tee /root/middleware-git-discovery.txt
 ```
@@ -182,10 +181,10 @@ The report records only non-secret runtime facts:
 - source/config/data mounts and whether each is writable;
 - published ports and container networks;
 - health, restart count, container user, privileged mode, and read-only root filesystem state;
-- a strict allowlist of non-secret safety flags;
+- an allowlist of non-secret safety flags;
 - related Odoo, n8n, PostgreSQL, Redis, Keycloak, Kong, Caddy, callback, and worker containers.
 
-It deliberately does not print the complete container environment or read database passwords.
+It does not print the full container environment or read database passwords.
 
 Record at minimum:
 
@@ -208,25 +207,36 @@ CURRENT_SAFE_FLAG_NAMES=
 
 Do not alter mounts, images, Compose files, or service names until these values are confirmed.
 
-## 5. Import only the authoritative source
+## 5. Import the authoritative source without giving production Git write access
 
-Identify the original source directory or image build context from the Compose metadata and bind mounts. Prefer the host source tree used to build the running image. Do not treat a running container filesystem as authoritative unless no source tree exists and the export has been independently reviewed.
+The production server should not push branches. Use one of these paths:
 
-Use a temporary working tree, not the production checkout:
+1. **Preferred:** import the authoritative source from a trusted development machine that already has GitHub write access.
+2. **Source exists only on the server:** create a sanitized, read-only export on the server, transfer it to the trusted development machine, and open the import pull request there.
+
+Do not add a write-enabled deploy key or a broad GitHub personal token to the production server.
+
+### 5.1 Create a sanitized server export
+
+Identify the verified host source directory or image build context from the discovery report. Prefer the host source tree used to build the running image. Do not treat a container filesystem as authoritative unless no source tree exists and the export is independently reviewed.
 
 ```bash
-export EXISTING_SOURCE=/actual/verified/middleware/source
-export WORKTREE=/tmp/codestra-middleware-import
+set -Eeuo pipefail
 
-rm -rf "$WORKTREE"
-git clone \
-  git@github-middleware:appolon1908-hue/Middleware-.git \
-  "$WORKTREE"
+export EXISTING_SOURCE=/actual/verified/middleware/source
+export EXPORT_DIR=/root/codestra-middleware-source-export
+export EXPORT_ARCHIVE=/root/codestra-middleware-source-export.tar.gz
+
+rm -rf "$EXPORT_DIR" "$EXPORT_ARCHIVE"
+install -d -m 0700 "$EXPORT_DIR"
 
 rsync -a \
+  --delete \
   --exclude='.git/' \
   --exclude='.env' \
   --exclude='.env.*' \
+  --exclude='*.env' \
+  --exclude='*.env.*' \
   --exclude='secrets/' \
   --exclude='credentials/' \
   --exclude='__pycache__/' \
@@ -235,17 +245,67 @@ rsync -a \
   --exclude='node_modules/' \
   --exclude='logs/' \
   --exclude='runtime/' \
-  --exclude='data/' \
   --exclude='backups/' \
   --exclude='*.log' \
   --exclude='*.dump' \
   --exclude='*.backup' \
+  --exclude='*.sql.gz' \
+  --exclude='*.sql.zst' \
   --exclude='*.sqlite*' \
   --exclude='*.rdb' \
   --exclude='*.aof' \
-  --exclude='*.pem' \
   --exclude='*.key' \
-  "$EXISTING_SOURCE"/ "$WORKTREE"/
+  --exclude='*.p12' \
+  --exclude='*.pfx' \
+  --exclude='*.jks' \
+  --exclude='*.keystore' \
+  --exclude='*.har' \
+  --exclude='*.pcap' \
+  --exclude='*.trace' \
+  "$EXISTING_SOURCE"/ "$EXPORT_DIR"/
+```
+
+Review the exported file list before creating an archive:
+
+```bash
+find "$EXPORT_DIR" -type f -printf '%P\n' | sort \
+grep -RIl --binary-files=without-match \
+  -E 'BEGIN ([A-Z]+ )?PRIVATE KEY|github_pat_|gh[pousr]_[A-Za-z0-9]{30,}|(AKIA|ASIA)[0-9A-Z]{16}' \
+  "$EXPORT_DIR" || true
+```
+
+A matching line is a stop condition requiring manual review and removal. This grep is only a basic preflight; the development import must run a dedicated secret scanner.
+
+Create a deterministic archive and checksum:
+
+```bash
+tar \
+  --sort=name \
+  --mtime='UTC 1970-01-01' \
+  --owner=0 \
+  --group=0 \
+  --numeric-owner \
+  -C "$EXPORT_DIR" \
+  -czf "$EXPORT_ARCHIVE" .
+
+sha256sum "$EXPORT_ARCHIVE" \
+  | tee "${EXPORT_ARCHIVE}.sha256"
+chmod 0600 "$EXPORT_ARCHIVE" "${EXPORT_ARCHIVE}.sha256"
+```
+
+Transfer the archive over an authenticated channel to the trusted development machine. Delete the temporary server export only after the imported pull request is safely created and independently checked.
+
+### 5.2 Create the import branch on the trusted development machine
+
+```bash
+set -Eeuo pipefail
+
+export ARCHIVE=./codestra-middleware-source-export.tar.gz
+export WORKTREE=./codestra-middleware-import
+
+rm -rf "$WORKTREE"
+git clone git@github.com:appolon1908-hue/Middleware-.git "$WORKTREE"
+tar -xzf "$ARCHIVE" -C "$WORKTREE"
 
 cd "$WORKTREE"
 git switch -c import/live-middleware-baseline
@@ -253,22 +313,22 @@ bash scripts/run_ci.sh
 git status --short
 ```
 
-Review every imported file. Search for credentials, private URLs containing embedded passwords, webhook samples, production payloads, customer data, TLS material, and generated artifacts. Add a dedicated secret scanner and the actual locked dependency/test pipeline in the same import pull request.
+Review every imported file. Search for embedded credentials, private URLs containing passwords, webhook samples, production payloads, customer data, TLS material, and generated artifacts. Add a dedicated secret scanner and the actual locked dependency/test pipeline in this same import pull request.
 
 The source import pull request must identify:
 
-- application framework and Python/runtime version;
-- API and worker entry points;
+- application framework and runtime version;
+- API, worker, scheduler, and callback entry points;
 - package manager and lock files;
-- database migration framework and current migration head;
+- migration framework and current migration head;
 - PostgreSQL and Redis responsibilities;
 - outbox, inbox, idempotency, retry, replay, and dead-letter behavior;
 - Keycloak/OIDC, Odoo, n8n, VICIdial, Kong/Caddy, SMS, email, and webhook integrations;
 - health/readiness endpoints;
 - external-write and kill-switch controls;
-- tests that currently pass and tests still missing.
+- tests that pass and tests still missing.
 
-## 6. Replace the bootstrap CI hook with the real test pipeline
+## 6. Replace the bootstrap test hook
 
 The bootstrap workflow runs `scripts/run_ci.sh`. The source import must add an executable:
 
@@ -276,29 +336,28 @@ The bootstrap workflow runs `scripts/run_ci.sh`. The source import must add an e
 scripts/project_ci.sh
 ```
 
-That script must use the repository's locked dependency mechanism and run, as applicable:
+It must use the repository's locked dependency mechanism and run, as applicable:
 
 ```text
 format/lint check
 static type checking
 unit tests
 PostgreSQL integration tests
-Redis integration tests
+Redis/queue integration tests
 migration upgrade and rollback tests
-outbox/inbox and lease tests
-idempotency and deduplication collision tests
-webhook signature, replay, and timestamp tests
+outbox/inbox, retry, lease, idempotency, replay, and dead-letter tests
 cross-tenant and authorization tests
+webhook signature, timestamp, replay, and deduplication tests
 Odoo/n8n/VICIdial adapter contract tests
-container build and health tests
+container build, health, readiness, and graceful-shutdown tests
 secret, dependency, and container vulnerability scans
 ```
 
-Do not make CI pass by silently skipping unavailable services. Report unsupported or missing test categories explicitly.
+Do not silently skip unavailable services. Report unsupported or missing test categories explicitly.
 
-## 7. Keep secrets outside Git
+## 7. Keep runtime secrets outside Git
 
-Use root-readable files or a dedicated secret manager on the server. A typical separation is:
+Use a dedicated secret manager or root-readable server files, for example:
 
 ```text
 /etc/codestra-middleware/runtime.env
@@ -306,27 +365,22 @@ Use root-readable files or a dedicated secret manager on the server. A typical s
 /etc/codestra-middleware/tls/
 ```
 
-Recommended ownership:
+Recommended ownership and permissions:
 
 ```text
 root:root
-```
-
-Recommended permissions:
-
-```text
 runtime.env: 0600
 credential files: 0600
 credential directories: 0700
 ```
 
-The repository may contain `.env.example` files with variable names and safe placeholder values, never live values.
+The repository may contain `.env.example` files with variable names and safe placeholders, never live values.
 
 ## 8. Stage with fail-closed capabilities
 
-`config/preproduction-safety.env.example` is a control baseline, not proof that the current application recognizes every variable. Map it to the actual code after import and add startup validation that fails closed when required controls are missing or malformed.
+`config/preproduction-safety.env.example` is a control baseline, not proof that the current application recognizes every variable. Map it to the actual code and add startup validation that fails closed when required controls are missing or malformed.
 
-At staging startup, all externally effective behavior must remain disabled, including:
+At staging startup, externally effective behavior must remain disabled:
 
 ```text
 SEND_EVENTS=false
@@ -343,24 +397,23 @@ N8N_PRODUCTION_WORKFLOWS_ENABLED=false
 PRODUCTION_DIALING=DISABLED
 ```
 
-Validate the effective runtime values from the container after deployment. Do not accept the source `.env.example` as runtime evidence.
+Verify effective values from the running staging container. Do not accept an example file as runtime evidence.
 
 ## 9. Build once and deploy an immutable image
 
-The preferred production model is:
+The production target is:
 
 ```text
 reviewed commit SHA
   -> GitHub-hosted CI build
   -> tests and scans
-  -> GHCR image
-  -> image digest
+  -> GHCR image digest
   -> staging deployment by digest
   -> accepted digest
   -> production deployment of the same digest
 ```
 
-The production Compose template should require a digest-bearing image value, for example:
+A production Compose template should require a digest-bearing value:
 
 ```yaml
 services:
@@ -376,11 +429,11 @@ The deployed value should resemble:
 ghcr.io/appolon1908-hue/codestra-middleware@sha256:<digest>
 ```
 
-Do not use `latest`, an unpinned branch-derived tag, or an image rebuilt separately on the server after staging acceptance.
+Do not use `latest`, an unpinned branch tag, or an image rebuilt separately after staging acceptance.
 
 ## 10. Scope deployment on the shared server
 
-After discovery confirms the Compose directory and service names, use service-scoped commands. A representative pattern is:
+After discovery confirms the Compose directory and service names, use service-scoped commands:
 
 ```bash
 cd <COMPOSE_WORKING_DIR>
@@ -394,7 +447,7 @@ docker compose \
   up -d --no-deps <MIDDLEWARE_SERVICE> <WORKER_SERVICES>
 ```
 
-Do not run unscoped commands such as:
+Do not run broad commands such as:
 
 ```bash
 docker compose down
@@ -402,27 +455,25 @@ docker system prune -a
 docker restart $(docker ps -q)
 ```
 
-Those commands can interrupt Odoo, n8n, PostgreSQL, Redis, Keycloak, Caddy, Kong, and other applications on the same host.
+Those commands can interrupt unrelated Odoo, n8n, PostgreSQL, Redis, Keycloak, Caddy, Kong, and provider services.
 
 ## 11. Minimum staging evidence
 
-Before production approval, capture evidence for the exact commit SHA and image digest:
+Before production approval, capture evidence tied to the exact commit SHA and image digest:
 
 - clean repository and exact SHA;
-- immutable image digest and build provenance;
-- database backup and restore test;
-- migration upgrade and rollback test;
+- immutable digest and build provenance;
+- database backup/restore and migration rollback;
 - Redis/outbox/inbox recovery behavior;
 - API health and readiness;
-- authentication and authorization;
-- cross-tenant isolation where applicable;
-- idempotency and duplicate request handling;
-- webhook signature, replay, timestamp, and deduplication controls;
+- authentication, authorization, and tenant isolation;
+- idempotency and duplicate-request handling;
+- webhook signature, timestamp, replay, and deduplication controls;
 - Odoo and n8n duplicate-delivery behavior;
 - VICIdial write denial while disabled;
 - external delivery and dialing denial while disabled;
 - worker retry, lease expiry, dead-letter, and replay behavior;
-- Kong/Caddy routing, TLS, mTLS, rate limit, and allowlist behavior;
+- Kong/Caddy routing, TLS, mTLS, rate limits, and allowlists;
 - rollback to the prior image and matching data recovery point.
 
 ## 12. GitHub deployment automation
@@ -440,4 +491,4 @@ MIDDLEWARE_DEPLOY_HOST_KEY
 MIDDLEWARE_GHCR_READ_TOKEN
 ```
 
-Keep application and integration credentials on the server or in a dedicated secret manager, not in deployment workflow YAML. Protect production with required reviewers and deploy only from the protected release branch or reviewed `main` commit according to the repository's release policy.
+Keep application and integration credentials on the server or in a dedicated secret manager, not in workflow YAML. Protect production with required reviewers and deploy only from the protected release branch or reviewed `main` commit according to the release policy.

@@ -1,8 +1,8 @@
-# auth.codestra.co Keycloak repair contract
+# auth.codestra.co Keycloak contract
 
 ## Scope
 
-This workstream owns the identity-side contract for repairing `auth.codestra.co` without changing Keycloak realm data, users, credentials, TOTP, clients, Odoo, n8n, telephony, or Booked4Seasons.
+This workstream owns the identity-side contract for `auth.codestra.co` without changing Keycloak realm data, users, credentials, TOTP, clients, Odoo, n8n, telephony, or Booked4Seasons.
 
 Canonical identity contract:
 
@@ -12,49 +12,64 @@ realm=codestra
 openid_configuration=/realms/codestra/.well-known/openid-configuration
 ```
 
-The edge repair must preserve that issuer exactly. Applications must not be redirected back to `auth.codestra.agency` or another hostname.
+## Verified Server A runtime — 2026-08-26
 
-## Current repair hypothesis
-
-The observed public symptom is HTTP `502` at `auth.codestra.co`. A `502` is an edge/upstream failure and must not be treated as authorization to modify Keycloak realm state.
-
-Historical/current operational evidence identifies `49.12.145.107` as the canonical Keycloak runtime host. That address is a discovery input, not automatic deployment authority. Server A must verify the actual reachable Keycloak endpoint before any Caddy route is changed.
-
-## Required discovery evidence
-
-Before an edge change, prove all of the following from the Caddy host:
+Current server evidence establishes the production identity runtime on Server A (`65.109.65.169`):
 
 ```text
-CANONICAL_ISSUER=https://auth.codestra.co/realms/codestra
-UPSTREAM_RUNTIME_IDENTIFIED=PASS
-UPSTREAM_TCP_REACHABLE=PASS
-UPSTREAM_TLS_OR_HTTP_MODE_IDENTIFIED=PASS
-OPENID_CONFIGURATION_DIRECT_UPSTREAM=HTTP_200
-ACTIVE_CADDY_ROUTE_IDENTIFIED=PASS
-PROXY_LOOP_ABSENT=PASS
+production_container=codestra-identity-keycloak-1
+production_container_health=healthy
+production_port=8080/tcp
+staging_container=codestra-identity-staging-keycloak-staging-1
+public_staging_selection=NO
 ```
 
-If the verified upstream is remote HTTPS, TLS verification must use the canonical server name `auth.codestra.co`. If the verified upstream is a local/private Keycloak service, the Caddy workstream must use that exact private service endpoint instead. Do not guess between these models.
+The public route does not proxy to a remote Keycloak host. The verified routing chain is:
+
+```text
+Internet
+ -> auth.codestra.co:443
+ -> host Caddy
+ -> 127.0.0.1:18103
+ -> codestra-caddy-upstream-gateway
+ -> codestra-identity-keycloak-1:8080
+ -> realm codestra
+```
+
+The earlier `49.12.145.107` runtime hypothesis is superseded for this site and must not be used for `auth.codestra.co` routing.
+
+## Verification result
+
+The observed end-to-end checks returned:
+
+```text
+UPSTREAM_GATEWAY_HTTP=200
+PUBLIC_OPENID_DISCOVERY_HTTP=200
+PUBLIC_TLS_VERIFY=0
+DISCOVERY_ISSUER=https://auth.codestra.co/realms/codestra
+AUTH_HTTP_502=ABSENT
+```
+
+No Caddy reload or Keycloak mutation was required to achieve this result; the existing production path was already healthy when tested.
 
 ## Acceptance
 
-After the edge repair, require:
+The route remains accepted only while all of the following hold:
 
 ```text
 GET https://auth.codestra.co/realms/codestra/.well-known/openid-configuration = 200
 issuer field = https://auth.codestra.co/realms/codestra
-GET https://auth.codestra.co/realms/codestra/account/ = expected Keycloak response/redirect
-certificate SAN includes auth.codestra.co
-public certificate chain validates
+certificate chain validates
+production Keycloak container is healthy
+public route selects production, not staging
 HTTP 502 absent
 ```
 
-The repair is incomplete if the public route returns 200 but the discovery document advertises a different issuer.
-
 ## Forbidden actions
 
-- Do not create, delete, or modify users, realms, clients, roles, credentials, or TOTP.
+- Do not create, delete, or modify users, realms, clients, roles, credentials, or TOTP as part of edge maintenance.
 - Do not expose Keycloak admin endpoints or credentials.
-- Do not make Caddy proxy `auth.codestra.co` back to `auth.codestra.co` through public DNS; that can create a proxy loop.
-- Do not disable upstream certificate verification to make a broken route appear healthy.
-- Do not change Booked4Seasons as part of this repair.
+- Do not proxy the public hostname back through public DNS.
+- Do not replace the verified local production route with the superseded remote-host hypothesis.
+- Do not disable TLS validation to conceal a routing failure.
+- Do not change Booked4Seasons as part of this workstream.

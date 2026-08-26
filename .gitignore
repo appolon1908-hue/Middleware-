@@ -47,7 +47,8 @@ backups/
 private-evidence/
 *.dump
 *.backup
-*.sql
+*.sql.gz
+*.sql.zst
 *.sqlite
 *.sqlite3
 *.rdb

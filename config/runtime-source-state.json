@@ -9,6 +9,12 @@
     "sourceState": "runtime-source-present-unverified",
     "paths": ["app/worker.py", "workers/run_outbox.py"]
   },
+  "validationState": "hardened-source-awaiting-final-exact-head-review",
+  "validationRequirements": [
+    "repository-ci",
+    "disposable-postgresql-redis-integration",
+    "codex-exact-head-review"
+  ],
   "runtimeDeployment": "not_deployed",
   "kongRoutesActivated": false,
   "outboxDispatchEnabled": false,

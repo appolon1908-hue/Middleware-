@@ -41,7 +41,6 @@ FORBIDDEN_SUFFIXES = {
     ".keystore",
     ".p12",
     ".pcap",
-    ".pem",
     ".pfx",
     ".rdb",
     ".sqlite",
@@ -51,10 +50,11 @@ FORBIDDEN_SUFFIXES = {
 
 SECRET_PATTERNS = {
     "private key material": re.compile(
-        rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
+        rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
     ),
     "GitHub token": re.compile(rb"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
-    "AWS access key": re.compile(rb"\bAKIA[0-9A-Z]{16}\b"),
+    "GitHub fine-grained token": re.compile(rb"\bgithub_pat_[A-Za-z0-9_]{50,}\b"),
+    "AWS access key": re.compile(rb"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
 }
 
 EXPECTED_SAFETY_VALUES = {
@@ -80,8 +80,19 @@ FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def is_allowed_env_example(path: Path) -> bool:
-    name = path.name
+    name = path.name.lower()
     return name == ".env.example" or name.endswith(".env.example")
+
+
+def is_live_env_file(path: Path) -> bool:
+    name = path.name.lower()
+    looks_like_env = (
+        name == ".env"
+        or name.startswith(".env.")
+        or name.endswith(".env")
+        or ".env." in name
+    )
+    return looks_like_env and not is_allowed_env_example(path)
 
 
 def iter_repository_files() -> list[Path]:
@@ -115,7 +126,7 @@ def validate_paths(files: list[Path], errors: list[str]) -> None:
         if relative.parts and relative.parts[0] in FORBIDDEN_TOP_LEVEL_DIRECTORIES:
             errors.append(f"forbidden top-level runtime/secret path: {relative}")
 
-        if path.name.startswith(".env") and not is_allowed_env_example(path):
+        if is_live_env_file(path):
             errors.append(f"live environment file must not be committed: {relative}")
 
         lower_name = path.name.lower()
@@ -123,7 +134,7 @@ def validate_paths(files: list[Path], errors: list[str]) -> None:
             errors.append(f"forbidden secret/runtime file type: {relative}")
 
         try:
-            size = path.stat().st_size
+            size = path.lstat().st_size
         except OSError as exc:
             errors.append(f"cannot stat {relative}: {exc}")
             continue

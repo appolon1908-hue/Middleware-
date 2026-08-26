@@ -20,7 +20,7 @@ They define supplemental workstreams, dependencies, communication links, routes,
 |---|---|---|
 | `codestra.co` | `site/codestra` | active |
 | `www.codestra.co` | `site/codestra` | redirect to root |
-| `auth.codestra.co` | `site/codestra-auth` | degraded: HTTP 502 |
+| `auth.codestra.co` | `site/codestra-auth` | active: verified OIDC discovery and TLS |
 | `social.codestra.co` | `site/codestra-social` | active Postiz/social application |
 | `ai.codestra.co` | `site/codestra-ai` | active AI console |
 | `beyvra.com` | `site/beyvra` | active |
@@ -39,7 +39,7 @@ They define supplemental workstreams, dependencies, communication links, routes,
 
 `platform/caddy` owns the application-server edge. `operations/application-host` owns host service inventory, safe restart boundaries, backups, route evidence, and change records.
 
-The two known failures remain explicit in Git and in monitoring targets. Repository changes must not silently represent them as healthy.
+The verified `auth.codestra.co` route is `65.109.65.169` host Caddy -> `127.0.0.1:18103` -> `codestra-caddy-upstream-gateway` -> `codestra-identity-keycloak-1:8080`. End-to-end OpenID discovery returned HTTP 200 with TLS verification result 0 and issuer `https://auth.codestra.co/realms/codestra`; the previously recorded 502 is no longer reproducible. The remaining Booked4Seasons TLS failure stays explicit in Git and is outside this auth recovery scope.
 
 ## Provider host and Nginx
 
@@ -150,6 +150,23 @@ site/breero
 ```
 
 The supplied provider-host inventory also changes RabbitMQ, Mautic, Postal, Jasmin, and Kyqra from middleware-host verification-only observations to declared remote-provider scope. Beyvra becomes declared active scope because its Caddy routes were supplied as active.
+
+## API and webhook identity contracts
+
+The middleware API/webhook contract set binds service-to-service traffic to the canonical Keycloak issuer `https://auth.codestra.co/realms/codestra`, client-credentials machine tokens, audience checks, scopes, idempotency, signed webhook envelopes, replay retention, and the following middleware ingress paths:
+
+```text
+/api/v1/odoo/events
+/api/v1/n8n/results
+/api/v1/vicidial/events
+/api/v1/telnexa/events
+/api/v1/klyrow/events
+/api/v1/kyqra/results
+/api/v1/kyqra/progress
+/api/v1/postly/events
+```
+
+These are contract definitions and security requirements. They must not be represented as executable/live middleware endpoints until the authoritative runtime source implements them and project-specific CI proves them.
 
 ## Form, crawler, and scraper intake to Odoo
 

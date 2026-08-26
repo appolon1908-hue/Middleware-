@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import ConfigurationError, Settings
+from app.config import ConfigurationError, Settings, WEBHOOK_PRODUCERS
 from app.security import (
     AuthorizationError,
     RequestValidationError,
@@ -104,6 +104,17 @@ def test_staging_cannot_use_in_memory_storage() -> None:
         )
 
 
+def staging_env() -> dict[str, str]:
+    return {
+        "APP_ENV": "staging",
+        "DATABASE_URL": "postgresql://example.invalid/db",
+        "REDIS_URL": "redis://example.invalid/0",
+        "APP_SOURCE_SHA": "a" * 40,
+        "IMAGE_DIGEST": "sha256:" + "b" * 64,
+        "BUILD_TIME": "2026-08-26T23:00:00Z",
+    }
+
+
 def test_staging_requires_immutable_release_identity() -> None:
     with pytest.raises(ConfigurationError):
         Settings.from_env(
@@ -113,6 +124,29 @@ def test_staging_requires_immutable_release_identity() -> None:
                 "REDIS_URL": "redis://example.invalid/0",
             }
         )
+
+
+def test_staging_requires_every_webhook_secret() -> None:
+    env = staging_env()
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(env)
+
+    for producer in WEBHOOK_PRODUCERS:
+        name = "WEBHOOK_SECRET_" + producer.upper().replace("-", "_").replace(".", "_")
+        env[name] = "x" * 32
+    settings = Settings.from_env(env)
+    settings.validate_all_webhook_secrets()
+
+
+def test_webhook_secret_uses_supplied_environment_mapping() -> None:
+    settings = Settings.from_env(
+        {
+            "APP_ENV": "test",
+            "ALLOW_IN_MEMORY_STORAGE": "true",
+            "WEBHOOK_SECRET_ODOO_INTEGRATION": "s" * 32,
+        }
+    )
+    assert settings.webhook_secret("odoo-integration") == b"s" * 32
 
 
 def test_jwks_uri_is_pinned_to_canonical_issuer() -> None:

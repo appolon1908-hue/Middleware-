@@ -20,21 +20,35 @@ fi
 
 python3 - <<'PY'
 import os
-from urllib.parse import urlparse
+import re
+from urllib.parse import unquote, urlparse
 
+safe_db_name = re.compile(r"^middleware_test_[A-Za-z0-9_]+$")
 pg = urlparse(os.environ["DATABASE_URL"])
 redis = urlparse(os.environ["REDIS_URL"])
 
 if pg.scheme not in {"postgres", "postgresql"}:
     raise SystemExit("DATABASE_URL must use postgres/postgresql")
+if pg.params or pg.query or pg.fragment:
+    raise SystemExit("DATABASE_URL must not contain params, query overrides, or fragments")
 if pg.hostname not in {"127.0.0.1", "localhost"}:
     raise SystemExit("DATABASE_URL must target localhost disposable PostgreSQL")
-if not pg.path.lstrip("/").startswith("middleware_test_"):
-    raise SystemExit("database name must start with middleware_test_")
+database_name = unquote(pg.path.lstrip("/"))
+if not safe_db_name.fullmatch(database_name):
+    raise SystemExit("database name must match middleware_test_[A-Za-z0-9_]+")
+
 if redis.scheme not in {"redis", "rediss"}:
     raise SystemExit("REDIS_URL must use redis/rediss")
+if redis.params or redis.query or redis.fragment:
+    raise SystemExit("REDIS_URL must not contain params, query overrides, or fragments")
 if redis.hostname not in {"127.0.0.1", "localhost"}:
     raise SystemExit("REDIS_URL must target localhost disposable Redis")
+try:
+    redis_db = int(unquote(redis.path.lstrip("/") or "0"))
+except ValueError as exc:
+    raise SystemExit("REDIS_URL must select an explicit numeric disposable DB") from exc
+if redis_db <= 0:
+    raise SystemExit("REDIS_URL must not target Redis DB 0")
 
 print("DISPOSABLE_INTEGRATION_TARGETS=PASS")
 PY

@@ -47,6 +47,114 @@ EXPECTED_REQUIRED_HEADERS = {
     "X-Codestra-Signature",
     "X-Correlation-Id",
 }
+EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
+    ("kong-gateway", "middleware-api"): {
+        "middleware.request.forward",
+        "middleware.status.read",
+    },
+    ("middleware-worker", "middleware-api"): {
+        "delivery.retry",
+        "dlq.replay",
+        "inbox.process",
+        "outbox.dispatch",
+    },
+    ("odoo-integration", "middleware-api"): {
+        "odoo.delivery.result.publish",
+        "odoo.events.publish",
+    },
+    ("middleware-api", "odoo-integration"): {
+        "odoo.activities.write",
+        "odoo.leads.read",
+        "odoo.leads.write",
+    },
+    ("n8n-automation", "middleware-api"): {
+        "workflow.result.publish",
+        "workflow.status.read",
+        "workflow.trigger",
+    },
+    ("vicidial-adapter", "middleware-api"): {
+        "callbacks.update",
+        "recordings.metadata.publish",
+        "telephony.events.publish",
+    },
+    ("middleware-api", "vicidial-adapter"): {
+        "callbacks.dispatch",
+        "telephony.commands.write",
+    },
+    ("middleware-api", "telnexa-gateway"): {
+        "sms.send",
+        "sms.status.read",
+    },
+    ("telnexa-gateway", "middleware-api"): {
+        "sms.events.publish",
+        "sms.inbound.publish",
+    },
+    ("middleware-api", "klyrow-gateway"): {
+        "email.send",
+        "email.status.read",
+    },
+    ("klyrow-gateway", "middleware-api"): {
+        "email.events.publish",
+        "email.inbound.publish",
+    },
+    ("middleware-api", "kyqra-gateway"): {
+        "crawler.jobs.read",
+        "crawler.jobs.submit",
+        "crawler.results.read",
+    },
+    ("kyqra-gateway", "middleware-api"): {
+        "crawler.progress.publish",
+        "crawler.results.publish",
+    },
+    ("middleware-api", "postly-adapter"): {
+        "social.publish",
+        "social.status.read",
+    },
+    ("postly-adapter", "middleware-api"): {
+        "social.events.publish",
+    },
+    ("provisioning-service", "middleware-api"): {
+        "identity.request",
+        "integration.configure",
+        "tenant.provision",
+    },
+    ("monitoring-readonly", "kong-gateway"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "middleware-api"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "odoo-integration"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "n8n-automation"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "vicidial-adapter"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "telnexa-gateway"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "klyrow-gateway"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "kyqra-gateway"): {
+        "health.read",
+        "metrics.read",
+    },
+    ("monitoring-readonly", "postly-adapter"): {
+        "health.read",
+        "metrics.read",
+    },
+}
 ALLOWED_SOURCE_STATES = {
     "contract-only",
     "contract-source-missing",
@@ -208,27 +316,18 @@ def validate_access(access: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], 
             fail(f"duplicate caller-target grant: {caller}->{target}")
         grant_index[key] = set(scopes)
 
-    required_edges = {
-        ("kong-gateway", "middleware-api"),
-        ("middleware-worker", "middleware-api"),
-        ("odoo-integration", "middleware-api"),
-        ("middleware-api", "odoo-integration"),
-        ("n8n-automation", "middleware-api"),
-        ("vicidial-adapter", "middleware-api"),
-        ("middleware-api", "vicidial-adapter"),
-        ("middleware-api", "telnexa-gateway"),
-        ("telnexa-gateway", "middleware-api"),
-        ("middleware-api", "klyrow-gateway"),
-        ("klyrow-gateway", "middleware-api"),
-        ("middleware-api", "kyqra-gateway"),
-        ("kyqra-gateway", "middleware-api"),
-        ("middleware-api", "postly-adapter"),
-        ("postly-adapter", "middleware-api"),
-        ("provisioning-service", "middleware-api"),
-    }
-    missing = required_edges - set(grant_index)
-    if missing:
-        fail(f"required caller-target grants are missing: {sorted(missing)}")
+    if grant_index != EXPECTED_GRANTS:
+        missing = sorted(set(EXPECTED_GRANTS) - set(grant_index))
+        unexpected = sorted(set(grant_index) - set(EXPECTED_GRANTS))
+        mismatched = sorted(
+            (caller, target, sorted(EXPECTED_GRANTS[(caller, target)]), sorted(grant_index[(caller, target)]))
+            for caller, target in set(EXPECTED_GRANTS) & set(grant_index)
+            if EXPECTED_GRANTS[(caller, target)] != grant_index[(caller, target)]
+        )
+        fail(
+            "least-privilege grant matrix changed: "
+            f"missing={missing}, unexpected={unexpected}, scope_mismatches={mismatched}"
+        )
 
     expected_prohibited = {
         "n8n-automation": [

@@ -1,0 +1,23 @@
+FROM python:3.12.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+RUN groupadd --system --gid 10001 middleware \
+ && useradd --system --uid 10001 --gid middleware --home-dir /nonexistent middleware
+
+COPY requirements-runtime.txt ./
+RUN python -m pip install --no-cache-dir -r requirements-runtime.txt
+
+COPY app ./app
+COPY config ./config
+COPY contracts ./contracts
+
+USER 10001:10001
+
+EXPOSE 8080
+
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1"]

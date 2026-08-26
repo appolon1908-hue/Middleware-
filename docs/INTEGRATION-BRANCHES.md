@@ -2,72 +2,126 @@
 
 ## Purpose
 
-Each external system and major middleware runtime concern has an isolated Git workstream. This prevents Odoo, n8n, Kong, Caddy, identity, database, queue, telephony, messaging, crawler, worker, and monitoring changes from being mixed into one large branch.
+Every middleware-connected system and each major platform or observability component has an isolated Git workstream. This prevents Odoo, n8n, telephony, messaging, identity, gateway, proxy, persistence, queue, and monitoring changes from being mixed into one oversized branch.
 
-These branches are code-review workstreams. They are **not** deployment environments and must never be deployed directly to production.
+These branches are code-review workstreams. They are **not** deployment environments and must never be deployed directly to staging or production.
 
-## Canonical branch set
+## Application and integration workstreams
+
+| Branch | System | Scope |
+|---|---|---|
+| `integration/odoo-19` | Odoo 19 | CRM, contacts, leads, activities, campaigns, callbacks, appointments, delivery results, reconciliation, and Odoo adapter tests. |
+| `integration/n8n` | n8n | Workflow automation, normalized event processing, signed webhooks, inactive-by-default workflow exports, replay protection, and adapter tests. |
+| `integration/vicidial` | VICIdial | Campaigns, agents, dispositions, call results, callbacks, restricted adapter commands, read-back comparison, and write-denial tests. Direct middleware writes to VICIdial tables are prohibited. |
+| `integration/asterisk-pjsip` | Asterisk/PJSIP | Endpoints, extensions, trunks, call infrastructure, health, authentication, routing contracts, and telephony tests. |
+| `integration/telnexa-sms` | Telnexa | SMS submission, delivery status callbacks, inbound events, signatures, replay protection, suppression, rate limits, and reconciliation. |
+| `integration/klyrow-email` | Klyrow | Email submission, lifecycle events, bounces, complaints, suppression, templates, deduplication, callbacks, and reconciliation. |
+| `integration/postly-social` | Postly | Social-media polling, publishing and delivery events, account isolation, retries, callbacks, and reconciliation. |
+| `integration/keycloak` | Keycloak | OIDC/JWKS validation, service identities, roles, claims, audience and issuer enforcement, authorization policy, and identity tests. The canonical issuer is `https://auth.codestra.co`. |
+
+## Platform workstreams
+
+| Branch | Platform | Scope |
+|---|---|---|
+| `platform/kong` | Kong | API services, routes, plugins, authentication, mTLS, rate limits, allowlists, transformations, and gateway smoke tests. |
+| `platform/caddy` | Caddy | Public HTTPS, reverse proxy, TLS, upstream health behavior, security headers, access restrictions, and edge validation. |
+| `platform/postgresql` | PostgreSQL | Durable records, event ledger, outbox, audit, mappings, schema, migrations, least-privilege roles, backup/restore, and rollback tests. |
+| `platform/redis` | Redis | Temporary queues, caching, leases, idempotency state, locks, retry scheduling, recovery behavior, and Redis integration tests. |
+
+## Shared middleware core
 
 | Branch | Scope |
 |---|---|
-| `integration/odoo` | Odoo API client, transactional outbox consumption, lead/campaign/callback/appointment delivery, reconciliation, duplicate-delivery handling, and Odoo adapter tests. |
-| `integration/n8n` | Signed inbound/outbound webhooks, workflow template contracts, inactive-by-default workflow exports, replay protection, correlation IDs, and n8n adapter tests. |
-| `integration/kong` | Kong services, routes, plugins, OIDC enforcement, mTLS, rate limits, allowlists, request/response transformation, and route smoke tests. |
-| `integration/caddy` | Caddy reverse-proxy configuration, TLS, upstream health behavior, security headers, access restrictions, and edge validation. |
-| `integration/keycloak` | OIDC/JWKS validation, service accounts, roles, claims, token audience/issuer rules, authorization policy, and identity tests. The canonical issuer remains `https://auth.codestra.co`. |
-| `integration/postgresql` | Schema, migrations, least-privilege roles, row-level security, indexes, backup/restore, migration rollback, and PostgreSQL integration tests. |
-| `integration/redis` | Queue isolation, idempotency state, locks, leases, cache behavior, retry scheduling, recovery behavior, and Redis integration tests. |
-| `integration/vicidial` | Restricted VICIdial adapter client, signed commands, read-back comparison, campaign/agent synchronization, callback/transfer behavior, and write-denial tests. Direct middleware writes to VICIdial tables are prohibited. |
-| `integration/jasmin-sms` | Jasmin SMS submission, delivery receipts, inbound messages, signatures, replay protection, suppression, rate limits, and provider reconciliation. |
-| `integration/postal-email` | Postal/Klyrow email delivery, inbound events, bounce/complaint handling, suppression, templates, deduplication, and reconciliation. |
-| `integration/kyqra-crawler` | Kyqra crawler job submission, result ingestion, tenant/job isolation, import validation, retry/replay behavior, and crawler contract tests. |
-| `integration/webhook-inbox-outbox` | Shared durable inbox/outbox primitives, signatures, timestamp bounds, deduplication, leases, retries, dead letters, replay, and audit trails. |
-| `integration/workers-scheduler` | Background workers, cron/scheduler jobs, graceful shutdown, concurrency, queue ownership, retry policy, and worker health/readiness. |
-| `integration/observability` | Structured logs, metrics, traces, dashboards, alerts, release identity, secret redaction, and operational runbooks. |
+| `core/event-ledger-outbox` | Canonical normalized events, durable event ledger, transactional outbox, leases, retries, dead letters, audit, and reconciliation. |
+| `core/webhook-inbox-replay` | Signed inbound inbox, timestamp bounds, replay protection, idempotency, deduplication, quarantine, and controlled replay. |
+| `core/workers-scheduler` | Background workers, schedulers, concurrency, queue ownership, graceful shutdown, retries, health, readiness, and restart behavior. |
+
+## Operations and monitoring workstreams
+
+| Branch | Component | Scope |
+|---|---|---|
+| `observability/prometheus` | Prometheus | Metrics collection, scrape configuration, recording rules, retention, and Prometheus validation. |
+| `observability/grafana` | Grafana | Dashboards, data sources, access controls, release identity panels, and provisioning. |
+| `observability/alertmanager` | Alertmanager | Alert routing, grouping, inhibition, receiver contracts, escalation, and notification tests. |
+| `observability/loki` | Loki | Central logs, labels, retention, queries, tenant boundaries, secret redaction, and validation. |
+| `observability/blackbox-exporter` | Blackbox Exporter | HTTP, HTTPS, TCP and TLS probes, target definitions, authentication-safe checks, and alerts. |
+| `observability/node-exporter` | Node Exporter | Host metrics, filesystem and network collection, collector restrictions, and host alerts. |
+| `observability/cadvisor` | cAdvisor | Container resource metrics, labels, access restrictions, retention, and container alerts. |
+| `observability/postgresql-exporter` | PostgreSQL Exporter | Least-privilege monitoring role, database metrics, custom queries, and alerts. |
+| `observability/redis-exporter` | Redis Exporter | Exporter authentication, queue and memory metrics, replication metrics, and alerts. |
+
+## Configured but runtime-unverified workstreams
+
+| Branch | Status | Allowed work |
+|---|---|---|
+| `integration/kyqra` | Configuration mentions Kyqra, but the available audit did not observe a running Kyqra worker on the middleware host. | Contracts, tests, and runtime verification only until the running service, endpoint, owner, source path, and deployment path are confirmed. |
+| `integration/beyvra` | Configuration mentions Beyvra, but its active middleware-host runtime was not confirmed by the available audit. | Contracts, tests, and runtime verification only until the active service, endpoint, owner, source path, and deployment path are confirmed. |
+
+Neither branch authorizes deployment or activation merely because configuration references exist.
+
+## Explicitly not observed on the middleware host
+
+The available runtime audit explicitly did not observe these components on the middleware host:
+
+```text
+RabbitMQ
+Mautic
+Postal
+Jasmin
+Crawlee
+Playwright
+```
+
+No active middleware workstream branch is created for them. Telnexa and Klyrow remain the middleware-facing SMS and email integrations. A new branch for an unobserved underlying component requires runtime evidence, an ownership decision, and an approved architecture update.
 
 ## Branch rules
 
-1. Every branch starts from the latest reviewed `main`.
-2. No direct commits to `main` for integration work.
-3. A branch may change only its declared integration plus the minimum shared contracts required for that integration.
-4. Shared primitives used by multiple integrations belong in `integration/webhook-inbox-outbox`, `integration/workers-scheduler`, `integration/postgresql`, or `integration/redis`, rather than being duplicated.
-5. Do not copy credentials, live `.env` files, private keys, certificates, database/Redis data, customer payloads, logs, or runtime volumes into any branch.
-6. Every integration branch must include tests for authentication, authorization, tenant isolation, idempotency, retry/replay, duplicate handling, failure recovery, and disabled-capability behavior where applicable.
-7. External writes remain disabled in staging unless a test explicitly uses a controlled fake or isolated test target.
-8. Integration branches may merge only through a pull request after exact-head validation.
-9. After merge, delete or reset the completed workstream before beginning unrelated work. Do not let long-lived branches silently drift from `main`.
-10. Production deploys only an immutable image built from a reviewed merged SHA. Never deploy an integration branch, mutable tag, or locally edited server checkout.
+1. Every workstream starts from the same latest reviewed `main` SHA.
+2. No direct integration commits go to `main`.
+3. A branch may change only its declared system plus the minimum shared contract required for that system.
+4. Shared event, inbox/outbox, worker, PostgreSQL, or Redis behavior belongs in the corresponding `core/*` or `platform/*` branch rather than being duplicated.
+5. Do not commit credentials, live `.env` files, private keys, certificates, database/Redis data, customer payloads, logs, packet captures, or runtime volumes.
+6. Every branch must include applicable tests for authentication, authorization, tenant isolation, idempotency, retry/replay, duplicates, failure recovery, and disabled-capability behavior.
+7. External writes remain disabled in staging unless a test uses a controlled fake or isolated test target.
+8. Workstream branches merge only through pull requests after exact-head validation.
+9. After merge, update or recreate the workstream from current `main` before unrelated work begins. Do not allow silent long-term drift.
+10. Production deploys only an immutable image built from a reviewed merged SHA. Never deploy `integration/*`, `platform/*`, `core/*`, or `observability/*` directly.
+11. The production server retains read-only Git access and may not rebase, force-push, resolve branch conflicts, or push source changes.
 
 ## Cross-system changes
 
-A change touching several systems must be split whenever practical:
+Split multi-system work whenever practical:
 
 ```text
-shared contract or persistence change
+shared event or persistence contract
   -> merge first
-system-specific adapter change
-  -> rebase on updated main
-edge/routing change
-  -> merge after upstream behavior is stable
-observability change
-  -> merge with final metrics and alerts
+system-specific adapter
+  -> update from new main and merge next
+Kong route and policy
+  -> merge after upstream contract stabilizes
+Caddy edge configuration
+  -> merge after Kong/upstream validation
+metrics, dashboards and alerts
+  -> merge with the final observable behavior
 ```
 
-Use stacked pull requests when one integration depends on another. Each PR must state its exact dependency and merge order. Do not combine Odoo, n8n, Kong, Caddy, database, and production activation into one oversized pull request.
+Use stacked pull requests when dependencies are unavoidable. Every pull request must state its exact dependency and merge order. Do not combine Odoo, n8n, VICIdial, Asterisk, Telnexa, Klyrow, Postly, Keycloak, Kong, Caddy, database changes, and production activation in one pull request.
 
 ## Recommended dependency order
 
-1. `integration/postgresql`
-2. `integration/redis`
+1. `platform/postgresql`
+2. `platform/redis`
 3. `integration/keycloak`
-4. `integration/webhook-inbox-outbox`
-5. `integration/workers-scheduler`
-6. System adapters: Odoo, n8n, VICIdial, Jasmin SMS, Postal email, and Kyqra crawler
-7. `integration/kong`
-8. `integration/caddy`
-9. `integration/observability`
+4. `core/event-ledger-outbox`
+5. `core/webhook-inbox-replay`
+6. `core/workers-scheduler`
+7. Application adapters: Odoo 19, n8n, VICIdial, Asterisk/PJSIP, Telnexa, Klyrow, and Postly
+8. `platform/kong`
+9. `platform/caddy`
+10. Exporters, Prometheus, Loki, Alertmanager, and Grafana
+11. Kyqra or Beyvra only after runtime verification
 
-This order is guidance, not permission to merge untested work. An integration branch may move earlier only when it is demonstrably independent.
+This order is guidance, not approval to merge untested work.
 
 ## Staging safety baseline
 
@@ -88,33 +142,33 @@ N8N_PRODUCTION_WORKFLOWS_ENABLED=false
 PRODUCTION_DIALING=DISABLED
 ```
 
-The current application source must map and enforce the real supported variable names. An example file is not runtime evidence.
+The actual middleware source must map and enforce its supported variable names. An example file is not runtime evidence.
 
 ## Updating a workstream
 
-Before starting work on an integration branch:
+Before beginning work:
 
 ```bash
 git fetch origin
-git switch integration/<system>
+git switch <workstream-branch>
 git merge --ff-only origin/main
 ```
 
-When a branch has unique commits and cannot fast-forward, rebase it in a trusted development environment, resolve conflicts, rerun the complete branch test suite, and force-push only with `--force-with-lease`. The production server remains read-only and must not perform this operation.
+When a branch has unique commits and cannot fast-forward, rebase it in a trusted development environment, resolve conflicts, rerun the complete branch test suite, and force-push only with `--force-with-lease`. Never perform this operation from the production server.
 
 ## Release flow
 
 ```text
-integration branch
+workstream branch
   -> pull request
   -> exact-head CI and review
   -> merge into protected main
-  -> build once from merged SHA
-  -> publish immutable digest
-  -> staging deployment with writes disabled
-  -> integration and rollback evidence
+  -> build once from protected merged SHA
+  -> publish immutable image digest
+  -> staging deployment with all external effects disabled
+  -> integration, backup/restore and rollback evidence
   -> explicit production approval
   -> production deployment of the identical digest
 ```
 
-Server source paths, Compose project names, service names, health endpoints, and current safety controls must still be confirmed by the read-only runtime discovery before any deployment automation is enabled.
+Server source paths, Compose project names, service names, health endpoints, and effective safety controls must still be confirmed through read-only runtime discovery before deployment automation is enabled.

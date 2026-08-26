@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "base_branch": "main",
   "deployment_from_workstream_branches": false,
   "workstreams": [
@@ -74,6 +74,42 @@
       "category": "platform",
       "runtime_status": "declared_active_scope",
       "scope": "Temporary queues, caching, leases, idempotency state, locks, retry scheduling, recovery behavior, and Redis integration tests"
+    },
+    {
+      "branch": "platform/rabbitmq",
+      "category": "platform",
+      "runtime_status": "not_observed_on_middleware_host_verification_only",
+      "scope": "AMQP broker contracts, exchanges, queues, bindings, publisher confirms, consumer acknowledgements, dead-lettering, retry behavior, TLS, authorization, and runtime verification"
+    },
+    {
+      "branch": "integration/mautic",
+      "category": "marketing",
+      "runtime_status": "not_observed_on_middleware_host_verification_only",
+      "scope": "Mautic contacts, campaigns, segments, API and webhook contracts, authentication, idempotent synchronization, delivery events, reconciliation, and runtime verification"
+    },
+    {
+      "branch": "integration/postal-email",
+      "category": "messaging",
+      "runtime_status": "not_observed_on_middleware_host_verification_only",
+      "scope": "Postal email submission, lifecycle events, bounces, complaints, suppression, signatures, deduplication, reconciliation, and runtime verification"
+    },
+    {
+      "branch": "integration/jasmin-sms",
+      "category": "messaging",
+      "runtime_status": "not_observed_on_middleware_host_verification_only",
+      "scope": "Jasmin HTTP and SMPP submission, delivery receipts, inbound messages, authentication, replay protection, suppression, rate limiting, reconciliation, and runtime verification"
+    },
+    {
+      "branch": "integration/crawlee",
+      "category": "crawler",
+      "runtime_status": "not_observed_on_middleware_host_verification_only",
+      "scope": "Crawlee job contracts, crawl policies, tenant and job isolation, queue ownership, result ingestion, retries, replay behavior, and runtime verification"
+    },
+    {
+      "branch": "testing/playwright",
+      "category": "testing",
+      "runtime_status": "not_observed_on_middleware_host_verification_only",
+      "scope": "Playwright browser end-to-end tests, synthetic no-write canaries, authentication flows, trace and artifact handling, deterministic test data, and runtime verification"
     },
     {
       "branch": "observability/prometheus",
@@ -160,12 +196,12 @@
       "scope": "Beyvra contracts and runtime verification only until the active service, endpoint, ownership, and deployment path are confirmed"
     }
   ],
-  "not_observed_no_active_branch": [
-    "rabbitmq",
-    "mautic",
-    "postal",
-    "jasmin",
-    "crawlee",
-    "playwright"
+  "not_observed_with_verification_branches": [
+    "platform/rabbitmq",
+    "integration/mautic",
+    "integration/postal-email",
+    "integration/jasmin-sms",
+    "integration/crawlee",
+    "testing/playwright"
   ]
 }

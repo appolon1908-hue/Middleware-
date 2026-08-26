@@ -43,10 +43,11 @@ class InboxStore(Protocol):
 
 
 class MemoryInboxStore:
-    """Test/development-only storage. Settings prohibit it in staging/production."""
+    """Test/development-only storage matching PostgreSQL identity constraints."""
 
     def __init__(self) -> None:
-        self._items: dict[tuple[str, str], tuple[str, IngressResult]] = {}
+        self._event_items: dict[tuple[str, str], tuple[str, IngressResult]] = {}
+        self._idempotency_items: dict[tuple[str, str], tuple[str, IngressResult]] = {}
 
     async def accept(
         self,
@@ -56,13 +57,21 @@ class MemoryInboxStore:
         body_sha256: str,
         semantic_sha256: str,
     ) -> IngressResult:
-        key = (envelope.tenant_id, envelope.id)
-        existing = self._items.get(key)
+        event_key = (envelope.tenant_id, envelope.id)
+        idempotency_key = (envelope.tenant_id, envelope.idempotency_key)
+        event_existing = self._event_items.get(event_key)
+        idem_existing = self._idempotency_items.get(idempotency_key)
+
+        if event_existing and idem_existing and event_existing[1].event_id != idem_existing[1].event_id:
+            raise ReplayConflict("event and idempotency identities refer to different accepted events")
+
+        existing = event_existing or idem_existing
         if existing:
             old_semantic_hash, result = existing
             if old_semantic_hash != semantic_sha256:
-                raise ReplayConflict("event id was reused with a different semantic payload")
+                raise ReplayConflict("event/idempotency identity was reused with a different semantic payload")
             return result.model_copy(update={"status": "duplicate", "duplicate": True})
+
         result = IngressResult(
             event_id=envelope.id,
             tenant_id=envelope.tenant_id,
@@ -70,7 +79,9 @@ class MemoryInboxStore:
             duplicate=False,
             correlation_id=envelope.correlation_id,
         )
-        self._items[key] = (semantic_sha256, result)
+        item = (semantic_sha256, result)
+        self._event_items[event_key] = item
+        self._idempotency_items[idempotency_key] = item
         return result
 
     async def ready(self) -> bool:
@@ -112,15 +123,42 @@ class PostgresInboxStore:
             "lease_until",
             "completed_at",
             "dead_lettered_at",
+            "reconciliation_required_at",
             "last_error",
         },
     }
     REQUIRED_UDT_TYPES = {
+        ("middleware_schema_migrations", "version"): "int4",
+        ("middleware_schema_migrations", "name"): "text",
+        ("middleware_schema_migrations", "applied_at"): "timestamptz",
+        ("middleware_inbox", "event_id"): "text",
+        ("middleware_inbox", "tenant_id"): "text",
+        ("middleware_inbox", "source_client_id"): "text",
+        ("middleware_inbox", "event_type"): "text",
+        ("middleware_inbox", "body_sha256"): "bpchar",
+        ("middleware_inbox", "semantic_sha256"): "bpchar",
+        ("middleware_inbox", "idempotency_key"): "text",
+        ("middleware_inbox", "correlation_id"): "text",
         ("middleware_inbox", "payload"): "jsonb",
         ("middleware_inbox", "received_at"): "timestamptz",
-        ("middleware_outbox", "payload"): "jsonb",
+        ("middleware_inbox", "status"): "text",
+        ("middleware_inbox", "processed_at"): "timestamptz",
+        ("middleware_inbox", "last_error"): "text",
         ("middleware_outbox", "id"): "int8",
+        ("middleware_outbox", "tenant_id"): "text",
+        ("middleware_outbox", "destination"): "text",
+        ("middleware_outbox", "event_type"): "text",
+        ("middleware_outbox", "payload"): "jsonb",
+        ("middleware_outbox", "idempotency_key"): "text",
+        ("middleware_outbox", "created_at"): "timestamptz",
         ("middleware_outbox", "next_attempt_at"): "timestamptz",
+        ("middleware_outbox", "attempt_count"): "int4",
+        ("middleware_outbox", "lease_owner"): "text",
+        ("middleware_outbox", "lease_until"): "timestamptz",
+        ("middleware_outbox", "completed_at"): "timestamptz",
+        ("middleware_outbox", "dead_lettered_at"): "timestamptz",
+        ("middleware_outbox", "reconciliation_required_at"): "timestamptz",
+        ("middleware_outbox", "last_error"): "text",
     }
     REQUIRED_KEYS = {
         ("middleware_inbox", "PRIMARY KEY", ("tenant_id", "event_id")),
@@ -186,7 +224,8 @@ class PostgresInboxStore:
             for key, expected_type in self.REQUIRED_UDT_TYPES.items():
                 if types.get(key) != expected_type:
                     raise StorageError(
-                        f"runtime schema type mismatch for {key[0]}.{key[1]}"
+                        f"runtime schema type mismatch for {key[0]}.{key[1]}: "
+                        f"expected {expected_type}, got {types.get(key)!r}"
                     )
             key_rows = await conn.fetch(
                 """
@@ -260,21 +299,26 @@ class PostgresInboxStore:
                         duplicate=False,
                         correlation_id=envelope.correlation_id,
                     )
-                existing = await conn.fetchrow(
+                existing_rows = await conn.fetch(
                     """
-                    SELECT event_id, tenant_id, semantic_sha256, correlation_id
+                    SELECT event_id, tenant_id, idempotency_key, semantic_sha256, correlation_id
                     FROM middleware_inbox
                     WHERE (tenant_id=$1 AND event_id=$2)
                        OR (tenant_id=$1 AND idempotency_key=$3)
                     ORDER BY received_at ASC
-                    LIMIT 1
                     """,
                     envelope.tenant_id,
                     envelope.id,
                     envelope.idempotency_key,
                 )
-                if not existing:
+                if not existing_rows:
                     raise StorageError("inbox conflict could not be reconciled")
+                identities = {(row["event_id"], row["idempotency_key"]) for row in existing_rows}
+                if len(identities) > 1:
+                    raise ReplayConflict(
+                        "event and idempotency identities refer to different accepted events"
+                    )
+                existing = existing_rows[0]
                 if existing["semantic_sha256"] != semantic_sha256:
                     raise ReplayConflict(
                         "event/idempotency identity was reused with a different semantic payload"
@@ -313,10 +357,7 @@ class OutboxRecord:
 
 
 class PostgresOutboxStore:
-    """Lease-based outbox with bounded retry and DLQ transitions.
-
-    Dispatch remains disabled by Settings on this branch.
-    """
+    """Lease-based outbox with bounded retry, reconciliation, and DLQ states."""
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self.pool = pool
@@ -346,6 +387,7 @@ class PostgresOutboxStore:
                         )
                     WHERE completed_at IS NULL
                       AND dead_lettered_at IS NULL
+                      AND reconciliation_required_at IS NULL
                       AND attempt_count >= $1
                       AND (lease_until IS NULL OR lease_until < now())
                     """,
@@ -358,6 +400,7 @@ class PostgresOutboxStore:
                         FROM middleware_outbox
                         WHERE completed_at IS NULL
                           AND dead_lettered_at IS NULL
+                          AND reconciliation_required_at IS NULL
                           AND attempt_count < $3
                           AND next_attempt_at <= now()
                           AND (lease_until IS NULL OR lease_until < now())
@@ -398,13 +441,42 @@ class PostgresOutboxStore:
                 """
                 UPDATE middleware_outbox
                 SET completed_at=now(), lease_owner=NULL, lease_until=NULL, last_error=NULL
-                WHERE id=$1 AND lease_owner=$2
+                WHERE id=$1 AND lease_owner=$2 AND reconciliation_required_at IS NULL
                 """,
                 record_id,
                 worker_id,
             )
             if result != "UPDATE 1":
                 raise StorageError("outbox lease ownership lost before completion")
+
+    async def quarantine_unknown_outcome(
+        self,
+        record_id: int,
+        *,
+        worker_id: str,
+        error: str,
+    ) -> None:
+        safe_error = error[:2048]
+        async with self.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE middleware_outbox
+                SET last_error=$3,
+                    lease_owner=NULL,
+                    lease_until=NULL,
+                    reconciliation_required_at=now()
+                WHERE id=$1
+                  AND lease_owner=$2
+                  AND completed_at IS NULL
+                  AND dead_lettered_at IS NULL
+                  AND reconciliation_required_at IS NULL
+                """,
+                record_id,
+                worker_id,
+                safe_error,
+            )
+            if result != "UPDATE 1":
+                raise StorageError("outbox lease ownership lost before reconciliation quarantine")
 
     async def fail(
         self,
@@ -432,7 +504,9 @@ class PostgresOutboxStore:
                             * interval '1 second'
                         )
                     END
-                WHERE id=$1 AND lease_owner=$2
+                WHERE id=$1
+                  AND lease_owner=$2
+                  AND reconciliation_required_at IS NULL
                 """,
                 record_id,
                 worker_id,

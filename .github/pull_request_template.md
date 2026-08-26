@@ -1,20 +1,38 @@
 ## Summary
 
-Describe the middleware behavior, API, worker, migration, integration, testing, or deployment-control change.
+Describe the middleware behavior, API, worker, migration, integration, testing, contract, or deployment-control change.
 
 ## Integration workstream
 
 - Source branch:
 - Declared branch scope from `docs/INTEGRATION-BRANCHES.md`:
 - Runtime status from `config/integration-branches.json`:
+- Dependency branches from `config/connectivity-map.json`:
 - Dependency pull request(s), or `NONE`:
 - Required merge order, or `INDEPENDENT`:
+- Latest `main` SHA included in this branch:
 
 - [ ] The source branch matches the system being changed.
 - [ ] Unrelated system changes were split into separate pull requests.
-- [ ] The branch was updated from the latest reviewed `main` before exact-head validation.
+- [ ] The branch contains the latest reviewed `main` before exact-head validation.
+- [ ] `main` is an ancestor of the reviewed branch head.
 - [ ] This workstream branch will not be deployed directly.
 - [ ] A verification-only branch does not add or activate a production runtime without an approved architecture and activation record.
+
+## Communication contract
+
+- Affected connection ID(s) from `config/connectivity-map.json`:
+- API or HTTP convention change, or `NONE`:
+- Event type and schema version change, or `NONE`:
+- Webhook signature/inbox change, or `NONE`:
+- Authentication, role, scope, audience, or issuer change, or `NONE`:
+- Tenant, correlation, causation, or idempotency change, or `NONE`:
+- Retry, replay, reconciliation, dead-letter, or compatibility change, or `NONE`:
+
+- [ ] The change remains compatible with `core/integration-contracts`, or the contract change is merged first.
+- [ ] Connectivity and dependency graph validation passes.
+- [ ] Every new communication path declares transport, authentication, reliability, owner, runtime status, and contract.
+- [ ] Verification-only systems remain marked verification-only until runtime evidence and approval exist.
 
 ## Runtime scope
 
@@ -37,6 +55,7 @@ Describe the middleware behavior, API, worker, migration, integration, testing, 
 
 - [ ] Bootstrap repository validation passes.
 - [ ] Workstream manifest validation passes.
+- [ ] Connectivity and communication contract validation passes.
 - [ ] Formatting/lint and static type checks pass.
 - [ ] Unit tests pass.
 - [ ] PostgreSQL integration tests pass where affected.
@@ -61,6 +80,7 @@ Describe the middleware behavior, API, worker, migration, integration, testing, 
 - Protected merged SHA:
 - Immutable image digest:
 - Staging deployment record:
+- Communication and compatibility evidence:
 - Test evidence:
 - Backup/restore evidence:
 - Rollback evidence:

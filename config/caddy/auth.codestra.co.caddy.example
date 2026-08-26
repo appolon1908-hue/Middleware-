@@ -1,0 +1,37 @@
+# Candidate only. Do not install until Server A discovery confirms the upstream.
+#
+# This file assumes the canonical Keycloak runtime is reached over HTTPS using
+# a verified IP/private endpoint and a certificate for auth.codestra.co.
+# Set AUTH_KEYCLOAK_UPSTREAM to the verified host:port, for example a verified
+# private address or 49.12.145.107:443. Do NOT set it to auth.codestra.co:443,
+# because public DNS may route back to this Caddy instance and create a loop.
+
+(auth_codestra_security) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	encode gzip
+}
+
+auth.codestra.co {
+	import auth_codestra_security
+
+	reverse_proxy {$AUTH_KEYCLOAK_UPSTREAM} {
+		header_up Host auth.codestra.co
+		header_up X-Forwarded-Host auth.codestra.co
+		header_up X-Forwarded-Proto https
+
+		transport http {
+			tls
+			tls_server_name auth.codestra.co
+		}
+
+		health_uri /realms/codestra/.well-known/openid-configuration
+		health_status 200
+		health_interval 30s
+		health_timeout 5s
+	}
+}

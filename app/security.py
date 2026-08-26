@@ -143,6 +143,16 @@ class KeycloakJwtVerifier:
             return True
 
 
+def _strict_numeric_timestamp(claims: dict[str, Any], name: str) -> float:
+    value = claims.get(name)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise AuthorizationError(f"machine token {name} must be a numeric timestamp")
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise AuthorizationError(f"machine token {name} must be finite")
+    return numeric
+
+
 def validate_claims(
     claims: dict[str, Any],
     *,
@@ -160,13 +170,11 @@ def validate_claims(
         raise AuthorizationError("token scope claim is missing or malformed")
     if required_scope not in scope_set:
         raise AuthorizationError("required scope is missing")
-    issued_at = claims.get("iat")
-    expires_at = claims.get("exp")
-    if isinstance(issued_at, (int, float)) and isinstance(expires_at, (int, float)):
-        if not math.isfinite(float(issued_at)) or not math.isfinite(float(expires_at)):
-            raise AuthorizationError("machine token timestamps must be finite")
-        if expires_at <= issued_at or expires_at - issued_at > 300:
-            raise AuthorizationError("machine token lifetime exceeds the 300-second policy")
+
+    issued_at = _strict_numeric_timestamp(claims, "iat")
+    expires_at = _strict_numeric_timestamp(claims, "exp")
+    if expires_at <= issued_at or expires_at - issued_at > 300:
+        raise AuthorizationError("machine token lifetime exceeds the 300-second policy")
 
 
 def authorize_tenant(claims: dict[str, Any], tenant_id: str) -> None:

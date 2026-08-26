@@ -25,13 +25,13 @@ def test_exact_scope_and_azp_are_required() -> None:
     )
     with pytest.raises(AuthorizationError):
         validate_claims(
-            {"azp": "odoo-integration", "scope": "other.scope"},
+            {"azp": "odoo-integration", "scope": "other.scope", "iat": 100, "exp": 200},
             expected_client_id="odoo-integration",
             required_scope="odoo.events.publish",
         )
     with pytest.raises(AuthorizationError):
         validate_claims(
-            {"azp": "wrong-client", "scope": "odoo.events.publish"},
+            {"azp": "wrong-client", "scope": "odoo.events.publish", "iat": 100, "exp": 200},
             expected_client_id="odoo-integration",
             required_scope="odoo.events.publish",
         )
@@ -49,6 +49,21 @@ def test_machine_token_lifetime_is_bounded() -> None:
             expected_client_id="odoo-integration",
             required_scope="odoo.events.publish",
         )
+
+
+def test_machine_token_timestamp_claims_must_be_numeric_and_finite() -> None:
+    for iat, exp in (("100", 200), (100, "200"), (True, 200), (100, False), (float("nan"), 200), (100, float("inf"))):
+        with pytest.raises(AuthorizationError):
+            validate_claims(
+                {
+                    "azp": "odoo-integration",
+                    "scope": "odoo.events.publish",
+                    "iat": iat,
+                    "exp": exp,
+                },
+                expected_client_id="odoo-integration",
+                required_scope="odoo.events.publish",
+            )
 
 
 def test_non_finite_webhook_timestamp_is_rejected() -> None:

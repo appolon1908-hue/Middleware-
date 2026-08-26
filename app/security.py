@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import math
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -162,6 +163,8 @@ def validate_claims(
     issued_at = claims.get("iat")
     expires_at = claims.get("exp")
     if isinstance(issued_at, (int, float)) and isinstance(expires_at, (int, float)):
+        if not math.isfinite(float(issued_at)) or not math.isfinite(float(expires_at)):
+            raise AuthorizationError("machine token timestamps must be finite")
         if expires_at <= issued_at or expires_at - issued_at > 300:
             raise AuthorizationError("machine token lifetime exceeds the 300-second policy")
 
@@ -184,7 +187,7 @@ def authorize_tenant(claims: dict[str, Any], tenant_id: str) -> None:
 
 def _parse_timestamp(raw: str) -> float:
     try:
-        return float(raw)
+        observed = float(raw)
     except ValueError:
         try:
             parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -194,7 +197,10 @@ def _parse_timestamp(raw: str) -> float:
             ) from exc
         if parsed.tzinfo is None:
             raise RequestValidationError("X-Codestra-Timestamp must include timezone")
-        return parsed.astimezone(timezone.utc).timestamp()
+        observed = parsed.astimezone(timezone.utc).timestamp()
+    if not math.isfinite(observed):
+        raise RequestValidationError("X-Codestra-Timestamp must be finite")
+    return observed
 
 
 @dataclass(frozen=True)

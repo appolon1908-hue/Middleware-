@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 
 from app.config import ConfigurationError, Settings
-from app.security import AuthorizationError, authorize_tenant, validate_claims
+from app.security import (
+    AuthorizationError,
+    RequestValidationError,
+    _parse_timestamp,
+    authorize_tenant,
+    validate_claims,
+)
 
 
 def test_exact_scope_and_azp_are_required() -> None:
@@ -45,6 +51,12 @@ def test_machine_token_lifetime_is_bounded() -> None:
         )
 
 
+def test_non_finite_webhook_timestamp_is_rejected() -> None:
+    for raw in ("nan", "NaN", "inf", "-inf"):
+        with pytest.raises(RequestValidationError):
+            _parse_timestamp(raw)
+
+
 def test_tenant_claim_is_mandatory_and_no_wildcards() -> None:
     authorize_tenant({"tenant_id": "tenant-a"}, "tenant-a")
     authorize_tenant({"tenant_ids": ["tenant-a", "tenant-b"]}, "tenant-b")
@@ -84,5 +96,16 @@ def test_staging_requires_immutable_release_identity() -> None:
                 "APP_ENV": "staging",
                 "DATABASE_URL": "postgresql://example.invalid/db",
                 "REDIS_URL": "redis://example.invalid/0",
+            }
+        )
+
+
+def test_jwks_uri_is_pinned_to_canonical_issuer() -> None:
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "KEYCLOAK_JWKS_URI": "http://attacker.invalid/jwks",
             }
         )

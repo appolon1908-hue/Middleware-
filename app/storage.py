@@ -11,6 +11,7 @@ from .models import EventEnvelope, IngressResult
 
 
 RUNTIME_SCHEMA_VERSION = 1
+DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 
 
 class StorageError(RuntimeError):
@@ -306,6 +307,7 @@ class OutboxRecord:
     tenant_id: str
     destination: str
     event_type: str
+    idempotency_key: str
     payload: dict[str, Any]
     attempt_count: int
 
@@ -319,9 +321,36 @@ class PostgresOutboxStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self.pool = pool
 
-    async def claim(self, *, worker_id: str, lease_seconds: int = 60) -> OutboxRecord | None:
+    async def claim(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: float = 60,
+        max_attempts: int = DEFAULT_MAX_OUTBOX_ATTEMPTS,
+    ) -> OutboxRecord | None:
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be positive")
         async with self.pool.acquire() as conn:
             async with conn.transaction():
+                await conn.execute(
+                    """
+                    UPDATE middleware_outbox
+                    SET dead_lettered_at=now(),
+                        lease_owner=NULL,
+                        lease_until=NULL,
+                        last_error=COALESCE(
+                            last_error,
+                            'maximum attempts exhausted after worker lease expiry'
+                        )
+                    WHERE completed_at IS NULL
+                      AND dead_lettered_at IS NULL
+                      AND attempt_count >= $1
+                      AND (lease_until IS NULL OR lease_until < now())
+                    """,
+                    max_attempts,
+                )
                 row = await conn.fetchrow(
                     """
                     WITH candidate AS (
@@ -329,6 +358,7 @@ class PostgresOutboxStore:
                         FROM middleware_outbox
                         WHERE completed_at IS NULL
                           AND dead_lettered_at IS NULL
+                          AND attempt_count < $3
                           AND next_attempt_at <= now()
                           AND (lease_until IS NULL OR lease_until < now())
                         ORDER BY id
@@ -342,10 +372,11 @@ class PostgresOutboxStore:
                     FROM candidate
                     WHERE o.id=candidate.id
                     RETURNING o.id, o.tenant_id, o.destination, o.event_type,
-                              o.payload, o.attempt_count
+                              o.idempotency_key, o.payload, o.attempt_count
                     """,
                     worker_id,
                     lease_seconds,
+                    max_attempts,
                 )
         if not row:
             return None
@@ -356,6 +387,7 @@ class PostgresOutboxStore:
             tenant_id=row["tenant_id"],
             destination=row["destination"],
             event_type=row["event_type"],
+            idempotency_key=row["idempotency_key"],
             payload=payload,
             attempt_count=row["attempt_count"],
         )
@@ -380,8 +412,10 @@ class PostgresOutboxStore:
         *,
         worker_id: str,
         error: str,
-        max_attempts: int = 8,
+        max_attempts: int = DEFAULT_MAX_OUTBOX_ATTEMPTS,
     ) -> None:
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be positive")
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
             result = await conn.execute(

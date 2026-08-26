@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "base_branch": "main",
+  "deployment_from_integration_branches": false,
+  "branches": [
+    "integration/odoo",
+    "integration/n8n",
+    "integration/kong",
+    "integration/caddy",
+    "integration/keycloak",
+    "integration/postgresql",
+    "integration/redis",
+    "integration/vicidial",
+    "integration/jasmin-sms",
+    "integration/postal-email",
+    "integration/kyqra-crawler",
+    "integration/webhook-inbox-outbox",
+    "integration/workers-scheduler",
+    "integration/observability"
+  ]
+}

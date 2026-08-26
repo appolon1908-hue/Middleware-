@@ -19,7 +19,9 @@ class OutboxWorker:
 
     No provider handlers are registered on intake-runtime-v1. Future handlers
     receive the authoritative idempotency key and are bounded to complete before
-    the database lease expires. Provider dispatch remains disabled by Settings.
+    the database lease expires. A timed-out handler is quarantined for explicit
+    reconciliation because its external outcome is unknown. Provider dispatch
+    remains disabled by Settings.
     """
 
     def __init__(
@@ -71,14 +73,13 @@ class OutboxWorker:
                 timeout=self.handler_timeout_seconds,
             )
         except TimeoutError:
-            await self.store.fail(
+            await self.store.quarantine_unknown_outcome(
                 record.id,
                 worker_id=self.worker_id,
                 error=(
                     "delivery handler exceeded bounded timeout before lease expiry; "
-                    "provider outcome requires reconciliation"
+                    "external outcome is unknown and requires reconciliation"
                 ),
-                max_attempts=self.max_attempts,
             )
         except Exception as exc:
             log.exception("outbox delivery failed", extra={"outbox_id": record.id})

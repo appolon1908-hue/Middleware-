@@ -1,4 +1,4 @@
-# auth.codestra.co edge repair
+# auth.codestra.co edge status
 
 ## Ownership
 
@@ -6,60 +6,52 @@ This branch owns the public `auth.codestra.co` site behavior and acceptance crit
 
 Booked4Seasons is explicitly out of scope.
 
-## Required route
+## Verified route — 2026-08-26
 
 ```text
 Internet
   -> auth.codestra.co:443
-  -> Caddy
-  -> verified canonical Keycloak upstream
+  -> host Caddy on 65.109.65.169
+  -> 127.0.0.1:18103
+  -> codestra-caddy-upstream-gateway
+  -> codestra-identity-keycloak-1:8080
   -> realm: codestra
 ```
 
-The edge must preserve:
+The staging Keycloak container exists separately and is not the public target.
+
+## Current acceptance evidence
+
+```text
+AUTH_PUBLIC_TLS=PASS
+AUTH_OPENID_DISCOVERY=HTTP_200
+AUTH_ISSUER=https://auth.codestra.co/realms/codestra
+AUTH_HTTP_502=ABSENT
+INTERNAL_GATEWAY_DISCOVERY=HTTP_200
+PUBLIC_TLS_VERIFY_RESULT=0
+PRODUCTION_KEYCLOAK_HEALTH=healthy
+CADDY_RELOAD_REQUIRED=NO
+LIVE_CONFIGURATION_CHANGED=NO
+```
+
+The OpenID Connect discovery body advertises the canonical issuer exactly:
 
 ```text
 https://auth.codestra.co/realms/codestra
 ```
 
-as the issuer exposed by OpenID Connect discovery.
+## Interpretation
 
-## Pre-change gate
+The previously recorded `502` is no longer reproducible. The existing route is healthy, so no Caddy edit or reload is justified by the current evidence. Treat an unnecessary reload or topology change as risk rather than remediation.
 
-Do not reload Caddy until all are true:
+## Regression gate
 
-- active Caddy process/container is identified;
-- the exact loaded Caddy configuration source is identified;
-- the current `auth.codestra.co` route and upstream are recorded;
-- the canonical Keycloak upstream responds directly from Server A;
-- the chosen route cannot recurse through public DNS back to Server A;
-- complete active Caddy configuration validates;
-- a timestamped backup and rollback command exist.
+If `auth.codestra.co` fails again, first verify these layers independently:
 
-## Success criteria
+1. `codestra-identity-keycloak-1` remains healthy.
+2. `codestra-caddy-upstream-gateway` listener `:18103` still targets `codestra-identity-keycloak-1:8080`.
+3. `http://127.0.0.1:18103/realms/codestra/.well-known/openid-configuration` returns 200.
+4. `https://auth.codestra.co/realms/codestra/.well-known/openid-configuration` returns 200 with TLS verification result 0.
+5. The discovery issuer remains `https://auth.codestra.co/realms/codestra`.
 
-```text
-AUTH_PUBLIC_TLS=PASS
-AUTH_CERTIFICATE_SAN=auth.codestra.co
-AUTH_OPENID_DISCOVERY=HTTP_200
-AUTH_ISSUER=https://auth.codestra.co/realms/codestra
-AUTH_ACCOUNT_ROUTE=EXPECTED_KEYCLOAK_RESPONSE
-AUTH_HTTP_502=ABSENT
-CADDY_RELOAD=ZERO_DOWNTIME
-UNRELATED_ROUTES=UNCHANGED
-```
-
-Also sample the other existing Caddy sites after reload to ensure this isolated repair did not alter their routing.
-
-## Rollback trigger
-
-Immediately restore the saved Caddy configuration and reload Caddy if any of these occurs:
-
-- configuration validation fails;
-- `auth.codestra.co` becomes unreachable;
-- certificate validation fails;
-- issuer changes from the canonical value;
-- a proxy loop is observed;
-- unrelated Caddy routes regress.
-
-No Keycloak realm/client/user mutation is part of rollback because none is authorized by this edge repair.
+Do not substitute the staging Keycloak service or an obsolete remote-host route as a recovery shortcut.

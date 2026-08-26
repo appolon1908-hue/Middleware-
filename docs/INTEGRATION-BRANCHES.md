@@ -2,11 +2,23 @@
 
 ## Purpose
 
-Every middleware-connected system and each major platform or observability component has an isolated Git workstream. This prevents Odoo, n8n, telephony, messaging, identity, gateway, proxy, persistence, queue, and monitoring changes from being mixed into one oversized branch.
+Every middleware-connected system and each major platform, shared-core, testing, or observability concern has an isolated Git workstream. This prevents Odoo, n8n, telephony, messaging, marketing, identity, gateway, proxy, persistence, queue, crawler, browser testing, and monitoring changes from being mixed into one oversized branch.
 
 These branches are code-review workstreams. They are **not** deployment environments and must never be deployed directly to staging or production.
 
-## Application and integration workstreams
+A branch existing in GitHub does not prove that a corresponding service is installed, running, owned by this repository, or approved for deployment. Runtime status must be verified independently through the read-only server audit.
+
+## Runtime status meanings
+
+| Status | Meaning |
+|---|---|
+| `declared_active_scope` | The middleware architecture declares an active integration or platform responsibility. Live paths still require runtime confirmation before deployment. |
+| `required_shared_primitive` | The capability is a required shared middleware concern, regardless of which external systems are active. |
+| `configured_worker_not_observed` | Configuration references exist, but the available audit did not observe the expected worker. |
+| `configured_runtime_not_confirmed` | Configuration references exist, but the active runtime and ownership are not confirmed. |
+| `not_observed_on_middleware_host_verification_only` | A dedicated branch exists because the system may be integrated later or may run on another host, but it was not observed on the middleware host. Only contracts, tests, inventory, and verification work are allowed until its runtime and ownership are proven. |
+
+## Active application and integration workstreams
 
 | Branch | System | Scope |
 |---|---|---|
@@ -19,7 +31,7 @@ These branches are code-review workstreams. They are **not** deployment environm
 | `integration/postly-social` | Postly | Social-media polling, publishing and delivery events, account isolation, retries, callbacks, and reconciliation. |
 | `integration/keycloak` | Keycloak | OIDC/JWKS validation, service identities, roles, claims, audience and issuer enforcement, authorization policy, and identity tests. The canonical issuer is `https://auth.codestra.co`. |
 
-## Platform workstreams
+## Active platform workstreams
 
 | Branch | Platform | Scope |
 |---|---|---|
@@ -27,6 +39,25 @@ These branches are code-review workstreams. They are **not** deployment environm
 | `platform/caddy` | Caddy | Public HTTPS, reverse proxy, TLS, upstream health behavior, security headers, access restrictions, and edge validation. |
 | `platform/postgresql` | PostgreSQL | Durable records, event ledger, outbox, audit, mappings, schema, migrations, least-privilege roles, backup/restore, and rollback tests. |
 | `platform/redis` | Redis | Temporary queues, caching, leases, idempotency state, locks, retry scheduling, recovery behavior, and Redis integration tests. |
+
+## Verification-only system workstreams
+
+The following branches now exist as isolated workspaces, but their services were not observed on the middleware host. They do not authorize installation, migration, deployment, traffic routing, or capability activation.
+
+| Branch | System | Allowed scope before runtime confirmation |
+|---|---|---|
+| `platform/rabbitmq` | RabbitMQ | AMQP contracts, exchange/queue/binding design, publisher confirms, consumer acknowledgements, dead-letter and retry policy, TLS/authentication requirements, compatibility tests, and runtime inventory. |
+| `integration/mautic` | Mautic | Contact, campaign, segment, API and webhook contracts, authentication, idempotent synchronization, event mapping, reconciliation tests, and runtime inventory. |
+| `integration/postal-email` | Postal | Middleware-facing email API and lifecycle-event contracts, bounces, complaints, suppression, signatures, deduplication, reconciliation tests, and runtime inventory. |
+| `integration/jasmin-sms` | Jasmin | Middleware-facing HTTP/SMPP submission and delivery-receipt contracts, inbound messages, authentication, replay protection, suppression, rate limits, reconciliation tests, and runtime inventory. |
+| `integration/crawlee` | Crawlee | Crawl-job contracts, policies, tenant/job isolation, queue ownership, result ingestion, retry/replay behavior, deterministic fixtures, and runtime inventory. |
+| `testing/playwright` | Playwright | Browser end-to-end tests, authentication tests, synthetic no-write canaries, deterministic test data, trace/artifact controls, and verification of where Playwright is allowed to run. |
+
+Postal and Jasmin may be underlying provider-host components while Klyrow and Telnexa remain the middleware-facing product integrations. Their branches should contain middleware adapter contracts and tests unless a separate architecture decision explicitly assigns the underlying service source and deployment configuration to this repository.
+
+RabbitMQ must not replace Redis queues or be introduced as an additional broker merely because its branch exists. A broker decision requires runtime evidence, an architecture record, migration and rollback design, queue-semantics tests, operational ownership, and explicit approval.
+
+Playwright is a test workstream, not a production middleware service. Browser tests must use no-write or isolated test targets unless a specific controlled test explicitly authorizes writes.
 
 ## Shared middleware core
 
@@ -50,50 +81,36 @@ These branches are code-review workstreams. They are **not** deployment environm
 | `observability/postgresql-exporter` | PostgreSQL Exporter | Least-privilege monitoring role, database metrics, custom queries, and alerts. |
 | `observability/redis-exporter` | Redis Exporter | Exporter authentication, queue and memory metrics, replication metrics, and alerts. |
 
-## Configured but runtime-unverified workstreams
+## Other configured but runtime-unverified workstreams
 
 | Branch | Status | Allowed work |
 |---|---|---|
 | `integration/kyqra` | Configuration mentions Kyqra, but the available audit did not observe a running Kyqra worker on the middleware host. | Contracts, tests, and runtime verification only until the running service, endpoint, owner, source path, and deployment path are confirmed. |
 | `integration/beyvra` | Configuration mentions Beyvra, but its active middleware-host runtime was not confirmed by the available audit. | Contracts, tests, and runtime verification only until the active service, endpoint, owner, source path, and deployment path are confirmed. |
 
-Neither branch authorizes deployment or activation merely because configuration references exist.
-
-## Explicitly not observed on the middleware host
-
-The available runtime audit explicitly did not observe these components on the middleware host:
-
-```text
-RabbitMQ
-Mautic
-Postal
-Jasmin
-Crawlee
-Playwright
-```
-
-No active middleware workstream branch is created for them. Telnexa and Klyrow remain the middleware-facing SMS and email integrations. A new branch for an unobserved underlying component requires runtime evidence, an ownership decision, and an approved architecture update.
+No verification-only branch authorizes deployment or activation merely because configuration references or a Git branch exist.
 
 ## Branch rules
 
 1. Every workstream starts from the same latest reviewed `main` SHA.
 2. No direct integration commits go to `main`.
 3. A branch may change only its declared system plus the minimum shared contract required for that system.
-4. Shared event, inbox/outbox, worker, PostgreSQL, or Redis behavior belongs in the corresponding `core/*` or `platform/*` branch rather than being duplicated.
-5. Do not commit credentials, live `.env` files, private keys, certificates, database/Redis data, customer payloads, logs, packet captures, or runtime volumes.
+4. Shared event, inbox/outbox, worker, PostgreSQL, Redis, or broker behavior belongs in the corresponding `core/*` or `platform/*` branch rather than being duplicated.
+5. Do not commit credentials, live `.env` files, private keys, certificates, database or queue data, customer payloads, logs, packet captures, browser traces containing secrets, or runtime volumes.
 6. Every branch must include applicable tests for authentication, authorization, tenant isolation, idempotency, retry/replay, duplicates, failure recovery, and disabled-capability behavior.
 7. External writes remain disabled in staging unless a test uses a controlled fake or isolated test target.
-8. Workstream branches merge only through pull requests after exact-head validation.
-9. After merge, update or recreate the workstream from current `main` before unrelated work begins. Do not allow silent long-term drift.
-10. Production deploys only an immutable image built from a reviewed merged SHA. Never deploy `integration/*`, `platform/*`, `core/*`, or `observability/*` directly.
-11. The production server retains read-only Git access and may not rebase, force-push, resolve branch conflicts, or push source changes.
+8. Verification-only branches may not add a production service, route, port, credential, database, queue, or external capability without an approved architecture and activation record.
+9. Workstream branches merge only through pull requests after exact-head validation.
+10. After merge, update or recreate the workstream from current `main` before unrelated work begins. Do not allow silent long-term drift.
+11. Production deploys only an immutable image built from a reviewed merged SHA. Never deploy `integration/*`, `platform/*`, `core/*`, `observability/*`, or `testing/*` directly.
+12. The production server retains read-only Git access and may not rebase, force-push, resolve branch conflicts, or push source changes.
 
 ## Cross-system changes
 
 Split multi-system work whenever practical:
 
 ```text
-shared event or persistence contract
+shared event, broker, or persistence contract
   -> merge first
 system-specific adapter
   -> update from new main and merge next
@@ -101,11 +118,13 @@ Kong route and policy
   -> merge after upstream contract stabilizes
 Caddy edge configuration
   -> merge after Kong/upstream validation
+browser tests and synthetic canaries
+  -> merge after the tested behavior stabilizes
 metrics, dashboards and alerts
   -> merge with the final observable behavior
 ```
 
-Use stacked pull requests when dependencies are unavoidable. Every pull request must state its exact dependency and merge order. Do not combine Odoo, n8n, VICIdial, Asterisk, Telnexa, Klyrow, Postly, Keycloak, Kong, Caddy, database changes, and production activation in one pull request.
+Use stacked pull requests when dependencies are unavoidable. Every pull request must state its exact dependency and merge order. Do not combine Odoo, n8n, telephony, SMS, email, marketing, crawler, broker, Kong, Caddy, database changes, browser testing, and production activation in one pull request.
 
 ## Recommended dependency order
 
@@ -115,13 +134,16 @@ Use stacked pull requests when dependencies are unavoidable. Every pull request 
 4. `core/event-ledger-outbox`
 5. `core/webhook-inbox-replay`
 6. `core/workers-scheduler`
-7. Application adapters: Odoo 19, n8n, VICIdial, Asterisk/PJSIP, Telnexa, Klyrow, and Postly
-8. `platform/kong`
-9. `platform/caddy`
-10. Exporters, Prometheus, Loki, Alertmanager, and Grafana
-11. Kyqra or Beyvra only after runtime verification
+7. Confirmed application adapters: Odoo 19, n8n, VICIdial, Asterisk/PJSIP, Telnexa, Klyrow, and Postly
+8. Verification-only adapters: Mautic, Postal, Jasmin, and Crawlee, only after runtime and ownership confirmation
+9. `platform/rabbitmq`, only after an approved broker architecture decision and migration/rollback evidence
+10. `platform/kong`
+11. `platform/caddy`
+12. `testing/playwright` against staging or isolated targets
+13. Exporters, Prometheus, Loki, Alertmanager, and Grafana
+14. Kyqra or Beyvra only after runtime verification
 
-This order is guidance, not approval to merge untested work.
+This order is guidance, not approval to merge or deploy untested work.
 
 ## Staging safety baseline
 
@@ -141,6 +163,8 @@ PRODUCTION_CALLBACKS_ENABLED=false
 N8N_PRODUCTION_WORKFLOWS_ENABLED=false
 PRODUCTION_DIALING=DISABLED
 ```
+
+Any RabbitMQ, Mautic, Postal, Jasmin, Crawlee, or browser-write capability introduced later must have an explicit fail-closed control and a test proving that omission or malformed values do not enable it.
 
 The actual middleware source must map and enforce its supported variable names. An example file is not runtime evidence.
 

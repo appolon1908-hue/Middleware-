@@ -13,10 +13,10 @@ This repository is the intended source of truth for Codestra's self-hosted middl
 5. Merge into protected `main`.
 6. Build one immutable image from the protected merged SHA.
 7. Deploy that digest to staging with all external effects disabled.
-8. Run database, Redis, webhook, Odoo, n8n, telephony, messaging, identity, gateway, monitoring, backup/restore, and rollback tests as applicable.
+8. Run database, Redis, queue, webhook, Odoo, n8n, telephony, messaging, identity, gateway, crawler, browser, monitoring, backup/restore, and rollback tests as applicable.
 9. Deploy the identical accepted digest to production only after explicit approval.
 
-`integration/*`, `platform/*`, `core/*`, and `observability/*` are review workstreams, not deployment branches. Never deploy them directly.
+`integration/*`, `platform/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches. Never deploy them directly.
 
 ## Managed and connected systems
 
@@ -50,7 +50,20 @@ Operations and monitoring:
 - PostgreSQL Exporter
 - Redis Exporter
 
-Kyqra and Beyvra have runtime-verification branches because configuration references exist but their active middleware-host runtime is not fully confirmed. RabbitMQ, Mautic, Postal, Jasmin, Crawlee, and Playwright were not observed on the middleware host and therefore do not have active branches.
+## Runtime-verification workstreams
+
+Dedicated branches also exist for systems that were not observed as running services on the middleware host:
+
+- `platform/rabbitmq`
+- `integration/mautic`
+- `integration/postal-email`
+- `integration/jasmin-sms`
+- `integration/crawlee`
+- `testing/playwright`
+
+These branches isolate contracts, tests, inventory, and future integration work. Their existence does not prove installation or authorize deployment. Runtime location, ownership, source path, credentials, network exposure, data responsibilities, migration strategy, rollback, and activation approval must be established first.
+
+Kyqra and Beyvra also have runtime-verification branches because configuration references exist but their active middleware-host runtime is not fully confirmed.
 
 ## Repository scope
 
@@ -62,14 +75,16 @@ Commit:
 - non-secret configuration examples;
 - CI, validation, deployment, backup, rollback, and operational documentation;
 - versioned n8n workflow exports only when they contain no credentials;
-- monitoring rules, dashboards, alerts, and exporter configuration without secrets.
+- monitoring rules, dashboards, alerts, and exporter configuration without secrets;
+- contract and test definitions for verification-only integrations.
 
 Never commit:
 
 - `.env` files, passwords, tokens, private keys, certificates, or live connection strings;
-- PostgreSQL or Redis data, dumps, runtime volumes, queues, or dead-letter payloads;
-- Odoo, n8n, VICIdial, Asterisk, Telnexa, Klyrow, Postly, Keycloak, Kong, Caddy, or provider credentials;
+- PostgreSQL, Redis, RabbitMQ, queue, outbox, inbox, dead-letter, or runtime data;
+- Odoo, n8n, VICIdial, Asterisk, Telnexa, Klyrow, Postly, Mautic, Postal, Jasmin, Keycloak, Kong, Caddy, crawler, or provider credentials;
 - production webhook payloads or customer personally identifiable information;
+- browser traces, screenshots, videos, or HAR files containing credentials or customer data;
 - logs, backups, generated evidence containing secrets, or files edited inside a running container.
 
 ## Bootstrap controls

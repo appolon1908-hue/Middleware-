@@ -24,6 +24,9 @@ python3 -m compileall -q "${python_dirs[@]}"
 printf '==> Validating repository safety controls\n'
 python3 scripts/validate_repository.py
 
+printf '==> Validating integration workstream manifest\n'
+python3 scripts/validate_workstream_manifest.py
+
 if [[ -x scripts/project_ci.sh ]]; then
   printf '==> Running project-specific locked dependency and test pipeline\n'
   scripts/project_ci.sh

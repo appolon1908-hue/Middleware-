@@ -1,129 +1,125 @@
 # Codestra Middleware
 
-This repository is the intended source of truth for Codestra's self-hosted middleware application running on Application Server A.
+This repository is the source of truth for reviewed middleware contracts and Git workstreams connecting Codestra applications, public sites, provider-host services, messaging, telephony, crawlers, identity, persistence, and monitoring.
 
-> **Security notice:** this repository is currently public. Keep it limited to non-secret bootstrap files until its visibility is changed to private. Do not import Codestra middleware source, integration configuration, customer data, credentials, certificates, or operational evidence while it is public.
+> **Security notice:** this repository is currently public. Keep it limited to non-secret scaffolding, contracts, tests, and documentation until its visibility is changed to private. Do not import live application source, credentials, certificates, customer data, private configuration, or operational evidence while it is public.
 
 ## Operating model
 
-1. Select the system workstream defined in [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md).
-2. Read its dependencies and communication connections in [`config/connectivity-map.json`](config/connectivity-map.json).
-3. Update the workstream from the latest reviewed `main` and confirm `main` remains an ancestor of the active work.
-4. Change code, tests, migrations, workers, configuration templates, contracts, or monitoring definitions only within the declared scope.
-5. Open a pull request and pass exact-head CI, dependency-graph validation, communication-contract validation, and review.
+1. Select the declared workstream in [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md) or the supplemental site registry in [`architecture/workstreams.py`](architecture/workstreams.py).
+2. Read its dependencies and communication links in [`config/connectivity-map.json`](config/connectivity-map.json) and [`architecture/site_architecture.py`](architecture/site_architecture.py).
+3. Refresh the branch from the latest reviewed `main`.
+4. Change only the declared component and the minimum required shared contracts.
+5. Open a pull request and pass exact-head repository, workstream, connectivity, site-route, lead-intake, and project tests.
 6. Merge into protected `main`.
-7. Build one immutable image from the protected merged SHA.
-8. Deploy that digest to staging with all external effects disabled.
-9. Run database, queue, webhook, Odoo, n8n, telephony, messaging, identity, gateway, crawler, browser, monitoring, backup/restore, and rollback tests as applicable.
+7. Build one immutable artifact from the merged SHA.
+8. Deploy that digest to staging with external effects disabled.
+9. Run authentication, tenant-isolation, duplicate, replay, migration, integration, backup/restore, and rollback tests.
 10. Deploy the identical accepted digest to production only after explicit approval.
 
-`integration/*`, `platform/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches. Never deploy them directly.
+`site/*`, `integration/*`, `platform/*`, `operations/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches.
 
-## Shared communication baseline
-
-The canonical cross-system workstream is:
+## Canonical communication layer
 
 ```text
 core/integration-contracts
 ```
 
-It owns the common event envelope, HTTP and webhook conventions, authentication and tenant metadata, correlation and causation rules, idempotency, compatibility policy, error semantics, observability names, and connection registry.
+This branch owns common event, HTTP, webhook, provider-transport, identity, tenant, correlation, causation, idempotency, compatibility, error, and observability rules.
 
-Every other workstream depends directly or transitively on this contract branch. Shared contract changes merge first; affected branches are then refreshed from the new `main` before implementation continues.
+Every other workstream depends directly or transitively on it. CI rejects disconnected branches, dependency cycles, unknown communication links, missing authentication, missing reliability behavior, missing contracts, and verification-only links represented as active.
 
-The repository validates:
+## Application-server sites
 
-- every workstream has an explicit dependency declaration;
-- the dependency graph is acyclic;
-- every workstream connects to `core/integration-contracts`;
-- every system participates in at least one declared communication connection;
-- every connection declares transport, authentication, reliability, ownership, runtime status, and contract;
-- verification-only systems cannot be represented as active runtime connections.
+Caddy currently exposes workstreams for:
 
-See [`docs/CONNECTIVITY-AND-COMMUNICATION.md`](docs/CONNECTIVITY-AND-COMMUNICATION.md).
+```text
+site/codestra                  codestra.co and www redirect
+site/codestra-auth             auth.codestra.co — degraded HTTP 502
+site/codestra-social           social.codestra.co / Postiz
+site/codestra-ai               ai.codestra.co
+site/beyvra                    public, www, platform, API, admin, staging
+site/booked4seasons            root active; www TLS handshake degraded
+site/breero                    production and staging frontends and APIs
+```
 
-## Managed and connected systems
+`platform/caddy` owns the edge. `operations/application-host` owns route inventory, safe restart boundaries, host health, backup references, and change records.
 
-Application integrations:
+## Provider-host stacks
 
-- Odoo 19
-- n8n
-- VICIdial
-- Asterisk/PJSIP
-- Telnexa SMS
-- Klyrow email
-- Postly social media
-- Keycloak
+The provider-host architecture adds aggregate site workstreams:
 
-Platform dependencies:
+```text
+site/klyrow
+site/telnexa
+site/kyqra-crawler
+site/private-app-integration
+site/codestra-business-scrapper
+operations/provider-host
+platform/nginx-provider
+platform/mariadb
+```
 
-- Kong
-- Caddy
-- PostgreSQL
-- Redis
+Klyrow includes its gateway/API, worker, billing API/worker/scheduler, SMTP relay, Mautic, Postal, RabbitMQ, PostgreSQL, MariaDB, Prometheus, Grafana, and public route contracts.
 
-Operations and monitoring:
+Telnexa includes Jasmin SMS, billing, Keycloak, RabbitMQ, Redis, PostgreSQL, Prometheus, Node Exporter, public routes, and internal mTLS access.
 
-- Prometheus
-- Grafana
-- Alertmanager
-- Loki
-- Blackbox Exporter
-- Node Exporter
-- cAdvisor
-- PostgreSQL Exporter
-- Redis Exporter
+Kyqra includes the crawler API, HTTP worker, browser worker, callback worker, PostgreSQL, Redis, and `crawler.kyqra.com`.
 
-## Runtime-verification workstreams
+The private integration gateway remains loopback/internal-mTLS only. The Codestra Business Scrapper source at `/opt/codestra-business-scrapper` remains recorded as not deployed.
 
-Dedicated branches also exist for systems that were not observed as running services on the middleware host:
+See [`docs/SITE-ARCHITECTURE.md`](docs/SITE-ARCHITECTURE.md).
 
-- `platform/rabbitmq`
-- `integration/mautic`
-- `integration/postal-email`
-- `integration/jasmin-sms`
-- `integration/crawlee`
-- `testing/playwright`
+## Forms, crawler results, and scraper results to Odoo
 
-These branches isolate contracts, tests, inventory, and future integration work. Their existence does not prove installation or authorize deployment. Runtime location, ownership, source path, credentials, network exposure, data responsibilities, migration strategy, rollback, and activation approval must be established first.
+The only approved write path is:
 
-Kyqra and Beyvra also have runtime-verification branches because configuration references exist but their active middleware-host runtime is not fully confirmed.
+```text
+website form / crawler result / approved scraper result
+                    -> edge or private integration gateway
+                    -> durable signed inbox
+                    -> core/lead-intake-normalization
+                    -> consent, suppression, provenance, dedupe, review policy
+                    -> transactional outbox
+                    -> integration/odoo-19
+                    -> Odoo CRM
+```
+
+No site, crawler, scraper, n8n workflow, provider service, or browser test writes directly to Odoo.
+
+Public forms may create or update `new` leads after validation, consent, and suppression checks. Crawler and scraper discoveries enter Odoo as `review_pending` with `review_required=true` and `allow_external_contact=false`.
+
+See:
+
+- [`contracts/lead-intake.schema.json`](contracts/lead-intake.schema.json)
+- [`contracts/odoo-lead-command.schema.json`](contracts/odoo-lead-command.schema.json)
+- [`docs/LEAD-INGESTION-TO-ODOO.md`](docs/LEAD-INGESTION-TO-ODOO.md)
 
 ## Repository scope
 
-Commit:
-
-- middleware API and worker source;
-- tests and database migrations;
-- Dockerfiles and non-secret Compose templates;
-- non-secret configuration examples;
-- canonical API, event, webhook, identity, and observability contracts;
-- CI, validation, deployment, backup, rollback, and operational documentation;
-- versioned n8n workflow exports only when they contain no credentials;
-- monitoring rules, dashboards, alerts, and exporter configuration without secrets;
-- contract and test definitions for verification-only integrations.
+Commit only application source, workers, tests, migrations, locked dependencies, Dockerfiles, non-secret templates, contracts, route registries, credential-free workflow exports, monitoring configuration, and operational documentation.
 
 Never commit:
 
-- `.env` files, passwords, tokens, private keys, certificates, or live connection strings;
-- PostgreSQL, Redis, RabbitMQ, queue, outbox, inbox, dead-letter, or runtime data;
-- Odoo, n8n, VICIdial, Asterisk, Telnexa, Klyrow, Postly, Mautic, Postal, Jasmin, Keycloak, Kong, Caddy, crawler, or provider credentials;
-- production webhook payloads or customer personally identifiable information;
+- `.env`, passwords, tokens, private keys, certificates, or live connection strings;
+- PostgreSQL, MariaDB, Redis, RabbitMQ, inbox, outbox, dead-letter, session, or runtime data;
+- Odoo, n8n, telephony, SMS, email, marketing, crawler, identity, gateway, or provider credentials;
+- production payloads or customer personally identifiable information;
 - browser traces, screenshots, videos, or HAR files containing credentials or customer data;
-- logs, backups, generated evidence containing secrets, or files edited inside a running container.
+- logs, backups, or secret-bearing evidence;
+- files edited inside a running production container.
 
-## Bootstrap controls
+## Canonical controls
 
-- [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md) defines the isolated branch architecture, runtime status, dependency order, and merge rules.
-- [`docs/CONNECTIVITY-AND-COMMUNICATION.md`](docs/CONNECTIVITY-AND-COMMUNICATION.md) defines cross-system topology, shared communication rules, and branch synchronization.
-- [`config/integration-branches.json`](config/integration-branches.json) is the machine-readable canonical workstream list.
-- [`config/connectivity-map.json`](config/connectivity-map.json) is the machine-readable dependency and connection registry.
-- [`contracts/event-envelope.schema.json`](contracts/event-envelope.schema.json) defines the canonical asynchronous event envelope.
-- [`contracts/http-conventions.md`](contracts/http-conventions.md) defines authentication, tenant, idempotency, webhook, retry, health, and error behavior.
-- [`contracts/observability-conventions.md`](contracts/observability-conventions.md) defines release identity, metrics, logs, tracing, dashboards, and alerts.
-- [`docs/SERVER-CONNECTION.md`](docs/SERVER-CONNECTION.md) explains how to make the repository private, create a separate read-only deploy key, inventory the live middleware safely, import only authoritative source, and deploy immutable artifacts without restarting unrelated services.
-- [`scripts/discover_middleware_runtime.sh`](scripts/discover_middleware_runtime.sh) performs read-only Docker discovery and prints only allowlisted non-secret runtime controls.
-- [`scripts/run_ci.sh`](scripts/run_ci.sh) runs bootstrap checks and delegates to `scripts/project_ci.sh` after the actual application source and locked dependency pipeline are imported.
-- [`config/preproduction-safety.env.example`](config/preproduction-safety.env.example) records the fail-closed staging baseline. It is not proof that the live application recognizes every variable; the source import must map and enforce the actual controls.
-
-The server must consume reviewed artifacts through read-only credentials. Production must deploy an exact commit SHA or immutable container digest; it must not build from an unreviewed branch or accept manual source edits inside a running container.
+- [`config/integration-branches.json`](config/integration-branches.json) — base workstream manifest and synchronization policy.
+- [`architecture/workstreams.py`](architecture/workstreams.py) — supplemental site/provider workstreams and runtime-status updates.
+- [`architecture/routes.py`](architecture/routes.py) — Caddy/Nginx routes, stack membership, and lead sources.
+- [`architecture/site_architecture.py`](architecture/site_architecture.py) — supplemental dependency, communication, stack, and Odoo-intake graph.
+- [`config/connectivity-map.json`](config/connectivity-map.json) — base dependency and communication graph.
+- [`contracts/event-envelope.schema.json`](contracts/event-envelope.schema.json) — canonical asynchronous event.
+- [`contracts/http-conventions.md`](contracts/http-conventions.md) — HTTP, identity, idempotency, webhook, retry, health, and error rules.
+- [`contracts/provider-transport-conventions.md`](contracts/provider-transport-conventions.md) — Caddy/Nginx, mTLS, RabbitMQ, SMTP, SMS, database, and provider transport rules.
+- [`contracts/observability-conventions.md`](contracts/observability-conventions.md) — release identity, metrics, logs, traces, dashboards, and alerts.
+- [`docs/SERVER-CONNECTION.md`](docs/SERVER-CONNECTION.md) — read-only server/Git connection and safe source import.
+- [`scripts/discover_middleware_runtime.sh`](scripts/discover_middleware_runtime.sh) — read-only middleware-host inventory.
+- [`scripts/audit_all_workstream_sync.py`](scripts/audit_all_workstream_sync.py) — base and supplemental branch synchronization audit.

@@ -14,6 +14,15 @@ Purpose: record the reviewed Git-only synchronization package for Application Se
 - `www.booked4seasons.com` remains out of scope and its recorded TLS degradation is unchanged;
 - contract-only middleware ingress paths are not represented as runnable endpoints.
 
+## Review feedback addressed
+
+Codex review findings were addressed before release:
+
+- exact caller/target/scope equality is now enforced for the complete least-privilege service-grant matrix;
+- auth discovery uses fresh temporary response bodies and cannot report a stale issuer after a failed curl request.
+
+These fixes must be included in the exact-head CI result used for merge.
+
 ## Deployment boundary
 
 This release synchronizes Git content only. It does not authorize Caddy reload, Keycloak restart, Odoo/n8n changes, external delivery, or creation of middleware API listeners that do not yet have authoritative runtime source.

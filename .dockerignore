@@ -2,6 +2,8 @@
 .github
 .env
 .env.*
+*.env
+*.env.*
 !.env.example
 !*.env.example
 .venv
@@ -17,7 +19,6 @@ node_modules
 coverage
 logs
 runtime
-data
 backups
 private-evidence
 artifacts
@@ -32,7 +33,6 @@ artifacts
 *.rdb
 *.aof
 *.key
-*.pem
 *.p12
 *.pfx
 *.jks
@@ -40,4 +40,3 @@ artifacts
 *.har
 *.pcap
 *.trace
-*.ndjson

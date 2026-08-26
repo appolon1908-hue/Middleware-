@@ -13,7 +13,7 @@ while IFS= read -r -d '' script; do
 done < <(find scripts -type f -name '*.sh' -print0 | sort -z)
 
 printf '==> Compiling Python source\n'
-python_dirs=(scripts)
+python_dirs=(scripts architecture)
 for candidate in app src middleware tests workers migrations; do
   if [[ -d "$candidate" ]]; then
     python_dirs+=("$candidate")
@@ -27,8 +27,14 @@ python3 scripts/validate_repository.py
 printf '==> Validating integration workstream manifest\n'
 python3 scripts/validate_workstream_manifest.py
 
-printf '==> Validating connectivity and communication contracts\n'
+printf '==> Validating canonical connectivity contracts\n'
 python3 scripts/validate_connectivity_contracts.py
+
+printf '==> Validating supplemental site/provider workstreams\n'
+python3 scripts/validate_site_workstreams.py
+
+printf '==> Validating server routes and Odoo lead intake\n'
+python3 scripts/validate_site_routes_and_leads.py
 
 if [[ -x scripts/project_ci.sh ]]; then
   printf '==> Running project-specific locked dependency and test pipeline\n'
@@ -36,5 +42,5 @@ if [[ -x scripts/project_ci.sh ]]; then
 else
   printf '%s\n' \
     'PROJECT_SPECIFIC_CI=NOT_YET_IMPORTED' \
-    'Add an executable scripts/project_ci.sh in the same pull request that imports the live middleware source.'
+    'Add an executable scripts/project_ci.sh in the same pull request that imports the authoritative middleware source.'
 fi

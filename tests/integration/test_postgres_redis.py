@@ -158,6 +158,27 @@ async def test_postgres_semantic_collision_fails_closed(pool: asyncpg.Pool) -> N
 
 
 @pytest.mark.asyncio
+async def test_postgres_idempotency_key_collision_fails_closed(pool: asyncpg.Pool) -> None:
+    store = PostgresInboxStore(pool)
+    first = envelope(event_id="evt-idem-1", idempotency_key="idem-shared", value=1)
+    second = envelope(event_id="evt-idem-2", idempotency_key="idem-shared", value=2)
+
+    await store.accept(
+        first,
+        producer_client_id="odoo-integration",
+        body_sha256="f" * 64,
+        semantic_sha256=semantic_digest(first),
+    )
+    with pytest.raises(ReplayConflict):
+        await store.accept(
+            second,
+            producer_client_id="odoo-integration",
+            body_sha256="0" * 64,
+            semantic_sha256=semantic_digest(second),
+        )
+
+
+@pytest.mark.asyncio
 async def test_outbox_claim_carries_idempotency_and_skip_locked(pool: asyncpg.Pool) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
@@ -215,6 +236,49 @@ async def test_outbox_expired_max_attempts_moves_to_dlq(pool: asyncpg.Pool) -> N
 
 
 @pytest.mark.asyncio
+async def test_outbox_unknown_outcome_is_quarantined_from_claims(pool: asyncpg.Pool) -> None:
+    async with pool.acquire() as conn:
+        row_id = await conn.fetchval(
+            """
+            INSERT INTO middleware_outbox
+              (tenant_id, destination, event_type, payload, idempotency_key)
+            VALUES ($1,$2,$3,$4::jsonb,$5)
+            RETURNING id
+            """,
+            "tenant-test",
+            "sandbox-provider",
+            "codestra.test.delivery",
+            json.dumps({"hello": "world"}),
+            "delivery-idem-unknown",
+        )
+
+    store = PostgresOutboxStore(pool)
+    claimed = await store.claim(worker_id="worker-timeout", lease_seconds=30, max_attempts=3)
+    assert claimed is not None and claimed.id == row_id
+
+    await store.quarantine_unknown_outcome(
+        row_id,
+        worker_id="worker-timeout",
+        error="provider timeout; outcome unknown",
+    )
+
+    assert await store.claim(worker_id="worker-retry", lease_seconds=30, max_attempts=3) is None
+    async with pool.acquire() as conn:
+        state = await conn.fetchrow(
+            """
+            SELECT reconciliation_required_at IS NOT NULL AS reconciliation_required,
+                   lease_owner, completed_at, dead_lettered_at
+            FROM middleware_outbox WHERE id=$1
+            """,
+            row_id,
+        )
+    assert state["reconciliation_required"] is True
+    assert state["lease_owner"] is None
+    assert state["completed_at"] is None
+    assert state["dead_lettered_at"] is None
+
+
+@pytest.mark.asyncio
 async def test_redis_replay_lock_owner_and_tuple_isolation(redis_client: Redis) -> None:
     guard = RedisReplayGuard(redis_client, lock_seconds=30)
 
@@ -226,7 +290,6 @@ async def test_redis_replay_lock_owner_and_tuple_isolation(redis_client: Redis) 
     with pytest.raises(ReplayBusy):
         await guard.acquire("tenant:a", "event:b")
 
-    # These delimiter-containing tuples must map to different Redis keys.
     other = await guard.acquire("tenant", "a:event:b")
     await guard.release("tenant", "a:event:b", other)
 

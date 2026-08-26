@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import asyncpg
 
@@ -12,6 +12,7 @@ from .models import EventEnvelope, IngressResult
 
 RUNTIME_SCHEMA_VERSION = 1
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
+ReconciliationAction = Literal["retry", "complete", "dead_letter"]
 
 
 class StorageError(RuntimeError):
@@ -21,6 +22,11 @@ class StorageError(RuntimeError):
 
 class ReplayConflict(StorageError):
     code = "idempotency_conflict"
+    retryable = False
+
+
+class ReconciliationError(StorageError):
+    code = "reconciliation_invalid"
     retryable = False
 
 
@@ -126,6 +132,16 @@ class PostgresInboxStore:
             "reconciliation_required_at",
             "last_error",
         },
+        "middleware_reconciliation_audit": {
+            "id",
+            "outbox_id",
+            "tenant_id",
+            "action",
+            "operator_id",
+            "reason",
+            "attempt_count",
+            "created_at",
+        },
     }
     REQUIRED_UDT_TYPES = {
         ("middleware_schema_migrations", "version"): "int4",
@@ -159,8 +175,17 @@ class PostgresInboxStore:
         ("middleware_outbox", "dead_lettered_at"): "timestamptz",
         ("middleware_outbox", "reconciliation_required_at"): "timestamptz",
         ("middleware_outbox", "last_error"): "text",
+        ("middleware_reconciliation_audit", "id"): "int8",
+        ("middleware_reconciliation_audit", "outbox_id"): "int8",
+        ("middleware_reconciliation_audit", "tenant_id"): "text",
+        ("middleware_reconciliation_audit", "action"): "text",
+        ("middleware_reconciliation_audit", "operator_id"): "text",
+        ("middleware_reconciliation_audit", "reason"): "text",
+        ("middleware_reconciliation_audit", "attempt_count"): "int4",
+        ("middleware_reconciliation_audit", "created_at"): "timestamptz",
     }
     REQUIRED_KEYS = {
+        ("middleware_schema_migrations", "PRIMARY KEY", ("version",)),
         ("middleware_inbox", "PRIMARY KEY", ("tenant_id", "event_id")),
         ("middleware_inbox", "UNIQUE", ("tenant_id", "idempotency_key")),
         ("middleware_outbox", "PRIMARY KEY", ("id",)),
@@ -169,6 +194,7 @@ class PostgresInboxStore:
             "UNIQUE",
             ("tenant_id", "destination", "idempotency_key"),
         ),
+        ("middleware_reconciliation_audit", "PRIMARY KEY", ("id",)),
     }
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -242,7 +268,7 @@ class PostgresInboxStore:
                   AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
                 GROUP BY tc.table_name, tc.constraint_type, tc.constraint_name
                 """,
-                ["middleware_inbox", "middleware_outbox"],
+                list(self.REQUIRED_COLUMNS),
             )
             found_keys = {
                 (
@@ -477,6 +503,106 @@ class PostgresOutboxStore:
             )
             if result != "UPDATE 1":
                 raise StorageError("outbox lease ownership lost before reconciliation quarantine")
+
+    async def resolve_reconciliation(
+        self,
+        record_id: int,
+        *,
+        operator_id: str,
+        action: ReconciliationAction,
+        reason: str,
+        max_attempts: int = DEFAULT_MAX_OUTBOX_ATTEMPTS,
+    ) -> None:
+        if action not in {"retry", "complete", "dead_letter"}:
+            raise ValueError("unsupported reconciliation action")
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be positive")
+        safe_operator = operator_id.strip()
+        safe_reason = reason.strip()
+        if not safe_operator or len(safe_operator) > 160:
+            raise ValueError("operator_id must contain 1..160 characters")
+        if not safe_reason or len(safe_reason) > 2048:
+            raise ValueError("reason must contain 1..2048 characters")
+
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, tenant_id, attempt_count,
+                           reconciliation_required_at, completed_at, dead_lettered_at
+                    FROM middleware_outbox
+                    WHERE id=$1
+                    FOR UPDATE
+                    """,
+                    record_id,
+                )
+                if row is None:
+                    raise ReconciliationError("outbox record does not exist")
+                if row["completed_at"] is not None or row["dead_lettered_at"] is not None:
+                    raise ReconciliationError("outbox record is already terminal")
+                if row["reconciliation_required_at"] is None:
+                    raise ReconciliationError("outbox record is not awaiting reconciliation")
+                if action == "retry" and row["attempt_count"] >= max_attempts:
+                    raise ReconciliationError(
+                        "attempt limit is exhausted; choose complete or dead_letter"
+                    )
+
+                await conn.execute(
+                    """
+                    INSERT INTO middleware_reconciliation_audit
+                      (outbox_id, tenant_id, action, operator_id, reason, attempt_count)
+                    VALUES ($1,$2,$3,$4,$5,$6)
+                    """,
+                    record_id,
+                    row["tenant_id"],
+                    action,
+                    safe_operator,
+                    safe_reason,
+                    row["attempt_count"],
+                )
+
+                if action == "retry":
+                    await conn.execute(
+                        """
+                        UPDATE middleware_outbox
+                        SET reconciliation_required_at=NULL,
+                            lease_owner=NULL,
+                            lease_until=NULL,
+                            next_attempt_at=now(),
+                            last_error='reconciliation approved retry: ' || $2
+                        WHERE id=$1
+                        """,
+                        record_id,
+                        safe_reason,
+                    )
+                elif action == "complete":
+                    await conn.execute(
+                        """
+                        UPDATE middleware_outbox
+                        SET reconciliation_required_at=NULL,
+                            lease_owner=NULL,
+                            lease_until=NULL,
+                            completed_at=now(),
+                            last_error='reconciliation confirmed delivery: ' || $2
+                        WHERE id=$1
+                        """,
+                        record_id,
+                        safe_reason,
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        UPDATE middleware_outbox
+                        SET reconciliation_required_at=NULL,
+                            lease_owner=NULL,
+                            lease_until=NULL,
+                            dead_lettered_at=now(),
+                            last_error='reconciliation dead-lettered: ' || $2
+                        WHERE id=$1
+                        """,
+                        record_id,
+                        safe_reason,
+                    )
 
     async def fail(
         self,

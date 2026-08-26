@@ -13,6 +13,7 @@ class FakeStore:
         self.record = record
         self.claim_args = None
         self.failed = []
+        self.quarantined = []
         self.completed = []
 
     async def claim(self, **kwargs):
@@ -22,6 +23,9 @@ class FakeStore:
 
     async def fail(self, record_id: int, **kwargs):
         self.failed.append((record_id, kwargs))
+
+    async def quarantine_unknown_outcome(self, record_id: int, **kwargs):
+        self.quarantined.append((record_id, kwargs))
 
     async def complete(self, record_id: int, **kwargs):
         self.completed.append((record_id, kwargs))
@@ -54,7 +58,7 @@ async def test_worker_passes_authoritative_idempotency_key_to_handler() -> None:
 
 
 @pytest.mark.asyncio
-async def test_handler_timeout_occurs_before_lease_expiry() -> None:
+async def test_handler_timeout_is_quarantined_before_lease_expiry() -> None:
     store = FakeStore(record())
 
     async def slow_handler(item: OutboxRecord) -> None:
@@ -68,7 +72,8 @@ async def test_handler_timeout_occurs_before_lease_expiry() -> None:
         max_attempts=8,
     )
     assert await worker.run_once() is True
-    assert store.failed
+    assert store.quarantined
+    assert not store.failed
     assert not store.completed
     assert store.claim_args["max_attempts"] == 8
     assert store.claim_args["lease_seconds"] == 0.1

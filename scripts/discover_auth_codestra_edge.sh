@@ -9,6 +9,9 @@ HOST_GATEWAY="http://127.0.0.1:18103"
 PRODUCTION_KEYCLOAK="codestra-identity-keycloak-1"
 STAGING_KEYCLOAK="codestra-identity-staging-keycloak-staging-1"
 UPSTREAM_GATEWAY="codestra-caddy-upstream-gateway"
+PUBLIC_BODY="$(mktemp)"
+GATEWAY_BODY="$(mktemp)"
+trap 'rm -f "$PUBLIC_BODY" "$GATEWAY_BODY"' EXIT
 
 printf 'SERVER\n'
 hostname
@@ -18,27 +21,45 @@ printf '\nDNS\n'
 getent ahostsv4 "$AUTH_HOST" 2>/dev/null | awk '{print $1}' | sort -u || true
 
 printf '\nPUBLIC_AUTH_STATUS\n'
-curl -sS --connect-timeout 5 --max-time 10 \
-  -o /tmp/auth-public-discovery.json \
+if curl -sS --connect-timeout 5 --max-time 10 \
+  -o "$PUBLIC_BODY" \
   -w 'URL=%{url_effective} HTTP=%{http_code} REMOTE_IP=%{remote_ip} TLS_VERIFY=%{ssl_verify_result}\n' \
-  "https://${AUTH_HOST}${DISCOVERY_PATH}" || true
+  "https://${AUTH_HOST}${DISCOVERY_PATH}"; then
+  PUBLIC_REQUEST_STATUS=PASS
+else
+  PUBLIC_REQUEST_STATUS=FAIL
+  : > "$PUBLIC_BODY"
+fi
+printf 'PUBLIC_REQUEST_STATUS=%s\n' "$PUBLIC_REQUEST_STATUS"
 
 printf '\nHOST_GATEWAY_STATUS\n'
-curl -sS --connect-timeout 5 --max-time 10 \
-  -o /tmp/auth-gateway-discovery.json \
+if curl -sS --connect-timeout 5 --max-time 10 \
+  -o "$GATEWAY_BODY" \
   -w 'URL=%{url_effective} HTTP=%{http_code}\n' \
-  "${HOST_GATEWAY}${DISCOVERY_PATH}" || true
+  "${HOST_GATEWAY}${DISCOVERY_PATH}"; then
+  GATEWAY_REQUEST_STATUS=PASS
+else
+  GATEWAY_REQUEST_STATUS=FAIL
+  : > "$GATEWAY_BODY"
+fi
+printf 'GATEWAY_REQUEST_STATUS=%s\n' "$GATEWAY_REQUEST_STATUS"
 
 printf '\nDISCOVERY_ISSUERS\n'
-python3 - <<'PY'
+PUBLIC_BODY="$PUBLIC_BODY" GATEWAY_BODY="$GATEWAY_BODY" python3 - <<'PY'
 import json
+import os
 from pathlib import Path
-for label, path in (
-    ("PUBLIC", Path("/tmp/auth-public-discovery.json")),
-    ("GATEWAY", Path("/tmp/auth-gateway-discovery.json")),
+
+for label, env_name in (
+    ("PUBLIC", "PUBLIC_BODY"),
+    ("GATEWAY", "GATEWAY_BODY"),
 ):
+    path = Path(os.environ[env_name])
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            raise ValueError("empty current-run response body")
+        payload = json.loads(text)
     except Exception:
         print(f"{label}_ISSUER=UNAVAILABLE")
         continue

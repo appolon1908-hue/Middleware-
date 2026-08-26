@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.codestra.co/middleware/event-envelope.schema.json",
+  "title": "Codestra Middleware Event Envelope",
+  "description": "Canonical envelope used across middleware adapters, durable inbox/outbox records, workers, callbacks, and audit trails.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "specversion",
+    "id",
+    "type",
+    "source",
+    "subject",
+    "time",
+    "tenant_id",
+    "correlation_id",
+    "causation_id",
+    "idempotency_key",
+    "schema_version",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^codestra\\.[a-z0-9_]+(?:\\.[a-z0-9_]+)+$",
+      "maxLength": 160
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^urn:codestra:[a-z0-9][a-z0-9-]*$",
+      "maxLength": 160
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 256
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "traceparent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user",
+            "service",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "delivery_attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}

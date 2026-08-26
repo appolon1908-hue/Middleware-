@@ -67,10 +67,12 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
         "odoo.leads.read",
         "odoo.leads.write",
     },
-    ("n8n-automation", "middleware-api"): {
-        "workflow.result.publish",
+    ("middleware-api", "n8n-automation"): {
         "workflow.status.read",
         "workflow.trigger",
+    },
+    ("n8n-automation", "middleware-api"): {
+        "workflow.result.publish",
     },
     ("vicidial-adapter", "middleware-api"): {
         "callbacks.update",

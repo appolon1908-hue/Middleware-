@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "branch": "feature/intake-runtime-v1",
+  "middlewareApi": {
+    "sourceState": "runtime-source-present-unverified",
+    "paths": ["app", "migrations", "requirements-runtime.txt", "Dockerfile.runtime"]
+  },
+  "middlewareWorker": {
+    "sourceState": "runtime-source-present-unverified",
+    "paths": ["app/worker.py", "workers/run_outbox.py"]
+  },
+  "runtimeDeployment": "not_deployed",
+  "kongRoutesActivated": false,
+  "outboxDispatchEnabled": false,
+  "externalDeliveryEnabled": false
+}

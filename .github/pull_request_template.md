@@ -2,6 +2,18 @@
 
 Describe the middleware behavior, API, worker, migration, integration, or deployment-control change.
 
+## Integration workstream
+
+- Source branch:
+- Declared branch scope from `docs/INTEGRATION-BRANCHES.md`:
+- Dependency pull request(s), or `NONE`:
+- Required merge order, or `INDEPENDENT`:
+
+- [ ] The source branch matches the system being changed.
+- [ ] Unrelated system changes were split into separate pull requests.
+- [ ] The branch was updated from the latest reviewed `main` before exact-head validation.
+- [ ] This integration branch will not be deployed directly.
+
 ## Runtime scope
 
 - API service(s):
@@ -9,7 +21,7 @@ Describe the middleware behavior, API, worker, migration, integration, or deploy
 - Scheduled/cron service(s):
 - Database migration revision(s):
 - Redis, queue, outbox, inbox, webhook, or dead-letter impact:
-- Odoo, n8n, VICIdial, Keycloak, Kong/Caddy, SMS, email, or provider impact:
+- Odoo, n8n, VICIdial, Keycloak, Kong/Caddy, SMS, email, crawler, or provider impact:
 
 ## Security and repository hygiene
 
@@ -29,7 +41,7 @@ Describe the middleware behavior, API, worker, migration, integration, or deploy
 - [ ] Migration upgrade and rollback tests pass where affected.
 - [ ] Outbox/inbox, retry, lease, idempotency, replay, and dead-letter tests pass where affected.
 - [ ] Cross-tenant and authorization tests pass where affected.
-- [ ] Odoo, n8n, VICIdial, Keycloak, Kong/Caddy, SMS, email, and provider contract tests pass where affected.
+- [ ] Odoo, n8n, VICIdial, Keycloak, Kong/Caddy, SMS, email, crawler, and provider contract tests pass where affected.
 - [ ] Container build, health, readiness, graceful shutdown, and restart tests pass.
 - [ ] Secret, dependency, and container vulnerability scans pass.
 
@@ -42,7 +54,8 @@ Describe the middleware behavior, API, worker, migration, integration, or deploy
 
 ## Release evidence
 
-- Exact reviewed commit SHA:
+- Exact reviewed branch-head SHA:
+- Protected merged SHA:
 - Immutable image digest:
 - Staging deployment record:
 - Test evidence:

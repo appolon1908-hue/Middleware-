@@ -215,7 +215,7 @@ def validate_workflow_pinning(errors: list[str]) -> None:
             continue
 
         for match in ACTION_REF_RE.finditer(text):
-            action = match.group(1).strip('"\'')
+            action = match.group(1).strip("\"'")
             if action.startswith("./"):
                 continue
             if action.startswith("docker://"):

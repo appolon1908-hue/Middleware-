@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import os
-from urllib.parse import urlparse
+import re
+from urllib.parse import unquote, urlparse
 
 import pytest
+
+
+SAFE_DB_NAME = re.compile(r"^middleware_test_[A-Za-z0-9_]+$")
+
+
+def _reject_url_overrides(parsed, label: str) -> None:
+    if parsed.params or parsed.query or parsed.fragment:
+        pytest.fail(f"{label} must not contain params, query overrides, or fragments")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -27,17 +36,20 @@ def require_disposable_integration_targets() -> None:
 
     if pg.scheme not in {"postgres", "postgresql"}:
         pytest.fail("DATABASE_URL must use postgres/postgresql")
+    _reject_url_overrides(pg, "DATABASE_URL")
     if pg.hostname not in {"127.0.0.1", "localhost"}:
         pytest.fail("DATABASE_URL must target localhost disposable PostgreSQL")
-    if not pg.path.lstrip("/").startswith("middleware_test_"):
-        pytest.fail("database name must start with middleware_test_")
+    database_name = unquote(pg.path.lstrip("/"))
+    if not SAFE_DB_NAME.fullmatch(database_name):
+        pytest.fail("database name must match middleware_test_[A-Za-z0-9_]+")
 
     if redis.scheme not in {"redis", "rediss"}:
         pytest.fail("REDIS_URL must use redis/rediss")
+    _reject_url_overrides(redis, "REDIS_URL")
     if redis.hostname not in {"127.0.0.1", "localhost"}:
         pytest.fail("REDIS_URL must target localhost disposable Redis")
     try:
-        redis_db = int(redis.path.lstrip("/") or "0")
+        redis_db = int(unquote(redis.path.lstrip("/") or "0"))
     except ValueError:
         pytest.fail("REDIS_URL must select an explicit numeric disposable DB")
     if redis_db <= 0:

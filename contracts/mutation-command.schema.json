@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.codestra.co/middleware/mutation-command.schema.json",
+  "title": "Codestra middleware mutation command",
+  "description": "Canonical command envelope for any cross-system operation that may create, update, send, publish, dial, schedule, or otherwise cause an externally meaningful effect.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "specversion",
+    "command_id",
+    "command_type",
+    "schema_version",
+    "tenant_id",
+    "actor",
+    "target",
+    "operation",
+    "requested_at",
+    "correlation_id",
+    "causation_id",
+    "idempotency_key",
+    "semantic_fingerprint",
+    "policy_context",
+    "payload"
+  ],
+  "properties": {
+    "specversion": {
+      "const": "1.0"
+    },
+    "command_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "command_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9_]*)+$"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "human",
+            "service",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "resource"
+      ],
+      "properties": {
+        "system": {
+          "enum": [
+            "odoo-19",
+            "n8n",
+            "vicidial",
+            "asterisk-pjsip",
+            "telnexa-sms",
+            "klyrow-email",
+            "postly-social",
+            "mautic",
+            "postal-email",
+            "jasmin-sms",
+            "crawlee",
+            "kyqra",
+            "beyvra"
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "external_id": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "update",
+        "upsert",
+        "send",
+        "publish",
+        "dial",
+        "schedule",
+        "cancel",
+        "suppress",
+        "delete",
+        "replay"
+      ]
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 256
+    },
+    "semantic_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 digest of the normalized business intent used to detect equivalent commands submitted under different request identifiers."
+    },
+    "expected_version": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      ]
+    },
+    "policy_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consent_check_required",
+        "suppression_check_required"
+      ],
+      "properties": {
+        "consent_check_required": {
+          "type": "boolean"
+        },
+        "suppression_check_required": {
+          "type": "boolean"
+        },
+        "consent_snapshot_id": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "policy_version": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "payload": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "null"
+        ]
+      }
+    }
+  }
+}

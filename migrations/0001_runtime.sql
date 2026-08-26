@@ -41,13 +41,16 @@ CREATE TABLE IF NOT EXISTS middleware_outbox (
     lease_until timestamptz,
     completed_at timestamptz,
     dead_lettered_at timestamptz,
+    reconciliation_required_at timestamptz,
     last_error text,
     UNIQUE (tenant_id, destination, idempotency_key)
 );
 
 CREATE INDEX IF NOT EXISTS middleware_outbox_dispatch_idx
     ON middleware_outbox (next_attempt_at, id)
-    WHERE completed_at IS NULL AND dead_lettered_at IS NULL;
+    WHERE completed_at IS NULL
+      AND dead_lettered_at IS NULL
+      AND reconciliation_required_at IS NULL;
 
 INSERT INTO middleware_schema_migrations (version, name)
 VALUES (1, '0001_runtime')

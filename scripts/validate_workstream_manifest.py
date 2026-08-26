@@ -24,6 +24,18 @@ REQUIRED_VERIFICATION_BRANCHES = {
     "integration/crawlee",
     "testing/playwright",
 }
+REQUIRED_SHARED_BRANCHES = {
+    "core/integration-contracts",
+    "core/event-ledger-outbox",
+    "core/webhook-inbox-replay",
+    "core/workers-scheduler",
+}
+EXPECTED_SYNC_POLICY = {
+    "main_must_be_ancestor_of_active_work": True,
+    "completed_workstreams_refresh_from_main": True,
+    "direct_workstream_deployment": False,
+    "immutable_release_from_merged_sha_only": True,
+}
 
 
 def fail(errors: list[str]) -> int:
@@ -53,14 +65,32 @@ def main() -> int:
         return fail(errors)
 
     version = manifest.get("version")
-    if not isinstance(version, int) or isinstance(version, bool) or version < 3:
-        errors.append("version must be an integer greater than or equal to 3")
+    if not isinstance(version, int) or isinstance(version, bool) or version < 4:
+        errors.append("version must be an integer greater than or equal to 4")
 
     if manifest.get("base_branch") != "main":
         errors.append("base_branch must be exactly 'main'")
 
     if manifest.get("deployment_from_workstream_branches") is not False:
         errors.append("deployment_from_workstream_branches must be false")
+
+    if manifest.get("canonical_contract_branch") != "core/integration-contracts":
+        errors.append(
+            "canonical_contract_branch must be exactly 'core/integration-contracts'"
+        )
+
+    if manifest.get("connectivity_map") != "config/connectivity-map.json":
+        errors.append("connectivity_map must reference config/connectivity-map.json")
+
+    if manifest.get("canonical_event_schema") != (
+        "contracts/event-envelope.schema.json"
+    ):
+        errors.append(
+            "canonical_event_schema must reference the canonical event schema"
+        )
+
+    if manifest.get("synchronization_policy") != EXPECTED_SYNC_POLICY:
+        errors.append("synchronization_policy is incomplete or unsafe")
 
     raw_workstreams = manifest.get("workstreams")
     if not isinstance(raw_workstreams, list) or not raw_workstreams:
@@ -104,6 +134,13 @@ def main() -> int:
             "duplicate workstream branches: " + ", ".join(duplicate_branches)
         )
 
+    branch_set = set(branches)
+    missing_shared = sorted(REQUIRED_SHARED_BRANCHES - branch_set)
+    if missing_shared:
+        errors.append(
+            "required shared workstreams are missing: " + ", ".join(missing_shared)
+        )
+
     declared_verification = manifest.get("not_observed_with_verification_branches")
     if not isinstance(declared_verification, list) or not all(
         isinstance(branch, str) for branch in declared_verification
@@ -142,7 +179,8 @@ def main() -> int:
     print(
         "Workstream manifest validation passed: "
         f"{len(branches)} unique branches, "
-        f"{len(verification_branches)} verification-only branches."
+        f"{len(verification_branches)} verification-only branches, "
+        f"{len(REQUIRED_SHARED_BRANCHES)} shared contract branches."
     )
     return 0
 

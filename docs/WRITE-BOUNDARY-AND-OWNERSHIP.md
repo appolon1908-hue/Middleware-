@@ -61,6 +61,8 @@ n8n must not:
 
 An n8n retry may repeat a request to Middleware with the same idempotency key. It may not create a new key to force the external effect to happen again.
 
+Versioned n8n workflow exports may use the generic HTTP Request node only when the URL starts with the exact `{{$env.MIDDLEWARE_BASE_URL}}` expression and an approved Middleware path (`/v1/commands`, `/v1/queries`, or `/v1/triggers`). Hard-coded hosts, caller-built hosts, Odoo/provider URLs, and other dynamic base expressions fail CI.
+
 ## Odoo 19 ownership
 
 Odoo 19 is the business system of record for:
@@ -144,6 +146,7 @@ Operator replay is an audited command. Replay never bypasses signature evidence,
 - n8n -> Odoo.
 - n8n -> provider.
 - Any external service -> Odoo PostgreSQL.
+- Any application, Compose, Kubernetes, deployment, workflow, or root configuration that supplies Odoo PostgreSQL credentials to Middleware or another external service.
 - Any service -> a generic `model + method + values` Odoo endpoint.
 - Direct writes to another system's database as a substitute for its approved service contract.
 - Retrying a timed-out write with a new idempotency key before reconciliation.

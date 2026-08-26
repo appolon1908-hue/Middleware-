@@ -7,13 +7,24 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "system-ownership.json"
 MUTATION_SCHEMA_PATH = ROOT / "contracts" / "mutation-command.schema.json"
 HTTP_CONVENTIONS_PATH = ROOT / "contracts" / "http-conventions.md"
 BOUNDARY_DOC_PATH = ROOT / "docs" / "WRITE-BOUNDARY-AND-OWNERSHIP.md"
+THIS_FILE = Path(__file__).resolve()
+
+UUID_PATTERN = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+DATETIME_PATTERN = (
+    r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+    r"(?:\.[0-9]{1,9})?(?:Z|[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00))$"
+)
 
 REQUIRED_MIDDLEWARE_OWNERSHIP = {
     "service_authorization",
@@ -84,6 +95,12 @@ REQUIRED_MUTATING_CONTROLS = {
     "consent_and_suppression_required_when_applicable": True,
 }
 
+REQUIRED_N8N_PATH_PREFIXES = {
+    "/v1/commands",
+    "/v1/queries",
+    "/v1/triggers",
+}
+
 FORBIDDEN_N8N_NODE_MARKERS = {
     "n8n-nodes-base.odoo",
     "n8n-nodes-base.postgres",
@@ -94,12 +111,45 @@ FORBIDDEN_N8N_NODE_MARKERS = {
 }
 
 ODOO_DATABASE_CREDENTIAL_RE = re.compile(
-    r"\b(?:ODOO_(?:DB|DATABASE)_(?:HOST|PORT|NAME|USER|PASSWORD)|"
-    r"ODOO_DATABASE_URL|ODOO_PG_DSN)\b",
+    r"\b(?:"
+    r"ODOO_(?:DB|DATABASE|POSTGRES)_(?:HOST|PORT|NAME|USER|PASSWORD)"
+    r"|ODOO_(?:DATABASE_URL|PG_DSN|PGHOST|PGPORT|PGDATABASE|PGUSER|PGPASSWORD)"
+    r")\b",
     re.IGNORECASE,
 )
 
-SOURCE_SUFFIXES = {".py", ".js", ".ts", ".mjs", ".cjs", ".sh", ".yaml", ".yml", ".toml"}
+EXCLUDED_SCAN_PARTS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+}
+BINARY_SUFFIXES = {
+    ".aof",
+    ".backup",
+    ".dump",
+    ".gif",
+    ".gz",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".pdf",
+    ".png",
+    ".pyc",
+    ".rdb",
+    ".sqlite",
+    ".sqlite3",
+    ".tar",
+    ".webp",
+    ".zip",
+}
+MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
 
 
 def load_json(path: Path, errors: list[str]) -> dict[str, Any] | None:
@@ -206,6 +256,20 @@ def validate_policy(policy: dict[str, Any], errors: list[str]) -> None:
         is not False
     ):
         errors.append("n8n direct mutating calls must be forbidden")
+    if n8n_policy.get("http_request_nodes_must_target_middleware") is not True:
+        errors.append("n8n HTTP Request nodes must target Middleware")
+    if n8n_policy.get("approved_http_base_variable") != "MIDDLEWARE_BASE_URL":
+        errors.append("n8n approved HTTP base variable must be MIDDLEWARE_BASE_URL")
+    approved_paths = string_set(
+        n8n_policy.get("approved_http_path_prefixes"),
+        "n8n_policy.approved_http_path_prefixes",
+        errors,
+    )
+    if approved_paths != REQUIRED_N8N_PATH_PREFIXES:
+        errors.append(
+            "n8n approved HTTP paths must be exactly /v1/commands, "
+            "/v1/queries, and /v1/triggers"
+        )
 
     forbidden = string_set(
         policy.get("forbidden_write_paths"), "forbidden_write_paths", errors
@@ -223,6 +287,36 @@ def validate_policy(policy: dict[str, Any], errors: list[str]) -> None:
         errors.append(
             "forbidden write paths are incomplete: " + ", ".join(missing_forbidden)
         )
+
+
+def validate_assertive_pattern(
+    properties: dict[str, Any],
+    field: str,
+    expected_pattern: str,
+    valid_sample: str,
+    invalid_samples: tuple[str, ...],
+    errors: list[str],
+) -> None:
+    definition = properties.get(field)
+    if not isinstance(definition, dict):
+        errors.append(f"mutation command {field} definition must be an object")
+        return
+    pattern = definition.get("pattern")
+    if pattern != expected_pattern:
+        errors.append(f"mutation command {field} must use an assertive pattern")
+        return
+    try:
+        compiled = re.compile(pattern)
+    except re.error as exc:
+        errors.append(f"mutation command {field} pattern is invalid: {exc}")
+        return
+    if compiled.fullmatch(valid_sample) is None:
+        errors.append(f"mutation command {field} pattern rejects a canonical value")
+    for invalid in invalid_samples:
+        if compiled.fullmatch(invalid) is not None:
+            errors.append(
+                f"mutation command {field} pattern accepts malformed value {invalid!r}"
+            )
 
 
 def validate_mutation_schema(schema: dict[str, Any], errors: list[str]) -> None:
@@ -252,6 +346,23 @@ def validate_mutation_schema(schema: dict[str, Any], errors: list[str]) -> None:
     if not isinstance(specversion, dict) or specversion.get("const") != "1.0":
         errors.append("mutation command specversion must be fixed to 1.0")
 
+    validate_assertive_pattern(
+        properties,
+        "command_id",
+        UUID_PATTERN,
+        "123e4567-e89b-12d3-a456-426614174000",
+        ("not-a-uuid", "123e4567-e89b-12d3-a456"),
+        errors,
+    )
+    validate_assertive_pattern(
+        properties,
+        "requested_at",
+        DATETIME_PATTERN,
+        "2026-08-26T18:45:30Z",
+        ("not-a-time", "2026-99-99T88:77:66Z"),
+        errors,
+    )
+
     fingerprint = properties.get("semantic_fingerprint")
     if (
         not isinstance(fingerprint, dict)
@@ -267,10 +378,12 @@ def validate_contract_text(errors: list[str]) -> None:
         HTTP_CONVENTIONS_PATH,
         BOUNDARY_DOC_PATH,
     )
+    missing_file = False
     for path in required_files:
         if not path.is_file():
             errors.append(f"missing write-boundary artifact: {path.relative_to(ROOT)}")
-    if errors:
+            missing_file = True
+    if missing_file:
         return
 
     http_text = HTTP_CONVENTIONS_PATH.read_text(encoding="utf-8")
@@ -283,30 +396,44 @@ def validate_contract_text(errors: list[str]) -> None:
         "Middleware is the only component allowed",
         "n8n owns orchestration",
         "No external service may receive Odoo PostgreSQL write credentials",
+        "{{$env.MIDDLEWARE_BASE_URL}}",
     ):
         if phrase not in boundary_text:
             errors.append(f"write-boundary document is missing required phrase: {phrase}")
 
 
-def iter_source_files() -> list[Path]:
-    files: list[Path] = []
-    for directory_name in ("app", "src", "middleware", "workers", "n8n", "workflows"):
-        directory = ROOT / directory_name
-        if not directory.is_dir():
+def iter_repository_text_files(errors: list[str]) -> Iterator[tuple[Path, str]]:
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or path.is_symlink():
             continue
-        for path in directory.rglob("*"):
-            if path.is_file() and path.suffix in SOURCE_SUFFIXES:
-                files.append(path)
-    return sorted(files)
+        relative = path.relative_to(ROOT)
+        if any(part in EXCLUDED_SCAN_PARTS for part in relative.parts):
+            continue
+        if path.resolve() == THIS_FILE:
+            continue
+        if path.suffix.lower() in BINARY_SUFFIXES:
+            continue
+        if "tests" in relative.parts and "fixtures" in relative.parts and "negative" in relative.parts:
+            continue
+        try:
+            size = path.stat().st_size
+            if size > MAX_TEXT_SCAN_BYTES:
+                continue
+            data = path.read_bytes()
+        except OSError as exc:
+            errors.append(f"cannot inspect {relative}: {exc}")
+            continue
+        if b"\x00" in data:
+            continue
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        yield path, text
 
 
 def validate_no_odoo_database_credentials(errors: list[str]) -> None:
-    for path in iter_source_files():
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            errors.append(f"cannot read source file {path.relative_to(ROOT)}: {exc}")
-            continue
+    for path, text in iter_repository_text_files(errors):
         if ODOO_DATABASE_CREDENTIAL_RE.search(text):
             errors.append(
                 "direct Odoo database credential reference is forbidden: "
@@ -314,7 +441,7 @@ def validate_no_odoo_database_credentials(errors: list[str]) -> None:
             )
 
 
-def walk_json(value: Any):
+def walk_json(value: Any) -> Iterator[Any]:
     yield value
     if isinstance(value, dict):
         for nested in value.values():
@@ -324,7 +451,31 @@ def walk_json(value: Any):
             yield from walk_json(nested)
 
 
-def validate_n8n_exports(errors: list[str]) -> None:
+def n8n_http_url_error(url: Any, approved_paths: set[str]) -> str | None:
+    if not isinstance(url, str):
+        return "URL must be a string expression rooted at MIDDLEWARE_BASE_URL"
+    compact = re.sub(r"\s+", "", url)
+    match = re.fullmatch(r"=?\{\{\$env\.MIDDLEWARE_BASE_URL\}\}(/[^?#]*)?(?:[?#].*)?", compact)
+    if match is None:
+        return "URL must start with {{$env.MIDDLEWARE_BASE_URL}}"
+    path = match.group(1) or ""
+    if not any(path == prefix or path.startswith(prefix + "/") for prefix in approved_paths):
+        return "URL path must use an approved Middleware command/query/trigger prefix"
+    return None
+
+
+def validate_n8n_exports(policy: dict[str, Any] | None, errors: list[str]) -> None:
+    n8n_policy = policy.get("n8n_policy") if isinstance(policy, dict) else None
+    approved_paths = (
+        string_set(
+            n8n_policy.get("approved_http_path_prefixes"),
+            "n8n_policy.approved_http_path_prefixes",
+            errors,
+        )
+        if isinstance(n8n_policy, dict)
+        else set()
+    )
+
     workflow_paths: list[Path] = []
     for directory_name in ("n8n", "workflows"):
         directory = ROOT / directory_name
@@ -349,6 +500,38 @@ def validate_n8n_exports(errors: list[str]) -> None:
                 + ", ".join(sorted(markers))
             )
 
+        for item in walk_json(value):
+            if not isinstance(item, dict) or item.get("type") != "n8n-nodes-base.httpRequest":
+                continue
+            parameters = item.get("parameters")
+            node_name = item.get("name") if isinstance(item.get("name"), str) else "unnamed"
+            if not isinstance(parameters, dict):
+                errors.append(
+                    f"{path.relative_to(ROOT)} HTTP Request node {node_name!r} "
+                    "has no parameters object"
+                )
+                continue
+            problem = n8n_http_url_error(parameters.get("url"), approved_paths)
+            if problem:
+                errors.append(
+                    f"{path.relative_to(ROOT)} HTTP Request node {node_name!r}: {problem}"
+                )
+
+
+def validate_guard_self_tests(errors: list[str]) -> None:
+    if ODOO_DATABASE_CREDENTIAL_RE.search("ODOO_DATABASE_URL=postgresql://example") is None:
+        errors.append("Odoo credential scanner self-test failed")
+    if n8n_http_url_error(
+        "https://odoo.example.invalid/web/dataset/call_kw",
+        REQUIRED_N8N_PATH_PREFIXES,
+    ) is None:
+        errors.append("n8n direct-Odoo HTTP negative self-test failed")
+    if n8n_http_url_error(
+        "={{ $env.MIDDLEWARE_BASE_URL }}/v1/commands/odoo/contact-upsert",
+        REQUIRED_N8N_PATH_PREFIXES,
+    ) is not None:
+        errors.append("n8n approved-Middleware HTTP positive self-test failed")
+
 
 def report(errors: list[str]) -> int:
     print("Write-boundary validation failed:", file=sys.stderr)
@@ -367,7 +550,8 @@ def main() -> int:
     if schema is not None:
         validate_mutation_schema(schema, errors)
     validate_no_odoo_database_credentials(errors)
-    validate_n8n_exports(errors)
+    validate_n8n_exports(policy, errors)
+    validate_guard_self_tests(errors)
 
     if errors:
         return report(errors)

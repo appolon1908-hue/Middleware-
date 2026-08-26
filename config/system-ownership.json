@@ -92,7 +92,14 @@
       "provider_adapters",
       "audit_ledger"
     ],
-    "direct_mutating_calls_to_business_or_provider_systems_allowed": false
+    "direct_mutating_calls_to_business_or_provider_systems_allowed": false,
+    "approved_http_base_variable": "MIDDLEWARE_BASE_URL",
+    "approved_http_path_prefixes": [
+      "/v1/commands",
+      "/v1/queries",
+      "/v1/triggers"
+    ],
+    "http_request_nodes_must_target_middleware": true
   },
   "forbidden_write_paths": [
     "n8n_to_odoo",

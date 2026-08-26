@@ -1,21 +1,171 @@
 {
-  "version": 1,
+  "version": 2,
   "base_branch": "main",
-  "deployment_from_integration_branches": false,
-  "branches": [
-    "integration/odoo",
-    "integration/n8n",
-    "integration/kong",
-    "integration/caddy",
-    "integration/keycloak",
-    "integration/postgresql",
-    "integration/redis",
-    "integration/vicidial",
-    "integration/jasmin-sms",
-    "integration/postal-email",
-    "integration/kyqra-crawler",
-    "integration/webhook-inbox-outbox",
-    "integration/workers-scheduler",
-    "integration/observability"
+  "deployment_from_workstream_branches": false,
+  "workstreams": [
+    {
+      "branch": "integration/odoo-19",
+      "category": "application",
+      "runtime_status": "declared_active_scope",
+      "scope": "CRM, contacts, leads, activities, campaigns, callbacks, appointments, delivery results, reconciliation, and Odoo adapter tests"
+    },
+    {
+      "branch": "integration/n8n",
+      "category": "application",
+      "runtime_status": "declared_active_scope",
+      "scope": "Workflow automation, normalized event processing, signed webhooks, inactive-by-default workflow exports, replay protection, and n8n adapter tests"
+    },
+    {
+      "branch": "integration/vicidial",
+      "category": "telephony",
+      "runtime_status": "declared_active_scope",
+      "scope": "Call-center campaigns, agents, dispositions, call results, callbacks, restricted adapter commands, read-back comparison, and write-denial tests"
+    },
+    {
+      "branch": "integration/asterisk-pjsip",
+      "category": "telephony",
+      "runtime_status": "declared_active_scope",
+      "scope": "Asterisk and PJSIP endpoints, extensions, trunks, call infrastructure, health, and telephony contract tests"
+    },
+    {
+      "branch": "integration/telnexa-sms",
+      "category": "messaging",
+      "runtime_status": "declared_active_scope",
+      "scope": "SMS submission, delivery status callbacks, inbound events, signatures, replay protection, suppression, rate limiting, and reconciliation"
+    },
+    {
+      "branch": "integration/klyrow-email",
+      "category": "messaging",
+      "runtime_status": "declared_active_scope",
+      "scope": "Email submission, lifecycle events, bounces, complaints, suppression, templates, deduplication, callbacks, and reconciliation"
+    },
+    {
+      "branch": "integration/postly-social",
+      "category": "social",
+      "runtime_status": "declared_active_scope",
+      "scope": "Social-media polling, publishing and delivery events, account isolation, retry behavior, callbacks, and reconciliation"
+    },
+    {
+      "branch": "integration/keycloak",
+      "category": "identity",
+      "runtime_status": "declared_active_scope",
+      "scope": "OIDC and JWKS validation, service identities, roles, claims, audience and issuer enforcement, authorization policy, and identity tests"
+    },
+    {
+      "branch": "platform/kong",
+      "category": "platform",
+      "runtime_status": "declared_active_scope",
+      "scope": "API gateway services, routes, plugins, authentication, mTLS, rate limits, allowlists, transformations, and gateway tests"
+    },
+    {
+      "branch": "platform/caddy",
+      "category": "platform",
+      "runtime_status": "declared_active_scope",
+      "scope": "Public HTTPS, reverse proxy, TLS, upstream health behavior, security headers, access controls, and edge validation"
+    },
+    {
+      "branch": "platform/postgresql",
+      "category": "platform",
+      "runtime_status": "declared_active_scope",
+      "scope": "Durable records, event ledger, outbox, audit, mappings, schema, migrations, least-privilege roles, backup and restore, and rollback tests"
+    },
+    {
+      "branch": "platform/redis",
+      "category": "platform",
+      "runtime_status": "declared_active_scope",
+      "scope": "Temporary queues, caching, leases, idempotency state, locks, retry scheduling, recovery behavior, and Redis integration tests"
+    },
+    {
+      "branch": "observability/prometheus",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Metrics collection, scrape configuration, recording rules, retention, and Prometheus validation"
+    },
+    {
+      "branch": "observability/grafana",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Dashboards, data sources, access controls, release identity panels, and Grafana provisioning"
+    },
+    {
+      "branch": "observability/alertmanager",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Alert routing, grouping, inhibition, receiver contracts, escalation, and notification tests"
+    },
+    {
+      "branch": "observability/loki",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Central logs, labels, retention, queries, tenant boundaries, secret redaction, and Loki validation"
+    },
+    {
+      "branch": "observability/blackbox-exporter",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "HTTP, HTTPS, TCP and TLS probes, target definitions, authentication-safe checks, and blackbox alerts"
+    },
+    {
+      "branch": "observability/node-exporter",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Host metrics, filesystem and network collection, collector restrictions, and host alerts"
+    },
+    {
+      "branch": "observability/cadvisor",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Container resource metrics, labels, access restrictions, retention, and container alerts"
+    },
+    {
+      "branch": "observability/postgresql-exporter",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "PostgreSQL exporter queries, least-privilege monitoring role, database metrics, and alerts"
+    },
+    {
+      "branch": "observability/redis-exporter",
+      "category": "observability",
+      "runtime_status": "declared_active_scope",
+      "scope": "Redis exporter authentication, queue and memory metrics, replication metrics, and alerts"
+    },
+    {
+      "branch": "core/event-ledger-outbox",
+      "category": "shared-core",
+      "runtime_status": "required_shared_primitive",
+      "scope": "Canonical normalized events, durable event ledger, transactional outbox, leases, retries, dead letters, audit, and reconciliation"
+    },
+    {
+      "branch": "core/webhook-inbox-replay",
+      "category": "shared-core",
+      "runtime_status": "required_shared_primitive",
+      "scope": "Signed inbound inbox, timestamp bounds, replay protection, idempotency, deduplication, quarantine, and controlled replay"
+    },
+    {
+      "branch": "core/workers-scheduler",
+      "category": "shared-core",
+      "runtime_status": "required_shared_primitive",
+      "scope": "Background workers, schedulers, concurrency, queue ownership, graceful shutdown, retries, health, readiness, and restart behavior"
+    },
+    {
+      "branch": "integration/kyqra",
+      "category": "configured-unverified",
+      "runtime_status": "configured_worker_not_observed",
+      "scope": "Kyqra contracts and runtime verification only until a running worker, endpoint, ownership, and deployment path are confirmed"
+    },
+    {
+      "branch": "integration/beyvra",
+      "category": "configured-unverified",
+      "runtime_status": "configured_runtime_not_confirmed",
+      "scope": "Beyvra contracts and runtime verification only until the active service, endpoint, ownership, and deployment path are confirmed"
+    }
+  ],
+  "not_observed_no_active_branch": [
+    "rabbitmq",
+    "mautic",
+    "postal",
+    "jasmin",
+    "crawlee",
+    "playwright"
   ]
 }

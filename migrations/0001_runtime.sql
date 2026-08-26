@@ -52,6 +52,20 @@ CREATE INDEX IF NOT EXISTS middleware_outbox_dispatch_idx
       AND dead_lettered_at IS NULL
       AND reconciliation_required_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS middleware_reconciliation_audit (
+    id bigserial PRIMARY KEY,
+    outbox_id bigint NOT NULL REFERENCES middleware_outbox(id) ON DELETE RESTRICT,
+    tenant_id text NOT NULL,
+    action text NOT NULL CHECK (action IN ('retry', 'complete', 'dead_letter')),
+    operator_id text NOT NULL,
+    reason text NOT NULL,
+    attempt_count integer NOT NULL CHECK (attempt_count >= 0),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS middleware_reconciliation_audit_outbox_idx
+    ON middleware_reconciliation_audit (outbox_id, created_at);
+
 INSERT INTO middleware_schema_migrations (version, name)
 VALUES (1, '0001_runtime')
 ON CONFLICT (version) DO UPDATE SET name=EXCLUDED.name;

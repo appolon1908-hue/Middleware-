@@ -10,6 +10,15 @@ FALSE_VALUES = {"0", "false", "no", "off", ""}
 TRUE_VALUES = {"1", "true", "yes", "on"}
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+WEBHOOK_PRODUCERS = (
+    "odoo-integration",
+    "n8n-automation",
+    "vicidial-adapter",
+    "telnexa-gateway",
+    "klyrow-gateway",
+    "kyqra-gateway",
+    "postly-adapter",
+)
 
 
 class ConfigurationError(RuntimeError):
@@ -45,6 +54,13 @@ def _int(
     return value
 
 
+def _secret_env_name(producer_client_id: str) -> str:
+    return (
+        "WEBHOOK_SECRET_"
+        + producer_client_id.upper().replace("-", "_").replace(".", "_")
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
@@ -63,6 +79,7 @@ class Settings:
     max_request_body_bytes: int
     webhook_max_clock_skew_seconds: int
     webhook_replay_retention_seconds: int
+    webhook_secrets: dict[str, bytes]
     outbox_dispatch_enabled: bool
     external_effects: dict[str, bool]
 
@@ -102,6 +119,10 @@ class Settings:
                 "CRAWLER_EXECUTION_ENABLED",
                 "SCRAPPER_EXECUTION_ENABLED",
             )
+        }
+        webhook_secrets = {
+            producer: source.get(_secret_env_name(producer), "").encode("utf-8")
+            for producer in WEBHOOK_PRODUCERS
         }
         settings = cls(
             app_env=source.get("APP_ENV", "development").strip().lower(),
@@ -144,6 +165,7 @@ class Settings:
                 minimum=86_400,
                 maximum=2_592_000,
             ),
+            webhook_secrets=webhook_secrets,
             outbox_dispatch_enabled=_bool(source, "OUTBOX_DISPATCH_ENABLED", False),
             external_effects=effects,
         )
@@ -188,16 +210,22 @@ class Settings:
                 raise ConfigurationError("IMAGE_DIGEST must be an immutable sha256 digest")
             if self.build_time in {"", "unknown"}:
                 raise ConfigurationError("BUILD_TIME is required in staging/production")
+            self.validate_all_webhook_secrets()
+
+    def validate_all_webhook_secrets(self) -> None:
+        for producer in WEBHOOK_PRODUCERS:
+            secret = self.webhook_secrets.get(producer, b"")
+            name = _secret_env_name(producer)
+            if len(secret) < 32:
+                raise ConfigurationError(
+                    f"{name} must be configured with at least 32 bytes"
+                )
 
     def webhook_secret(self, producer_client_id: str) -> bytes:
-        name = (
-            "WEBHOOK_SECRET_"
-            + producer_client_id.upper().replace("-", "_").replace(".", "_")
-        )
-        value = os.environ.get(name)
-        if not value:
-            raise ConfigurationError(f"missing webhook secret for {producer_client_id}: {name}")
-        secret = value.encode("utf-8")
+        if producer_client_id not in WEBHOOK_PRODUCERS:
+            raise ConfigurationError(f"unknown webhook producer: {producer_client_id}")
+        secret = self.webhook_secrets.get(producer_client_id, b"")
+        name = _secret_env_name(producer_client_id)
         if len(secret) < 32:
             raise ConfigurationError(f"{name} must contain at least 32 bytes")
         return secret

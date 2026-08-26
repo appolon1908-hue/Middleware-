@@ -26,7 +26,7 @@ class EventEnvelope(BaseModel):
     correlation_id: str = Field(min_length=1, max_length=128)
     causation_id: str = Field(min_length=1, max_length=128)
     idempotency_key: str = Field(min_length=8, max_length=256)
-    schema_version: int = Field(ge=1)
+    schema_version: Literal[1]
     traceparent: str | None = Field(default=None, min_length=1, max_length=256)
     actor: Actor | None = None
     delivery_attempt: int | None = Field(default=None, ge=1)

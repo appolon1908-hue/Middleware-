@@ -17,7 +17,7 @@ select_container() {
   if [[ -n "$requested" ]]; then
     docker inspect "$requested" >/dev/null 2>&1 || \
       fail "MIDDLEWARE_CONTAINER does not resolve: $requested"
-    docker ps --quiet --filter "id=$requested" | grep -q . || \
+    [[ "$(docker inspect "$requested" --format '{{.State.Running}}')" == "true" ]] || \
       fail "requested middleware container is not running: $requested"
     printf '%s\n' "$requested"
     return 0
@@ -47,11 +47,12 @@ select_container() {
 }
 
 middleware_container="$(select_container)"
+middleware_container_id="$(docker inspect "$middleware_container" --format '{{.Id}}')"
 container_name="$(docker inspect "$middleware_container" --format '{{.Name}}')"
 container_name="${container_name#/}"
 container_image="$(docker inspect "$middleware_container" --format '{{.Config.Image}}')"
 
-printf 'MIDDLEWARE_CONTAINER_ID=%s\n' "$middleware_container"
+printf 'MIDDLEWARE_CONTAINER_ID=%s\n' "$middleware_container_id"
 printf 'MIDDLEWARE_CONTAINER_NAME=%s\n' "$container_name"
 printf 'MIDDLEWARE_IMAGE=%s\n' "$container_image"
 docker inspect "$middleware_container" --format 'MIDDLEWARE_IMAGE_ID={{.Image}}'
@@ -86,12 +87,19 @@ docker inspect "$middleware_container" --format \
   '{{range $name, $network := .NetworkSettings.Networks}}{{printf "%s\tIP=%s\tGateway=%s\n" $name $network.IPAddress $network.Gateway}}{{end}}'
 
 printf '\nSAFE_RUNTIME_CONTROLS\n'
-docker inspect "$middleware_container" --format '{{range .Config.Env}}{{println .}}{{end}}' |
-  awk -F= '
-    $1 ~ /^(APP_ENV|ENVIRONMENT|LOG_LEVEL|SEND_EVENTS|ENABLE_EXTERNAL_DELIVERY|LIVE_WRITE|LIVE_WRITES|ODOO_WRITE|CALLBACK_DISPATCH|N8N_DELIVERY_ENABLED|VICIDIAL_WRITES_ENABLED|EXTERNAL_DIAL_ENABLED|PRODUCTION_CALLBACKS_ENABLED|N8N_PRODUCTION_WORKFLOWS_ENABLED|PRODUCTION_DIALING)$/ {
-      print
-    }
-  ' | sort
+safe_controls="$(
+  docker inspect "$middleware_container" --format '{{range .Config.Env}}{{println .}}{{end}}' |
+    awk -F= '
+      $1 ~ /^(APP_ENV|ENVIRONMENT|LOG_LEVEL|SEND_EVENTS|ENABLE_EXTERNAL_DELIVERY|LIVE_WRITE|LIVE_WRITES|ODOO_WRITE|CALLBACK_DISPATCH|N8N_DELIVERY_ENABLED|VICIDIAL_WRITES_ENABLED|EXTERNAL_DIAL_ENABLED|PRODUCTION_CALLBACKS_ENABLED|N8N_PRODUCTION_WORKFLOWS_ENABLED|PRODUCTION_DIALING)$/ {
+        print
+      }
+    ' | sort
+)"
+if [[ -n "$safe_controls" ]]; then
+  printf '%s\n' "$safe_controls"
+else
+  printf 'NO_ALLOWLISTED_SAFETY_CONTROLS_FOUND\n'
+fi
 
 printf '\nCOMPOSE_PROJECTS\n'
 docker compose ls 2>/dev/null || true

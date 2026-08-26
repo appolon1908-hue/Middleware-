@@ -33,6 +33,9 @@ python3 scripts/validate_connectivity_contracts.py
 printf '==> Validating the sole cross-system write boundary\n'
 python3 scripts/validate_write_boundary.py
 
+printf '==> Validating write-boundary hardening controls\n'
+python3 scripts/validate_write_boundary_hardening.py
+
 if [[ -x scripts/project_ci.sh ]]; then
   printf '==> Running project-specific locked dependency and test pipeline\n'
   scripts/project_ci.sh

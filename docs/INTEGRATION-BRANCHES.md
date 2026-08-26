@@ -1,176 +1,130 @@
-# Middleware integration branch architecture
+# Middleware integration workstreams
 
 ## Purpose
 
-Every middleware-connected system and each major platform, shared-core, testing, or observability concern has an isolated Git workstream. This prevents Odoo, n8n, telephony, messaging, marketing, identity, gateway, proxy, persistence, queue, crawler, browser testing, and monitoring changes from being mixed into one oversized branch.
+Each middleware-connected system and every major platform, shared-core, testing, or observability concern has an isolated Git workstream. Workstream branches are for implementation and review; they are not staging or production deployment branches.
 
-These branches are code-review workstreams. They are **not** deployment environments and must never be deployed directly to staging or production.
-
-A branch existing in GitHub does not prove that a corresponding service is installed, running, owned by this repository, or approved for deployment. Runtime status must be verified independently through the read-only server audit.
+The canonical machine-readable list is [`config/integration-branches.json`](../config/integration-branches.json). Dependency and communication relationships are defined in [`config/connectivity-map.json`](../config/connectivity-map.json) and explained in [`CONNECTIVITY-AND-COMMUNICATION.md`](CONNECTIVITY-AND-COMMUNICATION.md).
 
 ## Runtime status meanings
 
 | Status | Meaning |
 |---|---|
-| `declared_active_scope` | The middleware architecture declares an active integration or platform responsibility. Live paths still require runtime confirmation before deployment. |
-| `required_shared_primitive` | The capability is a required shared middleware concern, regardless of which external systems are active. |
-| `configured_worker_not_observed` | Configuration references exist, but the available audit did not observe the expected worker. |
-| `configured_runtime_not_confirmed` | Configuration references exist, but the active runtime and ownership are not confirmed. |
-| `not_observed_on_middleware_host_verification_only` | A dedicated branch exists because the system may be integrated later or may run on another host, but it was not observed on the middleware host. Only contracts, tests, inventory, and verification work are allowed until its runtime and ownership are proven. |
+| `declared_active_scope` | The architecture declares an active responsibility. Live source, paths, and credentials still require runtime confirmation. |
+| `required_shared_primitive` | A required cross-system middleware capability. |
+| `configured_worker_not_observed` | Configuration references exist, but the expected worker was not observed. |
+| `configured_runtime_not_confirmed` | Configuration references exist, but active runtime and ownership are not confirmed. |
+| `not_observed_on_middleware_host_verification_only` | The branch exists for contracts, tests, inventory, and verification only. It does not authorize installation or activation. |
+
+## Canonical shared contract workstream
+
+| Branch | Scope |
+|---|---|
+| `core/integration-contracts` | Canonical API and event contracts, connection registry, identity and tenant metadata, correlation, causation, idempotency, compatibility, error semantics, release identity, and cross-system contract tests. |
+
+Every other workstream depends directly or transitively on `core/integration-contracts`. A shared contract change merges first; affected workstreams then refresh from the new `main` before implementation continues.
 
 ## Active application and integration workstreams
 
 | Branch | System | Scope |
 |---|---|---|
-| `integration/odoo-19` | Odoo 19 | CRM, contacts, leads, activities, campaigns, callbacks, appointments, delivery results, reconciliation, and Odoo adapter tests. |
-| `integration/n8n` | n8n | Workflow automation, normalized event processing, signed webhooks, inactive-by-default workflow exports, replay protection, and adapter tests. |
-| `integration/vicidial` | VICIdial | Campaigns, agents, dispositions, call results, callbacks, restricted adapter commands, read-back comparison, and write-denial tests. Direct middleware writes to VICIdial tables are prohibited. |
-| `integration/asterisk-pjsip` | Asterisk/PJSIP | Endpoints, extensions, trunks, call infrastructure, health, authentication, routing contracts, and telephony tests. |
-| `integration/telnexa-sms` | Telnexa | SMS submission, delivery status callbacks, inbound events, signatures, replay protection, suppression, rate limits, and reconciliation. |
+| `integration/odoo-19` | Odoo 19 | CRM, contacts, leads, activities, campaigns, callbacks, appointments, delivery results, reconciliation, and adapter tests. |
+| `integration/n8n` | n8n | Workflow automation, normalized events, signed webhooks, inactive-by-default exports, replay protection, and adapter tests. |
+| `integration/vicidial` | VICIdial | Campaigns, agents, dispositions, call results, callbacks, restricted commands, read-back comparison, and write-denial tests. Direct database writes are prohibited. |
+| `integration/asterisk-pjsip` | Asterisk/PJSIP | Endpoints, extensions, trunks, call infrastructure, authentication, routing contracts, health, and telephony tests. |
+| `integration/telnexa-sms` | Telnexa | SMS submission, delivery callbacks, inbound events, signatures, replay protection, suppression, rate limits, and reconciliation. |
 | `integration/klyrow-email` | Klyrow | Email submission, lifecycle events, bounces, complaints, suppression, templates, deduplication, callbacks, and reconciliation. |
-| `integration/postly-social` | Postly | Social-media polling, publishing and delivery events, account isolation, retries, callbacks, and reconciliation. |
-| `integration/keycloak` | Keycloak | OIDC/JWKS validation, service identities, roles, claims, audience and issuer enforcement, authorization policy, and identity tests. The canonical issuer is `https://auth.codestra.co`. |
+| `integration/postly-social` | Postly | Social polling, publishing and delivery events, account isolation, retries, callbacks, and reconciliation. |
+| `integration/keycloak` | Keycloak | OIDC/JWKS validation, service identities, roles, claims, audience and issuer enforcement, authorization policy, and tests. The canonical issuer is `https://auth.codestra.co`. |
 
-## Active platform workstreams
+## Platform workstreams
 
-| Branch | Platform | Scope |
-|---|---|---|
-| `platform/kong` | Kong | API services, routes, plugins, authentication, mTLS, rate limits, allowlists, transformations, and gateway smoke tests. |
-| `platform/caddy` | Caddy | Public HTTPS, reverse proxy, TLS, upstream health behavior, security headers, access restrictions, and edge validation. |
-| `platform/postgresql` | PostgreSQL | Durable records, event ledger, outbox, audit, mappings, schema, migrations, least-privilege roles, backup/restore, and rollback tests. |
-| `platform/redis` | Redis | Temporary queues, caching, leases, idempotency state, locks, retry scheduling, recovery behavior, and Redis integration tests. |
+| Branch | Platform | Runtime status | Scope |
+|---|---|---|---|
+| `platform/kong` | Kong | Active scope | API services, routes, plugins, authentication, mTLS, rate limits, allowlists, transformations, and gateway tests. |
+| `platform/caddy` | Caddy | Active scope | Public HTTPS, reverse proxy, TLS, upstream health, security headers, access restrictions, and edge validation. |
+| `platform/postgresql` | PostgreSQL | Active scope | Durable records, event ledger, outbox, audit, mappings, schema, migrations, least-privilege roles, backup/restore, and rollback. |
+| `platform/redis` | Redis | Active scope | Temporary queues, cache, leases, idempotency state, locks, retry scheduling, recovery, and integration tests. |
+| `platform/rabbitmq` | RabbitMQ | Verification only | AMQP contracts, exchanges, queues, bindings, confirmations, acknowledgements, dead-lettering, retries, TLS, authorization, compatibility, and runtime inventory. |
 
-## Verification-only system workstreams
+RabbitMQ does not replace or supplement Redis merely because its branch exists. A broker change requires a reviewed architecture decision, migration and rollback plan, queue-semantics tests, operational ownership, and runtime evidence.
 
-The following branches now exist as isolated workspaces, but their services were not observed on the middleware host. They do not authorize installation, migration, deployment, traffic routing, or capability activation.
+## Verification-only application and testing workstreams
 
 | Branch | System | Allowed scope before runtime confirmation |
 |---|---|---|
-| `platform/rabbitmq` | RabbitMQ | AMQP contracts, exchange/queue/binding design, publisher confirms, consumer acknowledgements, dead-letter and retry policy, TLS/authentication requirements, compatibility tests, and runtime inventory. |
-| `integration/mautic` | Mautic | Contact, campaign, segment, API and webhook contracts, authentication, idempotent synchronization, event mapping, reconciliation tests, and runtime inventory. |
-| `integration/postal-email` | Postal | Middleware-facing email API and lifecycle-event contracts, bounces, complaints, suppression, signatures, deduplication, reconciliation tests, and runtime inventory. |
-| `integration/jasmin-sms` | Jasmin | Middleware-facing HTTP/SMPP submission and delivery-receipt contracts, inbound messages, authentication, replay protection, suppression, rate limits, reconciliation tests, and runtime inventory. |
-| `integration/crawlee` | Crawlee | Crawl-job contracts, policies, tenant/job isolation, queue ownership, result ingestion, retry/replay behavior, deterministic fixtures, and runtime inventory. |
-| `testing/playwright` | Playwright | Browser end-to-end tests, authentication tests, synthetic no-write canaries, deterministic test data, trace/artifact controls, and verification of where Playwright is allowed to run. |
+| `integration/mautic` | Mautic | Contact, campaign, segment, API/webhook contracts, authentication, idempotent synchronization, event mapping, reconciliation tests, and inventory. |
+| `integration/postal-email` | Postal | Email submission and lifecycle contracts, bounces, complaints, suppression, signatures, deduplication, reconciliation tests, and inventory. |
+| `integration/jasmin-sms` | Jasmin | HTTP/SMPP submission, delivery receipts, inbound-message contracts, authentication, replay protection, suppression, rate limits, tests, and inventory. |
+| `integration/crawlee` | Crawlee | Crawl-job contracts, policies, tenant/job isolation, queue ownership, result ingestion, retries, deterministic fixtures, and inventory. |
+| `testing/playwright` | Playwright | Browser end-to-end tests, authentication tests, synthetic no-write canaries, deterministic test data, and safe trace/artifact handling. |
+| `integration/kyqra` | Kyqra | Contracts, tests, and runtime verification until a running worker, endpoint, source path, owner, and deployment path are confirmed. |
+| `integration/beyvra` | Beyvra | Contracts, tests, and runtime verification until the active service, endpoint, source path, owner, and deployment path are confirmed. |
 
-Postal and Jasmin may be underlying provider-host components while Klyrow and Telnexa remain the middleware-facing product integrations. Their branches should contain middleware adapter contracts and tests unless a separate architecture decision explicitly assigns the underlying service source and deployment configuration to this repository.
+Postal and Jasmin may be underlying provider-host components while Klyrow and Telnexa remain the middleware-facing product integrations. The verification branches own middleware contracts and tests unless a separate architecture decision assigns underlying service source and deployment ownership to this repository.
 
-RabbitMQ must not replace Redis queues or be introduced as an additional broker merely because its branch exists. A broker decision requires runtime evidence, an architecture record, migration and rollback design, queue-semantics tests, operational ownership, and explicit approval.
-
-Playwright is a test workstream, not a production middleware service. Browser tests must use no-write or isolated test targets unless a specific controlled test explicitly authorizes writes.
+Playwright is testing infrastructure, not a production middleware service. It uses no-write or isolated targets unless an approved controlled test explicitly permits writes.
 
 ## Shared middleware core
 
 | Branch | Scope |
 |---|---|
-| `core/event-ledger-outbox` | Canonical normalized events, durable event ledger, transactional outbox, leases, retries, dead letters, audit, and reconciliation. |
-| `core/webhook-inbox-replay` | Signed inbound inbox, timestamp bounds, replay protection, idempotency, deduplication, quarantine, and controlled replay. |
-| `core/workers-scheduler` | Background workers, schedulers, concurrency, queue ownership, graceful shutdown, retries, health, readiness, and restart behavior. |
+| `core/event-ledger-outbox` | Normalized events, durable event ledger, transactional outbox, leases, retries, dead letters, audit, and reconciliation. |
+| `core/webhook-inbox-replay` | Signed durable inbox, timestamp bounds, replay protection, idempotency, deduplication, quarantine, and controlled replay. |
+| `core/workers-scheduler` | Workers, schedulers, concurrency, queue ownership, graceful shutdown, retries, health, readiness, and restart behavior. |
 
 ## Operations and monitoring workstreams
 
 | Branch | Component | Scope |
 |---|---|---|
-| `observability/prometheus` | Prometheus | Metrics collection, scrape configuration, recording rules, retention, and Prometheus validation. |
-| `observability/grafana` | Grafana | Dashboards, data sources, access controls, release identity panels, and provisioning. |
-| `observability/alertmanager` | Alertmanager | Alert routing, grouping, inhibition, receiver contracts, escalation, and notification tests. |
-| `observability/loki` | Loki | Central logs, labels, retention, queries, tenant boundaries, secret redaction, and validation. |
-| `observability/blackbox-exporter` | Blackbox Exporter | HTTP, HTTPS, TCP and TLS probes, target definitions, authentication-safe checks, and alerts. |
-| `observability/node-exporter` | Node Exporter | Host metrics, filesystem and network collection, collector restrictions, and host alerts. |
-| `observability/cadvisor` | cAdvisor | Container resource metrics, labels, access restrictions, retention, and container alerts. |
-| `observability/postgresql-exporter` | PostgreSQL Exporter | Least-privilege monitoring role, database metrics, custom queries, and alerts. |
-| `observability/redis-exporter` | Redis Exporter | Exporter authentication, queue and memory metrics, replication metrics, and alerts. |
+| `observability/prometheus` | Prometheus | Scrapes, recording rules, retention, middleware metrics, and validation. |
+| `observability/grafana` | Grafana | Dashboards, data sources, access control, release identity, and provisioning. |
+| `observability/alertmanager` | Alertmanager | Routing, grouping, inhibition, receiver contracts, escalation, and notification tests. |
+| `observability/loki` | Loki | Structured logs, labels, retention, queries, tenant boundaries, and secret redaction. |
+| `observability/blackbox-exporter` | Blackbox Exporter | HTTP, HTTPS, TCP and TLS no-write probes and alerts. |
+| `observability/node-exporter` | Node Exporter | Host, filesystem and network metrics with restricted collectors. |
+| `observability/cadvisor` | cAdvisor | Container resource metrics, labels, access restrictions, and alerts. |
+| `observability/postgresql-exporter` | PostgreSQL Exporter | Least-privilege monitoring role, metrics, custom queries, and alerts. |
+| `observability/redis-exporter` | Redis Exporter | Restricted authentication, memory, queue, replication metrics, and alerts. |
 
-## Other configured but runtime-unverified workstreams
+## Dependency and merge order
 
-| Branch | Status | Allowed work |
-|---|---|---|
-| `integration/kyqra` | Configuration mentions Kyqra, but the available audit did not observe a running Kyqra worker on the middleware host. | Contracts, tests, and runtime verification only until the running service, endpoint, owner, source path, and deployment path are confirmed. |
-| `integration/beyvra` | Configuration mentions Beyvra, but its active middleware-host runtime was not confirmed by the available audit. | Contracts, tests, and runtime verification only until the active service, endpoint, owner, source path, and deployment path are confirmed. |
+Preferred sequence:
 
-No verification-only branch authorizes deployment or activation merely because configuration references or a Git branch exist.
+```text
+1. core/integration-contracts
+2. platform/postgresql and platform/redis
+3. integration/keycloak
+4. core/event-ledger-outbox
+5. core/webhook-inbox-replay
+6. core/workers-scheduler
+7. confirmed application adapters
+8. verification-only adapters after runtime confirmation
+9. platform/rabbitmq after an approved broker decision
+10. platform/kong
+11. platform/caddy
+12. testing/playwright against staging or isolated targets
+13. exporters, Prometheus, Loki, Alertmanager and Grafana
+```
+
+Use stacked pull requests when dependencies are unavoidable. Each PR identifies its dependency branches, connection IDs, exact merge order, and compatibility evidence.
 
 ## Branch rules
 
-1. Every workstream starts from the same latest reviewed `main` SHA.
-2. No direct integration commits go to `main`.
-3. A branch may change only its declared system plus the minimum shared contract required for that system.
-4. Shared event, inbox/outbox, worker, PostgreSQL, Redis, or broker behavior belongs in the corresponding `core/*` or `platform/*` branch rather than being duplicated.
-5. Do not commit credentials, live `.env` files, private keys, certificates, database or queue data, customer payloads, logs, packet captures, browser traces containing secrets, or runtime volumes.
-6. Every branch must include applicable tests for authentication, authorization, tenant isolation, idempotency, retry/replay, duplicates, failure recovery, and disabled-capability behavior.
-7. External writes remain disabled in staging unless a test uses a controlled fake or isolated test target.
-8. Verification-only branches may not add a production service, route, port, credential, database, queue, or external capability without an approved architecture and activation record.
-9. Workstream branches merge only through pull requests after exact-head validation.
-10. After merge, update or recreate the workstream from current `main` before unrelated work begins. Do not allow silent long-term drift.
-11. Production deploys only an immutable image built from a reviewed merged SHA. Never deploy `integration/*`, `platform/*`, `core/*`, `observability/*`, or `testing/*` directly.
-12. The production server retains read-only Git access and may not rebase, force-push, resolve branch conflicts, or push source changes.
+1. Every workstream starts from the latest reviewed `main`.
+2. `main` must remain an ancestor of active work.
+3. Direct system commits to `main` are prohibited; merge through a pull request.
+4. A branch changes only its declared scope and minimum required shared contracts.
+5. Shared contract changes belong in `core/integration-contracts`; shared persistence, inbox/outbox, worker, database, cache, or broker behavior belongs in its corresponding core or platform branch.
+6. Secrets, live `.env`, keys, certificates, database/queue data, customer payloads, logs, packet captures, and secret-bearing browser traces are prohibited.
+7. Authentication, authorization, tenant isolation, idempotency, retry/replay, duplicates, recovery, and disabled-capability behavior are tested where applicable.
+8. Verification-only branches cannot add a production service, route, port, credential, database, queue, or capability without architecture and activation approval.
+9. No workstream branch is deployed directly. Releases are built from a protected merged SHA and deployed by immutable digest.
+10. The production server remains read-only and may not author, rebase, force-push, or resolve source conflicts.
 
-## Cross-system changes
+## Keeping workstreams current
 
-Split multi-system work whenever practical:
-
-```text
-shared event, broker, or persistence contract
-  -> merge first
-system-specific adapter
-  -> update from new main and merge next
-Kong route and policy
-  -> merge after upstream contract stabilizes
-Caddy edge configuration
-  -> merge after Kong/upstream validation
-browser tests and synthetic canaries
-  -> merge after the tested behavior stabilizes
-metrics, dashboards and alerts
-  -> merge with the final observable behavior
-```
-
-Use stacked pull requests when dependencies are unavoidable. Every pull request must state its exact dependency and merge order. Do not combine Odoo, n8n, telephony, SMS, email, marketing, crawler, broker, Kong, Caddy, database changes, browser testing, and production activation in one pull request.
-
-## Recommended dependency order
-
-1. `platform/postgresql`
-2. `platform/redis`
-3. `integration/keycloak`
-4. `core/event-ledger-outbox`
-5. `core/webhook-inbox-replay`
-6. `core/workers-scheduler`
-7. Confirmed application adapters: Odoo 19, n8n, VICIdial, Asterisk/PJSIP, Telnexa, Klyrow, and Postly
-8. Verification-only adapters: Mautic, Postal, Jasmin, and Crawlee, only after runtime and ownership confirmation
-9. `platform/rabbitmq`, only after an approved broker architecture decision and migration/rollback evidence
-10. `platform/kong`
-11. `platform/caddy`
-12. `testing/playwright` against staging or isolated targets
-13. Exporters, Prometheus, Loki, Alertmanager, and Grafana
-14. Kyqra or Beyvra only after runtime verification
-
-This order is guidance, not approval to merge or deploy untested work.
-
-## Staging safety baseline
-
-The effective running staging container must fail closed with externally effective capabilities disabled, including:
-
-```text
-SEND_EVENTS=false
-ENABLE_EXTERNAL_DELIVERY=false
-LIVE_WRITE=false
-LIVE_WRITES=false
-ODOO_WRITE=false
-CALLBACK_DISPATCH=false
-N8N_DELIVERY_ENABLED=false
-VICIDIAL_WRITES_ENABLED=false
-EXTERNAL_DIAL_ENABLED=false
-PRODUCTION_CALLBACKS_ENABLED=false
-N8N_PRODUCTION_WORKFLOWS_ENABLED=false
-PRODUCTION_DIALING=DISABLED
-```
-
-Any RabbitMQ, Mautic, Postal, Jasmin, Crawlee, or browser-write capability introduced later must have an explicit fail-closed control and a test proving that omission or malformed values do not enable it.
-
-The actual middleware source must map and enforce its supported variable names. An example file is not runtime evidence.
-
-## Updating a workstream
-
-Before beginning work:
+For a clean branch:
 
 ```bash
 git fetch origin
@@ -178,21 +132,27 @@ git switch <workstream-branch>
 git merge --ff-only origin/main
 ```
 
-When a branch has unique commits and cannot fast-forward, rebase it in a trusted development environment, resolve conflicts, rerun the complete branch test suite, and force-push only with `--force-with-lease`. Never perform this operation from the production server.
+For a branch with unique commits, rebase only from a trusted development environment, resolve conflicts, rerun exact-head CI, and use `--force-with-lease` if the reviewed workflow permits it.
 
-## Release flow
+After fetching all remote refs, audit synchronization with:
+
+```bash
+python3 scripts/audit_workstream_sync.py
+```
+
+Use `--require-exact` only when intentionally resetting all clean workstreams to the same `main` SHA.
+
+## Staging and release safety
+
+Staging starts fail closed with external delivery, live writes, callbacks, n8n delivery, Odoo/VICIdial writes, SMS, email, social publication, crawler execution, browser writes, and dialing disabled. Effective runtime values—not example files—are evidence.
 
 ```text
 workstream branch
-  -> pull request
   -> exact-head CI and review
-  -> merge into protected main
-  -> build once from protected merged SHA
-  -> publish immutable image digest
-  -> staging deployment with all external effects disabled
-  -> integration, backup/restore and rollback evidence
+  -> protected merge into main
+  -> immutable image from merged SHA
+  -> staging by digest with external effects disabled
+  -> communication, duplicate, replay, backup/restore and rollback evidence
   -> explicit production approval
   -> production deployment of the identical digest
 ```
-
-Server source paths, Compose project names, service names, health endpoints, and effective safety controls must still be confirmed through read-only runtime discovery before deployment automation is enabled.

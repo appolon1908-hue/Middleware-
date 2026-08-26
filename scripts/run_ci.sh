@@ -27,6 +27,9 @@ python3 scripts/validate_repository.py
 printf '==> Validating integration workstream manifest\n'
 python3 scripts/validate_workstream_manifest.py
 
+printf '==> Validating connectivity and communication contracts\n'
+python3 scripts/validate_connectivity_contracts.py
+
 if [[ -x scripts/project_ci.sh ]]; then
   printf '==> Running project-specific locked dependency and test pipeline\n'
   scripts/project_ci.sh

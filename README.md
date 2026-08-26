@@ -7,16 +7,40 @@ This repository is the intended source of truth for Codestra's self-hosted middl
 ## Operating model
 
 1. Select the system workstream defined in [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md).
-2. Update that branch from the latest reviewed `main`.
-3. Change code, tests, migrations, workers, configuration templates, or monitoring definitions only within the declared scope.
-4. Open a pull request and pass exact-head CI and review.
-5. Merge into protected `main`.
-6. Build one immutable image from the protected merged SHA.
-7. Deploy that digest to staging with all external effects disabled.
-8. Run database, Redis, queue, webhook, Odoo, n8n, telephony, messaging, identity, gateway, crawler, browser, monitoring, backup/restore, and rollback tests as applicable.
-9. Deploy the identical accepted digest to production only after explicit approval.
+2. Read its dependencies and communication connections in [`config/connectivity-map.json`](config/connectivity-map.json).
+3. Update the workstream from the latest reviewed `main` and confirm `main` remains an ancestor of the active work.
+4. Change code, tests, migrations, workers, configuration templates, contracts, or monitoring definitions only within the declared scope.
+5. Open a pull request and pass exact-head CI, dependency-graph validation, communication-contract validation, and review.
+6. Merge into protected `main`.
+7. Build one immutable image from the protected merged SHA.
+8. Deploy that digest to staging with all external effects disabled.
+9. Run database, queue, webhook, Odoo, n8n, telephony, messaging, identity, gateway, crawler, browser, monitoring, backup/restore, and rollback tests as applicable.
+10. Deploy the identical accepted digest to production only after explicit approval.
 
 `integration/*`, `platform/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches. Never deploy them directly.
+
+## Shared communication baseline
+
+The canonical cross-system workstream is:
+
+```text
+core/integration-contracts
+```
+
+It owns the common event envelope, HTTP and webhook conventions, authentication and tenant metadata, correlation and causation rules, idempotency, compatibility policy, error semantics, observability names, and connection registry.
+
+Every other workstream depends directly or transitively on this contract branch. Shared contract changes merge first; affected branches are then refreshed from the new `main` before implementation continues.
+
+The repository validates:
+
+- every workstream has an explicit dependency declaration;
+- the dependency graph is acyclic;
+- every workstream connects to `core/integration-contracts`;
+- every system participates in at least one declared communication connection;
+- every connection declares transport, authentication, reliability, ownership, runtime status, and contract;
+- verification-only systems cannot be represented as active runtime connections.
+
+See [`docs/CONNECTIVITY-AND-COMMUNICATION.md`](docs/CONNECTIVITY-AND-COMMUNICATION.md).
 
 ## Managed and connected systems
 
@@ -73,6 +97,7 @@ Commit:
 - tests and database migrations;
 - Dockerfiles and non-secret Compose templates;
 - non-secret configuration examples;
+- canonical API, event, webhook, identity, and observability contracts;
 - CI, validation, deployment, backup, rollback, and operational documentation;
 - versioned n8n workflow exports only when they contain no credentials;
 - monitoring rules, dashboards, alerts, and exporter configuration without secrets;
@@ -89,8 +114,13 @@ Never commit:
 
 ## Bootstrap controls
 
-- [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md) defines the complete isolated branch architecture, runtime status, dependency order, and merge rules.
+- [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md) defines the isolated branch architecture, runtime status, dependency order, and merge rules.
+- [`docs/CONNECTIVITY-AND-COMMUNICATION.md`](docs/CONNECTIVITY-AND-COMMUNICATION.md) defines cross-system topology, shared communication rules, and branch synchronization.
 - [`config/integration-branches.json`](config/integration-branches.json) is the machine-readable canonical workstream list.
+- [`config/connectivity-map.json`](config/connectivity-map.json) is the machine-readable dependency and connection registry.
+- [`contracts/event-envelope.schema.json`](contracts/event-envelope.schema.json) defines the canonical asynchronous event envelope.
+- [`contracts/http-conventions.md`](contracts/http-conventions.md) defines authentication, tenant, idempotency, webhook, retry, health, and error behavior.
+- [`contracts/observability-conventions.md`](contracts/observability-conventions.md) defines release identity, metrics, logs, tracing, dashboards, and alerts.
 - [`docs/SERVER-CONNECTION.md`](docs/SERVER-CONNECTION.md) explains how to make the repository private, create a separate read-only deploy key, inventory the live middleware safely, import only authoritative source, and deploy immutable artifacts without restarting unrelated services.
 - [`scripts/discover_middleware_runtime.sh`](scripts/discover_middleware_runtime.sh) performs read-only Docker discovery and prints only allowlisted non-secret runtime controls.
 - [`scripts/run_ci.sh`](scripts/run_ci.sh) runs bootstrap checks and delegates to `scripts/project_ci.sh` after the actual application source and locked dependency pipeline are imported.

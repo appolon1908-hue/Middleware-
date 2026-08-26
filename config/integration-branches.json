@@ -1,7 +1,16 @@
 {
-  "version": 3,
+  "version": 4,
   "base_branch": "main",
   "deployment_from_workstream_branches": false,
+  "canonical_contract_branch": "core/integration-contracts",
+  "connectivity_map": "config/connectivity-map.json",
+  "canonical_event_schema": "contracts/event-envelope.schema.json",
+  "synchronization_policy": {
+    "main_must_be_ancestor_of_active_work": true,
+    "completed_workstreams_refresh_from_main": true,
+    "direct_workstream_deployment": false,
+    "immutable_release_from_merged_sha_only": true
+  },
   "workstreams": [
     {
       "branch": "integration/odoo-19",
@@ -164,6 +173,12 @@
       "category": "observability",
       "runtime_status": "declared_active_scope",
       "scope": "Redis exporter authentication, queue and memory metrics, replication metrics, and alerts"
+    },
+    {
+      "branch": "core/integration-contracts",
+      "category": "shared-core",
+      "runtime_status": "required_shared_primitive",
+      "scope": "Canonical API and event contracts, system registry, identity and tenant metadata, correlation and idempotency rules, error semantics, compatibility policy, and communication tests"
     },
     {
       "branch": "core/event-ledger-outbox",

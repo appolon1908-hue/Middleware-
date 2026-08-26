@@ -18,7 +18,7 @@ SECRET = b"test-secret-value-that-is-at-least-thirty-two-bytes"
 
 
 class FakeTokenVerifier:
-    def verify(
+    async def verify(
         self,
         authorization: str,
         *,
@@ -33,7 +33,11 @@ class FakeTokenVerifier:
             "azp": expected_client_id,
             "scope": required_scope,
             "aud": "middleware-api",
+            "tenant_id": "tenant-1",
         }
+
+    async def ready(self) -> bool:
+        return True
 
 
 @pytest.fixture

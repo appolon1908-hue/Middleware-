@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import secrets
 from typing import Protocol
 
@@ -67,7 +69,13 @@ class RedisReplayGuard:
         return guard
 
     def _key(self, tenant_id: str, event_id: str) -> str:
-        return f"middleware:inbox-lock:{tenant_id}:{event_id}"
+        material = json.dumps(
+            [tenant_id, event_id],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        digest = hashlib.sha256(material).hexdigest()
+        return f"middleware:inbox-lock:{digest}"
 
     async def acquire(self, tenant_id: str, event_id: str) -> str:
         token = secrets.token_urlsafe(24)

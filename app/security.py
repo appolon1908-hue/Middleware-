@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import time
@@ -15,26 +16,32 @@ from .config import Settings
 
 class SecurityError(RuntimeError):
     status_code = 401
+    code = "security_error"
+    retryable = False
 
 
 class AuthenticationError(SecurityError):
     status_code = 401
+    code = "authentication_failed"
 
 
 class AuthorizationError(SecurityError):
     status_code = 403
+    code = "authorization_denied"
 
 
 class SignatureError(SecurityError):
     status_code = 401
+    code = "webhook_signature_invalid"
 
 
 class RequestValidationError(SecurityError):
     status_code = 400
+    code = "invalid_request"
 
 
 class TokenVerifier(Protocol):
-    def verify(
+    async def verify(
         self,
         authorization: str,
         *,
@@ -43,13 +50,58 @@ class TokenVerifier(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    async def ready(self) -> bool:
+        ...
+
 
 class KeycloakJwtVerifier:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._jwks = PyJWKClient(settings.jwks_uri, cache_keys=True, lifespan=300)
+        self._jwks = PyJWKClient(
+            settings.jwks_uri,
+            cache_keys=True,
+            lifespan=300,
+            timeout=settings.jwks_timeout_seconds,
+        )
+        self._last_ready_at = 0.0
+        self._ready_ttl_seconds = 30.0
+        self._ready_lock = asyncio.Lock()
 
-    def verify(
+    def _verify_sync(
+        self,
+        token: str,
+        *,
+        expected_client_id: str,
+        required_scope: str,
+    ) -> dict[str, Any]:
+        signing_key = self._jwks.get_signing_key_from_jwt(token)
+        claims = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=self.settings.audience,
+            issuer=self.settings.issuer,
+            options={
+                "require": [
+                    "exp",
+                    "iat",
+                    "iss",
+                    "sub",
+                    "aud",
+                    "azp",
+                    "jti",
+                    "scope",
+                ]
+            },
+        )
+        validate_claims(
+            claims,
+            expected_client_id=expected_client_id,
+            required_scope=required_scope,
+        )
+        return claims
+
+    async def verify(
         self,
         authorization: str,
         *,
@@ -60,23 +112,34 @@ class KeycloakJwtVerifier:
         if scheme.lower() != "bearer" or not token:
             raise AuthenticationError("Authorization must be a Bearer token")
         try:
-            signing_key = self._jwks.get_signing_key_from_jwt(token)
-            claims = jwt.decode(
+            return await asyncio.to_thread(
+                self._verify_sync,
                 token,
-                signing_key.key,
-                algorithms=["RS256"],
-                audience=self.settings.audience,
-                issuer=self.settings.issuer,
-                options={"require": ["exp", "iat", "iss", "sub", "aud", "azp", "jti"]},
+                expected_client_id=expected_client_id,
+                required_scope=required_scope,
             )
+        except SecurityError:
+            raise
         except Exception as exc:
             raise AuthenticationError("invalid bearer token") from exc
-        validate_claims(
-            claims,
-            expected_client_id=expected_client_id,
-            required_scope=required_scope,
-        )
-        return claims
+
+    async def ready(self) -> bool:
+        now = time.monotonic()
+        if now - self._last_ready_at < self._ready_ttl_seconds:
+            return True
+        async with self._ready_lock:
+            now = time.monotonic()
+            if now - self._last_ready_at < self._ready_ttl_seconds:
+                return True
+            try:
+                data = await asyncio.to_thread(self._jwks.fetch_data)
+                keys = data.get("keys") if isinstance(data, dict) else None
+                if not isinstance(keys, list) or not keys:
+                    return False
+            except Exception:
+                return False
+            self._last_ready_at = time.monotonic()
+            return True
 
 
 def validate_claims(
@@ -96,6 +159,27 @@ def validate_claims(
         raise AuthorizationError("token scope claim is missing or malformed")
     if required_scope not in scope_set:
         raise AuthorizationError("required scope is missing")
+    issued_at = claims.get("iat")
+    expires_at = claims.get("exp")
+    if isinstance(issued_at, (int, float)) and isinstance(expires_at, (int, float)):
+        if expires_at <= issued_at or expires_at - issued_at > 300:
+            raise AuthorizationError("machine token lifetime exceeds the 300-second policy")
+
+
+def authorize_tenant(claims: dict[str, Any], tenant_id: str) -> None:
+    authorized: set[str] = set()
+    single = claims.get("tenant_id")
+    if isinstance(single, str) and single.strip():
+        authorized.add(single.strip())
+    multiple = claims.get("tenant_ids")
+    if isinstance(multiple, list) and all(isinstance(item, str) for item in multiple):
+        authorized.update(item.strip() for item in multiple if item.strip())
+    if "*" in authorized:
+        raise AuthorizationError("wildcard tenant authorization is prohibited")
+    if not authorized:
+        raise AuthorizationError("token has no authoritative tenant claim")
+    if tenant_id not in authorized:
+        raise AuthorizationError("token is not authorized for the requested tenant")
 
 
 def _parse_timestamp(raw: str) -> float:
@@ -183,7 +267,10 @@ def verify_signed_request(
     prefix = "sha256="
     if not supplied.startswith(prefix):
         raise SignatureError("X-Codestra-Signature must use sha256=<hex>")
-    if not hmac.compare_digest(supplied[len(prefix) :].lower(), expected):
+    supplied_hex = supplied[len(prefix) :].lower()
+    if len(supplied_hex) != 64 or any(char not in "0123456789abcdef" for char in supplied_hex):
+        raise SignatureError("X-Codestra-Signature contains invalid hex")
+    if not hmac.compare_digest(supplied_hex, expected):
         raise SignatureError("invalid webhook signature")
     return SignedRequest(
         body_sha256=body_sha,

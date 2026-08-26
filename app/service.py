@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -9,40 +10,57 @@ from .contracts import WebhookRoute
 from .models import EventEnvelope, IngressResult
 from .replay import ReplayBusy
 from .runtime import Runtime
-from .security import RequestValidationError, verify_signed_request
+from .security import RequestValidationError, authorize_tenant, verify_signed_request
 from .storage import ReplayConflict
 
 
 class IngressError(RuntimeError):
     status_code = 400
+    code = "ingress_error"
+    retryable = False
 
 
 class EventTypeError(IngressError):
     status_code = 422
+    code = "event_type_not_allowed"
 
 
 class ReplayConflictError(IngressError):
     status_code = 409
+    code = "idempotency_conflict"
 
 
 class ProcessingConflictError(IngressError):
     status_code = 409
+    code = "processing_conflict"
+    retryable = True
+
+
+class PayloadTooLargeError(IngressError):
+    status_code = 413
+    code = "payload_too_large"
+
+
+def semantic_digest(envelope: EventEnvelope) -> str:
+    canonical = json.dumps(
+        envelope.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 async def accept_webhook(
     runtime: Runtime,
     route: WebhookRoute,
     *,
+    claims: dict[str, Any],
     method: str,
     path: str,
     raw_body: bytes,
     headers: dict[str, str],
 ) -> tuple[IngressResult, int]:
-    runtime.tokens.verify(
-        headers.get("authorization", ""),
-        expected_client_id=route.producer_client_id,
-        required_scope=route.required_scope,
-    )
     signed = verify_signed_request(
         settings=runtime.settings,
         method=method,
@@ -57,6 +75,7 @@ async def accept_webhook(
     except (json.JSONDecodeError, ValidationError) as exc:
         raise RequestValidationError("body does not match the canonical event envelope") from exc
 
+    authorize_tenant(claims, envelope.tenant_id)
     if envelope.type not in route.event_types:
         raise EventTypeError("event type is not allowed for this route")
     if signed.event_type != envelope.type:
@@ -72,6 +91,7 @@ async def accept_webhook(
     if envelope.source != f"urn:codestra:{route.producer_client_id}":
         raise RequestValidationError("body source does not match route producer")
 
+    semantic_sha = semantic_digest(envelope)
     token: str | None = None
     try:
         token = await runtime.replay.acquire(envelope.tenant_id, envelope.id)
@@ -80,6 +100,7 @@ async def accept_webhook(
                 envelope,
                 producer_client_id=route.producer_client_id,
                 body_sha256=signed.body_sha256,
+                semantic_sha256=semantic_sha,
             )
         except ReplayConflict as exc:
             raise ReplayConflictError(str(exc)) from exc

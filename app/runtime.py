@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from .config import Settings
@@ -16,7 +17,13 @@ class Runtime:
     tokens: TokenVerifier
 
     async def ready(self) -> bool:
-        return await self.inbox.ready() and await self.replay.ready()
+        results = await asyncio.gather(
+            self.inbox.ready(),
+            self.replay.ready(),
+            self.tokens.ready(),
+            return_exceptions=True,
+        )
+        return all(result is True for result in results)
 
     async def close(self) -> None:
         await self.inbox.close()
@@ -40,4 +47,8 @@ async def build_runtime(settings: Settings) -> Runtime:
     except Exception:
         await inbox.close()
         raise
-    return Runtime(settings=settings, inbox=inbox, replay=replay, tokens=tokens)
+    runtime = Runtime(settings=settings, inbox=inbox, replay=replay, tokens=tokens)
+    if not await runtime.ready():
+        await runtime.close()
+        raise RuntimeError("mandatory runtime readiness checks failed during startup")
+    return runtime

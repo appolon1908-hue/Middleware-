@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Mapping
 
 
 FALSE_VALUES = {"0", "false", "no", "off", ""}
 TRUE_VALUES = {"1", "true", "yes", "on"}
+SHA40 = re.compile(r"^[0-9a-f]{40}$")
+IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class ConfigurationError(RuntimeError):
@@ -25,16 +28,39 @@ def _bool(env: Mapping[str, str], name: str, default: bool = False) -> bool:
     raise ConfigurationError(f"{name} must be an explicit boolean")
 
 
+def _int(
+    env: Mapping[str, str],
+    name: str,
+    default: int,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int:
+    try:
+        value = int(env.get(name, str(default)))
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise ConfigurationError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
     app_version: str
+    source_sha: str
+    image_digest: str
+    schema_head: str
+    build_time: str
     issuer: str
     jwks_uri: str
+    jwks_timeout_seconds: int
     audience: str
     database_url: str | None
     redis_url: str | None
     allow_in_memory_storage: bool
+    max_request_body_bytes: int
     webhook_max_clock_skew_seconds: int
     webhook_replay_retention_seconds: int
     outbox_dispatch_enabled: bool
@@ -77,26 +103,47 @@ class Settings:
                 "SCRAPPER_EXECUTION_ENABLED",
             )
         }
-        try:
-            skew = int(source.get("WEBHOOK_MAX_CLOCK_SKEW_SECONDS", "300"))
-            retention = int(source.get("WEBHOOK_REPLAY_RETENTION_SECONDS", "86400"))
-        except ValueError as exc:
-            raise ConfigurationError("webhook timing controls must be integers") from exc
-        if not 1 <= skew <= 300:
-            raise ConfigurationError("WEBHOOK_MAX_CLOCK_SKEW_SECONDS must be 1..300")
-        if retention < 86400:
-            raise ConfigurationError("WEBHOOK_REPLAY_RETENTION_SECONDS must be >= 86400")
         settings = cls(
             app_env=source.get("APP_ENV", "development").strip().lower(),
-            app_version=source.get("APP_VERSION", "0.1.0"),
+            app_version=source.get("APP_VERSION", "0.1.0").strip(),
+            source_sha=source.get("APP_SOURCE_SHA", "unknown").strip(),
+            image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
+            schema_head=source.get("SCHEMA_HEAD", "0001_runtime").strip(),
+            build_time=source.get("BUILD_TIME", "unknown").strip(),
             issuer=issuer,
             jwks_uri=jwks,
+            jwks_timeout_seconds=_int(
+                source,
+                "JWKS_TIMEOUT_SECONDS",
+                3,
+                minimum=1,
+                maximum=10,
+            ),
             audience=source.get("MIDDLEWARE_AUDIENCE", "middleware-api"),
             database_url=source.get("DATABASE_URL") or None,
             redis_url=source.get("REDIS_URL") or None,
             allow_in_memory_storage=_bool(source, "ALLOW_IN_MEMORY_STORAGE", False),
-            webhook_max_clock_skew_seconds=skew,
-            webhook_replay_retention_seconds=retention,
+            max_request_body_bytes=_int(
+                source,
+                "MAX_REQUEST_BODY_BYTES",
+                1_048_576,
+                minimum=1_024,
+                maximum=10_485_760,
+            ),
+            webhook_max_clock_skew_seconds=_int(
+                source,
+                "WEBHOOK_MAX_CLOCK_SKEW_SECONDS",
+                300,
+                minimum=1,
+                maximum=300,
+            ),
+            webhook_replay_retention_seconds=_int(
+                source,
+                "WEBHOOK_REPLAY_RETENTION_SECONDS",
+                86_400,
+                minimum=86_400,
+                maximum=2_592_000,
+            ),
             outbox_dispatch_enabled=_bool(source, "OUTBOX_DISPATCH_ENABLED", False),
             external_effects=effects,
         )
@@ -104,8 +151,12 @@ class Settings:
         return settings
 
     def validate(self) -> None:
+        if self.app_env not in {"development", "test", "staging", "production"}:
+            raise ConfigurationError("APP_ENV is not recognized")
         if self.issuer != "https://auth.codestra.co/realms/codestra":
             raise ConfigurationError("KEYCLOAK_ISSUER must remain canonical")
+        if self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
+            raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
         if self.audience != "middleware-api":
             raise ConfigurationError("MIDDLEWARE_AUDIENCE must be middleware-api")
         enabled = sorted(name for name, value in self.external_effects.items() if value)
@@ -128,6 +179,15 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
+        if self.schema_head != "0001_runtime":
+            raise ConfigurationError("SCHEMA_HEAD must be 0001_runtime for intake-runtime-v1")
+        if self.app_env in {"staging", "production"}:
+            if not SHA40.fullmatch(self.source_sha):
+                raise ConfigurationError("APP_SOURCE_SHA must be an exact 40-character SHA")
+            if not IMAGE_DIGEST.fullmatch(self.image_digest):
+                raise ConfigurationError("IMAGE_DIGEST must be an immutable sha256 digest")
+            if self.build_time in {"", "unknown"}:
+                raise ConfigurationError("BUILD_TIME is required in staging/production")
 
     def webhook_secret(self, producer_client_id: str) -> bytes:
         name = (

@@ -6,6 +6,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+class Actor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["user", "service", "system"]
+    id: str = Field(min_length=1, max_length=160)
+
+
 class EventEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -21,7 +28,7 @@ class EventEnvelope(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=256)
     schema_version: int = Field(ge=1)
     traceparent: str | None = Field(default=None, min_length=1, max_length=256)
-    actor: dict[str, Any] | None = None
+    actor: Actor | None = None
     delivery_attempt: int | None = Field(default=None, ge=1)
     data: dict[str, Any]
 

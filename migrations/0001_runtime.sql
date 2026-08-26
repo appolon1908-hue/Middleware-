@@ -1,11 +1,18 @@
 BEGIN;
 
+CREATE TABLE IF NOT EXISTS middleware_schema_migrations (
+    version integer PRIMARY KEY,
+    name text NOT NULL,
+    applied_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS middleware_inbox (
     event_id text NOT NULL,
     tenant_id text NOT NULL,
     source_client_id text NOT NULL,
     event_type text NOT NULL,
     body_sha256 char(64) NOT NULL,
+    semantic_sha256 char(64) NOT NULL,
     idempotency_key text NOT NULL,
     correlation_id text NOT NULL,
     payload jsonb NOT NULL,
@@ -41,5 +48,9 @@ CREATE TABLE IF NOT EXISTS middleware_outbox (
 CREATE INDEX IF NOT EXISTS middleware_outbox_dispatch_idx
     ON middleware_outbox (next_attempt_at, id)
     WHERE completed_at IS NULL AND dead_lettered_at IS NULL;
+
+INSERT INTO middleware_schema_migrations (version, name)
+VALUES (1, '0001_runtime')
+ON CONFLICT (version) DO UPDATE SET name=EXCLUDED.name;
 
 COMMIT;

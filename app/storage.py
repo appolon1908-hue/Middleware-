@@ -482,17 +482,19 @@ class PostgresOutboxStore:
         worker_id: str,
         error: str,
     ) -> None:
+        """Persist unknown-on-crash state while preserving active dispatch ownership."""
+
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
             result = await conn.execute(
                 """
                 UPDATE middleware_outbox
                 SET last_error=$3,
-                    lease_owner=NULL,
-                    lease_until=NULL,
                     reconciliation_required_at=now()
                 WHERE id=$1
                   AND lease_owner=$2
+                  AND lease_until IS NOT NULL
+                  AND lease_until > now()
                   AND completed_at IS NULL
                   AND dead_lettered_at IS NULL
                   AND reconciliation_required_at IS NULL
@@ -512,6 +514,7 @@ class PostgresOutboxStore:
         action: ReconciliationAction,
         reason: str,
         max_attempts: int = DEFAULT_MAX_OUTBOX_ATTEMPTS,
+        worker_id: str | None = None,
     ) -> None:
         if action not in {"retry", "complete", "dead_letter"}:
             raise ValueError("unsupported reconciliation action")
@@ -519,17 +522,22 @@ class PostgresOutboxStore:
             raise ValueError("max_attempts must be positive")
         safe_operator = operator_id.strip()
         safe_reason = reason.strip()
+        safe_worker = worker_id.strip() if worker_id is not None else None
         if not safe_operator or len(safe_operator) > 160:
             raise ValueError("operator_id must contain 1..160 characters")
         if not safe_reason or len(safe_reason) > 2048:
             raise ValueError("reason must contain 1..2048 characters")
+        if worker_id is not None and (not safe_worker or len(safe_worker) > 256):
+            raise ValueError("worker_id must contain 1..256 characters")
 
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 row = await conn.fetchrow(
                     """
                     SELECT id, tenant_id, attempt_count,
-                           reconciliation_required_at, completed_at, dead_lettered_at
+                           reconciliation_required_at, completed_at, dead_lettered_at,
+                           lease_owner, lease_until,
+                           (lease_until IS NOT NULL AND lease_until > now()) AS lease_active
                     FROM middleware_outbox
                     WHERE id=$1
                     FOR UPDATE
@@ -542,6 +550,24 @@ class PostgresOutboxStore:
                     raise ReconciliationError("outbox record is already terminal")
                 if row["reconciliation_required_at"] is None:
                     raise ReconciliationError("outbox record is not awaiting reconciliation")
+
+                lease_active = bool(row["lease_active"])
+                if lease_active:
+                    if safe_worker is None:
+                        raise ReconciliationError(
+                            "active dispatch cannot be manually reconciled before lease expiry"
+                        )
+                    if row["lease_owner"] != safe_worker:
+                        raise ReconciliationError("active dispatch is owned by another worker")
+                    if action == "dead_letter":
+                        raise ReconciliationError(
+                            "active worker may resolve only complete or known-safe retry"
+                        )
+                elif safe_worker is not None:
+                    raise ReconciliationError(
+                        "worker dispatch lease expired; manual reconciliation is required"
+                    )
+
                 if action == "retry" and row["attempt_count"] >= max_attempts:
                     raise ReconciliationError(
                         "attempt limit is exhausted; choose complete or dead_letter"

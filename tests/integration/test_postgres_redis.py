@@ -14,7 +14,7 @@ from redis.asyncio import Redis
 
 from app.models import EventEnvelope
 from app.replay import RedisReplayGuard, ReplayBusy
-from app.storage import PostgresInboxStore, PostgresOutboxStore, ReplayConflict
+from app.storage import PostgresInboxStore, PostgresOutboxStore, ReconciliationError, ReplayConflict
 
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -62,6 +62,7 @@ async def pool() -> asyncpg.Pool:
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=8)
     migration = Path("migrations/0001_runtime.sql").read_text(encoding="utf-8")
     async with pool.acquire() as conn:
+        await conn.execute("DROP TABLE IF EXISTS middleware_reconciliation_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_outbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_inbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_schema_migrations CASCADE")
@@ -178,21 +179,44 @@ async def test_postgres_idempotency_key_collision_fails_closed(pool: asyncpg.Poo
         )
 
 
-@pytest.mark.asyncio
-async def test_outbox_claim_carries_idempotency_and_skip_locked(pool: asyncpg.Pool) -> None:
+async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:
     async with pool.acquire() as conn:
-        await conn.execute(
+        return await conn.fetchval(
             """
             INSERT INTO middleware_outbox
               (tenant_id, destination, event_type, payload, idempotency_key)
             VALUES ($1,$2,$3,$4::jsonb,$5)
+            RETURNING id
             """,
             "tenant-test",
             "sandbox-provider",
             "codestra.test.delivery",
             json.dumps({"hello": "world"}),
-            "delivery-idem-1",
+            idempotency_key,
         )
+
+
+async def quarantine_record(
+    pool: asyncpg.Pool,
+    *,
+    idempotency_key: str,
+    worker_id: str,
+) -> tuple[PostgresOutboxStore, int]:
+    row_id = await insert_outbox(pool, idempotency_key)
+    store = PostgresOutboxStore(pool)
+    claimed = await store.claim(worker_id=worker_id, lease_seconds=30, max_attempts=3)
+    assert claimed is not None and claimed.id == row_id
+    await store.quarantine_unknown_outcome(
+        row_id,
+        worker_id=worker_id,
+        error="provider timeout; outcome unknown",
+    )
+    return store, row_id
+
+
+@pytest.mark.asyncio
+async def test_outbox_claim_carries_idempotency_and_skip_locked(pool: asyncpg.Pool) -> None:
+    await insert_outbox(pool, "delivery-idem-1")
 
     store = PostgresOutboxStore(pool)
     one, two = await asyncio.gather(
@@ -237,29 +261,10 @@ async def test_outbox_expired_max_attempts_moves_to_dlq(pool: asyncpg.Pool) -> N
 
 @pytest.mark.asyncio
 async def test_outbox_unknown_outcome_is_quarantined_from_claims(pool: asyncpg.Pool) -> None:
-    async with pool.acquire() as conn:
-        row_id = await conn.fetchval(
-            """
-            INSERT INTO middleware_outbox
-              (tenant_id, destination, event_type, payload, idempotency_key)
-            VALUES ($1,$2,$3,$4::jsonb,$5)
-            RETURNING id
-            """,
-            "tenant-test",
-            "sandbox-provider",
-            "codestra.test.delivery",
-            json.dumps({"hello": "world"}),
-            "delivery-idem-unknown",
-        )
-
-    store = PostgresOutboxStore(pool)
-    claimed = await store.claim(worker_id="worker-timeout", lease_seconds=30, max_attempts=3)
-    assert claimed is not None and claimed.id == row_id
-
-    await store.quarantine_unknown_outcome(
-        row_id,
+    store, row_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-unknown",
         worker_id="worker-timeout",
-        error="provider timeout; outcome unknown",
     )
 
     assert await store.claim(worker_id="worker-retry", lease_seconds=30, max_attempts=3) is None
@@ -276,6 +281,110 @@ async def test_outbox_unknown_outcome_is_quarantined_from_claims(pool: asyncpg.P
     assert state["lease_owner"] is None
     assert state["completed_at"] is None
     assert state["dead_lettered_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_retry_is_audited_and_releases_record(pool: asyncpg.Pool) -> None:
+    store, row_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-reconcile-retry",
+        worker_id="worker-timeout-retry",
+    )
+    await store.resolve_reconciliation(
+        row_id,
+        operator_id="ops:test",
+        action="retry",
+        reason="sandbox provider confirmed no external delivery",
+        max_attempts=3,
+    )
+
+    claimed = await store.claim(worker_id="worker-after-review", lease_seconds=30, max_attempts=3)
+    assert claimed is not None and claimed.id == row_id
+    async with pool.acquire() as conn:
+        audit = await conn.fetchrow(
+            "SELECT action, operator_id, reason FROM middleware_reconciliation_audit WHERE outbox_id=$1",
+            row_id,
+        )
+    assert audit["action"] == "retry"
+    assert audit["operator_id"] == "ops:test"
+    assert "confirmed no external delivery" in audit["reason"]
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_complete_and_dead_letter_are_terminal_and_audited(
+    pool: asyncpg.Pool,
+) -> None:
+    complete_store, complete_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-reconcile-complete",
+        worker_id="worker-timeout-complete",
+    )
+    await complete_store.resolve_reconciliation(
+        complete_id,
+        operator_id="ops:test",
+        action="complete",
+        reason="provider reconciliation confirmed the original delivery succeeded",
+    )
+
+    dead_store, dead_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-reconcile-dlq",
+        worker_id="worker-timeout-dlq",
+    )
+    await dead_store.resolve_reconciliation(
+        dead_id,
+        operator_id="ops:test",
+        action="dead_letter",
+        reason="outcome cannot be proven safe for automatic retry",
+    )
+
+    async with pool.acquire() as conn:
+        completed = await conn.fetchval(
+            "SELECT completed_at IS NOT NULL FROM middleware_outbox WHERE id=$1",
+            complete_id,
+        )
+        dead = await conn.fetchval(
+            "SELECT dead_lettered_at IS NOT NULL FROM middleware_outbox WHERE id=$1",
+            dead_id,
+        )
+        actions = await conn.fetch(
+            "SELECT outbox_id, action FROM middleware_reconciliation_audit WHERE outbox_id=ANY($1::bigint[]) ORDER BY outbox_id",
+            [complete_id, dead_id],
+        )
+    assert completed is True
+    assert dead is True
+    assert {(row["outbox_id"], row["action"]) for row in actions} == {
+        (complete_id, "complete"),
+        (dead_id, "dead_letter"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_retry_refuses_exhausted_attempt_limit(pool: asyncpg.Pool) -> None:
+    async with pool.acquire() as conn:
+        row_id = await conn.fetchval(
+            """
+            INSERT INTO middleware_outbox
+              (tenant_id, destination, event_type, payload, idempotency_key,
+               attempt_count, reconciliation_required_at)
+            VALUES ($1,$2,$3,$4::jsonb,$5,3,now())
+            RETURNING id
+            """,
+            "tenant-test",
+            "sandbox-provider",
+            "codestra.test.delivery",
+            json.dumps({"hello": "world"}),
+            "delivery-idem-reconcile-exhausted",
+        )
+    store = PostgresOutboxStore(pool)
+    with pytest.raises(ReconciliationError):
+        await store.resolve_reconciliation(
+            row_id,
+            operator_id="ops:test",
+            action="retry",
+            reason="should not bypass the attempt ceiling",
+            max_attempts=3,
+        )
 
 
 @pytest.mark.asyncio

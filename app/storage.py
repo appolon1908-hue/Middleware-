@@ -481,16 +481,26 @@ class PostgresOutboxStore:
         *,
         worker_id: str,
         error: str,
+        lease_seconds: float = 60,
     ) -> None:
-        """Persist unknown-on-crash state while preserving active dispatch ownership."""
+        """Persist unknown-on-crash state and refresh active dispatch ownership.
 
+        This is the final pre-provider state transition. It both marks the row as
+        reconciliation-required and refreshes the owning worker's lease from the
+        database transaction time, guaranteeing a full lease window before the
+        provider handler begins.
+        """
+
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
             result = await conn.execute(
                 """
                 UPDATE middleware_outbox
                 SET last_error=$3,
-                    reconciliation_required_at=now()
+                    reconciliation_required_at=now(),
+                    lease_until=now() + ($4 * interval '1 second')
                 WHERE id=$1
                   AND lease_owner=$2
                   AND lease_until IS NOT NULL
@@ -502,6 +512,7 @@ class PostgresOutboxStore:
                 record_id,
                 worker_id,
                 safe_error,
+                lease_seconds,
             )
             if result != "UPDATE 1":
                 raise StorageError("outbox lease ownership lost before reconciliation quarantine")

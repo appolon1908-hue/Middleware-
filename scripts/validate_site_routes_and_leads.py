@@ -161,8 +161,8 @@ def main() -> int:
         errors.append("provider routes missing: " + ", ".join(missing_provider))
 
     auth = routes.get("auth.codestra.co", {})
-    if auth.get("status") != "degraded" or "502" not in str(auth.get("issue", "")):
-        errors.append("auth.codestra.co must remain degraded with HTTP 502 recorded")
+    if auth.get("status") != "active" or auth.get("issue") not in (None, ""):
+        errors.append("auth.codestra.co must be active with no recorded issue")
     booked = routes.get("www.booked4seasons.com", {})
     if booked.get("status") != "degraded" or "TLS" not in str(booked.get("issue", "")):
         errors.append("www.booked4seasons.com must remain degraded with TLS failure recorded")
@@ -257,7 +257,7 @@ def main() -> int:
     print(
         "Site route and Odoo intake validation passed: "
         f"{len(routes)} routes, {len(source_ids)} lead sources, "
-        "known 502/TLS failures preserved."
+        "auth.codestra.co active; remaining Booked4Seasons TLS degradation recorded."
     )
     return 0
 

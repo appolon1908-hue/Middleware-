@@ -1,0 +1,51 @@
+name: Scrapper integration contract validation
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/scrapper-control-plane-*.schema.json'
+      - 'config/integrations/scrapper-turnkey-control-plane.yaml'
+      - 'docs/integrations/SCRAPPER_TURNKEY_CONTROL_PLANE.md'
+      - '.github/workflows/scrapper-contract-validation.yml'
+  push:
+    branches:
+      - integration/scrapper-turnkey-control-plane-v1
+
+permissions:
+  contents: read
+
+jobs:
+  scrapper-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Validate JSON schemas
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool contracts/scrapper-control-plane-event.schema.json >/dev/null
+          python3 -m json.tool contracts/scrapper-control-plane-command.schema.json >/dev/null
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path('contracts').glob('scrapper-control-plane-*.schema.json'):
+              schema = json.loads(path.read_text())
+              assert schema['$schema'].endswith('2020-12/schema')
+              assert schema['additionalProperties'] is False
+              assert schema['properties']['tenant_id']['format'] == 'uuid'
+              assert schema['properties']['id']['format'] == 'uuid'
+          PY
+
+      - name: Validate disabled integration policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e "require 'yaml'; d=YAML.safe_load(File.read('config/integrations/scrapper-turnkey-control-plane.yaml')); abort unless d['status']=='disabled'; abort unless d.dig('transport','mtls_required') == true; abort unless d.dig('transport','hmac_required') == true; abort unless d.dig('outbox','enabled') == false; abort unless d.dig('destinations','n8n','write_enabled') == false; abort unless d.dig('destinations','odoo','write_enabled') == false"
+          ! grep -RniE 'BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|Bearer [A-Za-z0-9_-]{20,}' contracts config/integrations docs/integrations
+
+      - name: Validate clean patch
+        run: git diff --check

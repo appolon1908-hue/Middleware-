@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "config" / "beyvra-identity-event-contract.json"
 SCHEMA = ROOT / "contracts" / "beyvra-identity-provisioned.schema.json"
+CONNECTIVITY = ROOT / "config" / "connectivity-map.json"
 
 
 def require(value, message):
@@ -18,6 +19,7 @@ def require(value, message):
 def main():
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    connectivity = json.loads(CONNECTIVITY.read_text(encoding="utf-8"))
     require(contract["schemaVersion"] == 1, "schema version changed")
     require(contract["state"] == "contract-only-runtime-unverified", "runtime state overstated")
     require(contract["source"] == {
@@ -47,6 +49,7 @@ def main():
     }
     require(set(contract["privacy"]["forbiddenFields"]) == required_forbidden, "forbidden fields changed")
     require(set(schema["properties"]["payload"]["required"]) == allowed, "schema payload fields changed")
+    require(set(schema["properties"]["payload"]["properties"]) == allowed, "schema payload properties changed")
     require(schema["properties"]["payload"]["additionalProperties"] is False, "payload must fail closed")
     require(schema["properties"]["event_type"]["const"] == transport["subject"], "schema subject mismatch")
     require(schema["properties"]["tenant_ref"]["const"] == "beyvra", "schema tenant mismatch")
@@ -60,6 +63,19 @@ def main():
     }, "downstream authority changed")
     require(contract["httpBoundary"]["synchronousAuthEndpoint"] is None, "synchronous auth must bypass Middleware")
     require(contract["httpBoundary"]["identityWebhook"] is None, "identity is not an HTTP webhook")
+    expected_connection = {
+        "id": "beyvra-to-workers-identity-events",
+        "source_branch": "integration/beyvra",
+        "target_branch": "core/workers-scheduler",
+        "direction": "queue",
+        "transport": "nats_jetstream",
+        "authentication": "nats_tls_service_identity",
+        "reliability": "at_least_once",
+        "owner_branch": "integration/beyvra",
+        "runtime_status": "verification_only",
+        "contract": "contracts/beyvra-identity-provisioned.schema.json",
+    }
+    require(expected_connection in connectivity["connections"], "connectivity route changed")
     serialized = (CONTRACT.read_text(encoding="utf-8") + SCHEMA.read_text(encoding="utf-8")).lower()
     require("auth.codestra.agency" not in serialized, "legacy issuer found")
     require("moneybee" not in serialized, "unrelated product found")

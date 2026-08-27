@@ -158,6 +158,31 @@ async def test_heartbeat_continues_while_cancelled_handler_suppresses_cancellati
 
 
 @pytest.mark.asyncio
+async def test_known_safe_retry_reported_after_timeout_stays_quarantined() -> None:
+    store = FakeStore(record())
+
+    async def late_safe_retry_handler(item: OutboxRecord) -> None:
+        store.events.append("handler")
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.02)
+            raise KnownSafeRetryError("too late to prove safe after timeout")
+
+    worker = OutboxWorker(
+        store,  # type: ignore[arg-type]
+        {"provider": late_safe_retry_handler},
+        lease_seconds=0.06,
+        handler_timeout_seconds=0.01,
+        max_attempts=8,
+    )
+    assert await worker.run_once() is True
+    assert store.quarantined
+    assert not store.failed
+    assert not store.resolved
+
+
+@pytest.mark.asyncio
 async def test_generic_handler_exception_leaves_precommitted_active_quarantine() -> None:
     store = FakeStore(record())
 

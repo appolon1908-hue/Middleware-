@@ -1,6 +1,9 @@
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "status": "SOURCE_ONLY",
+  "implementation_status": "NOT_IMPLEMENTED",
+  "runtime_test_evidence": "NOT_AVAILABLE",
+  "independent_approval": "PENDING",
   "authority": {
     "job_ledger": "codestra-middleware-postgresql",
     "orchestration": "n8n",
@@ -8,13 +11,16 @@
     "identity": "keycloak",
     "provider_credentials": "middleware-adapters"
   },
-  "n8n_client": {
+  "n8n_client_policy": {
     "issuer": "https://auth.codestra.co/realms/codestra",
     "audience": "middleware-api",
     "grant_type": "client_credentials",
     "maximum_access_token_lifetime_seconds": 300,
+    "operation_policy": "contracts/automation/operation-policy.v2.json",
     "direct_provider_access": false,
-    "direct_database_access": false
+    "direct_database_access": false,
+    "generic_execute_scope_allowed": false,
+    "generic_command_scope_allowed": false
   },
   "endpoints": [
     "POST /v2/automation/jobs/claim",
@@ -43,17 +49,16 @@
     "automation_reconciliation_runs",
     "automation_dispatch_outbox"
   ],
-  "required_metadata": [
+  "required_job_metadata": [
     "event_id",
     "tenant_id",
     "correlation_id",
     "causation_id",
-    "idempotency_key",
     "workflow_key",
+    "workflow_family",
     "workflow_version",
     "occurred_at",
-    "actor.kind",
-    "actor.subject"
+    "actor_context"
   ],
   "command_states": [
     "ACCEPTED",
@@ -78,10 +83,14 @@
     "DEAD_LETTER",
     "CANCELLED"
   ],
-  "invariants": {
+  "design_invariants": {
     "durable_inbox_before_acknowledgement": true,
     "job_and_dispatch_outbox_same_transaction": true,
-    "lease_required_for_terminal_transition": true,
+    "lease_required_for_step_and_terminal_transition": true,
+    "lease_required_for_command_request": true,
+    "tenant_and_actor_derived_server_side": true,
+    "client_workflow_family_enforced": true,
+    "command_prefix_scope_enforced": true,
     "exact_replay_returns_original_result": true,
     "conflicting_replay_rejected": true,
     "unknown_outcome_reconciled_before_retry": true,
@@ -90,5 +99,18 @@
     "workflow_activation_enables_capability": false,
     "public_provider_callbacks_to_n8n": false,
     "external_effects_enabled": false
+  },
+  "evidence_state": {
+    "design_contract": "PRESENT",
+    "database_migrations": "PENDING",
+    "runtime_api": "PENDING",
+    "authorization_tests": "PENDING",
+    "idempotency_tests": "PENDING",
+    "concurrency_tests": "PENDING",
+    "lease_recovery_tests": "PENDING",
+    "unknown_outcome_tests": "PENDING",
+    "staging_no_effect_tests": "PENDING",
+    "backup_restore_tests": "PENDING",
+    "rollback_rehearsal": "PENDING"
   }
 }

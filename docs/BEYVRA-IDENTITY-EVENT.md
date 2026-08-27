@@ -26,3 +26,7 @@ This repository currently contains contracts and validators, not authoritative
 Middleware worker implementation. Runtime readiness requires imported worker
 source, a durable-consumer/replay test, verified NATS TLS and service identity,
 a schema fixture, and dead-letter plus observability evidence.
+
+The verification-only route is registered in `config/connectivity-map.json`
+as `beyvra-to-workers-identity-events`, using NATS JetStream, TLS service
+identity, at-least-once delivery, and the source-event schema in this branch.

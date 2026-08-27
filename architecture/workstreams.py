@@ -9,7 +9,10 @@ STATUS_OVERRIDES = {'integration/beyvra': 'declared_active_scope',
  'integration/postal-email': 'declared_remote_provider_scope',
  'platform/rabbitmq': 'declared_remote_provider_scope'}
 
-WORKSTREAMS = {'core/lead-intake-normalization': ('shared-core',
+WORKSTREAMS = {'integration/transportation-frontend': ('application',
+                                     'configured_remote_runtime_not_confirmed',
+                                     'Transportation frontend repository boundary, OIDC browser authentication, backend API access, release identity, health, and fail-closed runtime configuration'),
+ 'core/lead-intake-normalization': ('shared-core',
                                     'required_shared_primitive',
                                     'Form, crawler and scraper lead normalization, consent, suppression, provenance, '
                                     'deduplication, review state, Odoo command mapping, and audit'),
@@ -107,7 +110,8 @@ WORKSTREAMS = {'core/lead-intake-normalization': ('shared-core',
                   'Telnexa SMS, billing, Keycloak, RabbitMQ, Redis, PostgreSQL, Prometheus, Node Exporter, public '
                   'routes, internal mTLS, and route health')}
 
-DEPENDENCY_EXTRAS = {'core/lead-intake-normalization': ('core/event-ledger-outbox',
+DEPENDENCY_EXTRAS = {'integration/transportation-frontend': ('integration/keycloak', 'platform/kong'),
+ 'core/lead-intake-normalization': ('core/event-ledger-outbox',
                                     'core/webhook-inbox-replay',
                                     'core/workers-scheduler',
                                     'integration/keycloak'),

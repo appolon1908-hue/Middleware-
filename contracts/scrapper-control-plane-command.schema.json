@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.codestra.co/scrapper/control-plane-command.v1.schema.json",
+  "title": "Codestra Scrapper Reverse Command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "specversion",
+    "id",
+    "type",
+    "source",
+    "tenant_id",
+    "correlation_id",
+    "time",
+    "data"
+  ],
+  "properties": {
+    "specversion": { "const": "1.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "scraper.crawl.requested",
+        "scraper.job.cancel.requested",
+        "scraper.source.validate.requested"
+      ]
+    },
+    "source": { "const": "urn:codestra:middleware" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "causation_id": { "type": ["string", "null"], "format": "uuid" },
+    "time": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": ["string", "null"], "format": "date-time" },
+    "schema_version": { "const": "1.0" },
+    "data": { "type": "object" }
+  }
+}

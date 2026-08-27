@@ -1,13 +1,15 @@
 {
   "schemaVersion": 1,
-  "eventType": "moneybee.account.provisioned.v1",
+  "eventType": "codestra.moneybee.account.provisioned",
+  "eventSchemaVersion": 1,
   "source": {
     "system": "moneybee-backend",
     "repository": "appolon1908-hue/Moneybee-Backend",
     "transport": "middleware-api",
+    "identityContract": "config/moneybee-backend-producer-identity.json",
     "requiredAudience": "middleware-api",
-    "requiredScope": "identity.request",
-    "idempotencyKey": "event_id"
+    "requiredScope": "moneybee.events.publish",
+    "idempotencyKey": "idempotency_key"
   },
   "authoritativeBoundaries": {
     "humanIdentityAuthority": "keycloak",

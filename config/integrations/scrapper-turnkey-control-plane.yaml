@@ -1,0 +1,62 @@
+integration: scrapper-turnkey-control-plane
+version: 1
+status: disabled
+
+service_identity:
+  issuer: https://auth.codestra.co/realms/codestra
+  audience: codestra-middleware
+  required_scopes:
+    events: scrapper.events.write
+    commands: scrapper.commands.write
+
+transport:
+  private_only: true
+  mtls_required: true
+  hmac_required: true
+  timestamp_tolerance_seconds: 300
+  message_id_header: X-Codestra-Message-ID
+  timestamp_header: X-Codestra-Timestamp
+  signature_header: X-Codestra-Signature
+  correlation_header: X-Correlation-ID
+  tenant_header: X-Tenant-ID
+
+inbox:
+  acknowledge_after_durable_insert: true
+  duplicate_same_digest: return_original_receipt
+  duplicate_changed_digest: reject_conflict
+  raw_payload_retention_days: 30
+
+outbox:
+  enabled: false
+  max_attempts: 8
+  initial_backoff_seconds: 5
+  max_backoff_seconds: 3600
+  lease_seconds: 120
+  jitter: full
+
+allowed_events:
+  - scraper.tenant.onboarding.requested
+  - scraper.tenant.status.changed
+  - scraper.job.completed
+  - scraper.job.failed
+  - scraper.business.batch.ready
+  - scraper.review.approved
+  - scraper.export.ready
+
+allowed_commands:
+  - scraper.crawl.requested
+  - scraper.job.cancel.requested
+  - scraper.source.validate.requested
+
+destinations:
+  n8n:
+    enabled: false
+    write_enabled: false
+  odoo:
+    enabled: false
+    write_enabled: false
+
+reconciliation:
+  enabled: true
+  destructive_repair: false
+  require_human_approval_for_replay: true

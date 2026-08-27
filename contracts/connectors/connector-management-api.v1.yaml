@@ -1,0 +1,348 @@
+openapi: 3.1.0
+info:
+  title: Codestra Connector Management API
+  version: 1.0.0
+  description: >-
+    Disabled-first connector catalog, installation, health, webhook lifecycle,
+    delivery evidence, and replay-request API. Connector activation is
+    intentionally excluded and remains a protected release/canary operation.
+servers:
+  - url: https://api.codestra.co
+    description: Public Codestra gateway; deployment is outside this contract.
+paths:
+  /v1/connectors:
+    get:
+      operationId: listConnectors
+      security: [{oauth2: [connector.catalog.read]}]
+      responses:
+        '200':
+          description: Tenant-authorized connector catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/ConnectorProjection'}
+                  meta: {$ref: '#/components/schemas/ResponseMeta'}
+  /v1/connectors/validate:
+    post:
+      operationId: validateConnectorManifest
+      security: [{oauth2: [connector.manifest.validate]}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [manifest]
+              properties:
+                manifest:
+                  $ref: https://contracts.codestra.co/connectors/connector-manifest.v1.schema.json
+      responses:
+        '200': {description: Validation result with canonical manifest digest}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /v1/connectors/install:
+    post:
+      operationId: installConnectorDisabled
+      description: Installs a reviewed manifest in INSTALLED_DISABLED state only.
+      security: [{oauth2: [connector.install.request]}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [manifest, expected_manifest_digest]
+              properties:
+                manifest:
+                  $ref: https://contracts.codestra.co/connectors/connector-manifest.v1.schema.json
+                expected_manifest_digest:
+                  type: string
+                  pattern: '^sha256:[a-f0-9]{64}$'
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /v1/connectors/{connector_id}:
+    get:
+      operationId: getConnector
+      security: [{oauth2: [connector.catalog.read]}]
+      parameters: [{$ref: '#/components/parameters/ConnectorId'}]
+      responses:
+        '200':
+          description: Safe connector projection
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConnectorProjection'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /v1/connectors/{connector_id}/manifest:
+    get:
+      operationId: getConnectorManifest
+      security: [{oauth2: [connector.manifest.read]}]
+      parameters: [{$ref: '#/components/parameters/ConnectorId'}]
+      responses:
+        '200': {description: Secret-free installed manifest and digest}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /v1/connectors/{connector_id}/test:
+    post:
+      operationId: testConnectorConnection
+      description: Performs a no-effect identity, TLS, and health read-back test.
+      security: [{oauth2: [connector.connection.test]}]
+      parameters:
+        - {$ref: '#/components/parameters/ConnectorId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+  /v1/connectors/{connector_id}/upgrade:
+    post:
+      operationId: upgradeConnectorDisabled
+      description: Records a digest-bound upgrade; it does not activate the connector.
+      security: [{oauth2: [connector.upgrade.request]}]
+      parameters:
+        - {$ref: '#/components/parameters/ConnectorId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /v1/connectors/{connector_id}/disable:
+    post:
+      operationId: disableConnector
+      security: [{oauth2: [connector.disable.request]}]
+      parameters:
+        - {$ref: '#/components/parameters/ConnectorId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+  /v1/connectors/{connector_id}/health:
+    get:
+      operationId: getConnectorHealth
+      security: [{oauth2: [connector.health.read]}]
+      parameters: [{$ref: '#/components/parameters/ConnectorId'}]
+      responses:
+        '200': {description: Redacted connector and destination health}
+  /v1/integrations/connections/{connection_id}/webhooks:
+    get:
+      operationId: listConnectionWebhooks
+      security: [{oauth2: [connector.webhook.read]}]
+      parameters: [{$ref: '#/components/parameters/ConnectionId'}]
+      responses:
+        '200': {description: Secret-free webhook endpoints}
+    post:
+      operationId: createConnectionWebhook
+      security: [{oauth2: [connector.webhook.write]}]
+      parameters:
+        - {$ref: '#/components/parameters/ConnectionId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+  /v1/webhooks/{webhook_id}:
+    get:
+      operationId: getWebhook
+      security: [{oauth2: [connector.webhook.read]}]
+      parameters: [{$ref: '#/components/parameters/WebhookId'}]
+      responses:
+        '200': {description: Secret-free webhook endpoint projection}
+    patch:
+      operationId: updateWebhook
+      security: [{oauth2: [connector.webhook.write]}]
+      parameters:
+        - {$ref: '#/components/parameters/WebhookId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+    delete:
+      operationId: disableWebhook
+      description: Disables the endpoint; audit history is retained.
+      security: [{oauth2: [connector.webhook.write]}]
+      parameters:
+        - {$ref: '#/components/parameters/WebhookId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+  /v1/webhooks/{webhook_id}/test:
+    post:
+      operationId: testWebhook
+      security: [{oauth2: [connector.webhook.test]}]
+      parameters:
+        - {$ref: '#/components/parameters/WebhookId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+  /v1/webhooks/{webhook_id}/rotate-secret:
+    post:
+      operationId: rotateWebhookSecretReference
+      description: Rotates external secret references with an overlap window.
+      security: [{oauth2: [connector.webhook.rotate]}]
+      parameters:
+        - {$ref: '#/components/parameters/WebhookId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+  /v1/webhooks/{webhook_id}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      security: [{oauth2: [connector.webhook.delivery.read]}]
+      parameters: [{$ref: '#/components/parameters/WebhookId'}]
+      responses:
+        '200': {description: Redacted delivery and durable inbox evidence}
+  /v1/webhook-deliveries/{delivery_id}:
+    get:
+      operationId: getWebhookDelivery
+      security: [{oauth2: [connector.webhook.delivery.read]}]
+      parameters: [{$ref: '#/components/parameters/DeliveryId'}]
+      responses:
+        '200': {description: One redacted delivery record}
+  /v1/webhook-deliveries/{delivery_id}/replay-request:
+    post:
+      operationId: requestWebhookDeliveryReplay
+      description: Requests protected replay; it never self-authorizes execution.
+      security: [{oauth2: [connector.webhook.replay.request]}]
+      parameters:
+        - {$ref: '#/components/parameters/DeliveryId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /v1/webhooks/{connector_id}/{endpoint_key}:
+    post:
+      operationId: receiveConnectorWebhook
+      description: >-
+        Public provider ingress. Middleware verifies the raw-body signature,
+        timestamp, event ID, body digest, tenant mapping, route ownership, body
+        limit, and replay state before durable acknowledgement.
+      security: []
+      parameters:
+        - {$ref: '#/components/parameters/ConnectorId'}
+        - name: endpoint_key
+          in: path
+          required: true
+          schema: {type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'}
+      responses:
+        '202': {description: Event durably accepted after provider verification}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {description: Signature, timestamp, or source verification failed}
+        '409': {$ref: '#/components/responses/ConflictError'}
+        '413': {description: Body exceeds connector policy}
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.codestra.co/realms/codestra/protocol/openid-connect/token
+          scopes:
+            connector.catalog.read: Read available connector projections
+            connector.manifest.read: Read a secret-free manifest
+            connector.manifest.validate: Validate a candidate manifest
+            connector.install.request: Request disabled-first installation
+            connector.upgrade.request: Request a digest-bound upgrade
+            connector.disable.request: Disable an installed connector
+            connector.connection.test: Run a no-effect connection test
+            connector.health.read: Read redacted health
+            connector.webhook.read: Read webhook endpoint metadata
+            connector.webhook.write: Request webhook endpoint changes
+            connector.webhook.test: Run a signed no-effect webhook test
+            connector.webhook.rotate: Rotate an external secret reference
+            connector.webhook.delivery.read: Read redacted delivery evidence
+            connector.webhook.replay.request: Request protected replay
+  parameters:
+    ConnectorId:
+      name: connector_id
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'}
+    ConnectionId:
+      name: connection_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    WebhookId:
+      name: webhook_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    DeliveryId:
+      name: delivery_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 180}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+  schemas:
+    ConnectorProjection:
+      type: object
+      required: [connector_id, version, cell, state, manifest_digest]
+      properties:
+        connector_id: {type: string}
+        display_name: {type: string}
+        version: {type: string}
+        cell: {type: string}
+        state:
+          enum: [DECLARED, VALIDATED, INSTALLED_DISABLED, ACTIVE, SUSPENDED, FAILED]
+        manifest_digest: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
+        runtime_binding_status: {type: string}
+        workflow_families: {type: array, items: {type: string}}
+    ResponseMeta:
+      type: object
+      required: [correlation_id, api_version]
+      properties:
+        correlation_id: {type: string, format: uuid}
+        api_version: {const: v1}
+    Error:
+      type: object
+      required: [code, message, correlation_id]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        correlation_id: {type: string, format: uuid}
+        retryable: {type: boolean}
+  responses:
+    OperationAccepted:
+      description: Durable asynchronous operation accepted
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data:
+                type: object
+                required: [operation_id, status]
+                properties:
+                  operation_id: {type: string, format: uuid}
+                  status: {const: accepted}
+              meta: {$ref: '#/components/schemas/ResponseMeta'}
+    ValidationError:
+      description: Contract or policy validation failed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    ConflictError:
+      description: Digest, idempotency, version, state, or replay conflict
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFoundError:
+      description: Resource not found in the caller's tenant scope
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

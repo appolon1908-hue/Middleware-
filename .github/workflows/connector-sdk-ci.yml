@@ -1,0 +1,48 @@
+name: Connector SDK v1 validation
+
+on:
+  pull_request:
+    paths:
+      - "middleware/connector_sdk/**"
+      - "connectors/**"
+      - "contracts/connectors/**"
+      - "docs/connectors/**"
+      - "scripts/generate_connector_artifacts.py"
+      - "scripts/scaffold_connector.py"
+      - "scripts/validate_connector_sdk.py"
+      - "tests/test_connector_sdk_v1.py"
+      - ".github/workflows/connector-sdk-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Reject whitespace errors
+        run: git diff --check
+      - name: Compile SDK
+        run: >-
+          python3 -m compileall -q
+          middleware/connector_sdk
+          scripts/generate_connector_artifacts.py
+          scripts/scaffold_connector.py
+          scripts/validate_connector_sdk.py
+          tests/test_connector_sdk_v1.py
+      - name: Validate manifests, generated source, API, and storage
+        run: |
+          python3 scripts/generate_connector_artifacts.py --check
+          python3 scripts/validate_connector_sdk.py
+      - name: Run Connector SDK regression tests
+        run: python3 -m unittest -v tests.test_connector_sdk_v1

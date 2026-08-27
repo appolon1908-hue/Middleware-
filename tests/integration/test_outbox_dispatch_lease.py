@@ -36,36 +36,42 @@ async def pool() -> asyncpg.Pool:
         await pool.close()
 
 
-@pytest.mark.asyncio
-async def test_pre_dispatch_quarantine_refreshes_full_lease_atomically(
-    pool: asyncpg.Pool,
-) -> None:
+async def insert_and_quarantine(pool: asyncpg.Pool, *, key: str, worker_id: str) -> tuple[PostgresOutboxStore, int]:
     async with pool.acquire() as conn:
         row_id = await conn.fetchval(
             """
             INSERT INTO middleware_outbox
               (tenant_id, destination, event_type, payload, idempotency_key)
-            VALUES ('tenant-test','sandbox-provider','codestra.test.delivery','{}'::jsonb,
-                    'delivery-refresh-lease')
+            VALUES ('tenant-test','sandbox-provider','codestra.test.delivery','{}'::jsonb,$1)
             RETURNING id
-            """
+            """,
+            key,
         )
 
     store = PostgresOutboxStore(pool)
     claimed = await store.claim(
-        worker_id="worker-refresh",
+        worker_id=worker_id,
         lease_seconds=1,
         max_attempts=3,
     )
     assert claimed is not None and claimed.id == row_id
-
-    # The final pre-provider state transition must establish a fresh lease window
-    # from database time, regardless of time consumed since the original claim.
     await store.quarantine_unknown_outcome(
         row_id,
-        worker_id="worker-refresh",
+        worker_id=worker_id,
         error="dispatch reserved immediately before provider invocation",
         lease_seconds=30,
+    )
+    return store, row_id
+
+
+@pytest.mark.asyncio
+async def test_pre_dispatch_quarantine_refreshes_full_lease_atomically(
+    pool: asyncpg.Pool,
+) -> None:
+    store, row_id = await insert_and_quarantine(
+        pool,
+        key="delivery-refresh-lease",
+        worker_id="worker-refresh",
     )
 
     async with pool.acquire() as conn:
@@ -92,6 +98,53 @@ async def test_pre_dispatch_quarantine_refreshes_full_lease_atomically(
             reason="manual retry must be blocked during refreshed active dispatch",
             max_attempts=3,
         )
+
+    assert await store.claim(
+        worker_id="worker-other",
+        lease_seconds=30,
+        max_attempts=3,
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_active_dispatch_heartbeat_renews_same_owner_from_database_time(
+    pool: asyncpg.Pool,
+) -> None:
+    store, row_id = await insert_and_quarantine(
+        pool,
+        key="delivery-heartbeat-lease",
+        worker_id="worker-heartbeat",
+    )
+
+    # Simulate a handler that has remained alive long enough for its prior lease
+    # to be near expiry, then verify the heartbeat restores a full lease window.
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE middleware_outbox SET lease_until=now() + interval '100 milliseconds' WHERE id=$1",
+            row_id,
+        )
+
+    await store.renew_active_dispatch(
+        row_id,
+        worker_id="worker-heartbeat",
+        lease_seconds=30,
+    )
+
+    async with pool.acquire() as conn:
+        state = await conn.fetchrow(
+            """
+            SELECT lease_owner,
+                   reconciliation_required_at IS NOT NULL AS reconciliation_required,
+                   extract(epoch FROM (lease_until - now())) AS remaining_seconds
+            FROM middleware_outbox
+            WHERE id=$1
+            """,
+            row_id,
+        )
+
+    assert state["lease_owner"] == "worker-heartbeat"
+    assert state["reconciliation_required"] is True
+    assert float(state["remaining_seconds"]) > 20.0
 
     assert await store.claim(
         worker_id="worker-other",

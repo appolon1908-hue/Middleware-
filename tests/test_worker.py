@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from app.storage import OutboxRecord
-from app.worker import OutboxWorker
+from app.worker import KnownSafeRetryError, OutboxWorker
 
 
 class FakeStore:
@@ -77,3 +77,33 @@ async def test_handler_timeout_is_quarantined_before_lease_expiry() -> None:
     assert not store.completed
     assert store.claim_args["max_attempts"] == 8
     assert store.claim_args["lease_seconds"] == 0.1
+
+
+@pytest.mark.asyncio
+async def test_generic_handler_exception_is_quarantined_as_unknown_outcome() -> None:
+    store = FakeStore(record())
+
+    async def ambiguous_handler(item: OutboxRecord) -> None:
+        raise ConnectionError("provider accepted request then connection reset")
+
+    worker = OutboxWorker(store, {"provider": ambiguous_handler})  # type: ignore[arg-type]
+    assert await worker.run_once() is True
+    assert store.quarantined
+    assert not store.failed
+    assert not store.completed
+    assert "unknown" in store.quarantined[0][1]["error"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_known_safe_retry_error_uses_retry_queue() -> None:
+    store = FakeStore(record())
+
+    async def safe_retry_handler(item: OutboxRecord) -> None:
+        raise KnownSafeRetryError("provider rejected request before dispatch")
+
+    worker = OutboxWorker(store, {"provider": safe_retry_handler})  # type: ignore[arg-type]
+    assert await worker.run_once() is True
+    assert store.failed
+    assert not store.quarantined
+    assert not store.completed
+    assert store.failed[0][1]["max_attempts"] == 8

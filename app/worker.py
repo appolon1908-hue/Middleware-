@@ -27,11 +27,11 @@ class KnownSafeRetryError(RuntimeError):
 class OutboxWorker:
     """Generic bounded lease/retry/reconciliation worker.
 
-    No provider handlers are registered on intake-runtime-v1. Before any future
-    provider handler is invoked, the claimed row is durably moved into the
-    reconciliation-required state while preserving the active worker lease. That
-    excludes the row from automatic claims but also prevents operators or other
-    workers from releasing it while the provider call is still in flight.
+    No provider handlers are registered on intake-runtime-v1. Immediately before
+    any future provider handler is invoked, the claimed row is durably moved into
+    the reconciliation-required state and its active worker lease is refreshed for
+    a full lease window. That excludes the row from automatic claims and ensures
+    the configured handler timeout remains strictly inside the refreshed lease.
 
     A normal handler return lets the owning worker resolve that active dispatch as
     complete. An explicit KnownSafeRetryError lets the owning worker resolve it as
@@ -85,9 +85,8 @@ class OutboxWorker:
             )
             return True
 
-        # Commit unknown-on-crash state before invoking any provider code while
-        # retaining this worker's live lease. If this write fails, the exception
-        # propagates and the handler is never run.
+        # This final pre-provider transaction refreshes the lease from database
+        # time. If it fails, the exception propagates and provider code is never run.
         await self.store.quarantine_unknown_outcome(
             record.id,
             worker_id=self.worker_id,
@@ -95,6 +94,7 @@ class OutboxWorker:
                 "provider dispatch reserved before handler invocation; external outcome "
                 "must be explicitly confirmed before automatic release"
             ),
+            lease_seconds=self.lease_seconds,
         )
 
         try:

@@ -51,7 +51,7 @@ def record() -> OutboxRecord:
 
 
 @pytest.mark.asyncio
-async def test_worker_quarantines_before_handler_and_resolves_success() -> None:
+async def test_worker_quarantines_before_handler_and_resolves_success_as_owner() -> None:
     store = FakeStore(record())
     observed = []
 
@@ -63,7 +63,9 @@ async def test_worker_quarantines_before_handler_and_resolves_success() -> None:
     assert await worker.run_once() is True
     assert observed == ["idem-12345678"]
     assert store.events == ["quarantine", "handler", "resolve:complete"]
+    assert store.quarantined[0][1]["worker_id"] == worker.worker_id
     assert store.resolved[0][1]["action"] == "complete"
+    assert store.resolved[0][1]["worker_id"] == worker.worker_id
 
 
 @pytest.mark.asyncio
@@ -85,7 +87,7 @@ async def test_pre_dispatch_quarantine_failure_prevents_handler_invocation() -> 
 
 
 @pytest.mark.asyncio
-async def test_handler_timeout_leaves_precommitted_quarantine() -> None:
+async def test_handler_timeout_leaves_precommitted_active_quarantine() -> None:
     store = FakeStore(record())
 
     async def slow_handler(item: OutboxRecord) -> None:
@@ -109,7 +111,7 @@ async def test_handler_timeout_leaves_precommitted_quarantine() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generic_handler_exception_leaves_precommitted_quarantine() -> None:
+async def test_generic_handler_exception_leaves_precommitted_active_quarantine() -> None:
     store = FakeStore(record())
 
     async def ambiguous_handler(item: OutboxRecord) -> None:
@@ -125,7 +127,7 @@ async def test_generic_handler_exception_leaves_precommitted_quarantine() -> Non
 
 
 @pytest.mark.asyncio
-async def test_explicit_known_safe_retry_resolves_quarantine_to_retry() -> None:
+async def test_explicit_known_safe_retry_resolves_quarantine_as_owner() -> None:
     store = FakeStore(record())
 
     async def safe_retry_handler(item: OutboxRecord) -> None:
@@ -139,4 +141,5 @@ async def test_explicit_known_safe_retry_resolves_quarantine_to_retry() -> None:
     assert store.resolved
     assert store.resolved[0][1]["action"] == "retry"
     assert store.resolved[0][1]["max_attempts"] == 8
+    assert store.resolved[0][1]["worker_id"] == worker.worker_id
     assert store.events == ["quarantine", "handler", "resolve:retry"]

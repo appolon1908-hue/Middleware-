@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.codestra.co/scrapper/control-plane-event.v1.schema.json",
+  "title": "Codestra Scrapper Control Plane Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "specversion",
+    "id",
+    "type",
+    "source",
+    "subject",
+    "time",
+    "tenant_id",
+    "correlation_id",
+    "data"
+  ],
+  "properties": {
+    "specversion": { "const": "1.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "scraper.tenant.onboarding.requested",
+        "scraper.tenant.status.changed",
+        "scraper.job.completed",
+        "scraper.job.failed",
+        "scraper.business.batch.ready",
+        "scraper.review.approved",
+        "scraper.export.ready"
+      ]
+    },
+    "source": { "const": "urn:codestra:scrapper" },
+    "subject": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "time": { "type": "string", "format": "date-time" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "causation_id": { "type": ["string", "null"], "format": "uuid" },
+    "schema_version": { "const": "1.0" },
+    "data": { "type": "object" }
+  }
+}

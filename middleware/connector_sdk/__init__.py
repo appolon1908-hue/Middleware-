@@ -1,8 +1,8 @@
 """Codestra Connector SDK v1.
 
-This package is intentionally framework-neutral. FastAPI, Django, worker, and
-Temporal adapters can bind these services without giving connector manifests
-the ability to load code or hold secret values.
+This package is framework-neutral. FastAPI, worker, and Temporal adapters can
+bind these services without giving connector manifests the ability to load
+code or contain secret values.
 """
 
 from .catalog import ConnectorCatalogService
@@ -16,6 +16,8 @@ from .errors import (
     ManifestValidationError,
     ReadBackRequiredError,
     ReplayDetectedError,
+    StandardsValidationError,
+    TenantResolutionError,
     UnknownOutcomeError,
     WebhookVerificationError,
 )
@@ -25,6 +27,7 @@ from .interfaces import (
     ConnectorAdapter,
     ReplayStore,
     SecretResolver,
+    TenantResolver,
 )
 from .manifest import (
     canonical_manifest_json,
@@ -33,6 +36,7 @@ from .manifest import (
     parse_manifest,
 )
 from .models import (
+    CloudEventEnvelope,
     CommandContext,
     CommandOutcome,
     CommandRequest,
@@ -45,13 +49,23 @@ from .models import (
     NormalizedWebhookEvent,
     ReplayDecision,
     VerifiedWebhook,
+    WebhookProcessResult,
     WebhookRequest,
 )
 from .registry import ConnectorRegistry, RegisteredConnector
 from .runtime import ConnectorRuntime, StaticCapabilityProvider
+from .standards import (
+    SemanticVersion,
+    deep_freeze,
+    deep_thaw,
+    validate_rfc3339,
+    validate_traceparent,
+    validate_tracestate,
+)
 from .webhooks import (
     InMemoryReplayStore,
     MappingSecretResolver,
+    MappingTenantResolver,
     WebhookProcessor,
 )
 
@@ -59,6 +73,7 @@ __all__ = [
     "AdapterFactory",
     "CapabilityDisabledError",
     "CapabilityProvider",
+    "CloudEventEnvelope",
     "CommandContext",
     "CommandNotAllowedError",
     "CommandOutcome",
@@ -80,6 +95,7 @@ __all__ = [
     "InMemoryReplayStore",
     "ManifestValidationError",
     "MappingSecretResolver",
+    "MappingTenantResolver",
     "NormalizedWebhookEvent",
     "ReadBackRequiredError",
     "RegisteredConnector",
@@ -87,14 +103,24 @@ __all__ = [
     "ReplayDetectedError",
     "ReplayStore",
     "SecretResolver",
+    "SemanticVersion",
+    "StandardsValidationError",
     "StaticCapabilityProvider",
+    "TenantResolutionError",
+    "TenantResolver",
     "UnknownOutcomeError",
     "VerifiedWebhook",
+    "WebhookProcessResult",
     "WebhookProcessor",
     "WebhookRequest",
     "WebhookVerificationError",
     "canonical_manifest_json",
+    "deep_freeze",
+    "deep_thaw",
     "load_manifest",
     "manifest_digest",
     "parse_manifest",
+    "validate_rfc3339",
+    "validate_traceparent",
+    "validate_tracestate",
 ]

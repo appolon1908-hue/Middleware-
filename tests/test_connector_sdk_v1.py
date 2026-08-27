@@ -1,4 +1,4 @@
-"""Security and lifecycle regression tests for Codestra Connector SDK v1."""
+"""Standards, security, and lifecycle regression tests for Connector SDK v1."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any
 
 from middleware.connector_sdk import (
     CapabilityDisabledError,
+    CloudEventEnvelope,
     CommandContext,
     CommandNotAllowedError,
     CommandOutcome,
@@ -28,11 +29,16 @@ from middleware.connector_sdk import (
     ConnectorRegistry,
     ConnectorRuntime,
     ConnectorState,
+    ConnectorStateError,
+    ConnectorVersionConflictError,
     InMemoryReplayStore,
     ManifestValidationError,
     MappingSecretResolver,
+    MappingTenantResolver,
     NormalizedWebhookEvent,
-    ReplayDetectedError,
+    ReadBackRequiredError,
+    ReplayDecision,
+    SemanticVersion,
     StaticCapabilityProvider,
     VerifiedWebhook,
     WebhookProcessor,
@@ -48,75 +54,133 @@ MANIFESTS = ROOT / "connectors" / "manifests"
 
 
 class FakeAdapter(ConnectorAdapter):
+    result_outcome = CommandOutcome.SUBMITTED
+    readback_outcome = CommandOutcome.COMPLETED
+    leak_result = False
+    change_operation_id = False
+
     def __init__(self, manifest: ConnectorManifest) -> None:
         self.manifest = manifest
 
     def validate_configuration(
-        self, manifest: ConnectorManifest, configuration: Mapping[str, Any]
+        self,
+        manifest: ConnectorManifest,
+        configuration: Mapping[str, Any],
     ) -> tuple[str, ...]:
         del manifest
-        return () if configuration.get("account_id") else ("account_id required",)
+        return () if configuration.get("account_id") else (
+            "account_id required",
+        )
 
     def test_connection(
-        self, manifest: ConnectorManifest, configuration: Mapping[str, Any]
+        self,
+        manifest: ConnectorManifest,
+        configuration: Mapping[str, Any],
     ) -> ConnectionTestResult:
         del manifest, configuration
-        return ConnectionTestResult(ok=True, code="READ_ONLY_TEST_PASS")
+        return ConnectionTestResult(
+            ok=True,
+            code="READ_ONLY_TEST_PASS",
+        )
 
-    def execute_command(self, request: CommandRequest) -> CommandResult:
+    def execute_command(
+        self,
+        request: CommandRequest,
+    ) -> CommandResult:
+        safe_result = (
+            {"access_token": "leak"}
+            if self.leak_result
+            else {"submitted": True}
+        )
         return CommandResult(
-            outcome=CommandOutcome.SUBMITTED,
+            outcome=self.result_outcome,
             operation_id=request.command_id,
-            safe_result={"submitted": True},
+            safe_result=safe_result,
         )
 
     def read_back(
-        self, request: CommandRequest, prior_result: CommandResult
+        self,
+        request: CommandRequest,
+        prior_result: CommandResult,
     ) -> CommandResult:
-        del request
+        operation_id = (
+            str(uuid.uuid4())
+            if self.change_operation_id
+            else prior_result.operation_id
+        )
         return CommandResult(
-            outcome=CommandOutcome.COMPLETED,
-            operation_id=prior_result.operation_id,
+            outcome=self.readback_outcome,
+            operation_id=operation_id,
             safe_result={"readback": "confirmed"},
         )
 
-    def normalize_webhook(self, webhook: VerifiedWebhook) -> NormalizedWebhookEvent:
+    def normalize_webhook(
+        self,
+        webhook: VerifiedWebhook,
+    ) -> NormalizedWebhookEvent:
         payload = json.loads(webhook.body)
         return NormalizedWebhookEvent(
             event_id=webhook.event_id,
             event_type=payload["event_type"],
-            tenant_id=payload["tenant_id"],
+            external_account_reference=payload["account_reference"],
             correlation_id=payload["correlation_id"],
             causation_id=payload["causation_id"],
             occurred_at=payload["occurred_at"],
-            payload=payload,
+            payload=payload["data"],
+            traceparent=payload.get("traceparent"),
         )
 
     def reconcile_unknown(
-        self, request: CommandRequest, prior_result: CommandResult
+        self,
+        request: CommandRequest,
+        prior_result: CommandResult,
     ) -> CommandResult:
         return self.read_back(request, prior_result)
 
     def health(self) -> ConnectorHealth:
-        return ConnectorHealth(status="HEALTHY", checked_at_epoch=int(time.time()))
+        return ConnectorHealth(
+            status="HEALTHY",
+            checked_at_epoch=int(time.time()),
+        )
 
 
-class ConnectorSdkV1Tests(unittest.TestCase):
+class ConnectorSdkStandardsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = ConnectorRegistry()
         self.records = self.registry.load_directory(MANIFESTS)
 
     @staticmethod
     def raw(connector_id: str) -> dict[str, Any]:
-        return json.loads((MANIFESTS / f"{connector_id}.connector.json").read_text())
+        return json.loads(
+            (
+                MANIFESTS / f"{connector_id}.connector.json"
+            ).read_text()
+        )
 
-    def activate(self, connector_id: str) -> None:
+    def activate(
+        self,
+        connector_id: str,
+        adapter: type[FakeAdapter] = FakeAdapter,
+    ) -> None:
         self.registry.set_state(
             connector_id,
             expected_state=ConnectorState.DECLARED,
+            new_state=ConnectorState.VALIDATED,
+        )
+        self.registry.set_state(
+            connector_id,
+            expected_state=ConnectorState.VALIDATED,
+            new_state=ConnectorState.INSTALLED_DISABLED,
+        )
+        self.registry.set_state(
+            connector_id,
+            expected_state=ConnectorState.INSTALLED_DISABLED,
             new_state=ConnectorState.ACTIVE,
         )
-        self.registry.register_adapter_factory(connector_id, FakeAdapter)
+        self.registry.register_adapter_factory(
+            connector_id,
+            adapter,
+        )
 
     def request(self, tenant_id: str) -> CommandRequest:
         return CommandRequest(
@@ -132,163 +196,406 @@ class ConnectorSdkV1Tests(unittest.TestCase):
                 causation_id=str(uuid.uuid4()),
                 idempotency_key="email:test:0001",
                 capability_snapshot={"EMAIL_DELIVERY": True},
+                traceparent=(
+                    "00-4bf92f3577b34da6a3ce929d0e0e4736-"
+                    "00f067aa0ba902b7-01"
+                ),
             ),
         )
 
-    def test_manifests_are_complete_disabled_and_non_overlapping(self) -> None:
+    def webhook_request(
+        self,
+        *,
+        secret: bytes,
+        event_id: str = "evt-1",
+        account_reference: str = "postal-server-1",
+        body_suffix: bytes = b"",
+        signature_secret: bytes | None = None,
+        provider_tenant_id: str | None = None,
+    ) -> tuple[WebhookRequest, str, dict[str, Any]]:
+        now = int(time.time())
+        payload = {
+            "event_type": "email.message.delivered.v1",
+            "account_reference": account_reference,
+            "correlation_id": str(uuid.uuid4()),
+            "causation_id": str(uuid.uuid4()),
+            "occurred_at": "2026-08-27T21:00:00Z",
+            "data": {"message_id": "m-1"},
+        }
+        if provider_tenant_id is not None:
+            payload["tenant_id"] = provider_tenant_id
+        body = (
+            json.dumps(payload, separators=(",", ":")).encode()
+            + body_suffix
+        )
+        used_secret = signature_secret or secret
+        signature = hmac.new(
+            used_secret,
+            str(now).encode() + b"." + body,
+            hashlib.sha256,
+        ).hexdigest()
+        request = WebhookRequest(
+            headers={
+                "Content-Type": "application/json",
+                "X-Postal-Signature": "v1=" + signature,
+                "X-Postal-Timestamp": str(now),
+                "X-Postal-Event-Id": event_id,
+            },
+            body=body,
+            received_at_epoch=now,
+        )
+        return request, account_reference, payload
+
+    def processor(
+        self,
+        secret_values: bytes | tuple[bytes, ...],
+        account_reference: str,
+        tenant_id: str,
+        replay_store: InMemoryReplayStore | None = None,
+    ) -> WebhookProcessor:
+        return WebhookProcessor(
+            self.registry,
+            MappingSecretResolver(
+                {"WEBHOOK_KLYROW_EMAIL_HMAC_SECRET": secret_values}
+            ),
+            replay_store or InMemoryReplayStore(),
+            MappingTenantResolver(
+                {
+                    (
+                        "klyrow-email",
+                        "postal-events",
+                        account_reference,
+                    ): tenant_id
+                }
+            ),
+        )
+
+    def test_manifests_are_disabled_and_non_overlapping(self) -> None:
         self.assertEqual(len(self.records), 8)
-        self.assertEqual(self.registry.validate_global_invariants(), ())
+        self.assertEqual(
+            self.registry.validate_global_invariants(),
+            (),
+        )
         for record in self.records:
             self.assertFalse(record.manifest.enabled_by_default)
             self.assertFalse(record.manifest.direct_n8n_access)
-            self.assertTrue(record.manifest.runtime_binding.base_url.endswith(".invalid"))
+            self.assertTrue(
+                record.manifest.runtime_binding.base_url.endswith(
+                    ".invalid"
+                )
+            )
 
-    def test_digest_is_stable_and_installation_is_disabled(self) -> None:
+    def test_semver_200_precedence(self) -> None:
+        self.assertLess(
+            SemanticVersion.parse("1.0.0-alpha.2"),
+            SemanticVersion.parse("1.0.0-alpha.10"),
+        )
+        self.assertLess(
+            SemanticVersion.parse("1.0.0-rc.1"),
+            SemanticVersion.parse("1.0.0"),
+        )
+        self.assertEqual(
+            SemanticVersion.parse("1.0.0+build.1"),
+            SemanticVersion.parse("1.0.0+build.2"),
+        )
+
+    def test_same_version_different_digest_is_rejected(self) -> None:
+        registry = ConnectorRegistry()
+        raw = self.raw("klyrow-email")
+        registry.register_manifest(raw)
+        changed = copy.deepcopy(raw)
+        changed["display_name"] = "Changed"
+        with self.assertRaises(ConnectorVersionConflictError):
+            registry.register_manifest(changed, replace=True)
+
+    def test_manifest_digest_is_stable_and_install_disabled(self) -> None:
         raw = self.raw("postly-social")
         digest = manifest_digest(raw)
-        self.assertEqual(digest, manifest_digest(copy.deepcopy(raw)))
-        service = ConnectorCatalogService(ConnectorRegistry())
-        projection = service.install_disabled(raw, expected_digest=digest)
-        self.assertEqual(projection["state"], "INSTALLED_DISABLED")
-        with self.assertRaises(ValueError):
-            service.install_disabled(raw, expected_digest="sha256:" + "0" * 64)
-
-    def test_manifest_rejects_secrets_and_unverified_public_urls(self) -> None:
-        raw = self.raw("klyrow-email")
-        raw["authentication"]["client_secret"] = "forbidden"
-        with self.assertRaises(ManifestValidationError):
-            parse_manifest(raw)
-        raw = self.raw("klyrow-email")
-        raw["runtime_binding"]["base_url"] = "https://email.example.com"
-        with self.assertRaises(ManifestValidationError):
-            parse_manifest(raw)
-
-    def test_beyvra_financial_prefixes_are_unavailable(self) -> None:
-        with self.assertRaises(CommandNotAllowedError):
-            self.registry.resolve_command("trade.place.v1")
-        record, policy = self.registry.resolve_command(
-            "beyvra.operations.report-request.v1"
+        self.assertEqual(
+            digest,
+            manifest_digest(copy.deepcopy(raw)),
         )
-        self.assertEqual(record.manifest.connector_id, "beyvra-nonfinancial")
-        self.assertEqual(policy.required_capability, "BEYVRA_OPERATIONS_WRITE")
+        service = ConnectorCatalogService(ConnectorRegistry())
+        projection = service.install_disabled(
+            raw,
+            expected_digest=digest,
+        )
+        self.assertEqual(
+            projection["state"],
+            "INSTALLED_DISABLED",
+        )
 
-    def test_runtime_fails_closed_and_requires_readback(self) -> None:
+    def test_state_machine_rejects_direct_activation(self) -> None:
+        with self.assertRaises(ConnectorStateError):
+            self.registry.set_state(
+                "klyrow-email",
+                expected_state=ConnectorState.DECLARED,
+                new_state=ConnectorState.ACTIVE,
+            )
+
+    def test_registration_cannot_create_active_connector(self) -> None:
+        registry = ConnectorRegistry()
+        with self.assertRaises(ConnectorStateError):
+            registry.register_manifest(
+                self.raw("klyrow-email"),
+                state=ConnectorState.ACTIVE,
+            )
+
+    def test_models_are_deeply_immutable(self) -> None:
+        metadata = {"nested": {"value": 1}}
+        raw = self.raw("klyrow-email")
+        raw["metadata"] = metadata
+        parsed = parse_manifest(raw)
+        metadata["nested"]["value"] = 9
+        self.assertEqual(
+            parsed.metadata["nested"]["value"],
+            1,
+        )
+        with self.assertRaises(TypeError):
+            parsed.metadata["nested"]["value"] = 2
+
+    def test_manifest_rejects_secrets_and_encoded_paths(self) -> None:
+        raw = self.raw("klyrow-email")
+        raw["metadata"]["api_key"] = "forbidden"
+        with self.assertRaises(ManifestValidationError):
+            parse_manifest(raw)
+        raw = self.raw("klyrow-email")
+        raw["runtime_binding"]["health_path"] = (
+            "/health/%252e%252e/admin"
+        )
+        with self.assertRaises(ManifestValidationError):
+            parse_manifest(raw)
+
+    def test_manifest_rejects_duplicate_security_headers(self) -> None:
+        raw = self.raw("klyrow-email")
+        raw["webhooks"][0]["timestamp_header"] = (
+            raw["webhooks"][0]["signature_header"].lower()
+        )
+        with self.assertRaises(ManifestValidationError):
+            parse_manifest(raw)
+
+    def test_runtime_fails_closed_and_requires_terminal_readback(self) -> None:
         self.activate("klyrow-email")
         tenant_id = str(uuid.uuid4())
         request = self.request(tenant_id)
         with self.assertRaises(CapabilityDisabledError):
             ConnectorRuntime(
-                self.registry, StaticCapabilityProvider({})
+                self.registry,
+                StaticCapabilityProvider({}),
             ).execute(request)
         result = ConnectorRuntime(
             self.registry,
-            StaticCapabilityProvider({(tenant_id, "EMAIL_DELIVERY"): True}),
+            StaticCapabilityProvider(
+                {(tenant_id, "EMAIL_DELIVERY"): True}
+            ),
         ).execute(request)
-        self.assertEqual(result.outcome, CommandOutcome.COMPLETED)
-        self.assertEqual(result.safe_result["readback"], "confirmed")
+        self.assertEqual(
+            result.outcome,
+            CommandOutcome.COMPLETED,
+        )
 
-    def test_runtime_rejects_nested_secret_fields(self) -> None:
+    def test_runtime_rejects_nonterminal_readback(self) -> None:
+        class NonTerminalAdapter(FakeAdapter):
+            readback_outcome = CommandOutcome.SUBMITTED
+
+        self.activate("klyrow-email", NonTerminalAdapter)
+        tenant_id = str(uuid.uuid4())
+        with self.assertRaises(ReadBackRequiredError):
+            ConnectorRuntime(
+                self.registry,
+                StaticCapabilityProvider(
+                    {(tenant_id, "EMAIL_DELIVERY"): True}
+                ),
+            ).execute(self.request(tenant_id))
+
+    def test_runtime_rejects_operation_id_switch(self) -> None:
+        class SwitchingAdapter(FakeAdapter):
+            change_operation_id = True
+
+        self.activate("klyrow-email", SwitchingAdapter)
+        tenant_id = str(uuid.uuid4())
+        with self.assertRaises(CommandNotAllowedError):
+            ConnectorRuntime(
+                self.registry,
+                StaticCapabilityProvider(
+                    {(tenant_id, "EMAIL_DELIVERY"): True}
+                ),
+            ).execute(self.request(tenant_id))
+
+    def test_runtime_rejects_result_secret_leak(self) -> None:
+        class LeakingAdapter(FakeAdapter):
+            leak_result = True
+
+        self.activate("klyrow-email", LeakingAdapter)
+        tenant_id = str(uuid.uuid4())
+        with self.assertRaises(CommandNotAllowedError):
+            ConnectorRuntime(
+                self.registry,
+                StaticCapabilityProvider(
+                    {(tenant_id, "EMAIL_DELIVERY"): True}
+                ),
+            ).execute(self.request(tenant_id))
+
+    def test_runtime_rejects_invalid_trace_context(self) -> None:
         self.activate("klyrow-email")
         tenant_id = str(uuid.uuid4())
         request = self.request(tenant_id)
-        request = CommandRequest(
+        invalid = CommandRequest(
             connector_id=request.connector_id,
             command_id=request.command_id,
             command_type=request.command_type,
-            command_version=1,
-            payload={"nested": {"access_token": "forbidden"}},
-            context=request.context,
+            command_version=request.command_version,
+            payload=request.payload,
+            context=CommandContext(
+                tenant_id=request.context.tenant_id,
+                actor_id=request.context.actor_id,
+                correlation_id=request.context.correlation_id,
+                causation_id=request.context.causation_id,
+                idempotency_key=request.context.idempotency_key,
+                capability_snapshot=request.context.capability_snapshot,
+                traceparent="00-" + "0" * 32 + "-" + "0" * 16 + "-00",
+            ),
         )
         with self.assertRaises(CommandNotAllowedError):
             ConnectorRuntime(
                 self.registry,
-                StaticCapabilityProvider({(tenant_id, "EMAIL_DELIVERY"): True}),
-            ).execute(request)
+                StaticCapabilityProvider(
+                    {(tenant_id, "EMAIL_DELIVERY"): True}
+                ),
+            ).execute(invalid)
 
-    def test_webhook_hmac_timestamp_and_replay(self) -> None:
+    def test_webhook_new_event_becomes_cloudevent_10(self) -> None:
         self.activate("klyrow-email")
         secret = b"x" * 32
-        now = int(time.time())
-        payload = {
-            "event_type": "email.message.delivered.v1",
-            "tenant_id": str(uuid.uuid4()),
-            "correlation_id": str(uuid.uuid4()),
-            "causation_id": str(uuid.uuid4()),
-            "occurred_at": "2026-08-27T21:00:00Z",
-        }
-        body = json.dumps(payload, separators=(",", ":")).encode()
-        signature = hmac.new(
-            secret, str(now).encode() + b"." + body, hashlib.sha256
-        ).hexdigest()
-        request = WebhookRequest(
-            headers={
-                "X-Postal-Signature": "v1=" + signature,
-                "X-Postal-Timestamp": str(now),
-                "X-Postal-Event-Id": "evt-1",
-            },
-            body=body,
-            received_at_epoch=now,
+        tenant_id = str(uuid.uuid4())
+        request, account, _ = self.webhook_request(secret=secret)
+        result = self.processor(
+            secret,
+            account,
+            tenant_id,
+        ).process(
+            "klyrow-email",
+            "postal-events",
+            request,
         )
-        processor = WebhookProcessor(
-            self.registry,
-            MappingSecretResolver({"WEBHOOK_POSTAL_HMAC_SECRET": secret}),
-            InMemoryReplayStore(),
+        self.assertEqual(result.decision, ReplayDecision.NEW)
+        self.assertIsInstance(
+            result.cloud_event,
+            CloudEventEnvelope,
         )
+        event = result.cloud_event.as_dict()
+        self.assertEqual(event["specversion"], "1.0")
+        self.assertEqual(event["tenantid"], tenant_id)
         self.assertEqual(
-            processor.process("klyrow-email", "postal-events", request).event_type,
-            "email.message.delivered.v1",
+            event["source"],
+            "urn:codestra:connector:klyrow-email",
         )
-        with self.assertRaises(ReplayDetectedError):
-            processor.process("klyrow-email", "postal-events", request)
 
-    def test_reused_event_id_with_changed_body_is_a_conflict(self) -> None:
+    def test_exact_webhook_replay_is_idempotently_acknowledgeable(self) -> None:
+        self.activate("klyrow-email")
+        secret = b"x" * 32
+        tenant_id = str(uuid.uuid4())
+        request, account, _ = self.webhook_request(secret=secret)
+        replay_store = InMemoryReplayStore()
+        processor = self.processor(
+            secret,
+            account,
+            tenant_id,
+            replay_store,
+        )
+        first = processor.process(
+            "klyrow-email",
+            "postal-events",
+            request,
+        )
+        second = processor.process(
+            "klyrow-email",
+            "postal-events",
+            request,
+        )
+        self.assertEqual(first.decision, ReplayDecision.NEW)
+        self.assertEqual(
+            second.decision,
+            ReplayDecision.EXACT_REPLAY,
+        )
+        self.assertIsNone(second.cloud_event)
+
+    def test_webhook_event_id_body_conflict_is_rejected(self) -> None:
         self.activate("klyrow-email")
         secret = b"y" * 32
-        now = int(time.time())
-        processor = WebhookProcessor(
-            self.registry,
-            MappingSecretResolver({"WEBHOOK_POSTAL_HMAC_SECRET": secret}),
-            InMemoryReplayStore(),
+        tenant_id = str(uuid.uuid4())
+        first, account, _ = self.webhook_request(
+            secret=secret,
+            event_id="evt-conflict",
         )
-
-        def request(body: bytes) -> WebhookRequest:
-            signature = hmac.new(
-                secret, str(now).encode() + b"." + body, hashlib.sha256
-            ).hexdigest()
-            return WebhookRequest(
-                headers={
-                    "X-Postal-Signature": signature,
-                    "X-Postal-Timestamp": str(now),
-                    "X-Postal-Event-Id": "evt-conflict",
-                },
-                body=body,
-                received_at_epoch=now,
-            )
-
-        first = json.dumps({
-            "event_type": "email.message.delivered.v1",
-            "tenant_id": str(uuid.uuid4()),
-            "correlation_id": str(uuid.uuid4()),
-            "causation_id": str(uuid.uuid4()),
-            "occurred_at": "2026-08-27T21:00:00Z",
-        }).encode()
-        processor.process("klyrow-email", "postal-events", request(first))
+        replay_store = InMemoryReplayStore()
+        processor = self.processor(
+            secret,
+            account,
+            tenant_id,
+            replay_store,
+        )
+        processor.process(
+            "klyrow-email",
+            "postal-events",
+            first,
+        )
+        second, _, _ = self.webhook_request(
+            secret=secret,
+            event_id="evt-conflict",
+            account_reference=account,
+            body_suffix=b" ",
+        )
         with self.assertRaises(WebhookVerificationError):
             processor.process(
-                "klyrow-email", "postal-events", request(first + b" ")
+                "klyrow-email",
+                "postal-events",
+                second,
             )
 
-    def test_generated_artifacts_match_manifests(self) -> None:
-        artifacts = build_generated_artifacts(MANIFESTS)
-        self.assertEqual(set(artifacts), {
-            "kong-routes.v1.json",
-            "keycloak-clients.v1.json",
-            "n8n-workflow-packs.v1.json",
-            "command-registry.v1.json",
-        })
-        self.assertEqual(len(artifacts["kong-routes.v1.json"]["routes"]), 8)
+    def test_webhook_secret_rotation_overlap(self) -> None:
+        self.activate("klyrow-email")
+        current = b"c" * 32
+        previous = b"p" * 32
+        tenant_id = str(uuid.uuid4())
+        request, account, _ = self.webhook_request(
+            secret=current,
+            signature_secret=previous,
+        )
+        result = self.processor(
+            (current, previous),
+            account,
+            tenant_id,
+        ).process(
+            "klyrow-email",
+            "postal-events",
+            request,
+        )
+        self.assertEqual(result.decision, ReplayDecision.NEW)
 
-    def test_scaffold_output_parses_and_is_disabled(self) -> None:
+    def test_webhook_tenant_is_not_trusted_from_payload(self) -> None:
+        self.activate("klyrow-email")
+        secret = b"z" * 32
+        authoritative_tenant = str(uuid.uuid4())
+        request, account, _ = self.webhook_request(
+            secret=secret,
+            provider_tenant_id=str(uuid.uuid4()),
+        )
+        result = self.processor(
+            secret,
+            account,
+            authoritative_tenant,
+        ).process(
+            "klyrow-email",
+            "postal-events",
+            request,
+        )
+        self.assertEqual(
+            result.cloud_event.as_dict()["tenantid"],
+            authoritative_tenant,
+        )
+
+    def test_scaffolder_output_remains_disabled_and_valid(self) -> None:
         from scripts.scaffold_connector import build_manifest
 
         class Args:
@@ -305,6 +612,22 @@ class ConnectorSdkV1Tests(unittest.TestCase):
         manifest = parse_manifest(build_manifest(Args()))
         self.assertFalse(manifest.enabled_by_default)
         self.assertFalse(manifest.direct_n8n_access)
+
+    def test_generated_artifacts_match_manifests(self) -> None:
+        artifacts = build_generated_artifacts(MANIFESTS)
+        self.assertEqual(
+            set(artifacts),
+            {
+                "kong-routes.v1.json",
+                "keycloak-clients.v1.json",
+                "n8n-workflow-packs.v1.json",
+                "command-registry.v1.json",
+            },
+        )
+        self.assertEqual(
+            len(artifacts["kong-routes.v1.json"]["routes"]),
+            8,
+        )
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ loading from a connector manifest.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Protocol
 
 from .models import (
@@ -25,7 +25,10 @@ from .models import (
 
 class SecretResolver(Protocol):
     def resolve(self, reference: str) -> bytes:
-        """Return secret bytes for a reviewed runtime reference."""
+        """Return current secret bytes for a reviewed runtime reference."""
+
+    def resolve_all(self, reference: str) -> Sequence[bytes]:
+        """Return current and still-valid previous secret bytes."""
 
 
 class ReplayStore(Protocol):
@@ -41,6 +44,16 @@ class ReplayStore(Protocol):
 class CapabilityProvider(Protocol):
     def is_enabled(self, tenant_id: str, capability: str) -> bool:
         """Return the authoritative effective capability state."""
+
+
+class TenantResolver(Protocol):
+    def resolve(
+        self,
+        connector_id: str,
+        endpoint_key: str,
+        external_account_reference: str,
+    ) -> str:
+        """Map a verified provider account reference to one authoritative tenant."""
 
 
 class ConnectorAdapter(ABC):
@@ -79,7 +92,7 @@ class ConnectorAdapter(ABC):
         self,
         webhook: VerifiedWebhook,
     ) -> NormalizedWebhookEvent:
-        """Translate a verified provider callback into the canonical event."""
+        """Translate a verified provider callback into a canonical event."""
 
     @abstractmethod
     def reconcile_unknown(

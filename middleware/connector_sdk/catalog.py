@@ -7,10 +7,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .errors import ConnectorNotFoundError
+from .errors import (
+    ConnectorNotFoundError,
+    ConnectorVersionConflictError,
+)
 from .manifest import manifest_digest, parse_manifest
 from .models import ConnectorState
 from .registry import ConnectorRegistry
+from .standards import SemanticVersion
 
 
 class ConnectorCatalogService:
@@ -62,18 +66,52 @@ class ConnectorCatalogService:
             existing = self._registry.get(manifest.connector_id)
         except ConnectorNotFoundError:
             existing = None
-        if existing is not None and existing.state not in {
-            ConnectorState.DECLARED,
-            ConnectorState.VALIDATED,
-            ConnectorState.INSTALLED_DISABLED,
-        }:
-            raise ValueError(
-                f"connector cannot be installed over {existing.state.value}"
+
+        if existing is None:
+            record = self._registry.register_manifest(
+                raw_manifest,
+                state=ConnectorState.INSTALLED_DISABLED,
             )
+            return self._projection(record)
+
+        incoming_version = SemanticVersion.parse(manifest.version)
+        existing_version = SemanticVersion.parse(existing.manifest.version)
+        if incoming_version < existing_version:
+            raise ConnectorVersionConflictError(
+                "connector version cannot move backwards"
+            )
+        if incoming_version == existing_version:
+            if actual != existing.manifest_digest:
+                raise ConnectorVersionConflictError(
+                    "the same semantic version cannot carry a new digest"
+                )
+            if existing.state is ConnectorState.DECLARED:
+                self._registry.set_state(
+                    manifest.connector_id,
+                    expected_state=ConnectorState.DECLARED,
+                    new_state=ConnectorState.VALIDATED,
+                )
+                existing = self._registry.set_state(
+                    manifest.connector_id,
+                    expected_state=ConnectorState.VALIDATED,
+                    new_state=ConnectorState.INSTALLED_DISABLED,
+                )
+            elif existing.state is ConnectorState.VALIDATED:
+                existing = self._registry.set_state(
+                    manifest.connector_id,
+                    expected_state=ConnectorState.VALIDATED,
+                    new_state=ConnectorState.INSTALLED_DISABLED,
+                )
+            elif existing.state is not ConnectorState.INSTALLED_DISABLED:
+                raise ValueError(
+                    f"connector cannot be installed over {existing.state.value}"
+                )
+            return self._projection(existing)
+
         record = self._registry.register_manifest(
             raw_manifest,
             state=ConnectorState.INSTALLED_DISABLED,
-            replace=existing is not None,
+            replace=True,
         )
         return self._projection(record)
 

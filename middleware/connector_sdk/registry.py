@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,19 +12,36 @@ from typing import Any
 from .errors import (
     CommandNotAllowedError,
     ConnectorNotFoundError,
+    ConnectorStateError,
     ConnectorVersionConflictError,
 )
 from .interfaces import AdapterFactory
 from .manifest import load_manifest, manifest_digest, parse_manifest
 from .models import ConnectorManifest, ConnectorState
+from .standards import SemanticVersion
 
-
-def _version_tuple(version: str) -> tuple[int, int, int, str]:
-    without_build = version.split("+", 1)[0]
-    core, separator, prerelease = without_build.partition("-")
-    major, minor, patch = (int(part) for part in core.split("."))
-    release_rank = "1" if not separator else "0" + prerelease
-    return major, minor, patch, release_rank
+_ALLOWED_TRANSITIONS: dict[ConnectorState, frozenset[ConnectorState]] = {
+    ConnectorState.DECLARED: frozenset(
+        {ConnectorState.VALIDATED, ConnectorState.FAILED}
+    ),
+    ConnectorState.VALIDATED: frozenset(
+        {ConnectorState.INSTALLED_DISABLED, ConnectorState.FAILED}
+    ),
+    ConnectorState.INSTALLED_DISABLED: frozenset(
+        {
+            ConnectorState.ACTIVE,
+            ConnectorState.SUSPENDED,
+            ConnectorState.FAILED,
+        }
+    ),
+    ConnectorState.ACTIVE: frozenset(
+        {ConnectorState.SUSPENDED, ConnectorState.FAILED}
+    ),
+    ConnectorState.SUSPENDED: frozenset(
+        {ConnectorState.INSTALLED_DISABLED, ConnectorState.FAILED}
+    ),
+    ConnectorState.FAILED: frozenset({ConnectorState.DECLARED}),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,20 +66,50 @@ class ConnectorRegistry:
         state: ConnectorState = ConnectorState.DECLARED,
         replace: bool = False,
     ) -> RegisteredConnector:
+        if state not in {
+            ConnectorState.DECLARED,
+            ConnectorState.VALIDATED,
+            ConnectorState.INSTALLED_DISABLED,
+        }:
+            raise ConnectorStateError(
+                "manifest registration cannot create an active, suspended, "
+                "or failed connector"
+            )
         manifest = parse_manifest(raw_manifest)
         digest = manifest_digest(raw_manifest)
+        new_version = SemanticVersion.parse(manifest.version)
+
         with self._lock:
             existing = self._connectors.get(manifest.connector_id)
-            if existing and not replace:
+            if existing is None:
+                record = RegisteredConnector(
+                    manifest=manifest,
+                    manifest_digest=digest,
+                    state=state,
+                )
+                self._connectors[manifest.connector_id] = record
+                return record
+
+            if not replace:
                 raise ConnectorVersionConflictError(
                     f"connector already registered: {manifest.connector_id}"
                 )
-            if existing and _version_tuple(manifest.version) < _version_tuple(
+
+            existing_version = SemanticVersion.parse(
                 existing.manifest.version
-            ):
+            )
+            if new_version < existing_version:
                 raise ConnectorVersionConflictError(
                     "connector version cannot move backwards"
                 )
+            if new_version == existing_version:
+                if digest != existing.manifest_digest:
+                    raise ConnectorVersionConflictError(
+                        "an existing semantic version is immutable and "
+                        "cannot be replaced with a different manifest digest"
+                    )
+                return existing
+
             record = RegisteredConnector(
                 manifest=manifest,
                 manifest_digest=digest,
@@ -119,6 +166,13 @@ class ConnectorRegistry:
                     f"state changed: expected {expected_state.value}, "
                     f"found {existing.state.value}"
                 )
+            if new_state is expected_state:
+                return existing
+            if new_state not in _ALLOWED_TRANSITIONS[expected_state]:
+                raise ConnectorStateError(
+                    f"invalid connector state transition: "
+                    f"{expected_state.value} -> {new_state.value}"
+                )
             updated = RegisteredConnector(
                 manifest=existing.manifest,
                 manifest_digest=existing.manifest_digest,
@@ -152,7 +206,8 @@ class ConnectorRegistry:
                 sorted(item[1].manifest.connector_id for item in best)
             )
             raise CommandNotAllowedError(
-                f"ambiguous command prefix for {command_type}: {connector_ids}"
+                f"ambiguous command prefix for {command_type}: "
+                f"{connector_ids}"
             )
         _, record, policy = best[0]
         return record, policy
@@ -221,7 +276,7 @@ class ConnectorRegistry:
                     )
                     if overlaps and prior_owner != manifest.connector_id:
                         errors.append(
-                            f"command prefixes overlap across connectors: "
+                            "command prefixes overlap across connectors: "
                             f"{prior_prefix} ({prior_owner}) and "
                             f"{command.prefix} ({manifest.connector_id})"
                         )

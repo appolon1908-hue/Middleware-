@@ -59,10 +59,11 @@ trap 'rm -rf .venv-integration' EXIT
 python -m pip install --disable-pip-version-check --no-input --quiet --upgrade pip
 python -m pip install --disable-pip-version-check --no-input --quiet -r requirements-runtime.txt
 
-pytest -q tests/integration/test_postgres_redis.py
+pytest -q tests/integration
 
 echo "POSTGRES_INTEGRATION=PASS"
 echo "REDIS_INTEGRATION=PASS"
 echo "INBOX_CONCURRENCY=PASS"
 echo "OUTBOX_LEASE_DLQ=PASS"
+echo "OUTBOX_PRE_DISPATCH_LEASE_REFRESH=PASS"
 echo "RUNTIME_INTEGRATION_CI=PASS"

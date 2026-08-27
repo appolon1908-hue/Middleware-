@@ -29,13 +29,15 @@ class OutboxWorker:
 
     No provider handlers are registered on intake-runtime-v1. Before any future
     provider handler is invoked, the claimed row is durably moved into the
-    reconciliation-required state. That removes it from automatic claims even if
-    the worker crashes or PostgreSQL becomes unavailable after an external write.
+    reconciliation-required state while preserving the active worker lease. That
+    excludes the row from automatic claims but also prevents operators or other
+    workers from releasing it while the provider call is still in flight.
 
-    A normal handler return resolves that quarantine as complete. An explicit
-    KnownSafeRetryError resolves it as retry. Timeout and generic exceptions leave
-    the precommitted quarantine in place for reconciliation. Provider dispatch
-    remains disabled by Settings on this branch.
+    A normal handler return lets the owning worker resolve that active dispatch as
+    complete. An explicit KnownSafeRetryError lets the owning worker resolve it as
+    retry. Timeout and generic exceptions leave the precommitted quarantine and
+    lease in place until lease expiry, after which audited manual reconciliation
+    may proceed. Provider dispatch remains disabled by Settings on this branch.
     """
 
     def __init__(
@@ -83,8 +85,9 @@ class OutboxWorker:
             )
             return True
 
-        # Commit the unknown-on-crash state before invoking any provider code.
-        # If this write fails, the exception propagates and the handler is never run.
+        # Commit unknown-on-crash state before invoking any provider code while
+        # retaining this worker's live lease. If this write fails, the exception
+        # propagates and the handler is never run.
         await self.store.quarantine_unknown_outcome(
             record.id,
             worker_id=self.worker_id,
@@ -101,7 +104,7 @@ class OutboxWorker:
             )
         except TimeoutError:
             log.error(
-                "outbox handler timed out; precommitted reconciliation quarantine retained",
+                "outbox handler timed out; active reconciliation quarantine retained",
                 extra={"outbox_id": record.id},
             )
         except KnownSafeRetryError as exc:
@@ -115,10 +118,11 @@ class OutboxWorker:
                 action="retry",
                 reason=f"handler certified known-safe retry: {exc}",
                 max_attempts=self.max_attempts,
+                worker_id=self.worker_id,
             )
         except Exception:
             log.exception(
-                "outbox handler raised; precommitted reconciliation quarantine retained",
+                "outbox handler raised; active reconciliation quarantine retained",
                 extra={"outbox_id": record.id},
             )
         else:
@@ -128,6 +132,7 @@ class OutboxWorker:
                 action="complete",
                 reason="handler returned successfully and confirmed delivery outcome",
                 max_attempts=self.max_attempts,
+                worker_id=self.worker_id,
             )
         return True
 

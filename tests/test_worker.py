@@ -51,7 +51,7 @@ def record() -> OutboxRecord:
 
 
 @pytest.mark.asyncio
-async def test_worker_quarantines_before_handler_and_resolves_success_as_owner() -> None:
+async def test_worker_refreshes_lease_before_handler_and_resolves_success_as_owner() -> None:
     store = FakeStore(record())
     observed = []
 
@@ -59,11 +59,17 @@ async def test_worker_quarantines_before_handler_and_resolves_success_as_owner()
         store.events.append("handler")
         observed.append(item.idempotency_key)
 
-    worker = OutboxWorker(store, {"provider": handler})  # type: ignore[arg-type]
+    worker = OutboxWorker(
+        store,  # type: ignore[arg-type]
+        {"provider": handler},
+        lease_seconds=60,
+        handler_timeout_seconds=45,
+    )
     assert await worker.run_once() is True
     assert observed == ["idem-12345678"]
     assert store.events == ["quarantine", "handler", "resolve:complete"]
     assert store.quarantined[0][1]["worker_id"] == worker.worker_id
+    assert store.quarantined[0][1]["lease_seconds"] == 60
     assert store.resolved[0][1]["action"] == "complete"
     assert store.resolved[0][1]["worker_id"] == worker.worker_id
 
@@ -103,6 +109,7 @@ async def test_handler_timeout_leaves_precommitted_active_quarantine() -> None:
     )
     assert await worker.run_once() is True
     assert store.quarantined
+    assert store.quarantined[0][1]["lease_seconds"] == 0.1
     assert not store.failed
     assert not store.resolved
     assert store.events[:2] == ["quarantine", "handler"]

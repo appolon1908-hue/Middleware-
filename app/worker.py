@@ -31,14 +31,13 @@ class OutboxWorker:
     any future provider handler is invoked, the claimed row is durably moved into
     the reconciliation-required state and its active worker lease is refreshed for
     a full lease window. A background heartbeat continues renewing that ownership
-    until the provider await actually terminates, including any time spent waiting
+    until the provider task actually terminates, including any time spent waiting
     for a cancellation-suppressing coroutine to finish after the timeout.
 
-    A normal handler return lets the owning worker resolve that active dispatch as
-    complete. An explicit KnownSafeRetryError lets the owning worker resolve it as
-    retry. Timeout and generic exceptions leave the precommitted quarantine in
-    place for audited recovery. Provider dispatch remains disabled by Settings on
-    this branch.
+    Timeout is sticky: once the configured deadline is crossed, a later normal
+    return or KnownSafeRetryError from a cancellation-suppressing handler cannot
+    turn that unknown outcome into an automatic complete or retry transition.
+    Provider dispatch remains disabled by Settings on this branch.
     """
 
     def __init__(
@@ -129,48 +128,82 @@ class OutboxWorker:
         heartbeat_task = asyncio.create_task(
             self._heartbeat_active_dispatch(record.id, heartbeat_stop)
         )
+        handler_task = asyncio.create_task(handler(record))
+        timed_out = False
         try:
             try:
-                await asyncio.wait_for(
-                    handler(record),
+                done, _ = await asyncio.wait(
+                    {handler_task},
                     timeout=self.handler_timeout_seconds,
                 )
-            except TimeoutError:
-                # wait_for does not return until cancellation of the handler has
-                # actually completed. The heartbeat remains alive for that entire
-                # period, preventing the ownership deadline from expiring beneath
-                # a cancellation-suppressing provider coroutine.
-                log.error(
-                    "outbox handler timed out; reconciliation quarantine retained",
-                    extra={"outbox_id": record.id},
-                )
-            except KnownSafeRetryError as exc:
-                log.warning(
-                    "outbox handler certified failure as safe to retry",
-                    extra={"outbox_id": record.id},
-                )
-                await self.store.resolve_reconciliation(
-                    record.id,
-                    operator_id=f"worker:{self.worker_id}",
-                    action="retry",
-                    reason=f"handler certified known-safe retry: {exc}",
-                    max_attempts=self.max_attempts,
-                    worker_id=self.worker_id,
-                )
-            except Exception:
-                log.exception(
-                    "outbox handler raised; reconciliation quarantine retained",
-                    extra={"outbox_id": record.id},
-                )
-            else:
-                await self.store.resolve_reconciliation(
-                    record.id,
-                    operator_id=f"worker:{self.worker_id}",
-                    action="complete",
-                    reason="handler returned successfully and confirmed delivery outcome",
-                    max_attempts=self.max_attempts,
-                    worker_id=self.worker_id,
-                )
+                if handler_task not in done:
+                    timed_out = True
+                    handler_task.cancel()
+
+                try:
+                    await handler_task
+                except asyncio.CancelledError:
+                    if not timed_out:
+                        raise
+                except KnownSafeRetryError as exc:
+                    if timed_out:
+                        log.error(
+                            "outbox handler crossed timeout then reported safe retry; "
+                            "unknown outcome remains quarantined",
+                            extra={"outbox_id": record.id},
+                        )
+                    else:
+                        log.warning(
+                            "outbox handler certified failure as safe to retry",
+                            extra={"outbox_id": record.id},
+                        )
+                        await self.store.resolve_reconciliation(
+                            record.id,
+                            operator_id=f"worker:{self.worker_id}",
+                            action="retry",
+                            reason=f"handler certified known-safe retry: {exc}",
+                            max_attempts=self.max_attempts,
+                            worker_id=self.worker_id,
+                        )
+                except Exception:
+                    if timed_out:
+                        log.exception(
+                            "outbox handler crossed timeout and later raised; "
+                            "unknown outcome remains quarantined",
+                            extra={"outbox_id": record.id},
+                        )
+                    else:
+                        log.exception(
+                            "outbox handler raised; reconciliation quarantine retained",
+                            extra={"outbox_id": record.id},
+                        )
+                else:
+                    if timed_out:
+                        log.error(
+                            "outbox handler crossed timeout and later returned; "
+                            "unknown outcome remains quarantined",
+                            extra={"outbox_id": record.id},
+                        )
+                    else:
+                        await self.store.resolve_reconciliation(
+                            record.id,
+                            operator_id=f"worker:{self.worker_id}",
+                            action="complete",
+                            reason="handler returned successfully and confirmed delivery outcome",
+                            max_attempts=self.max_attempts,
+                            worker_id=self.worker_id,
+                        )
+            except asyncio.CancelledError:
+                # A worker shutdown must not orphan live provider code while the
+                # lease heartbeat is stopped. Cancel the provider task and keep
+                # renewing ownership until that task actually terminates.
+                if not handler_task.done():
+                    handler_task.cancel()
+                try:
+                    await handler_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                raise
         finally:
             heartbeat_stop.set()
             await heartbeat_task

@@ -14,7 +14,9 @@ class FakeStore:
         self.claim_args = None
         self.failed = []
         self.quarantined = []
-        self.completed = []
+        self.resolved = []
+        self.events = []
+        self.quarantine_error: Exception | None = None
 
     async def claim(self, **kwargs):
         self.claim_args = kwargs
@@ -22,13 +24,18 @@ class FakeStore:
         return record
 
     async def fail(self, record_id: int, **kwargs):
+        self.events.append("fail")
         self.failed.append((record_id, kwargs))
 
     async def quarantine_unknown_outcome(self, record_id: int, **kwargs):
+        self.events.append("quarantine")
+        if self.quarantine_error is not None:
+            raise self.quarantine_error
         self.quarantined.append((record_id, kwargs))
 
-    async def complete(self, record_id: int, **kwargs):
-        self.completed.append((record_id, kwargs))
+    async def resolve_reconciliation(self, record_id: int, **kwargs):
+        self.events.append(f"resolve:{kwargs['action']}")
+        self.resolved.append((record_id, kwargs))
 
 
 def record() -> OutboxRecord:
@@ -44,24 +51,45 @@ def record() -> OutboxRecord:
 
 
 @pytest.mark.asyncio
-async def test_worker_passes_authoritative_idempotency_key_to_handler() -> None:
+async def test_worker_quarantines_before_handler_and_resolves_success() -> None:
     store = FakeStore(record())
     observed = []
 
     async def handler(item: OutboxRecord) -> None:
+        store.events.append("handler")
         observed.append(item.idempotency_key)
 
     worker = OutboxWorker(store, {"provider": handler})  # type: ignore[arg-type]
     assert await worker.run_once() is True
     assert observed == ["idem-12345678"]
-    assert store.completed
+    assert store.events == ["quarantine", "handler", "resolve:complete"]
+    assert store.resolved[0][1]["action"] == "complete"
 
 
 @pytest.mark.asyncio
-async def test_handler_timeout_is_quarantined_before_lease_expiry() -> None:
+async def test_pre_dispatch_quarantine_failure_prevents_handler_invocation() -> None:
+    store = FakeStore(record())
+    store.quarantine_error = RuntimeError("database unavailable")
+    invoked = False
+
+    async def handler(item: OutboxRecord) -> None:
+        nonlocal invoked
+        invoked = True
+
+    worker = OutboxWorker(store, {"provider": handler})  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        await worker.run_once()
+    assert invoked is False
+    assert store.events == ["quarantine"]
+    assert not store.resolved
+
+
+@pytest.mark.asyncio
+async def test_handler_timeout_leaves_precommitted_quarantine() -> None:
     store = FakeStore(record())
 
     async def slow_handler(item: OutboxRecord) -> None:
+        store.events.append("handler")
         await asyncio.sleep(0.05)
 
     worker = OutboxWorker(
@@ -74,36 +102,41 @@ async def test_handler_timeout_is_quarantined_before_lease_expiry() -> None:
     assert await worker.run_once() is True
     assert store.quarantined
     assert not store.failed
-    assert not store.completed
+    assert not store.resolved
+    assert store.events[:2] == ["quarantine", "handler"]
     assert store.claim_args["max_attempts"] == 8
     assert store.claim_args["lease_seconds"] == 0.1
 
 
 @pytest.mark.asyncio
-async def test_generic_handler_exception_is_quarantined_as_unknown_outcome() -> None:
+async def test_generic_handler_exception_leaves_precommitted_quarantine() -> None:
     store = FakeStore(record())
 
     async def ambiguous_handler(item: OutboxRecord) -> None:
+        store.events.append("handler")
         raise ConnectionError("provider accepted request then connection reset")
 
     worker = OutboxWorker(store, {"provider": ambiguous_handler})  # type: ignore[arg-type]
     assert await worker.run_once() is True
     assert store.quarantined
     assert not store.failed
-    assert not store.completed
-    assert "unknown" in store.quarantined[0][1]["error"]
+    assert not store.resolved
+    assert store.events == ["quarantine", "handler"]
 
 
 @pytest.mark.asyncio
-async def test_explicit_known_safe_retry_error_uses_retry_queue() -> None:
+async def test_explicit_known_safe_retry_resolves_quarantine_to_retry() -> None:
     store = FakeStore(record())
 
     async def safe_retry_handler(item: OutboxRecord) -> None:
+        store.events.append("handler")
         raise KnownSafeRetryError("provider rejected request before dispatch")
 
     worker = OutboxWorker(store, {"provider": safe_retry_handler})  # type: ignore[arg-type]
     assert await worker.run_once() is True
-    assert store.failed
-    assert not store.quarantined
-    assert not store.completed
-    assert store.failed[0][1]["max_attempts"] == 8
+    assert store.quarantined
+    assert not store.failed
+    assert store.resolved
+    assert store.resolved[0][1]["action"] == "retry"
+    assert store.resolved[0][1]["max_attempts"] == 8
+    assert store.events == ["quarantine", "handler", "resolve:retry"]

@@ -483,13 +483,7 @@ class PostgresOutboxStore:
         error: str,
         lease_seconds: float = 60,
     ) -> None:
-        """Persist unknown-on-crash state and refresh active dispatch ownership.
-
-        This is the final pre-provider state transition. It both marks the row as
-        reconciliation-required and refreshes the owning worker's lease from the
-        database transaction time, guaranteeing a full lease window before the
-        provider handler begins.
-        """
+        """Persist unknown-on-crash state and refresh active dispatch ownership."""
 
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
@@ -516,6 +510,42 @@ class PostgresOutboxStore:
             )
             if result != "UPDATE 1":
                 raise StorageError("outbox lease ownership lost before reconciliation quarantine")
+
+    async def renew_active_dispatch(
+        self,
+        record_id: int,
+        *,
+        worker_id: str,
+        lease_seconds: float,
+    ) -> None:
+        """Refresh ownership while provider code is still alive.
+
+        Renewal is allowed only for the exact worker that owns a quarantined,
+        nonterminal dispatch. It intentionally does not require the previous
+        deadline to still be in the future: claim() already excludes every
+        reconciliation-required row, and renewing the same owner closes small
+        scheduler/database timing gaps without creating a new claimant.
+        """
+
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        async with self.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE middleware_outbox
+                SET lease_until=now() + ($3 * interval '1 second')
+                WHERE id=$1
+                  AND lease_owner=$2
+                  AND reconciliation_required_at IS NOT NULL
+                  AND completed_at IS NULL
+                  AND dead_lettered_at IS NULL
+                """,
+                record_id,
+                worker_id,
+                lease_seconds,
+            )
+            if result != "UPDATE 1":
+                raise StorageError("active dispatch ownership lost during lease renewal")
 
     async def resolve_reconciliation(
         self,

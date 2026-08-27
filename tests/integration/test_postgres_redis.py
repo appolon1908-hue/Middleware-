@@ -201,6 +201,7 @@ async def quarantine_record(
     *,
     idempotency_key: str,
     worker_id: str,
+    expire_lease: bool = False,
 ) -> tuple[PostgresOutboxStore, int]:
     row_id = await insert_outbox(pool, idempotency_key)
     store = PostgresOutboxStore(pool)
@@ -209,8 +210,14 @@ async def quarantine_record(
     await store.quarantine_unknown_outcome(
         row_id,
         worker_id=worker_id,
-        error="provider timeout; outcome unknown",
+        error="provider dispatch reserved; outcome unknown until handler resolves",
     )
+    if expire_lease:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE middleware_outbox SET lease_until=now() - interval '1 second' WHERE id=$1",
+                row_id,
+            )
     return store, row_id
 
 
@@ -260,7 +267,9 @@ async def test_outbox_expired_max_attempts_moves_to_dlq(pool: asyncpg.Pool) -> N
 
 
 @pytest.mark.asyncio
-async def test_outbox_unknown_outcome_is_quarantined_from_claims(pool: asyncpg.Pool) -> None:
+async def test_reconciliation_required_row_keeps_live_lease_and_is_never_claimed(
+    pool: asyncpg.Pool,
+) -> None:
     store, row_id = await quarantine_record(
         pool,
         idempotency_key="delivery-idem-unknown",
@@ -272,15 +281,126 @@ async def test_outbox_unknown_outcome_is_quarantined_from_claims(pool: asyncpg.P
         state = await conn.fetchrow(
             """
             SELECT reconciliation_required_at IS NOT NULL AS reconciliation_required,
-                   lease_owner, completed_at, dead_lettered_at
+                   lease_owner, lease_until > now() AS lease_active,
+                   completed_at, dead_lettered_at
             FROM middleware_outbox WHERE id=$1
             """,
             row_id,
         )
     assert state["reconciliation_required"] is True
-    assert state["lease_owner"] is None
+    assert state["lease_owner"] == "worker-timeout"
+    assert state["lease_active"] is True
     assert state["completed_at"] is None
     assert state["dead_lettered_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_active_dispatch_blocks_manual_and_wrong_worker_reconciliation(
+    pool: asyncpg.Pool,
+) -> None:
+    store, row_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-active-block",
+        worker_id="worker-owner",
+    )
+
+    with pytest.raises(ReconciliationError, match="cannot be manually reconciled"):
+        await store.resolve_reconciliation(
+            row_id,
+            operator_id="ops:test",
+            action="retry",
+            reason="operator must wait for active dispatch lease to expire",
+            max_attempts=3,
+        )
+
+    with pytest.raises(ReconciliationError, match="owned by another worker"):
+        await store.resolve_reconciliation(
+            row_id,
+            operator_id="worker:worker-other",
+            action="complete",
+            reason="wrong worker must not resolve active dispatch",
+            max_attempts=3,
+            worker_id="worker-other",
+        )
+
+
+@pytest.mark.asyncio
+async def test_active_dispatch_owner_can_resolve_complete_and_retry(pool: asyncpg.Pool) -> None:
+    complete_store, complete_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-active-complete",
+        worker_id="worker-complete",
+    )
+    await complete_store.resolve_reconciliation(
+        complete_id,
+        operator_id="worker:worker-complete",
+        action="complete",
+        reason="provider handler returned success",
+        max_attempts=3,
+        worker_id="worker-complete",
+    )
+
+    retry_store, retry_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-active-retry",
+        worker_id="worker-safe-retry",
+    )
+    await retry_store.resolve_reconciliation(
+        retry_id,
+        operator_id="worker:worker-safe-retry",
+        action="retry",
+        reason="provider rejected before any external write",
+        max_attempts=3,
+        worker_id="worker-safe-retry",
+    )
+
+    reclaimed = await retry_store.claim(
+        worker_id="worker-after-safe-retry",
+        lease_seconds=30,
+        max_attempts=3,
+    )
+    assert reclaimed is not None and reclaimed.id == retry_id
+
+    async with pool.acquire() as conn:
+        completed = await conn.fetchval(
+            "SELECT completed_at IS NOT NULL FROM middleware_outbox WHERE id=$1",
+            complete_id,
+        )
+        actions = await conn.fetch(
+            "SELECT outbox_id, action FROM middleware_reconciliation_audit WHERE outbox_id=ANY($1::bigint[])",
+            [complete_id, retry_id],
+        )
+    assert completed is True
+    assert {(row["outbox_id"], row["action"]) for row in actions} == {
+        (complete_id, "complete"),
+        (retry_id, "retry"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_expired_active_dispatch_becomes_manually_reconcilable(pool: asyncpg.Pool) -> None:
+    store, row_id = await quarantine_record(
+        pool,
+        idempotency_key="delivery-idem-expired-manual",
+        worker_id="worker-crashed",
+        expire_lease=True,
+    )
+    await store.resolve_reconciliation(
+        row_id,
+        operator_id="ops:test",
+        action="complete",
+        reason="operator verified provider delivery after worker lease expired",
+        max_attempts=3,
+    )
+
+    async with pool.acquire() as conn:
+        state = await conn.fetchrow(
+            "SELECT completed_at IS NOT NULL AS completed, lease_owner, lease_until FROM middleware_outbox WHERE id=$1",
+            row_id,
+        )
+    assert state["completed"] is True
+    assert state["lease_owner"] is None
+    assert state["lease_until"] is None
 
 
 @pytest.mark.asyncio
@@ -289,6 +409,7 @@ async def test_reconciliation_retry_is_audited_and_releases_record(pool: asyncpg
         pool,
         idempotency_key="delivery-idem-reconcile-retry",
         worker_id="worker-timeout-retry",
+        expire_lease=True,
     )
     await store.resolve_reconciliation(
         row_id,
@@ -318,6 +439,7 @@ async def test_reconciliation_complete_and_dead_letter_are_terminal_and_audited(
         pool,
         idempotency_key="delivery-idem-reconcile-complete",
         worker_id="worker-timeout-complete",
+        expire_lease=True,
     )
     await complete_store.resolve_reconciliation(
         complete_id,
@@ -330,6 +452,7 @@ async def test_reconciliation_complete_and_dead_letter_are_terminal_and_audited(
         pool,
         idempotency_key="delivery-idem-reconcile-dlq",
         worker_id="worker-timeout-dlq",
+        expire_lease=True,
     )
     await dead_store.resolve_reconciliation(
         dead_id,

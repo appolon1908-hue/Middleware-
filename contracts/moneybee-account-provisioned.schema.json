@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api.codestra.co/contracts/moneybee-account-provisioned.v1.schema.json",
+  "title": "MoneyBee account provisioned event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "tenant_id",
+    "actor",
+    "correlation_id",
+    "schema",
+    "data"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "event_type": {"const": "moneybee.account.provisioned.v1"},
+    "event_version": {"const": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "tenant_id": {"type": "string", "format": "uuid"},
+    "correlation_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "causation_id": {"type": ["string", "null"], "maxLength": 160},
+    "schema": {"const": "moneybee.account.provisioned.v1"},
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "issuer", "subject"],
+      "properties": {
+        "type": {"enum": ["human", "service", "system"]},
+        "issuer": {"const": "https://auth.codestra.co/realms/codestra"},
+        "subject": {"type": "string", "minLength": 1, "maxLength": 255}
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "user_id",
+        "organization_id",
+        "membership_type",
+        "email",
+        "email_verified"
+      ],
+      "properties": {
+        "user_id": {"type": "string", "format": "uuid"},
+        "organization_id": {"type": "string", "format": "uuid"},
+        "membership_type": {"const": "BORROWER"},
+        "email": {"type": "string", "format": "email", "maxLength": 320},
+        "email_verified": {"const": true},
+        "display_name": {"type": ["string", "null"], "maxLength": 255},
+        "marketing_consent": {"type": "boolean", "default": false}
+      }
+    }
+  }
+}

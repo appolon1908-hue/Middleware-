@@ -75,6 +75,7 @@ def connections() -> list[dict[str, str]]:
             "declared_private_scope": "private_only",
             "declared_degraded_scope": "degraded",
             "declared_remote_provider_scope": "declared_remote",
+            "configured_remote_runtime_not_confirmed": "verification_only",
         }.get(runtime, "declared")
         links.append(_link(link_id, CANONICAL_CONTRACT_BRANCH, branch, status=status, contract=contract))
 

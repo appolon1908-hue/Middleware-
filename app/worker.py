@@ -14,14 +14,26 @@ Handler = Callable[[OutboxRecord], Awaitable[None]]
 log = logging.getLogger(__name__)
 
 
+class KnownSafeRetryError(RuntimeError):
+    """Handler-provided proof that no external effect could have committed.
+
+    Provider adapters may raise this only when they can establish that the
+    operation is safe to retry, for example because dispatch was rejected before
+    any provider write was attempted. Ambiguous transport/provider errors must
+    not use this exception; they are quarantined for reconciliation instead.
+    """
+
+
 class OutboxWorker:
     """Generic bounded lease/retry/DLQ worker.
 
     No provider handlers are registered on intake-runtime-v1. Future handlers
     receive the authoritative idempotency key and are bounded to complete before
-    the database lease expires. A timed-out handler is quarantined for explicit
-    reconciliation because its external outcome is unknown. Provider dispatch
-    remains disabled by Settings.
+    the database lease expires. Once a provider handler starts, timeout and
+    generic exceptions are treated as unknown external outcomes and quarantined
+    for explicit reconciliation. Automatic retry is permitted only when a
+    handler deliberately raises KnownSafeRetryError. Provider dispatch remains
+    disabled by Settings.
     """
 
     def __init__(
@@ -81,13 +93,29 @@ class OutboxWorker:
                     "external outcome is unknown and requires reconciliation"
                 ),
             )
-        except Exception as exc:
-            log.exception("outbox delivery failed", extra={"outbox_id": record.id})
+        except KnownSafeRetryError as exc:
+            log.warning(
+                "outbox delivery failed before any external effect; safe retry allowed",
+                extra={"outbox_id": record.id},
+            )
             await self.store.fail(
                 record.id,
                 worker_id=self.worker_id,
                 error=str(exc),
                 max_attempts=self.max_attempts,
+            )
+        except Exception as exc:
+            log.exception(
+                "outbox delivery raised after handler invocation; outcome requires reconciliation",
+                extra={"outbox_id": record.id},
+            )
+            await self.store.quarantine_unknown_outcome(
+                record.id,
+                worker_id=self.worker_id,
+                error=(
+                    "delivery handler raised after invocation; external outcome is unknown "
+                    f"and requires reconciliation: {type(exc).__name__}: {exc}"
+                ),
             )
         else:
             await self.store.complete(record.id, worker_id=self.worker_id)

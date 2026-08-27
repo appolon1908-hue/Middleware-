@@ -14,6 +14,7 @@ class FakeStore:
         self.claim_args = None
         self.failed = []
         self.quarantined = []
+        self.renewed = []
         self.resolved = []
         self.events = []
         self.quarantine_error: Exception | None = None
@@ -32,6 +33,10 @@ class FakeStore:
         if self.quarantine_error is not None:
             raise self.quarantine_error
         self.quarantined.append((record_id, kwargs))
+
+    async def renew_active_dispatch(self, record_id: int, **kwargs):
+        self.events.append("renew")
+        self.renewed.append((record_id, kwargs))
 
     async def resolve_reconciliation(self, record_id: int, **kwargs):
         self.events.append(f"resolve:{kwargs['action']}")
@@ -67,7 +72,8 @@ async def test_worker_refreshes_lease_before_handler_and_resolves_success_as_own
     )
     assert await worker.run_once() is True
     assert observed == ["idem-12345678"]
-    assert store.events == ["quarantine", "handler", "resolve:complete"]
+    assert store.events[0:2] == ["quarantine", "handler"]
+    assert store.events[-1] == "resolve:complete"
     assert store.quarantined[0][1]["worker_id"] == worker.worker_id
     assert store.quarantined[0][1]["lease_seconds"] == 60
     assert store.resolved[0][1]["action"] == "complete"
@@ -118,6 +124,40 @@ async def test_handler_timeout_leaves_precommitted_active_quarantine() -> None:
 
 
 @pytest.mark.asyncio
+async def test_heartbeat_continues_while_cancelled_handler_suppresses_cancellation() -> None:
+    store = FakeStore(record())
+    cancelled = asyncio.Event()
+
+    async def cancellation_suppressing_handler(item: OutboxRecord) -> None:
+        store.events.append("handler")
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled.set()
+            # Simulate a provider coroutine that performs cleanup / response work
+            # after cancellation instead of terminating immediately.
+            await asyncio.sleep(0.06)
+            return
+
+    worker = OutboxWorker(
+        store,  # type: ignore[arg-type]
+        {"provider": cancellation_suppressing_handler},
+        lease_seconds=0.06,
+        handler_timeout_seconds=0.01,
+        max_attempts=8,
+    )
+    assert await worker.run_once() is True
+    assert cancelled.is_set()
+    assert store.renewed, "lease heartbeat must continue until handler actually terminates"
+    assert all(item[1]["worker_id"] == worker.worker_id for item in store.renewed)
+    assert all(item[1]["lease_seconds"] == 0.06 for item in store.renewed)
+    # A timeout remains an unknown outcome even if the cancellation-suppressing
+    # coroutine later returns; do not auto-complete or retry it.
+    assert not store.resolved
+    assert not store.failed
+
+
+@pytest.mark.asyncio
 async def test_generic_handler_exception_leaves_precommitted_active_quarantine() -> None:
     store = FakeStore(record())
 
@@ -130,7 +170,7 @@ async def test_generic_handler_exception_leaves_precommitted_active_quarantine()
     assert store.quarantined
     assert not store.failed
     assert not store.resolved
-    assert store.events == ["quarantine", "handler"]
+    assert store.events[0:2] == ["quarantine", "handler"]
 
 
 @pytest.mark.asyncio
@@ -149,4 +189,4 @@ async def test_explicit_known_safe_retry_resolves_quarantine_as_owner() -> None:
     assert store.resolved[0][1]["action"] == "retry"
     assert store.resolved[0][1]["max_attempts"] == 8
     assert store.resolved[0][1]["worker_id"] == worker.worker_id
-    assert store.events == ["quarantine", "handler", "resolve:retry"]
+    assert store.events[-1] == "resolve:retry"

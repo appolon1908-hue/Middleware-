@@ -20,20 +20,22 @@ class KnownSafeRetryError(RuntimeError):
     Provider adapters may raise this only when they can establish that the
     operation is safe to retry, for example because dispatch was rejected before
     any provider write was attempted. Ambiguous transport/provider errors must
-    not use this exception; they are quarantined for reconciliation instead.
+    not use this exception; they remain quarantined for reconciliation instead.
     """
 
 
 class OutboxWorker:
-    """Generic bounded lease/retry/DLQ worker.
+    """Generic bounded lease/retry/reconciliation worker.
 
-    No provider handlers are registered on intake-runtime-v1. Future handlers
-    receive the authoritative idempotency key and are bounded to complete before
-    the database lease expires. Once a provider handler starts, timeout and
-    generic exceptions are treated as unknown external outcomes and quarantined
-    for explicit reconciliation. Automatic retry is permitted only when a
-    handler deliberately raises KnownSafeRetryError. Provider dispatch remains
-    disabled by Settings.
+    No provider handlers are registered on intake-runtime-v1. Before any future
+    provider handler is invoked, the claimed row is durably moved into the
+    reconciliation-required state. That removes it from automatic claims even if
+    the worker crashes or PostgreSQL becomes unavailable after an external write.
+
+    A normal handler return resolves that quarantine as complete. An explicit
+    KnownSafeRetryError resolves it as retry. Timeout and generic exceptions leave
+    the precommitted quarantine in place for reconciliation. Provider dispatch
+    remains disabled by Settings on this branch.
     """
 
     def __init__(
@@ -70,6 +72,7 @@ class OutboxWorker:
         )
         if record is None:
             return False
+
         handler = self.handlers.get(record.destination)
         if handler is None:
             await self.store.fail(
@@ -79,46 +82,53 @@ class OutboxWorker:
                 max_attempts=self.max_attempts,
             )
             return True
+
+        # Commit the unknown-on-crash state before invoking any provider code.
+        # If this write fails, the exception propagates and the handler is never run.
+        await self.store.quarantine_unknown_outcome(
+            record.id,
+            worker_id=self.worker_id,
+            error=(
+                "provider dispatch reserved before handler invocation; external outcome "
+                "must be explicitly confirmed before automatic release"
+            ),
+        )
+
         try:
             await asyncio.wait_for(
                 handler(record),
                 timeout=self.handler_timeout_seconds,
             )
         except TimeoutError:
-            await self.store.quarantine_unknown_outcome(
-                record.id,
-                worker_id=self.worker_id,
-                error=(
-                    "delivery handler exceeded bounded timeout before lease expiry; "
-                    "external outcome is unknown and requires reconciliation"
-                ),
+            log.error(
+                "outbox handler timed out; precommitted reconciliation quarantine retained",
+                extra={"outbox_id": record.id},
             )
         except KnownSafeRetryError as exc:
             log.warning(
-                "outbox delivery failed before any external effect; safe retry allowed",
+                "outbox handler certified failure as safe to retry",
                 extra={"outbox_id": record.id},
             )
-            await self.store.fail(
+            await self.store.resolve_reconciliation(
                 record.id,
-                worker_id=self.worker_id,
-                error=str(exc),
+                operator_id=f"worker:{self.worker_id}",
+                action="retry",
+                reason=f"handler certified known-safe retry: {exc}",
                 max_attempts=self.max_attempts,
             )
-        except Exception as exc:
+        except Exception:
             log.exception(
-                "outbox delivery raised after handler invocation; outcome requires reconciliation",
+                "outbox handler raised; precommitted reconciliation quarantine retained",
                 extra={"outbox_id": record.id},
             )
-            await self.store.quarantine_unknown_outcome(
-                record.id,
-                worker_id=self.worker_id,
-                error=(
-                    "delivery handler raised after invocation; external outcome is unknown "
-                    f"and requires reconciliation: {type(exc).__name__}: {exc}"
-                ),
-            )
         else:
-            await self.store.complete(record.id, worker_id=self.worker_id)
+            await self.store.resolve_reconciliation(
+                record.id,
+                operator_id=f"worker:{self.worker_id}",
+                action="complete",
+                reason="handler returned successfully and confirmed delivery outcome",
+                max_attempts=self.max_attempts,
+            )
         return True
 
     async def run_forever(self) -> None:

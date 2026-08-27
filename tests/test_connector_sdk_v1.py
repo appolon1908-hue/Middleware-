@@ -253,10 +253,15 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
         tenant_id: str,
         replay_store: InMemoryReplayStore | None = None,
     ) -> WebhookProcessor:
+        webhook_policy = (
+            self.registry.get("klyrow-email")
+            .manifest.webhook_policy_for("postal-events")
+        )
+        self.assertIsNotNone(webhook_policy)
         return WebhookProcessor(
             self.registry,
             MappingSecretResolver(
-                {"WEBHOOK_KLYROW_EMAIL_HMAC_SECRET": secret_values}
+                {webhook_policy.secret_reference: secret_values}
             ),
             replay_store or InMemoryReplayStore(),
             MappingTenantResolver(

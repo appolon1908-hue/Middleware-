@@ -37,6 +37,21 @@ EXPECTED_SYNC_POLICY = {
     "direct_workstream_deployment": False,
     "immutable_release_from_merged_sha_only": True,
 }
+EXPECTED_EXTERNAL_AUTHORITIES = {
+    "integration_and_release": {
+        "repository": "appolon1908-hue/codestra-production-platform",
+        "branch": "release/production-activation",
+        "contract_catalog": "contracts/catalog.v1.json",
+        "runtime_composition": "composition/runtime-composition.v1.json",
+        "release_manifest_schema": "release/platform-release-manifest.v1.schema.json",
+        "caddy_config_home": "operations/caddy",
+    },
+    "crawler_source": {
+        "repository": "appolon1908-hue/kyqra-crawler",
+        "branch": "main",
+        "retired_repository": "appolon1908-hue/kyqra",
+    },
+}
 
 
 def fail(errors: list[str]) -> int:
@@ -92,6 +107,9 @@ def main() -> int:
 
     if manifest.get("synchronization_policy") != EXPECTED_SYNC_POLICY:
         errors.append("synchronization_policy is incomplete or unsafe")
+
+    if manifest.get("external_authorities") != EXPECTED_EXTERNAL_AUTHORITIES:
+        errors.append("external_authorities is incomplete or non-canonical")
 
     raw_workstreams = manifest.get("workstreams")
     if not isinstance(raw_workstreams, list) or not raw_workstreams:

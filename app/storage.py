@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -10,7 +11,7 @@ import asyncpg
 from .models import EventEnvelope, IngressResult
 
 
-RUNTIME_SCHEMA_VERSION = 2
+RUNTIME_SCHEMA_VERSION = 3
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
@@ -29,6 +30,98 @@ class ReplayConflict(StorageError):
 class ReconciliationError(StorageError):
     code = "reconciliation_invalid"
     retryable = False
+
+
+class EventLedgerIntegrityError(StorageError):
+    code = "event_ledger_integrity_error"
+    retryable = False
+
+
+ZERO_LEDGER_HASH = "0" * 64
+
+
+def canonical_payload_sha256(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def event_ledger_hash(
+    *,
+    tenant_id: str,
+    tenant_sequence: int,
+    event_id: str,
+    semantic_sha256: str,
+    previous_entry_hash: str,
+) -> str:
+    value = json.dumps(
+        [
+            "codestra-event-ledger-v1",
+            tenant_id,
+            tenant_sequence,
+            event_id,
+            semantic_sha256,
+            previous_entry_hash,
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(value).hexdigest()
+
+
+@dataclass(frozen=True)
+class EventLedgerRecord:
+    tenant_id: str
+    tenant_sequence: int
+    event_id: str
+    semantic_sha256: str
+    previous_entry_hash: str
+    entry_hash: str
+    payload: dict[str, Any]
+
+
+def verify_event_ledger_records(
+    records: list[EventLedgerRecord],
+) -> dict[str, int]:
+    expected_sequence: dict[str, int] = {}
+    previous_hash: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    for record in sorted(records, key=lambda item: (item.tenant_id, item.tenant_sequence)):
+        expected = expected_sequence.get(record.tenant_id, 1)
+        previous = previous_hash.get(record.tenant_id, ZERO_LEDGER_HASH)
+        if record.tenant_sequence != expected:
+            raise EventLedgerIntegrityError(
+                f"event ledger sequence gap for tenant {record.tenant_id}"
+            )
+        if record.previous_entry_hash != previous:
+            raise EventLedgerIntegrityError(
+                f"event ledger previous hash mismatch for tenant {record.tenant_id}"
+            )
+        semantic = canonical_payload_sha256(record.payload)
+        if semantic != record.semantic_sha256:
+            raise EventLedgerIntegrityError(
+                f"event ledger payload hash mismatch for tenant {record.tenant_id}"
+            )
+        expected_hash = event_ledger_hash(
+            tenant_id=record.tenant_id,
+            tenant_sequence=record.tenant_sequence,
+            event_id=record.event_id,
+            semantic_sha256=record.semantic_sha256,
+            previous_entry_hash=record.previous_entry_hash,
+        )
+        if record.entry_hash != expected_hash:
+            raise EventLedgerIntegrityError(
+                f"event ledger entry hash mismatch for tenant {record.tenant_id}"
+            )
+        expected_sequence[record.tenant_id] = expected + 1
+        previous_hash[record.tenant_id] = record.entry_hash
+        counts[record.tenant_id] = counts.get(record.tenant_id, 0) + 1
+    return counts
 
 
 class InboxStore(Protocol):
@@ -55,6 +148,9 @@ class MemoryInboxStore:
     def __init__(self) -> None:
         self._event_items: dict[tuple[str, str], tuple[str, IngressResult]] = {}
         self._idempotency_items: dict[tuple[str, str], tuple[str, IngressResult]] = {}
+        self.ledger_records: list[EventLedgerRecord] = []
+        self._ledger_heads: dict[str, str] = {}
+        self._ledger_counts: dict[str, int] = {}
 
     async def accept(
         self,
@@ -64,6 +160,11 @@ class MemoryInboxStore:
         body_sha256: str,
         semantic_sha256: str,
     ) -> IngressResult:
+        payload = envelope.model_dump(mode="json")
+        if canonical_payload_sha256(payload) != semantic_sha256:
+            raise EventLedgerIntegrityError(
+                "semantic hash does not match the canonical event payload"
+            )
         event_key = (envelope.tenant_id, envelope.event_id)
         idempotency_key = (envelope.tenant_id, envelope.idempotency_key)
         event_existing = self._event_items.get(event_key)
@@ -89,6 +190,31 @@ class MemoryInboxStore:
         item = (semantic_sha256, result)
         self._event_items[event_key] = item
         self._idempotency_items[idempotency_key] = item
+        tenant_sequence = self._ledger_counts.get(envelope.tenant_id, 0) + 1
+        previous_entry_hash = self._ledger_heads.get(
+            envelope.tenant_id,
+            ZERO_LEDGER_HASH,
+        )
+        entry_hash = event_ledger_hash(
+            tenant_id=envelope.tenant_id,
+            tenant_sequence=tenant_sequence,
+            event_id=envelope.event_id,
+            semantic_sha256=semantic_sha256,
+            previous_entry_hash=previous_entry_hash,
+        )
+        self.ledger_records.append(
+            EventLedgerRecord(
+                tenant_id=envelope.tenant_id,
+                tenant_sequence=tenant_sequence,
+                event_id=envelope.event_id,
+                semantic_sha256=semantic_sha256,
+                previous_entry_hash=previous_entry_hash,
+                entry_hash=entry_hash,
+                payload=payload,
+            )
+        )
+        self._ledger_counts[envelope.tenant_id] = tenant_sequence
+        self._ledger_heads[envelope.tenant_id] = entry_hash
         return result
 
     async def ready(self) -> bool:
@@ -143,6 +269,23 @@ class PostgresInboxStore:
             "attempt_count",
             "created_at",
         },
+        "middleware_event_ledger": {
+            "ledger_id",
+            "tenant_id",
+            "tenant_sequence",
+            "event_id",
+            "event_type",
+            "event_version",
+            "source_client_id",
+            "correlation_id",
+            "causation_id",
+            "idempotency_key",
+            "semantic_sha256",
+            "previous_entry_hash",
+            "entry_hash",
+            "payload",
+            "recorded_at",
+        },
     }
     REQUIRED_UDT_TYPES = {
         ("middleware_schema_migrations", "version"): "int4",
@@ -184,6 +327,21 @@ class PostgresInboxStore:
         ("middleware_reconciliation_audit", "reason"): "text",
         ("middleware_reconciliation_audit", "attempt_count"): "int4",
         ("middleware_reconciliation_audit", "created_at"): "timestamptz",
+        ("middleware_event_ledger", "ledger_id"): "int8",
+        ("middleware_event_ledger", "tenant_id"): "text",
+        ("middleware_event_ledger", "tenant_sequence"): "int8",
+        ("middleware_event_ledger", "event_id"): "text",
+        ("middleware_event_ledger", "event_type"): "text",
+        ("middleware_event_ledger", "event_version"): "text",
+        ("middleware_event_ledger", "source_client_id"): "text",
+        ("middleware_event_ledger", "correlation_id"): "text",
+        ("middleware_event_ledger", "causation_id"): "text",
+        ("middleware_event_ledger", "idempotency_key"): "text",
+        ("middleware_event_ledger", "semantic_sha256"): "bpchar",
+        ("middleware_event_ledger", "previous_entry_hash"): "bpchar",
+        ("middleware_event_ledger", "entry_hash"): "bpchar",
+        ("middleware_event_ledger", "payload"): "jsonb",
+        ("middleware_event_ledger", "recorded_at"): "timestamptz",
     }
     REQUIRED_KEYS = {
         ("middleware_schema_migrations", "PRIMARY KEY", ("version",)),
@@ -196,6 +354,23 @@ class PostgresInboxStore:
             ("tenant_id", "destination", "idempotency_key"),
         ),
         ("middleware_reconciliation_audit", "PRIMARY KEY", ("id",)),
+        ("middleware_event_ledger", "PRIMARY KEY", ("ledger_id",)),
+        (
+            "middleware_event_ledger",
+            "UNIQUE",
+            ("tenant_id", "tenant_sequence"),
+        ),
+        ("middleware_event_ledger", "UNIQUE", ("tenant_id", "event_id")),
+        (
+            "middleware_event_ledger",
+            "UNIQUE",
+            ("tenant_id", "idempotency_key"),
+        ),
+    }
+    REQUIRED_TRIGGERS = {
+        "middleware_event_ledger_immutable",
+        "middleware_command_audit_immutable",
+        "middleware_reconciliation_audit_immutable",
     }
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -284,6 +459,23 @@ class PostgresInboxStore:
                 raise StorageError(
                     f"runtime schema is missing key constraints: {sorted(missing_keys)}"
                 )
+            trigger_rows = await conn.fetch(
+                """
+                SELECT tgname, tgenabled::text AS tgenabled
+                FROM pg_trigger
+                WHERE NOT tgisinternal AND tgname=ANY($1::text[])
+                """,
+                list(self.REQUIRED_TRIGGERS),
+            )
+            enabled_triggers = {
+                row["tgname"]
+                for row in trigger_rows
+                if row["tgenabled"] == "O"
+            }
+            if enabled_triggers != self.REQUIRED_TRIGGERS:
+                raise StorageError(
+                    "runtime schema is missing enabled immutable-ledger triggers"
+                )
 
     async def accept(
         self,
@@ -294,6 +486,17 @@ class PostgresInboxStore:
         semantic_sha256: str,
     ) -> IngressResult:
         payload = envelope.model_dump(mode="json")
+        calculated_semantic_sha = canonical_payload_sha256(payload)
+        if calculated_semantic_sha != semantic_sha256:
+            raise EventLedgerIntegrityError(
+                "semantic hash does not match the canonical event payload"
+            )
+        payload_json = json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         now = datetime.now(timezone.utc)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -315,13 +518,66 @@ class PostgresInboxStore:
                     semantic_sha256,
                     envelope.idempotency_key,
                     envelope.correlation_id,
-                    json.dumps(payload, separators=(",", ":"), sort_keys=True),
+                    payload_json,
                     now,
                 )
                 if row:
+                    await conn.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                        envelope.tenant_id,
+                    )
+                    previous = await conn.fetchrow(
+                        """
+                        SELECT tenant_sequence, entry_hash
+                        FROM middleware_event_ledger
+                        WHERE tenant_id=$1
+                        ORDER BY tenant_sequence DESC
+                        LIMIT 1
+                        """,
+                        envelope.tenant_id,
+                    )
+                    tenant_sequence = (
+                        int(previous["tenant_sequence"]) + 1 if previous else 1
+                    )
+                    previous_entry_hash = (
+                        str(previous["entry_hash"])
+                        if previous
+                        else ZERO_LEDGER_HASH
+                    )
+                    entry_hash = event_ledger_hash(
+                        tenant_id=envelope.tenant_id,
+                        tenant_sequence=tenant_sequence,
+                        event_id=envelope.event_id,
+                        semantic_sha256=semantic_sha256,
+                        previous_entry_hash=previous_entry_hash,
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO middleware_event_ledger (
+                            tenant_id, tenant_sequence, event_id, event_type,
+                            event_version, source_client_id, correlation_id,
+                            causation_id, idempotency_key, semantic_sha256,
+                            previous_entry_hash, entry_hash, payload
+                        ) VALUES (
+                            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb
+                        )
+                        """,
+                        envelope.tenant_id,
+                        tenant_sequence,
+                        envelope.event_id,
+                        envelope.event_type,
+                        envelope.event_version,
+                        producer_client_id,
+                        envelope.correlation_id,
+                        envelope.causation_id,
+                        envelope.idempotency_key,
+                        semantic_sha256,
+                        previous_entry_hash,
+                        entry_hash,
+                        payload_json,
+                    )
                     # Durable acceptance and publication intent are committed
-                    # together. PostgreSQL remains authoritative; the worker
-                    # later publishes this row to JetStream at least once.
+                    # together with the immutable hash-chained event record.
                     await conn.execute(
                         """
                         INSERT INTO middleware_outbox (
@@ -332,11 +588,7 @@ class PostgresInboxStore:
                         envelope.tenant_id,
                         NATS_JETSTREAM_DESTINATION,
                         envelope.event_type,
-                        json.dumps(
-                            payload,
-                            separators=(",", ":"),
-                            sort_keys=True,
-                        ),
+                        payload_json,
                         envelope.idempotency_key,
                     )
                     return IngressResult(
@@ -377,6 +629,43 @@ class PostgresInboxStore:
                     duplicate=True,
                     correlation_id=existing["correlation_id"],
                 )
+
+    async def verify_event_ledger(
+        self,
+        tenant_id: str | None = None,
+    ) -> dict[str, int]:
+        query = """
+            SELECT tenant_id, tenant_sequence, event_id, semantic_sha256,
+                   previous_entry_hash, entry_hash, payload
+            FROM middleware_event_ledger
+        """
+        values: tuple[str, ...] = ()
+        if tenant_id is not None:
+            query += " WHERE tenant_id=$1"
+            values = (tenant_id,)
+        query += " ORDER BY tenant_id, tenant_sequence"
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, *values)
+        records = []
+        for row in rows:
+            raw_payload = row["payload"]
+            payload = (
+                json.loads(raw_payload)
+                if isinstance(raw_payload, str)
+                else dict(raw_payload)
+            )
+            records.append(
+                EventLedgerRecord(
+                    tenant_id=row["tenant_id"],
+                    tenant_sequence=row["tenant_sequence"],
+                    event_id=row["event_id"],
+                    semantic_sha256=row["semantic_sha256"],
+                    previous_entry_hash=row["previous_entry_hash"],
+                    entry_hash=row["entry_hash"],
+                    payload=payload,
+                )
+            )
+        return verify_event_ledger_records(records)
 
     async def ready(self) -> bool:
         try:

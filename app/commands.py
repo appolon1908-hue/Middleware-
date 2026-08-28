@@ -378,6 +378,7 @@ class PostgresCommandStore:
         ),
         ("middleware_command_audit", "PRIMARY KEY", ("id",)),
     }
+    REQUIRED_TRIGGERS = {"middleware_command_audit_immutable"}
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self.pool = pool
@@ -666,7 +667,14 @@ class PostgresCommandStore:
                     """,
                     list(self.REQUIRED_COLUMNS),
                 )
-            if head != 2:
+                trigger_rows = await conn.fetch(
+                    """
+                    SELECT tgname, tgenabled::text AS tgenabled FROM pg_trigger
+                    WHERE NOT tgisinternal AND tgname=ANY($1::text[])
+                    """,
+                    list(self.REQUIRED_TRIGGERS),
+                )
+            if head != 3:
                 return False
             observed_columns = {
                 table: set() for table in self.REQUIRED_COLUMNS
@@ -686,7 +694,15 @@ class PostgresCommandStore:
                 )
                 for row in key_rows
             }
-            return self.REQUIRED_KEYS <= observed_keys
+            enabled_triggers = {
+                row["tgname"]
+                for row in trigger_rows
+                if row["tgenabled"] == "O"
+            }
+            return (
+                self.REQUIRED_KEYS <= observed_keys
+                and enabled_triggers == self.REQUIRED_TRIGGERS
+            )
         except Exception:
             return False
 

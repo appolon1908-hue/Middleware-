@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from typing import Any
 
@@ -11,7 +10,7 @@ from .models import EventEnvelope, IngressResult
 from .replay import ReplayBusy
 from .runtime import Runtime
 from .security import RequestValidationError, authorize_tenant, verify_signed_request
-from .storage import ReplayConflict
+from .storage import ReplayConflict, canonical_payload_sha256
 
 
 class IngressError(RuntimeError):
@@ -42,13 +41,7 @@ class PayloadTooLargeError(IngressError):
 
 
 def semantic_digest(envelope: EventEnvelope) -> str:
-    canonical = json.dumps(
-        envelope.model_dump(mode="json"),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(canonical).hexdigest()
+    return canonical_payload_sha256(envelope.model_dump(mode="json"))
 
 
 async def accept_webhook(

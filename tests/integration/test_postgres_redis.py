@@ -67,6 +67,7 @@ async def pool() -> asyncpg.Pool:
         for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
     ]
     async with pool.acquire() as conn:
+        await conn.execute("DROP TABLE IF EXISTS middleware_event_ledger CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_reconciliation_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_outbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_inbox CASCADE")
@@ -133,6 +134,71 @@ async def test_postgres_schema_and_duplicate_reconciliation(pool: asyncpg.Pool) 
     raw_payload = outbox["payload"]
     payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
     assert payload["event_id"] == item.event_id
+    assert await store.verify_event_ledger(item.tenant_id) == {
+        item.tenant_id: 1
+    }
+    async with pool.acquire() as conn:
+        ledger = await conn.fetchrow(
+            """
+            SELECT tenant_sequence, event_id, previous_entry_hash, entry_hash
+            FROM middleware_event_ledger
+            WHERE tenant_id=$1
+            """,
+            item.tenant_id,
+        )
+    assert ledger["tenant_sequence"] == 1
+    assert ledger["event_id"] == item.event_id
+    assert ledger["previous_entry_hash"] == "0" * 64
+    assert len(ledger["entry_hash"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_event_ledger_is_hash_chained_and_database_immutable(
+    pool: asyncpg.Pool,
+) -> None:
+    store = PostgresInboxStore(pool)
+    first = envelope(
+        event_id="evt-ledger-db-1",
+        idempotency_key="idem-ledger-db-1",
+    )
+    second = envelope(
+        event_id="evt-ledger-db-2",
+        idempotency_key="idem-ledger-db-2",
+        value=2,
+    )
+    for item in (first, second):
+        await store.accept(
+            item,
+            producer_client_id="odoo-integration",
+            body_sha256="a" * 64,
+            semantic_sha256=semantic_digest(item),
+        )
+
+    assert await store.verify_event_ledger("tenant-test") == {"tenant-test": 2}
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT tenant_sequence, previous_entry_hash, entry_hash
+            FROM middleware_event_ledger
+            WHERE tenant_id='tenant-test'
+            ORDER BY tenant_sequence
+            """
+        )
+        assert rows[1]["previous_entry_hash"] == rows[0]["entry_hash"]
+        with pytest.raises(asyncpg.ObjectNotInPrerequisiteStateError):
+            await conn.execute(
+                "UPDATE middleware_event_ledger SET event_type='tampered'"
+            )
+        with pytest.raises(asyncpg.ObjectNotInPrerequisiteStateError):
+            await conn.execute(
+                "DELETE FROM middleware_event_ledger WHERE tenant_id='tenant-test'"
+            )
+        with pytest.raises(asyncpg.ObjectNotInPrerequisiteStateError):
+            await conn.execute("TRUNCATE middleware_event_ledger")
+        remaining = await conn.fetchval(
+            "SELECT count(*) FROM middleware_event_ledger"
+        )
+    assert remaining == 2
 
 
 @pytest.mark.asyncio
@@ -160,6 +226,40 @@ async def test_postgres_concurrent_same_event_is_single_accept(pool: asyncpg.Poo
             item.event_id,
         )
     assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_distinct_events_form_one_gapless_tenant_chain(
+    pool: asyncpg.Pool,
+) -> None:
+    store = PostgresInboxStore(pool)
+    items = [
+        envelope(
+            event_id=f"evt-chain-{index}",
+            idempotency_key=f"idem-chain-{index}",
+            value=index,
+        )
+        for index in range(1, 9)
+    ]
+
+    async def accept_once(item: EventEnvelope) -> None:
+        await store.accept(
+            item,
+            producer_client_id="odoo-integration",
+            body_sha256="c" * 64,
+            semantic_sha256=semantic_digest(item),
+        )
+
+    await asyncio.gather(*(accept_once(item) for item in items))
+    assert await store.verify_event_ledger("tenant-test") == {"tenant-test": 8}
+    async with pool.acquire() as conn:
+        sequences = await conn.fetch(
+            """
+            SELECT tenant_sequence FROM middleware_event_ledger
+            WHERE tenant_id='tenant-test' ORDER BY tenant_sequence
+            """
+        )
+    assert [row["tenant_sequence"] for row in sequences] == list(range(1, 9))
 
 
 @pytest.mark.asyncio

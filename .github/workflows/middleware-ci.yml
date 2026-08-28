@@ -34,6 +34,43 @@ jobs:
       - name: Run fail-closed bootstrap validation
         run: bash scripts/run_ci.sh
 
+  runtime-image-smoke:
+    name: Build and smoke-test runtime image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Build exact-source runtime image
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          build_time="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          docker build \
+            --file Dockerfile.runtime \
+            --build-arg "SOURCE_SHA=$SOURCE_SHA" \
+            --build-arg "BUILD_TIME=$build_time" \
+            --tag "codestra-middleware-ci:$SOURCE_SHA" \
+            .
+
+      - name: Prove packaged runtime can construct the application
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          docker run --rm \
+            --entrypoint python \
+            --env APP_ENV=test \
+            --env ALLOW_IN_MEMORY_STORAGE=true \
+            "codestra-middleware-ci:$SOURCE_SHA" \
+            -c "from app.commands import CommandPolicyRegistry; from app.main import create_app; assert CommandPolicyRegistry.load().policies; assert create_app().title == 'Codestra Middleware API'; print('RUNTIME_IMAGE_SMOKE=PASS')"
+
   runtime-integration:
     name: Disposable PostgreSQL Redis integration
     runs-on: ubuntu-24.04

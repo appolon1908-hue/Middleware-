@@ -102,6 +102,12 @@ def main() -> int:
     dockerfile = (ROOT / "Dockerfile.runtime").read_text(encoding="utf-8")
     require(dockerfile, f"FROM {BASE}", "digest-pinned base image", errors)
     require(dockerfile, "--require-hashes", "hashed dependency install", errors)
+    require(
+        dockerfile,
+        "COPY connectors ./connectors",
+        "generated command registry bundle",
+        errors,
+    )
     require(dockerfile, "COPY migrations ./migrations", "migration bundle", errors)
     require(
         dockerfile,
@@ -138,6 +144,12 @@ def main() -> int:
 
     middleware_ci = (ROOT / ".github/workflows/middleware-ci.yml").read_text(
         encoding="utf-8"
+    )
+    require(
+        middleware_ci,
+        "Build and smoke-test runtime image",
+        "pre-release runtime image smoke test",
+        errors,
     )
     require(
         middleware_ci,

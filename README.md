@@ -19,6 +19,10 @@ This repository is the source of truth for reviewed middleware contracts and Git
 
 `site/*`, `integration/*`, `platform/*`, `operations/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches.
 
+For the current branch inventory, CI matrix, staging/production environment
+policy, and the exact point where production-readiness work stopped, see
+[`docs/CI-ENVIRONMENTS-AND-HANDOFF.md`](docs/CI-ENVIRONMENTS-AND-HANDOFF.md).
+
 ## Canonical communication layer
 
 ```text

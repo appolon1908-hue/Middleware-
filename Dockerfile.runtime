@@ -25,6 +25,7 @@ RUN python -m pip install --no-cache-dir --require-hashes -r requirements-runtim
 COPY app ./app
 COPY workers ./workers
 COPY config ./config
+COPY connectors ./connectors
 COPY contracts ./contracts
 COPY migrations ./migrations
 COPY scripts/migrate_runtime.py ./scripts/migrate_runtime.py

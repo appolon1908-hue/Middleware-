@@ -12,6 +12,19 @@ on:
       - "scripts/validate_connector_sdk.py"
       - "tests/test_connector_sdk*.py"
       - ".github/workflows/connector-sdk-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "middleware/connector_sdk/**"
+      - "connectors/**"
+      - "contracts/connectors/**"
+      - "docs/connectors/**"
+      - "scripts/generate_connector_artifacts.py"
+      - "scripts/scaffold_connector.py"
+      - "scripts/validate_connector_sdk.py"
+      - "tests/test_connector_sdk*.py"
+      - ".github/workflows/connector-sdk-ci.yml"
 
 permissions:
   contents: read
@@ -24,11 +37,12 @@ jobs:
       - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
       - name: Prove exact source identity
         env:
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           test -z "$(git status --porcelain)"

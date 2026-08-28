@@ -24,16 +24,37 @@ assert data["additionalProperties"] is False
 assert data["properties"]["email_verified"]["const"] is True
 assert data["properties"]["membership_type"]["const"] == "BORROWER"
 
+assert ROUTING["schemaVersion"] == 2
 assert ROUTING["eventType"] == "codestra.moneybee.account.provisioned"
 assert ROUTING["eventSchemaVersion"] == 1
 assert ROUTING["source"]["idempotencyKey"] == "idempotency_key"
 assert ROUTING["source"]["identityContract"] == "config/moneybee-backend-producer-identity.json"
 assert ROUTING["source"]["requiredAudience"] == "middleware-api"
 assert ROUTING["source"]["requiredScope"] == "moneybee.events.publish"
+assert ROUTING["source"]["canonicalEnvelope"] == "contracts/event-envelope.schema.json"
 assert ROUTING["authoritativeBoundaries"]["humanIdentityAuthority"] == "keycloak"
 assert ROUTING["authoritativeBoundaries"]["crossSystemMutationBoundary"] == "middleware"
 assert ROUTING["marketing"]["securityEmailPath"] == "prohibited"
 assert ROUTING["marketing"]["mauticSynchronousIdentityMail"] is False
+
+ownership = ROUTING["orchestrationOwnership"]
+crm = ownership["baseCrmProjection"]
+onboarding = ownership["borrowerOnboarding"]
+assert crm == {
+    "owner": "middleware",
+    "destination": "odoo-integration",
+    "command": "crm.contact.upsert.v1",
+    "n8nMustNotDuplicate": True,
+}
+assert onboarding["owner"] == "n8n"
+assert onboarding["trigger"] == "onboarding.started.v1"
+assert onboarding["mayRequestBaseCrmProjection"] is False
+assert set(onboarding["allowedResponsibilities"]) == {
+    "onboarding.tasks",
+    "document.followup",
+    "operations.escalation",
+    "marketing.consent.branch",
+}
 
 assert PRODUCER["clientId"] == "moneybee-backend"
 assert PRODUCER["grantType"] == "client_credentials"

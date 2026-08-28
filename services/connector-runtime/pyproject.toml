@@ -8,7 +8,6 @@ version = "1.0.0"
 description = "Production runtime for the Codestra Connector SDK"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-  "codestra-middleware-connector-sdk==1.0.0",
   "alembic==1.18.4",
   "fastapi==0.141.1",
   "httpx==0.28.1",

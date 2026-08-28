@@ -252,12 +252,8 @@ class WebhookProcessor:
             signature_version, signature = _signature_hex(
                 headers[policy.signature_header.lower()]
             )
-            timestamp_raw = headers[
-                policy.timestamp_header.lower()
-            ]
-            event_id = headers[
-                policy.event_id_header.lower()
-            ].strip()
+            timestamp_raw = headers[policy.timestamp_header.lower()]
+            event_id = headers[policy.event_id_header.lower()].strip()
         except KeyError as error:
             raise WebhookVerificationError(
                 f"required webhook header is missing: {error.args[0]}"
@@ -276,15 +272,9 @@ class WebhookProcessor:
                 "webhook timestamp is outside policy"
             )
         if _EVENT_ID.fullmatch(event_id) is None:
-            raise WebhookVerificationError(
-                "webhook event ID is invalid"
-            )
+            raise WebhookVerificationError("webhook event ID is invalid")
 
-        signed = (
-            str(timestamp).encode("ascii")
-            + b"."
-            + request.body
-        )
+        signed = str(timestamp).encode("ascii") + b"." + request.body
         expected_values = [
             hmac.new(secret, signed, hashlib.sha256).hexdigest()
             for secret in _secret_candidates(
@@ -294,19 +284,12 @@ class WebhookProcessor:
         ]
         verified = False
         for expected in expected_values:
-            verified = hmac.compare_digest(
-                expected,
-                signature,
-            ) or verified
+            verified = hmac.compare_digest(expected, signature) or verified
         if not verified:
-            raise WebhookVerificationError(
-                "webhook signature is invalid"
-            )
+            raise WebhookVerificationError("webhook signature is invalid")
 
         body_digest = hashlib.sha256(request.body).hexdigest()
-        replay_key = (
-            f"{connector_id}:{endpoint_key}:{event_id}"
-        )
+        replay_key = f"{connector_id}:{endpoint_key}:{event_id}"
         decision = self._replay_store.claim(
             replay_key,
             body_digest,
@@ -336,36 +319,29 @@ class WebhookProcessor:
         endpoint_key: str,
         request: WebhookRequest,
     ) -> WebhookProcessResult:
-        verified = self.verify(
-            connector_id,
-            endpoint_key,
-            request,
-        )
-        if verified.replay_decision is ReplayDecision.EXACT_REPLAY:
-            return WebhookProcessResult(
-                decision=ReplayDecision.EXACT_REPLAY,
-                verified=verified,
-                cloud_event=None,
-            )
-
+        verified = self.verify(connector_id, endpoint_key, request)
         record = self._registry.get(connector_id)
-        adapter = self._registry.adapter_factory(connector_id)(
-            record.manifest
-        )
+        adapter = self._registry.adapter_factory(connector_id)(record.manifest)
+
+        # Exact replays are normalized again rather than dropped. This makes a
+        # retry recoverable when the first delivery was authenticated and
+        # claimed but normalization or durable inbox persistence failed.
         event = adapter.normalize_webhook(verified)
         if event.event_id != verified.event_id:
             raise WebhookVerificationError(
                 "adapter changed the verified provider event ID"
             )
-        if not record.manifest.allows_event(event.event_type):
+        if not any(
+            policy.event_type == event.event_type
+            and policy.direction == "inbound"
+            for policy in record.manifest.event_policies
+        ):
             raise WebhookVerificationError(
-                "adapter emitted undeclared event type: "
+                "adapter emitted an undeclared inbound event type: "
                 f"{event.event_type}"
             )
         if (
-            _EXTERNAL_REFERENCE.fullmatch(
-                event.external_account_reference
-            )
+            _EXTERNAL_REFERENCE.fullmatch(event.external_account_reference)
             is None
         ):
             raise WebhookVerificationError(
@@ -386,14 +362,10 @@ class WebhookProcessor:
         except StandardsValidationError as error:
             raise WebhookVerificationError(str(error)) from error
 
-        secret_paths = forbidden_paths(
-            event.payload,
-            SECRET_KEY_NAMES,
-        )
+        secret_paths = forbidden_paths(event.payload, SECRET_KEY_NAMES)
         if secret_paths:
             raise WebhookVerificationError(
-                "normalized event payload contains forbidden secret "
-                "fields: "
+                "normalized event payload contains forbidden secret fields: "
                 + ", ".join(secret_paths)
             )
 
@@ -402,9 +374,7 @@ class WebhookProcessor:
             endpoint_key,
             event.external_account_reference,
         )
-        source = (
-            f"urn:codestra:connector:{connector_id}"
-        )
+        source = f"urn:codestra:connector:{connector_id}"
         validate_uri_reference(source, "CloudEvent source")
         extensions: dict[str, Any] = {
             "tenantid": tenant_id,
@@ -424,10 +394,7 @@ class WebhookProcessor:
             source=source,
             type=event.event_type,
             time=event.occurred_at,
-            subject=(
-                event.subject
-                or event.external_account_reference
-            ),
+            subject=event.subject or event.external_account_reference,
             datacontenttype="application/json",
             dataschema=(
                 "https://contracts.codestra.co/events/"
@@ -437,7 +404,7 @@ class WebhookProcessor:
             extensions=extensions,
         )
         return WebhookProcessResult(
-            decision=ReplayDecision.NEW,
+            decision=verified.replay_decision,
             verified=verified,
             cloud_event=cloud_event,
         )

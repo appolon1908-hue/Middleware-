@@ -51,7 +51,9 @@ Apply `migrations/0001_runtime.sql` before starting a non-test runtime.
 
 The same PostgreSQL transaction that accepts a new inbox event now creates its `nats-jetstream` outbox row. The store and worker implement `FOR UPDATE SKIP LOCKED`, bounded exponential retry, lease ownership, unknown-outcome quarantine, and dead-letter transition. JetStream publication uses a domain-separated `codestra.events.*` subject and a deterministic `Nats-Msg-Id`; the outbox is completed only after the server acknowledges the publish.
 
-`workers/run_outbox.py` registers only the NATS JetStream transport. Provider, Odoo, n8n, telephony, SMS, email, social, and crawler writes are not registered. Dispatch requires `SEND_EVENTS=true` and `OUTBOX_DISPATCH_ENABLED=true` together, a production-only `PRODUCTION_ACTIVATION_ID`, an exact immutable release identity, and a mounted NATS service credential. Staging remains no-effect.
+`workers/run_outbox.py` registers only the NATS JetStream transport. Provider, Odoo, n8n, telephony, SMS, email, social, and crawler writes are not registered. Dispatch requires `SEND_EVENTS=true`, `OUTBOX_DISPATCH_ENABLED=true`, and a non-disabled `NATS_DISPATCH_MODE` together. Production additionally requires `PRODUCTION_ACTIVATION_ID`, an exact immutable release identity, TLS, and a mounted NATS service credential.
+
+Staging may exercise the event plane only with `NATS_DISPATCH_MODE=isolated`, stream `CODESTRA_STAGING_EVENTS`, and subjects below `codestra.staging.events.*`. It cannot use the production stream or subject namespace, and provider/business delivery flags remain disabled. `NATS_ALLOW_INSECURE_TEST_CONNECTION` exists only for a disposable localhost server in test/development; staging and production require TLS and a mounted service credential.
 
 ## Fail-closed runtime
 

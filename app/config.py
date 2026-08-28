@@ -90,6 +90,8 @@ class Settings:
     nats_stream: str
     nats_subject_prefix: str
     nats_credentials_file: Path | None
+    nats_dispatch_mode: str
+    nats_allow_insecure_test_connection: bool
     production_activation_id: str | None
     production_dialing: str
     allow_in_memory_storage: bool
@@ -174,6 +176,15 @@ class Settings:
                 if source.get("NATS_CREDS_FILE")
                 else None
             ),
+            nats_dispatch_mode=source.get(
+                "NATS_DISPATCH_MODE",
+                "disabled",
+            ).strip().lower(),
+            nats_allow_insecure_test_connection=_bool(
+                source,
+                "NATS_ALLOW_INSECURE_TEST_CONNECTION",
+                False,
+            ),
             production_activation_id=(
                 source.get("PRODUCTION_ACTIVATION_ID", "").strip() or None
             ),
@@ -232,26 +243,40 @@ class Settings:
             raise ConfigurationError(
                 "PRODUCTION_DIALING must remain DISABLED"
             )
-        if self.outbox_dispatch_enabled != ("SEND_EVENTS" in enabled):
+        if self.nats_dispatch_mode not in {"disabled", "isolated", "production"}:
             raise ConfigurationError(
-                "OUTBOX_DISPATCH_ENABLED and SEND_EVENTS must be enabled or disabled together"
+                "NATS_DISPATCH_MODE must be disabled, isolated, or production"
+            )
+        send_events = "SEND_EVENTS" in enabled
+        dispatch_configured = self.nats_dispatch_mode != "disabled"
+        if not (
+            self.outbox_dispatch_enabled == send_events == dispatch_configured
+        ):
+            raise ConfigurationError(
+                "OUTBOX_DISPATCH_ENABLED, SEND_EVENTS, and NATS_DISPATCH_MODE "
+                "must be enabled or disabled together"
             )
         if self.outbox_dispatch_enabled:
-            if self.app_env != "production":
+            if self.nats_dispatch_mode == "production" and self.app_env != "production":
                 raise ConfigurationError(
-                    "JetStream dispatch is allowed only after production authorization"
+                    "production JetStream dispatch requires APP_ENV=production"
                 )
-            if not self.production_activation_id or not re.fullmatch(
-                r"[A-Z0-9][A-Z0-9._/-]{7,127}",
-                self.production_activation_id,
-            ):
+            if self.nats_dispatch_mode == "isolated" and self.app_env == "production":
                 raise ConfigurationError(
-                    "PRODUCTION_ACTIVATION_ID must identify the approved activation"
+                    "isolated JetStream dispatch is forbidden in production"
                 )
             parsed_nats = urlparse(self.nats_url or "")
-            if parsed_nats.scheme != "tls" or not parsed_nats.hostname:
+            insecure_local_test = (
+                self.nats_allow_insecure_test_connection
+                and self.app_env in {"test", "development"}
+                and parsed_nats.scheme == "nats"
+                and parsed_nats.hostname in {"127.0.0.1", "localhost"}
+            )
+            if not insecure_local_test and (
+                parsed_nats.scheme != "tls" or not parsed_nats.hostname
+            ):
                 raise ConfigurationError(
-                    "NATS_URL must use tls:// with a hostname when dispatch is enabled"
+                    "NATS_URL must use tls:// with a hostname outside disposable tests"
                 )
             if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", self.nats_stream):
                 raise ConfigurationError("NATS_STREAM is invalid")
@@ -260,13 +285,47 @@ class Settings:
                 self.nats_subject_prefix,
             ):
                 raise ConfigurationError("NATS_SUBJECT_PREFIX is invalid")
-            if (
-                self.nats_credentials_file is None
-                or not _is_absolute_mount_path(self.nats_credentials_file)
-            ):
+            if not insecure_local_test and (
+                    self.nats_credentials_file is None
+                    or not _is_absolute_mount_path(self.nats_credentials_file)
+                ):
                 raise ConfigurationError(
                     "NATS_CREDS_FILE must be an absolute mounted credential path"
                 )
+            if self.nats_dispatch_mode == "isolated":
+                expected_environment = (
+                    "staging" if self.app_env == "staging" else "test"
+                )
+                expected_stream = f"CODESTRA_{expected_environment.upper()}_EVENTS"
+                expected_prefix = f"codestra.{expected_environment}.events"
+                if self.nats_stream != expected_stream:
+                    raise ConfigurationError(
+                        f"isolated JetStream must use NATS_STREAM={expected_stream}"
+                    )
+                if self.nats_subject_prefix != expected_prefix:
+                    raise ConfigurationError(
+                        "isolated JetStream subject prefix does not match the environment"
+                    )
+            else:
+                if self.nats_stream != "CODESTRA_EVENTS":
+                    raise ConfigurationError(
+                        "production JetStream must use NATS_STREAM=CODESTRA_EVENTS"
+                    )
+                if self.nats_subject_prefix != "codestra.events":
+                    raise ConfigurationError(
+                        "production JetStream must use NATS_SUBJECT_PREFIX=codestra.events"
+                    )
+                if not self.production_activation_id or not re.fullmatch(
+                    r"[A-Z0-9][A-Z0-9._/-]{7,127}",
+                    self.production_activation_id,
+                ):
+                    raise ConfigurationError(
+                        "PRODUCTION_ACTIVATION_ID must identify the approved activation"
+                    )
+        elif self.nats_allow_insecure_test_connection:
+            raise ConfigurationError(
+                "NATS_ALLOW_INSECURE_TEST_CONNECTION requires isolated dispatch"
+            )
         if self.allow_in_memory_storage:
             if self.app_env not in {"test", "development"}:
                 raise ConfigurationError(

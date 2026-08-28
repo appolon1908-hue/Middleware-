@@ -123,6 +123,7 @@ def test_production_jetstream_dispatch_requires_approved_identity() -> None:
         "NATS_STREAM": "CODESTRA_EVENTS",
         "NATS_SUBJECT_PREFIX": "codestra.events",
         "NATS_CREDS_FILE": "/run/secrets/middleware-nats.creds",
+        "NATS_DISPATCH_MODE": "production",
         "PRODUCTION_ACTIVATION_ID": "CHG-20260828-EVENTS",
         "SEND_EVENTS": "true",
         "OUTBOX_DISPATCH_ENABLED": "true",
@@ -140,6 +141,54 @@ def test_production_jetstream_dispatch_requires_approved_identity() -> None:
 
     assert settings.outbox_dispatch_enabled is True
     assert settings.production_activation_id == "CHG-20260828-EVENTS"
+
+
+def test_staging_uses_an_isolated_jetstream_namespace() -> None:
+    env = staging_env()
+    env.update(
+        {
+            "NATS_URL": "tls://nats-staging.invalid:4222",
+            "NATS_STREAM": "CODESTRA_STAGING_EVENTS",
+            "NATS_SUBJECT_PREFIX": "codestra.staging.events",
+            "NATS_CREDS_FILE": "/run/secrets/middleware-staging-nats.creds",
+            "NATS_DISPATCH_MODE": "isolated",
+            "SEND_EVENTS": "true",
+            "OUTBOX_DISPATCH_ENABLED": "true",
+        }
+    )
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+
+    settings = Settings.from_env(env)
+
+    assert settings.nats_dispatch_mode == "isolated"
+    assert settings.nats_subject_prefix == "codestra.staging.events"
+
+
+def test_staging_rejects_production_jetstream_namespace() -> None:
+    env = staging_env()
+    env.update(
+        {
+            "NATS_URL": "tls://nats-staging.invalid:4222",
+            "NATS_STREAM": "CODESTRA_EVENTS",
+            "NATS_SUBJECT_PREFIX": "codestra.events",
+            "NATS_CREDS_FILE": "/run/secrets/middleware-staging-nats.creds",
+            "NATS_DISPATCH_MODE": "isolated",
+            "SEND_EVENTS": "true",
+            "OUTBOX_DISPATCH_ENABLED": "true",
+        }
+    )
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(env)
 
 
 def test_staging_cannot_use_in_memory_storage() -> None:

@@ -37,22 +37,32 @@ class NatsJetStreamPublisher:
 
     @classmethod
     async def connect(cls, settings: Settings) -> "NatsJetStreamPublisher":
-        if settings.nats_url is None or settings.nats_credentials_file is None:
+        if settings.nats_url is None:
             raise NatsTransportError("NATS runtime configuration is incomplete")
 
         import nats
 
+        connect_options: dict[str, Any] = {}
+        if settings.nats_credentials_file is not None:
+            connect_options["user_credentials"] = str(
+                settings.nats_credentials_file
+            )
         client = await nats.connect(
             servers=[settings.nats_url],
-            user_credentials=str(settings.nats_credentials_file),
             connect_timeout=5,
             max_reconnect_attempts=-1,
             reconnect_time_wait=1,
             name="codestra-middleware-worker",
+            **connect_options,
         )
         jetstream = client.jetstream()
         try:
-            await jetstream.stream_info(settings.nats_stream)
+            info = await jetstream.stream_info(settings.nats_stream)
+            required_subject = f"{settings.nats_subject_prefix}.>"
+            if info.config.subjects != [required_subject]:
+                raise NatsTransportError(
+                    "JetStream subjects must exactly match the configured domain"
+                )
         except Exception:
             await client.close()
             raise
@@ -98,12 +108,16 @@ class NatsJetStreamPublisher:
             headers["X-Causation-ID"] = causation_id
 
         # Completion is allowed only after the server returns a JetStream ack.
-        await self.jetstream.publish(
+        ack = await self.jetstream.publish(
             subject,
             body,
             headers=headers,
             timeout=10,
         )
+        if getattr(ack, "stream", None) != self.stream:
+            raise NatsTransportError(
+                "JetStream acknowledgement came from an unexpected stream"
+            )
 
     async def close(self) -> None:
         if self.client is not None and not self.client.is_closed:

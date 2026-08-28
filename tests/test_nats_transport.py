@@ -32,7 +32,7 @@ class FakeJetStream:
         timeout: int,
     ) -> object:
         self.calls.append((subject, body, headers, timeout))
-        return object()
+        return type("Ack", (), {"stream": "CODESTRA_EVENTS"})()
 
 
 def record(**overrides: object) -> OutboxRecord:

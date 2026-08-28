@@ -83,3 +83,23 @@ jobs:
           DATABASE_URL: postgresql://middleware:middleware_ci_only@127.0.0.1:5432/middleware_test_runtime
           REDIS_URL: redis://127.0.0.1:6379/15
         run: bash scripts/integration_ci.sh
+
+  nats-jetstream-integration:
+    name: Disposable NATS JetStream integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Exercise isolated JetStream delivery and recovery
+        run: bash scripts/nats_integration_ci.sh

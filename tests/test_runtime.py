@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+from jsonschema import Draft202012Validator
 
 from app.contracts import ROUTE_BY_PATH, WEBHOOK_ROUTES
 from app.main import create_app
@@ -264,6 +267,77 @@ def test_health_ready_version(test_settings, runtime) -> None:
         assert version["environment"] == "test"
         assert version["runtime_profile_id"] == "local-unlocked"
         assert version["schema_head"] == "0003_immutable_event_ledger"
+
+
+def test_runtime_safety_readback_is_authenticated_and_schema_valid(
+    test_settings,
+    runtime,
+) -> None:
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        denied = client.get("/v1/runtime/safety")
+        accepted = client.get(
+            "/v1/runtime/safety",
+            headers={
+                "Authorization": (
+                    "Bearer valid-monitoring-readonly-health.read"
+                )
+            },
+        )
+
+    assert denied.status_code == 401
+    assert accepted.status_code == 200
+    value = accepted.json()
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts"
+            / "runtime-safety-readback.v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    Draft202012Validator(schema).validate(value)
+    assert value["environment"] == "test"
+    assert value["provider_effects_disabled"] is True
+    assert value["all_external_effects_disabled"] is True
+    assert value["staging_safe"] is False
+    assert "test-secret-value" not in accepted.text
+
+
+def test_runtime_safety_readback_proves_fail_closed_staging(
+    test_settings,
+    runtime,
+) -> None:
+    staging = replace(
+        test_settings,
+        app_env="staging",
+        runtime_profile_id="codestra-middleware-staging-v1",
+        source_sha="a" * 40,
+        image_digest="sha256:" + ("b" * 64),
+        build_time="2026-08-28T12:00:00Z",
+        allow_in_memory_storage=False,
+    )
+    runtime.settings = staging
+    app = create_app(settings=staging, runtime=runtime)
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/runtime/safety",
+            headers={
+                "Authorization": (
+                    "Bearer valid-monitoring-readonly-health.read"
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    value = response.json()
+    assert value["staging_safe"] is True
+    assert value["dispatch"] == {
+        "outbox_enabled": False,
+        "nats_mode": "disabled",
+        "temporal_worker_mode": "disabled",
+    }
+    assert value["production_activation_configured"] is False
+    assert not any(value["external_effects"].values())
 
 
 def test_readiness_reports_named_failure_without_dependency_details(

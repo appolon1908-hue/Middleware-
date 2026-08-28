@@ -17,7 +17,11 @@ REQUIRED = (
     "requirements-test.in",
     "requirements-test.txt",
     "contracts/release-manifest.v1.schema.json",
+    "contracts/runtime-safety-readback.v1.schema.json",
     "scripts/release_manifest.py",
+    "scripts/staging_synthetic_acceptance.py",
+    "scripts/synthetic_acceptance_ci.sh",
+    "tests/integration/test_synthetic_acceptance.py",
     ".github/workflows/release.yml",
 )
 
@@ -145,6 +149,18 @@ def main() -> int:
         middleware_ci,
         "redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
         "digest-pinned Redis CI service",
+        errors,
+    )
+    require(
+        middleware_ci,
+        "synthetic-acceptance-e2e:",
+        "combined synthetic acceptance job",
+        errors,
+    )
+    require(
+        middleware_ci,
+        "bash scripts/synthetic_acceptance_ci.sh",
+        "combined synthetic acceptance runner",
         errors,
     )
 

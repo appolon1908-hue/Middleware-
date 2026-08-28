@@ -39,6 +39,10 @@ Staging and production use separate, startup-enforced resource profiles while
 promoting the same image digest. See
 [`docs/RUNTIME-ENVIRONMENT-LOCKS.md`](docs/RUNTIME-ENVIRONMENT-LOCKS.md).
 
+Promotion also requires effective runtime safety read-back and a synthetic
+no-provider-effect acceptance journey. See
+[`docs/SYNTHETIC-STAGING-ACCEPTANCE.md`](docs/SYNTHETIC-STAGING-ACCEPTANCE.md).
+
 Critical Temporal workflows are implemented for reconciliation, delayed callbacks, provisioning with compensation, and operator-approved dead-letter recovery. See [`docs/TEMPORAL-WORKFLOWS.md`](docs/TEMPORAL-WORKFLOWS.md).
 
 The sole durable event and command shapes live under `contracts/platform`; the

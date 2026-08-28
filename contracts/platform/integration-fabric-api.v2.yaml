@@ -7,6 +7,20 @@ servers:
   - url: https://api.codestra.co
     description: Public gateway; runtime activation is outside this contract.
 paths:
+  /v1/runtime/safety:
+    get:
+      operationId: getRuntimeSafety
+      description: Read effective non-secret safety controls from the running process.
+      security: [{oauth2: [health.read]}]
+      responses:
+        '200':
+          description: Effective runtime safety controls and immutable release identity
+          content:
+            application/json:
+              schema:
+                $ref: '../runtime-safety-readback.v1.schema.json'
+        '401': {description: Monitoring identity is missing or invalid}
+        '403': {description: Monitoring identity lacks health.read}
   /v1/commands:
     post:
       operationId: submitCommand
@@ -145,6 +159,7 @@ components:
             integration.connection.write: Create or change connection metadata
             integration.connection.test: Request a no-effect connection test
             operation.read: Read operation state
+            health.read: Read health and non-secret runtime safety state
             middleware.request.forward: Submit a governed command
             middleware.status.read: Read an authorized command operation
             operations.replay.request: Request protected dead-letter replay

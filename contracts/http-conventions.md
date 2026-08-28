@@ -102,6 +102,7 @@ Every deployable middleware service exposes or provides equivalent authenticated
 /ready    required local dependencies and startup checks are ready
 /version  exact source SHA, immutable image digest, schema head, and build time
 /metrics  authenticated or private operational metrics
+/v1/runtime/safety  authenticated effective non-secret safety controls
 ```
 
 Readiness must not report success when required database migrations, identity configuration, or mandatory safety controls are missing.

@@ -5,10 +5,12 @@ This branch converts the reviewed middleware ingress contracts into executable F
 ## Runtime surface
 
 Health:
+
 - `GET /health`
 - `GET /ready`
 - `GET /version`
 - `GET /metrics` (Keycloak `monitoring-readonly` client with `metrics.read`)
+- `GET /v1/runtime/safety` (Keycloak `monitoring-readonly` client with `health.read`)
 
 Authenticated signed ingress:
 - `POST /api/v1/odoo/events`
@@ -35,6 +37,12 @@ authentication-denial, readiness, process-start, and release-identity series. Th
 endpoint is not anonymous: the caller must be the existing `monitoring-readonly`
 service identity and hold `metrics.read`. Metric labels use route templates and do
 not include tenant, event, idempotency, correlation, or payload values.
+
+`/v1/runtime/safety` requires the monitoring identity's `health.read` scope and
+returns only effective non-secret controls from the running process. The
+staging acceptance gate validates this response against
+`contracts/runtime-safety-readback.v1.schema.json` before it submits a
+synthetic event.
 
 Every HTTP response receives a validated or server-generated `X-Correlation-ID`.
 A valid W3C `traceparent` is propagated; malformed values are dropped. Completed

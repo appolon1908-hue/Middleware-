@@ -19,6 +19,7 @@ from .observability import (
     safe_traceparent,
 )
 from .runtime import Runtime, build_runtime
+from .runtime_safety import runtime_safety_readback
 from .security import SecurityError
 from .service import IngressError, PayloadTooLargeError, accept_webhook
 from .storage import StorageError
@@ -252,6 +253,15 @@ def create_app(
             "schema_head": resolved.schema_head,
             "build_time": resolved.build_time,
         }
+
+    @app.get("/v1/runtime/safety")
+    async def runtime_safety(request: Request) -> dict[str, object]:
+        await request.app.state.runtime.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id="monitoring-readonly",
+            required_scope="health.read",
+        )
+        return runtime_safety_readback(request.app.state.runtime.settings)
 
     @app.post("/v1/commands")
     async def submit_command(

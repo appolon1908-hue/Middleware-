@@ -1,0 +1,38 @@
+services:
+  reverse-proxy:
+    volumes:
+      - /opt/codestra/middleware/deploy/internal-n8n/Caddyfile:/etc/caddy/internal-integration.Caddyfile:ro
+      - /etc/codestra/pki/internal-integration/n8n.crt:/run/secrets/n8n_internal_tls_cert:ro
+      - /etc/codestra/pki/internal-integration/n8n.key:/run/secrets/n8n_internal_tls_key:ro
+      - /etc/codestra/pki/internal-integration/odoo.crt:/run/secrets/odoo_internal_tls_cert:ro
+      - /etc/codestra/pki/internal-integration/odoo.key:/run/secrets/odoo_internal_tls_key:ro
+    networks:
+      codestra-internal-integration:
+        aliases:
+          - n8n.internal.codestra.agency
+          - odoo.internal.codestra.agency
+
+  n8n:
+    networks:
+      - codestra-internal-integration
+
+  odoo:
+    environment:
+      CODESTRA_ODOO_KEYCLOAK_ISSUER: https://auth.codestra.co/realms/codestra
+      CODESTRA_ODOO_KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/certs
+      CODESTRA_ODOO_INTEGRATION_AUDIENCE: codestra-odoo
+      CODESTRA_ODOO_INTEGRATION_SERVICE_ALLOWLIST: codestra-middleware-odoo-results
+    volumes:
+      - /opt/codestra/releases/odoo-addons/5564aec351510008ba211779a798be4afaa2cfd5/call_center_campaign:/mnt/call-center-addons/call_center_campaign:ro
+      - /opt/codestra/releases/odoo-addons/5564aec351510008ba211779a798be4afaa2cfd5/call_center_campaign:/mnt/extra-addons/call_center_campaign:ro
+    networks:
+      - codestra-internal-integration
+      - codestra-identity-service
+
+networks:
+  codestra-internal-integration:
+    name: codestra-internal-integration
+    external: true
+  codestra-identity-service:
+    name: codestra-identity_identity_service
+    external: true

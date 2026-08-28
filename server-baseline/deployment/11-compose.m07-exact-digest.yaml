@@ -1,0 +1,3 @@
+services:
+  middleware-webphone-session-issuer:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:48dbb4201b4cf8abee1600936a84da52a92969ab124fb44a0007059e75d57e85

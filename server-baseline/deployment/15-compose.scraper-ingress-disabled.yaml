@@ -1,0 +1,29 @@
+services:
+  middleware-integration-api:
+    image: codestra/middleware@sha256:dc97c48f3a29690635bf28de9f3d2562fac2dadb74b8744ea6e99c1bd4ffcda1
+    environment:
+      SCRAPER_RESULT_INGEST_ENABLED: "false"
+      SCRAPER_MIDDLEWARE_DELIVERY_ENABLED: "false"
+      SALES_SCRAPER_IDENTITY: "codestra-scraper-production"
+      SALES_SCRAPER_TENANT_ID: "TENANT-SYNTHETIC"
+      SALES_SCRAPER_CAMPAIGN_ALLOWLIST: "TEST_SYN"
+      SALES_SCRAPER_HMAC_KEY_IDS: "scraper-prod-20260813-01"
+      SALES_SCRAPER_HMAC_KEYS_DIRECTORY: "/run/secrets/scraper-ingress/hmac-keys"
+      SALES_SCRAPER_JWT_ISSUER: "https://auth.codestra.co/realms/codestra"
+      SALES_SCRAPER_JWT_AUDIENCE: "codestra-scraper-ingress"
+      SALES_SCRAPER_JWT_JWKS_URL: "http://keycloak:8080/realms/codestra/protocol/openid-connect/certs"
+      SALES_SCRAPER_JWT_AUTHORIZED_PARTIES: "codestra-scraper-production"
+      SALES_SCRAPER_JWT_REQUIRED_SCOPE: "scraper.events.write"
+      SALES_SCRAPER_JWT_REQUIRED_ROLE: "scraper-publisher"
+      LIVE_WRITES_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      N8N_DELIVERY_ENABLED: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      OUTBOX_WORKER_ENABLED: "false"
+      CALLBACK_DISPATCH_ENABLED: "false"
+    volumes:
+      - type: bind
+        source: /etc/codestra/secrets/scraper-ingress/hmac-keys
+        target: /run/secrets/scraper-ingress/hmac-keys
+        read_only: true

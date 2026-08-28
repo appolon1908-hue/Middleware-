@@ -1,0 +1,83 @@
+services:
+  middleware-scraper-odoo-delivery-worker:
+    image: codestra/middleware@sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492
+    command: [python, -m, app.entrypoints.scraper_odoo_delivery_worker]
+    user: "10001:10001"
+    group_add: ["3999"]
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    environment:
+      SERVICE_NAME: middleware-scraper-odoo-delivery
+      ENVIRONMENT: production
+      PORT: "8095"
+      LOG_LEVEL: INFO
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      SCRAPER_MIDDLEWARE_DELIVERY_ENABLED: "false"
+      SCRAPER_RESULT_INGEST_ENABLED: "false"
+      LIVE_WRITES_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      N8N_DELIVERY_ENABLED: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      N8N_PRODUCTION_WORKFLOWS_ENABLED: "false"
+      N8N_RUNTIME_ENABLED: "false"
+      REDIS_RUNTIME_ENABLED: "false"
+      OUTBOX_WORKER_ENABLED: "false"
+      CALLBACK_DISPATCH_ENABLED: "false"
+      AUTOMATION_ACTIONS_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+      VICIDIAL_PUBLICATION_ENABLED: "false"
+      VICIDIAL_WRITE_ENABLED: "false"
+      VICIDIAL_WRITES_ENABLED: "false"
+      OUTREACH_ENABLED: "false"
+      MESSAGING_ENABLED: "false"
+      ALLOW_LIVE_EMAIL: "false"
+      ALLOW_LIVE_SMS: "false"
+      ENABLE_EXTERNAL_DELIVERY: "false"
+      SEND_EVENTS: "false"
+      BROAD_EVENT_DELIVERY_ENABLED: "false"
+      PRODUCTION_CALLBACKS_ENABLED: "false"
+      TRANSFERS_ENABLED: "false"
+      SOCIAL_PUBLISH_ENABLED: "false"
+      POSTIZ_PUBLISH_ENABLED: "false"
+      ALLOW_NON_TEST_CAMPAIGNS: "false"
+      ALLOW_CAMPAIGN_ACTIVATION: "false"
+    volumes:
+      - type: bind
+        source: /etc/codestra/secrets/middleware-runtime/middleware-integration-api-database-url
+        target: /run/secrets/database_url
+        read_only: true
+      - type: bind
+        source: /etc/codestra/secrets/codestra-compose/redis_url
+        target: /run/secrets/redis_url
+        read_only: true
+    expose: ["8095"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8095/metrics', timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+    cpus: 0.50
+    mem_limit: 512m
+    pids_limit: 128
+    stop_grace_period: 30s
+    networks: [backend]

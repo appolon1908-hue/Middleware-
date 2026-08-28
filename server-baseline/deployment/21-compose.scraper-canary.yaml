@@ -1,0 +1,57 @@
+services:
+  middleware-staging:
+    image: codestra/middleware:scraper-protected-main-4780bd72
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/scraper_canary_hmac:/run/secrets/scraper-canary-hmac:ro
+    environment: &scraper-canary-environment
+      ENVIRONMENT: staging
+      SALES_LEAD_INTAKE_ENABLED: "true"
+      SALES_IDENTITY_RESOLUTION_ENABLED: "true"
+      SCRAPER_RESULT_INGEST_ENABLED: "false"
+      SCRAPER_MIDDLEWARE_DELIVERY_ENABLED: "true"
+      SALES_SCRAPER_IDENTITY: scraper-canary-01
+      SALES_SCRAPER_TENANT_ID: TENANT-SYNTHETIC
+      SALES_SCRAPER_CAMPAIGN_ALLOWLIST: TEST_SYN
+      SALES_SCRAPER_HMAC_SECRET_FILE: /run/secrets/scraper-canary-hmac
+      SCRAPER_ODOO_APPLY_URL: http://odoo-scraper-canary:8069
+      SCRAPER_ODOO_COMPANY_KEY: COMPANY-1
+      SCRAPER_ODOO_BUSINESS_UNIT_KEY: web-mobile-ai
+      LEAD_AUTOMATION_HMAC_SECRET: ${LEAD_AUTOMATION_HMAC_SECRET:?required}
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_LEAD_WRITE_ENABLED: "false"
+      VICIDIAL_LEAD_WRITE_ENABLED: "false"
+      N8N_LEAD_DELIVERY_ENABLED: "false"
+      POSTLY_LEAD_DELIVERY_ENABLED: "false"
+      LEAD_OUTREACH_ENABLED: "false"
+      OUTREACH_ENABLED: "false"
+
+  scraper-odoo-delivery-worker:
+    image: codestra/middleware:scraper-protected-main-4780bd72
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    pids_limit: 128
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    environment:
+      <<: *scraper-canary-environment
+      SERVICE_NAME: middleware-scraper-odoo-delivery
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/scraper_canary_hmac:/run/secrets/scraper-canary-hmac:ro
+    command: ["python", "-m", "app.entrypoints.scraper_odoo_delivery_worker"]
+    depends_on:
+      middleware-staging:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+      - staging_edge
+    labels:
+      codestra.environment: STAGING
+      codestra.isolation: scraper-odoo-canary-only

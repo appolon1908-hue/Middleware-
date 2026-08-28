@@ -1,0 +1,67 @@
+services:
+  odoo:
+    volumes:
+      - /home/codestra-admin/releases/odoo-addons-9bb4583a39965d1f228100ba41ddec1aa216cf71/codestra_appointments:/mnt/extra-addons/codestra_appointments:ro
+
+  middleware-integration-api:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.integration_api"]
+    environment:
+      CALLBACK_TEST_SYN_ENABLED: "true"
+      CALLBACK_ALLOWED_TENANT: "COD"
+      CALLBACK_ALLOWED_CAMPAIGN: "TEST_SYN"
+      CALLBACK_JWT_ISSUER: "https://auth.codestra.co/realms/codestra"
+      CALLBACK_JWT_AUDIENCE: "codestra-callback-api"
+      CALLBACK_JWT_JWKS_URL: "http://keycloak:8080/realms/codestra/protocol/openid-connect/certs"
+      CALLBACK_JWT_AUTHORIZED_PARTIES: "codestra-agent-desktop,codestra-agent-auth-gateway"
+      CALLBACK_SCHEDULER_ENABLED: "false"
+      CALLBACK_WEBSOCKET_DELIVERY_ENABLED: "false"
+      CALLBACK_EMAIL_COMMAND_ENABLED: "false"
+      CALLBACK_DELIVERY_ENABLED: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      ALLOW_LIVE_EMAIL: "false"
+      LIVE_PSTN_DIALING: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      ODOO_RESULT_DELIVERY_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+
+  middleware-scheduler:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.scheduler"]
+    environment:
+      CALLBACK_TEST_SYN_ENABLED: "true"
+      CALLBACK_ALLOWED_TENANT: "COD"
+      CALLBACK_ALLOWED_CAMPAIGN: "TEST_SYN"
+      CALLBACK_SCHEDULER_ENABLED: "true"
+      CALLBACK_EMAIL_COMMAND_ENABLED: "false"
+      CALLBACK_DELIVERY_ENABLED: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      ALLOW_LIVE_EMAIL: "false"
+      LIVE_PSTN_DIALING: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      ODOO_RESULT_DELIVERY_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+
+  middleware-notification-worker:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.notification_worker"]
+    environment:
+      CALLBACK_TEST_SYN_ENABLED: "true"
+      CALLBACK_ALLOWED_TENANT: "COD"
+      CALLBACK_ALLOWED_CAMPAIGN: "TEST_SYN"
+      CALLBACK_WEBSOCKET_DELIVERY_ENABLED: "true"
+      CALLBACK_WEBSOCKET_GATEWAY_URL: "http://gateway:8080/internal/v1/realtime/events"
+      CALLBACK_WEBSOCKET_TOKEN_FILE: ${CALLBACK_WEBSOCKET_TOKEN_FILE:?required}
+      CALLBACK_EMAIL_COMMAND_ENABLED: "false"
+      CALLBACK_DELIVERY_ENABLED: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      ALLOW_LIVE_EMAIL: "false"
+      LIVE_PSTN_DIALING: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      ODOO_RESULT_DELIVERY_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+    volumes:
+      - /etc/codestra/secrets/websocket-gateway/internal_token:/run/secrets/callback_websocket_token:ro

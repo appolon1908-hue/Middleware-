@@ -1,0 +1,55 @@
+x-live-delivery-safety: &live-delivery-safety
+  environment:
+    LIVE_SMS_DELIVERY: "false"
+    LIVE_EMAIL_DELIVERY: "false"
+    LIVE_PSTN_DIALING: "false"
+    ENABLE_EXTERNAL_DELIVERY: "false"
+    CALLBACK_DISPATCH: "false"
+    ENABLE_VICIDIAL_WRITES: "false"
+    LIVE_WRITE: "false"
+    ODOO_WRITE: "false"
+    PRODUCTION_DIALING: "false"
+    LIVE_CALL_CONTROL: "false"
+    GENERAL_AI_DIALING: "false"
+  volumes:
+    - /opt/codestra/safety/live-delivery-admission.sh:/usr/local/bin/live-delivery-admission:ro
+  entrypoint: ["/usr/local/bin/live-delivery-admission"]
+
+services:
+  middleware:
+    <<: *live-delivery-safety
+    command: ["python", "-m", "app.entrypoints.integration_api"]
+  middleware-integration-api:
+    <<: *live-delivery-safety
+  middleware-event-gateway:
+    <<: *live-delivery-safety
+  middleware-evidence-runner:
+    <<: *live-delivery-safety
+  middleware-policy-engine:
+    <<: *live-delivery-safety
+  middleware-sync-worker:
+    <<: *live-delivery-safety
+  middleware-notification-worker:
+    <<: *live-delivery-safety
+  middleware-odoo-result-worker:
+    <<: *live-delivery-safety
+  middleware-postly-polling-worker:
+    <<: *live-delivery-safety
+  middleware-n8n-runtime-worker:
+    <<: *live-delivery-safety
+  middleware-social-n8n-delivery-worker:
+    <<: *live-delivery-safety
+  middleware-telephony-provisioning:
+    <<: *live-delivery-safety
+  middleware-vicidial-adapter:
+    <<: *live-delivery-safety
+  middleware-pjsip-adapter:
+    <<: *live-delivery-safety
+  middleware-reconciliation-worker:
+    <<: *live-delivery-safety
+  middleware-scheduler:
+    <<: *live-delivery-safety
+  middleware-extension-allocator:
+    <<: *live-delivery-safety
+  middleware-webphone-session-issuer:
+    <<: *live-delivery-safety

@@ -1,0 +1,106 @@
+[
+  {
+    "source_path": "/home/codestra-admin/releases/callback-production-20260822.override.yaml",
+    "snapshot_path": "server-baseline/deployment/01-callback-production-20260822.override.yaml"
+  },
+  {
+    "source_path": "/home/codestra-admin/releases/campaign-crm-middleware-d30babd.override.yaml",
+    "snapshot_path": "server-baseline/deployment/02-campaign-crm-middleware-d30babd.override.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.breero-worker-a9e890c.yaml",
+    "snapshot_path": "server-baseline/deployment/03-compose.breero-worker-a9e890c.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.external-webhook.yaml",
+    "snapshot_path": "server-baseline/deployment/04-compose.external-webhook.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.final-production-trust.yaml",
+    "snapshot_path": "server-baseline/deployment/05-compose.final-production-trust.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.health-contract-remediation.yaml",
+    "snapshot_path": "server-baseline/deployment/06-compose.health-contract-remediation.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.live-delivery-breero.yaml",
+    "snapshot_path": "server-baseline/deployment/07-compose.live-delivery-breero.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.live-delivery-external-webhook.yaml",
+    "snapshot_path": "server-baseline/deployment/08-compose.live-delivery-external-webhook.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.live-delivery-safety.yaml",
+    "snapshot_path": "server-baseline/deployment/09-compose.live-delivery-safety.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.live-delivery-scraper.yaml",
+    "snapshot_path": "server-baseline/deployment/10-compose.live-delivery-scraper.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.m07-exact-digest.yaml",
+    "snapshot_path": "server-baseline/deployment/11-compose.m07-exact-digest.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.middleware-runtime.yaml",
+    "snapshot_path": "server-baseline/deployment/12-compose.middleware-runtime.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.phase-n2-activation.yaml",
+    "snapshot_path": "server-baseline/deployment/13-compose.phase-n2-activation.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.schema2-recovery-20260812.yaml",
+    "snapshot_path": "server-baseline/deployment/14-compose.schema2-recovery-20260812.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.scraper-ingress-disabled.yaml",
+    "snapshot_path": "server-baseline/deployment/15-compose.scraper-ingress-disabled.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.scraper-monitoring-worker-disabled.yaml",
+    "snapshot_path": "server-baseline/deployment/16-compose.scraper-monitoring-worker-disabled.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.server-a-readiness-5bb5a048.yaml",
+    "snapshot_path": "server-baseline/deployment/17-compose.server-a-readiness-5bb5a048.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.webrtc-6101-controlled.yaml",
+    "snapshot_path": "server-baseline/deployment/18-compose.webrtc-6101-controlled.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/compose/compose.yaml",
+    "snapshot_path": "server-baseline/deployment/19-compose.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/middleware-staging/callback-release-031447a.override.yaml",
+    "snapshot_path": "server-baseline/deployment/20-callback-release-031447a.override.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/middleware-staging/compose.scraper-canary.yaml",
+    "snapshot_path": "server-baseline/deployment/21-compose.scraper-canary.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/middleware-staging/compose.yaml",
+    "snapshot_path": "server-baseline/deployment/22-compose.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/middleware/deploy/compose.campaign-crm-d30babd.yaml",
+    "snapshot_path": "server-baseline/deployment/23-compose.campaign-crm-d30babd.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/middleware/deploy/compose.runtime.yaml",
+    "snapshot_path": "server-baseline/deployment/24-compose.runtime.yaml"
+  },
+  {
+    "source_path": "/opt/codestra/releases/middleware-51416422/deploy/readiness/compose.private-vicidial-ingress.yaml",
+    "snapshot_path": "server-baseline/deployment/25-compose.private-vicidial-ingress.yaml"
+  },
+  {
+    "source_path": "/tmp/worker-recreate-safety.yaml",
+    "snapshot_path": "server-baseline/deployment/26-worker-recreate-safety.yaml"
+  }
+]

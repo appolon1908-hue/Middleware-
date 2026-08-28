@@ -1,1 +1,0 @@
-"""Codestra Middleware source package."""

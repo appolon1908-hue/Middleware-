@@ -1,380 +1,99 @@
-from __future__ import annotations
+from fastapi import FastAPI
+from app.api.v1.events import router as events_router
+from app.api.v1.control import router as control_router
+from app.api.v1.automation import router as automation_router
+from app.api.v1.reports import router as reports_router
+from app.api.v1.operations import router as operations_router
+from app.api.v1.lead_reconciliation import router as lead_reconciliation_router
+from app.api.v1.orchestration import router as orchestration_router
+from app.api.v1.mappings import router as mappings_router
+from app.api.v1.publisher import router as publisher_router
+from app.api.v1.webphone import router as webphone_router
+from app.api.v1.n8n_staging import router as n8n_staging_router
+from app.api.v1.telephony import router as telephony_router
+from app.api.v1.integrations import router as integrations_router
+from app.integrations.postiz.routes import router as postiz_router
+from app.core.config import settings
+from app.core.auth import BearerAuthError, verify_bearer
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from prometheus_client import make_asgi_app
 
-import uuid
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
-from typing import AsyncIterator
-from uuid import UUID
+app = FastAPI(title="Codestra Middleware", version="0.2.0")
+app.include_router(events_router)
+app.include_router(control_router)
+app.include_router(automation_router)
+app.include_router(reports_router)
+app.include_router(operations_router)
+app.include_router(lead_reconciliation_router)
+app.include_router(orchestration_router)
+app.include_router(mappings_router)
+app.include_router(publisher_router)
+app.include_router(webphone_router)
+app.include_router(n8n_staging_router)
+app.include_router(telephony_router)
+app.include_router(integrations_router)
+app.include_router(postiz_router)
+app.mount("/metrics", make_asgi_app())
 
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError as FastApiValidationError
-from fastapi.responses import JSONResponse, Response
-
-from .config import ConfigurationError, Settings
-from .commands import CommandEnvelope, CommandError
-from .contracts import WEBHOOK_ROUTES, WebhookRoute
-from .observability import (
-    MiddlewareObservability,
-    safe_correlation_id,
-    safe_traceparent,
+SIGNED_WEBHOOK_PATHS = frozenset(
+    {
+        "/api/v1/events/vicidial",
+        "/api/v1/automation/events",
+        "/api/v2/telephony/canary",
+    }
 )
-from .runtime import Runtime, build_runtime
-from .runtime_safety import runtime_safety_readback
-from .security import SecurityError
-from .service import IngressError, PayloadTooLargeError, accept_webhook
-from .storage import StorageError
 
 
-def _correlation_id(request: Request) -> str:
-    assigned = getattr(request.state, "correlation_id", None)
-    if isinstance(assigned, str):
-        return assigned
-    supplied = safe_correlation_id(request.headers.get("X-Correlation-ID"))
-    if supplied is not None:
-        return supplied
-    return str(uuid.uuid4())
-
-
-def _operation(request: Request) -> str:
-    route = request.scope.get("route")
-    template = getattr(route, "path", None)
-    if isinstance(template, str) and template.startswith("/"):
-        return template
-    return "unmatched"
-
-
-def _error_response(
-    request: Request,
-    *,
-    status_code: int,
-    code: str,
-    message: str,
-    retryable: bool,
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": {
-                "code": code,
-                "message": message,
-                "correlation_id": _correlation_id(request),
-                "retryable": retryable,
-                "details": {},
-            }
-        },
+@app.middleware("http")
+async def control_request_guard(request: Request, call_next):
+    if (
+        int(request.headers.get("content-length", "0") or 0)
+        > settings.request_max_bytes
+    ):
+        return JSONResponse({"detail": "request too large"}, status_code=413)
+    if (
+        (request.url.path.startswith("/api/") or request.url.path.startswith("/v1/"))
+        and request.url.path not in SIGNED_WEBHOOK_PATHS
+    ):
+        try:
+            verify_bearer(
+                request.headers.get("Authorization", ""), settings.middleware_secret
+            )
+        except BearerAuthError as exc:
+            status_code = 503 if not settings.middleware_secret else 401
+            return JSONResponse({"detail": str(exc)}, status_code=status_code)
+    response = await call_next(request)
+    response.headers["X-Correlation-ID"] = (
+        request.headers.get("X-Correlation-ID", "") or "generated"
     )
+    return response
 
 
-async def _read_limited_body(request: Request, maximum: int) -> bytes:
-    raw_length = request.headers.get("Content-Length")
-    if raw_length is not None:
-        try:
-            length = int(raw_length)
-        except ValueError as exc:
-            from .security import RequestValidationError
-
-            raise RequestValidationError("Content-Length must be an integer") from exc
-        if length < 0:
-            from .security import RequestValidationError
-
-            raise RequestValidationError("Content-Length must not be negative")
-        if length > maximum:
-            raise PayloadTooLargeError(f"request body exceeds {maximum} bytes")
-    body = bytearray()
-    async for chunk in request.stream():
-        if len(body) + len(chunk) > maximum:
-            raise PayloadTooLargeError(f"request body exceeds {maximum} bytes")
-        body.extend(chunk)
-    return bytes(body)
+@app.get("/healthz")
+@app.get("/health")
+async def healthz() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "mode": "dry-run",
+        "authorization": "online" if settings.auth_ready else "offline",
+    }
 
 
-def create_app(
-    *,
-    settings: Settings | None = None,
-    runtime: Runtime | None = None,
-) -> FastAPI:
-    resolved = settings or Settings.from_env()
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        active = runtime or await build_runtime(resolved)
-        app.state.runtime = active
-        try:
-            yield
-        finally:
-            if runtime is None:
-                await active.close()
-
-    app = FastAPI(
-        title="Codestra Middleware API",
-        version=resolved.app_version,
-        docs_url=None if resolved.app_env in {"staging", "production"} else "/docs",
-        redoc_url=None,
-        lifespan=lifespan,
-    )
-    telemetry = MiddlewareObservability(resolved)
-    app.state.observability = telemetry
-
-    @app.middleware("http")
-    async def observe_request(request: Request, call_next):
-        request.state.correlation_id = (
-            safe_correlation_id(request.headers.get("X-Correlation-ID"))
-            or str(uuid.uuid4())
-        )
-        request.state.traceparent = safe_traceparent(
-            request.headers.get("traceparent")
-        )
-        started = telemetry.start_request()
-        status_code = 500
-        try:
-            response = await call_next(request)
-            status_code = response.status_code
-            response.headers["X-Correlation-ID"] = request.state.correlation_id
-            if request.state.traceparent is not None:
-                response.headers["traceparent"] = request.state.traceparent
-            return response
-        finally:
-            telemetry.finish_request(
-                started=started,
-                operation=_operation(request),
-                method=request.method,
-                status_code=status_code,
-                correlation_id=request.state.correlation_id,
-                traceparent=request.state.traceparent,
-            )
-
-    @app.exception_handler(SecurityError)
-    async def security_error(request: Request, exc: SecurityError) -> JSONResponse:
-        request.app.state.observability.record_auth_denial(
-            _operation(request),
-            exc.code,
-        )
-        return _error_response(
-            request,
-            status_code=exc.status_code,
-            code=exc.code,
-            message=str(exc),
-            retryable=exc.retryable,
-        )
-
-    @app.exception_handler(IngressError)
-    async def ingress_error(request: Request, exc: IngressError) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=exc.status_code,
-            code=exc.code,
-            message=str(exc),
-            retryable=exc.retryable,
-        )
-
-    @app.exception_handler(StorageError)
-    async def storage_error(request: Request, exc: StorageError) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=503,
-            code=exc.code,
-            message="required persistence dependency is unavailable",
-            retryable=exc.retryable,
-        )
-
-    @app.exception_handler(CommandError)
-    async def command_error(request: Request, exc: CommandError) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=exc.status_code,
-            code=exc.code,
-            message=str(exc),
-            retryable=exc.retryable,
-        )
-
-    @app.exception_handler(FastApiValidationError)
-    async def validation_error(
-        request: Request,
-        exc: FastApiValidationError,
-    ) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=400,
-            code="invalid_request",
-            message="request does not match the canonical API contract",
-            retryable=False,
-        )
-
-    @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {
-            "status": "ok",
-            "service": "middleware-api",
-            "component": "api",
-        }
-
-    @app.get("/ready")
-    async def ready(request: Request) -> JSONResponse:
-        report = await request.app.state.runtime.readiness()
-        request.app.state.observability.record_readiness(report.components)
+@app.get("/readyz", response_model=None)
+@app.get("/readiness", response_model=None)
+async def readyz() -> dict[str, str] | JSONResponse:
+    if not settings.auth_ready:
         return JSONResponse(
-            status_code=200 if report.ready else 503,
-            content={
-                "status": "ready" if report.ready else "not_ready",
-                "service": "middleware-api",
-                "component": "api",
-                "environment": resolved.app_env,
-                "release_sha": resolved.source_sha,
-                "image_digest": resolved.image_digest,
-                "schema_or_migration_head": resolved.schema_head,
-                "checked_at": datetime.now(UTC).isoformat(),
-                "components": report.components,
-            },
+            {"status": "not-ready", "authorization": "offline"}, status_code=503
         )
-
-    @app.get("/metrics")
-    async def metrics(request: Request) -> Response:
-        await request.app.state.runtime.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id="monitoring-readonly",
-            required_scope="metrics.read",
-        )
-        report = await request.app.state.runtime.readiness()
-        request.app.state.observability.record_readiness(report.components)
-        body, media_type = request.app.state.observability.render()
-        return Response(content=body, headers={"Content-Type": media_type})
-
-    @app.get("/version")
-    async def version() -> dict[str, str]:
-        return {
-            "service": "middleware-api",
-            "version": resolved.app_version,
-            "environment": resolved.app_env,
-            "runtime_profile_id": (
-                resolved.runtime_profile_id or "local-unlocked"
-            ),
-            "source_sha": resolved.source_sha,
-            "image_digest": resolved.image_digest,
-            "schema_head": resolved.schema_head,
-            "build_time": resolved.build_time,
-        }
-
-    @app.get("/v1/runtime/safety")
-    async def runtime_safety(request: Request) -> dict[str, object]:
-        await request.app.state.runtime.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id="monitoring-readonly",
-            required_scope="health.read",
-        )
-        return runtime_safety_readback(request.app.state.runtime.settings)
-
-    @app.post("/v1/commands")
-    async def submit_command(
-        command: CommandEnvelope,
-        request: Request,
-    ) -> JSONResponse:
-        active = request.app.state.runtime
-        if active.commands is None:
-            raise StorageError("command ledger is unavailable")
-        claims = await active.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id="kong-gateway",
-            required_scope="middleware.request.forward",
-        )
-        from .security import authorize_tenant
-
-        authorize_tenant(claims, command.tenant_id)
-        if request.headers.get("X-Tenant-ID") != command.tenant_id:
-            from .security import RequestValidationError
-
-            raise RequestValidationError("X-Tenant-ID does not match command tenant")
-        if request.headers.get("X-Correlation-ID") != command.correlation_id:
-            from .security import RequestValidationError
-
-            raise RequestValidationError(
-                "X-Correlation-ID does not match command correlation_id"
-            )
-        if request.headers.get("Idempotency-Key") != command.idempotency_key:
-            from .security import RequestValidationError
-
-            raise RequestValidationError(
-                "Idempotency-Key does not match command idempotency_key"
-            )
-        subject = claims.get("sub")
-        if not isinstance(subject, str) or not subject:
-            from .security import AuthorizationError
-
-            raise AuthorizationError("token subject is required for commands")
-        operation = await active.commands.submit(
-            command,
-            authenticated_subject=subject,
-        )
-        status_code = 200 if operation.duplicate else 202
-        return JSONResponse(
-            status_code=status_code,
-            content=operation.model_dump(mode="json"),
-            headers={
-                "Location": f"/v1/operations/{operation.command_id}",
-                "X-Correlation-ID": operation.correlation_id,
-            },
-        )
-
-    @app.get("/v1/operations/{command_id}")
-    async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
-        active = request.app.state.runtime
-        if active.commands is None:
-            raise StorageError("command ledger is unavailable")
-        claims = await active.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id="kong-gateway",
-            required_scope="middleware.status.read",
-        )
-        tenant_id = request.headers.get("X-Tenant-ID", "")
-        from .security import authorize_tenant
-
-        authorize_tenant(claims, tenant_id)
-        operation = await active.commands.get(tenant_id, command_id)
-        return JSONResponse(
-            status_code=200,
-            content=operation.model_dump(mode="json"),
-            headers={"X-Correlation-ID": operation.correlation_id},
-        )
-
-    def register(route: WebhookRoute) -> None:
-        async def ingress(request: Request) -> JSONResponse:
-            headers = {key.lower(): value for key, value in request.headers.items()}
-            claims = await request.app.state.runtime.tokens.verify(
-                headers.get("authorization", ""),
-                expected_client_id=route.producer_client_id,
-                required_scope=route.required_scope,
-            )
-            raw = await _read_limited_body(
-                request,
-                request.app.state.runtime.settings.max_request_body_bytes,
-            )
-            result, status_code = await accept_webhook(
-                request.app.state.runtime,
-                route,
-                claims=claims,
-                method=request.method,
-                path=request.url.path,
-                raw_body=raw,
-                headers=headers,
-            )
-            return JSONResponse(
-                status_code=status_code,
-                content=result.model_dump(mode="json"),
-            )
-
-        app.add_api_route(
-            route.path,
-            ingress,
-            methods=["POST"],
-            name=f"ingress-{route.producer_client_id}-{route.path.rsplit('/', 1)[-1]}",
-        )
-
-    for webhook_route in WEBHOOK_ROUTES:
-        register(webhook_route)
-
-    return app
+    return {"status": "ready", "integration": "outbox-only", "authorization": "online"}
 
 
-try:
-    app = create_app()
-except ConfigurationError:
-    app = None
+@app.get("/version")
+async def version() -> dict[str, str]:
+    return {
+        "service": "codestra-contact-center-middleware",
+        "version": "1.0.0",
+        "environment": settings.environment,
+    }

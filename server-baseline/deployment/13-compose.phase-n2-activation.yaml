@@ -1,0 +1,20 @@
+services:
+  middleware-integration-api:
+    environment:
+      N8N_RUNTIME_ENABLED: "true"
+      SOCIAL_N8N_EVENTS_ENABLED: "true"
+      SOCIAL_PUBLISH_ENABLED: "false"
+      SOCIAL_ODOO_WRITE_ENABLED: "false"
+  middleware-social-n8n-delivery-worker:
+    environment:
+      N8N_RUNTIME_ENABLED: "true"
+      SOCIAL_N8N_EVENTS_ENABLED: "true"
+      SOCIAL_N8N_DELIVERY_WORKER_ENABLED: "true"
+      SOCIAL_PUBLISH_ENABLED: "false"
+      SOCIAL_ODOO_WRITE_ENABLED: "false"
+  middleware-postly-polling-worker:
+    environment:
+      POSTLY_POLLING_ENABLED: "true"
+      SOCIAL_PUBLISH_ENABLED: "false"
+      POSTIZ_PUBLISH_ENABLED: "false"
+      SOCIAL_ODOO_WRITE_ENABLED: "false"

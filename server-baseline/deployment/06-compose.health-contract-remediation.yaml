@@ -1,0 +1,9 @@
+services:
+  middleware:
+    image: codestra/middleware:health-contract-b3ca9aa
+    environment:
+      HEALTH_REQUIRE_DATABASE: "false"
+  middleware-integration-api:
+    image: codestra/middleware:health-contract-4780bd72
+    environment:
+      HEALTH_REQUIRE_DATABASE: "true"

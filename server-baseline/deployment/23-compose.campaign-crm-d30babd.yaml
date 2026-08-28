@@ -1,0 +1,16 @@
+services:
+  middleware-odoo-result-worker:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.odoo_result_worker"]
+    environment:
+      ALLOW_CAMPAIGN_ACTIVATION: "false"
+      AUTOMATION_ACTIONS_ENABLED: "false"
+      ENABLE_EXTERNAL_DELIVERY: "false"
+      EXTERNAL_DELIVERY_ENABLED: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      LIVE_SMS_DELIVERY: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      N8N_PRODUCTION_WORKFLOWS_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+      ODOO_RESULT_DELIVERY_ENABLED: "false"
+      TEST_SYN_ODOO_RESULT_DELIVERY_ENABLED: "false"

@@ -1,0 +1,7 @@
+{
+  "branch": "postiz-social-orchestration-20260804",
+  "sha": "7b9451b4db92982e5f0a4179d979ae94c043f943",
+  "origin": "https://github.com/Codestra-SRL/codestra-middleware.git",
+  "status": "M app/api/v1/webphone.py\n M app/core/config.py\n M app/integrations/postiz/client.py\n M deploy/compose.runtime.yaml\n?? Dockerfile.base-test\n?? Dockerfile.derivative-test\n?? Dockerfile.mtls-client\n?? app/core/vicidial_dispositions.py\n?? deploy/compose.campaign-crm-d30babd.yaml\n?? deploy/compose.runtime.yaml.pre-result-20260822\n?? deploy/internal-n8n-private/\n?? deploy/internal-n8n/\n?? deploy/internal-odoo/\n?? deployed-config.py\n?? tests/test_vicidial_dispositions.py",
+  "last_commit": "7b9451b feat: expose explicit Odoo and n8n gateway routes"
+}

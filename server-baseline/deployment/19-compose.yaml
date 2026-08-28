@@ -1,0 +1,330 @@
+name: codestra
+services:
+  postgres:
+    image: postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    restart: unless-stopped
+    env_file:
+    - /opt/codestra/env/postgres.env
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    networks:
+    - backend
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    cpus: 2
+    mem_limit: 4g
+    secrets:
+    - postgres_superuser_password
+  redis:
+    image: redis@sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08
+    restart: unless-stopped
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+    - --maxmemory
+    - 768mb
+    - --maxmemory-policy
+    - noeviction
+    - --aclfile
+    - /run/secrets/redis_users_acl
+    volumes:
+    - redis_data:/data
+    networks:
+    - backend
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - redis-cli --no-auth-warning --user "$$(cat /run/secrets/redis_middleware_username)" --pass "$$(cat /run/secrets/redis_middleware_password)" ping
+        | grep PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    cpus: 1
+    mem_limit: 1g
+    user: 999:1000
+    secrets:
+    - redis_password
+    - redis_users_acl
+    - redis_middleware_username
+    - redis_middleware_password
+  odoo:
+    image: odoo@sha256:f54272f31d5f77e4146b887efb3761c98480317daf687e4b4b5e76ed8bcc08c5
+    restart: unless-stopped
+    entrypoint:
+    - /usr/local/bin/odoo-secret-entrypoint.sh
+    env_file:
+    - /opt/codestra/env/odoo.env
+    environment:
+      SEND_EVENTS: "false"
+      PRODUCTION_CALLBACKS_ENABLED: "false"
+      VICIDIAL_WRITES_ENABLED: "false"
+      EXTERNAL_DIAL_ENABLED: "false"
+      TRANSFERS_ENABLED: "false"
+      N8N_PRODUCTION_WORKFLOWS_ENABLED: "false"
+      WEBRTC_PRODUCTION_ROUTES_ENABLED: "false"
+      ALLOW_LIVE_EMAIL: "false"
+      ALLOW_LIVE_SMS: "false"
+      ALLOW_LIVE_CALLS: "false"
+      ALLOW_CAMPAIGN_ACTIVATION: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+    - odoo_data:/var/lib/odoo
+    - /opt/codestra/staging-sources/app-odoo-identity-timezone-57ab123cded2-r2/integration:/mnt/integration-addons:ro
+    - /opt/codestra/staging-sources/app-odoo-identity-timezone-57ab123cded2-r2/call-center:/mnt/call-center-addons:ro
+    - /opt/codestra/config/odoo:/etc/odoo:ro
+    - /opt/codestra/scripts/odoo-secret-entrypoint.sh:/usr/local/bin/odoo-secret-entrypoint.sh:ro
+    command:
+    - odoo
+    - --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/integration-addons,/mnt/call-center-addons
+    - --workers=4
+    - --max-cron-threads=1
+    - --gevent-port=8072
+    networks:
+    - backend
+    - edge
+    expose:
+    - '8069'
+    - '8071'
+    - '8072'
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS http://127.0.0.1:8069/web/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+    cpus: 2
+    mem_limit: 4g
+    secrets:
+    - odoo_db_password
+  n8n:
+    image: n8nio/n8n@sha256:11524034450080bd0032754892b23ff20be43d72cf320ce75640f7c5475fdca8
+    restart: unless-stopped
+    env_file:
+    - /opt/codestra/env/n8n.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+    - n8n_data:/home/node/.n8n
+    networks:
+    - backend
+    - edge
+    expose:
+    - '5678'
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://127.0.0.1:5678/healthz || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+    cpus: 2
+    mem_limit: 2g
+    secrets:
+    - n8n_db_password
+    - n8n_encryption_key
+  middleware:
+    image: codestra/middleware:candidate-b3ca9aa
+    group_add:
+    - '3999'
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    env_file:
+    - /opt/codestra/env/middleware.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+    - backend
+    - edge
+    - identity_service
+    - provisioning_private
+    - odoo_module_staging
+    expose:
+    - '8095'
+    volumes:
+    - /etc/codestra/secrets/vicidial-mtls:/run/secrets/vicidial-mtls:ro
+    - /etc/codestra/secrets/vicidial-callback-hmac:/run/secrets/vicidial-callback-hmac:ro
+    - /etc/codestra/secrets/telephony-publisher/keys.json:/run/secrets/telephony-publisher-keys.json:ro
+    - /etc/codestra/secrets/codestra-compose/provisioning/client_secret:/run/secrets/provisioning/client_secret:ro
+    - /etc/codestra/secrets/codestra-compose/provisioning/ca.crt:/run/secrets/provisioning/ca.crt:ro
+    - /etc/codestra/secrets/codestra-compose/odoo_identity_hmac:/run/secrets/odoo/identity_hmac:ro
+    - /etc/codestra/secrets/middleware-runtime/quarantine-fingerprint-key:/run/secrets/quarantine-fingerprint-key:ro
+    - /etc/codestra/secrets/middleware-runtime/quarantine-encryption-key:/run/secrets/quarantine-encryption-key:ro
+    - /etc/codestra/secrets/middleware-runtime/quarantine-reviewer-key:/run/secrets/quarantine-reviewer-key:ro
+    environment:
+      PUBLISHER_HMAC_KEYS_FILE: /run/secrets/telephony-publisher-keys.json
+      PUBLISHER_CANARY_ENABLED: 'false'
+      QUARANTINE_FINGERPRINT_SECRET_FILE: /run/secrets/quarantine-fingerprint-key
+      QUARANTINE_ENCRYPTION_KEY_FILE: /run/secrets/quarantine-encryption-key
+      QUARANTINE_REVIEWER_SECRET_FILE: /run/secrets/quarantine-reviewer-key
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8095/healthz\")"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+    cpus: 1
+    mem_limit: 1g
+    secrets:
+    - database_url
+    - redis_url
+    - middleware_secret
+    - webhook_shared_secret
+  reverse-proxy:
+    image: codestra/caddy:2.11.4-hardened-20260723
+    restart: unless-stopped
+    ports:
+    - 65.109.65.169:80:80
+    - 65.109.65.169:443:443
+    volumes:
+    - /opt/codestra/config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    - /opt/codestra/config/caddy/phone-auth.htpasswd:/etc/caddy/phone-auth.htpasswd:ro
+    - /etc/codestra/pki/middleware-private-ingress:/run/secrets/middleware-private-ingress:ro
+    - caddy_data:/data
+    - caddy_config:/config
+    - /opt/codestra/logs/caddy:/var/log/caddy
+    networks:
+    - backend
+    - edge
+    - n8n_staging_edge
+    - identity_service
+    - identity_staging_service
+    - qwen_auth_private
+    depends_on:
+    - odoo
+    - n8n
+    - middleware
+    healthcheck:
+      test:
+      - CMD
+      - caddy
+      - validate
+      - --config
+      - /etc/caddy/Caddyfile
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+  backup:
+    image: postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    restart: unless-stopped
+    volumes:
+    - /opt/codestra/backups:/backups
+    - postgres_data:/source/postgres:ro
+    - odoo_data:/source/odoo:ro
+    - n8n_data:/source/n8n:ro
+    - /opt/codestra:/source/config:ro
+    networks:
+    - backend
+    entrypoint:
+    - /bin/sh
+    - -c
+    command:
+    - while true; do sleep 86400; done
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+networks:
+  backend:
+    internal: true
+  edge: {}
+  n8n_staging_edge:
+    external: true
+    name: codestra-n8n-staging_edge
+  identity_service:
+    external: true
+    name: codestra-identity_identity_service
+  identity_staging_service:
+    external: true
+    name: codestra-identity-staging_service
+  qwen_auth_private:
+    external: true
+    name: codestra_qwen_auth_private
+  provisioning_private:
+    external: true
+    name: codestra-provisioning-service_private
+  odoo_module_staging:
+    external: true
+    name: codestra-odoo19-module-staging_isolated
+volumes:
+  postgres_data: {}
+  redis_data: {}
+  odoo_data: {}
+  n8n_data: {}
+  caddy_data: {}
+  caddy_config: {}
+secrets:
+  postgres_superuser_password:
+    file: /etc/codestra/secrets/codestra-compose/postgres_superuser_password
+  n8n_db_password:
+    file: /etc/codestra/secrets/codestra-compose/n8n_db_password
+  n8n_encryption_key:
+    file: /etc/codestra/secrets/codestra-compose/n8n_encryption_key
+  odoo_db_password:
+    file: /etc/codestra/secrets/codestra-compose/odoo_db_password
+  redis_password:
+    file: /etc/codestra/secrets/codestra-compose/redis_password
+  redis_users_acl:
+    file: /etc/codestra/secrets/codestra-compose/redis_users_acl
+  redis_middleware_username:
+    file: /etc/codestra/secrets/codestra-compose/redis_middleware_username
+  redis_middleware_password:
+    file: /etc/codestra/secrets/codestra-compose/redis_middleware_password
+  database_url:
+    file: /etc/codestra/secrets/codestra-compose/database_url
+  redis_url:
+    file: /etc/codestra/secrets/codestra-compose/redis_url
+  middleware_secret:
+    file: /etc/codestra/secrets/codestra-compose/middleware_secret
+  webhook_shared_secret:
+    file: /etc/codestra/secrets/codestra-compose/webhook_shared_secret

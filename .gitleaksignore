@@ -1,0 +1,2 @@
+# Reviewed false positive: environment template contains a variable name only and an empty value.
+.env.example:generic-api-key:120

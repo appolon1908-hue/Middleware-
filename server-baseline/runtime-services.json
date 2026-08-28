@@ -1,0 +1,392 @@
+[
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.vicidial_adapter"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-vicidial-adapter-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.telephony_provisioning"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-telephony-provisioning-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.pjsip_adapter"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-pjsip-adapter-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.webphone_session_issuer"
+    ],
+    "health_status": "healthy",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:48dbb4201b4cf8abee1600936a84da52a92969ab124fb44a0007059e75d57e85",
+    "image_id": "sha256:48dbb4201b4cf8abee1600936a84da52a92969ab124fb44a0007059e75d57e85",
+    "name": "codestra-middleware-webphone-session-issuer-1",
+    "revision_label": "80954a1ecb4eae49a57a9de245f78fd9a2f825a1"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.integration_api"
+    ],
+    "health_status": "healthy",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:09d4bd0f7b2376e0a06d3efae27a6642429389fa7e3277791ec0b36584e87175",
+    "image_id": "sha256:09d4bd0f7b2376e0a06d3efae27a6642429389fa7e3277791ec0b36584e87175",
+    "name": "codestra-middleware-integration-api-1",
+    "revision_label": "35448ef85ae56db3651a72b61db8e242b7aacd2e"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.integration_api"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware:health-contract-b3ca9aa",
+    "image_id": "sha256:5dd751a9da60e2417c9ee553ddea68f54e76981dcc896eb3676b27617d121f38",
+    "name": "codestra-middleware-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.odoo_result_worker"
+    ],
+    "health_status": "healthy",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2",
+    "image_id": "sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2",
+    "name": "codestra-middleware-odoo-result-worker-1",
+    "revision_label": "d30babd35b7b82aab312f16940f5b8d2f7797f1d"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.notification_worker"
+    ],
+    "health_status": "healthy",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "name": "codestra-middleware-notification-worker-1",
+    "revision_label": "9118e5bc01f9ce4a52add8753c096d061cd84848"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.scheduler"
+    ],
+    "health_status": "healthy",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "name": "codestra-middleware-scheduler-1",
+    "revision_label": "9118e5bc01f9ce4a52add8753c096d061cd84848"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.integration_api"
+    ],
+    "health_status": "healthy",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "name": "codestra-middleware-staging-middleware-staging-1",
+    "revision_label": "9118e5bc01f9ce4a52add8753c096d061cd84848"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.notification_worker"
+    ],
+    "health_status": "running",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "name": "codestra-middleware-staging-notification-worker-staging-1",
+    "revision_label": "9118e5bc01f9ce4a52add8753c096d061cd84848"
+  },
+  {
+    "command": [
+      "/opt/venv/bin/python",
+      "-m",
+      "app.entrypoints.scheduler"
+    ],
+    "health_status": "running",
+    "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+    "name": "codestra-middleware-staging-scheduler-staging-1",
+    "revision_label": "9118e5bc01f9ce4a52add8753c096d061cd84848"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.evidence_runner"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-evidence-runner-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.policy_engine"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-policy-engine-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.sync_worker"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-sync-worker-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.n8n_runtime_worker"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-n8n-runtime-worker-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.social_n8n_delivery_worker"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-social-n8n-delivery-worker-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.reconciliation_worker"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-reconciliation-worker-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.extension_allocator"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+    "name": "codestra-middleware-extension-allocator-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.event_gateway"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware:webhook-cert-pg-20260816",
+    "image_id": "sha256:93cbb4a11765ad92e9bbf1a1bb9601f15a540164b4e7d6647cb0f16d588ab6e0",
+    "name": "codestra-middleware-event-gateway-1",
+    "revision_label": "4a3ac0b57a61baf63310c55048a7897556faa9a972083b86761e91391ae2317b"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.external_webhook_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:webhook-cert-pg-20260816",
+    "image_id": "sha256:93cbb4a11765ad92e9bbf1a1bb9601f15a540164b4e7d6647cb0f16d588ab6e0",
+    "name": "codestra-middleware-external-webhook-worker-1",
+    "revision_label": "4a3ac0b57a61baf63310c55048a7897556faa9a972083b86761e91391ae2317b"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.breero_odoo_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:breero-51416422",
+    "image_id": "sha256:961c0569a5033cdb494d211fd32cfe20d7efd42d3900f02c2d3f0ac7bfdcfa63",
+    "name": "codestra-middleware-breero-odoo-worker-1",
+    "revision_label": "51416422eaaa959c8c7223ad1434287597eb8007"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.postly_polling_worker"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:d3ac2b34d216064bc579feedca9cc2d4079ebe44943a6417ab31437c79df8dd8",
+    "image_id": "sha256:d3ac2b34d216064bc579feedca9cc2d4079ebe44943a6417ab31437c79df8dd8",
+    "name": "codestra-middleware-postly-polling-worker-1",
+    "revision_label": "b3ca9aa458fef843e3065aeff3397c656349f138"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.scraper_odoo_delivery_worker"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware@sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492",
+    "image_id": "sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492",
+    "name": "codestra-middleware-scraper-odoo-delivery-worker-1",
+    "revision_label": "bab6f4332fec77611f6a364fd3c9c7f9cc022051"
+  },
+  {
+    "command": [
+      "redis-server",
+      "--appendonly",
+      "yes",
+      "--save",
+      "60",
+      "1",
+      "--maxmemory",
+      "384mb",
+      "--maxmemory-policy",
+      "noeviction",
+      "--aclfile",
+      "/run/secrets/redis-users.acl"
+    ],
+    "health_status": "healthy",
+    "image": "redis@sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08",
+    "image_id": "sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08",
+    "name": "codestra-middleware-staging-redis-1",
+    "revision_label": null
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.odoo_result_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:r1-45c4678",
+    "image_id": "sha256:d102957a1e88b9ad5bb5fae14f2e246676fc7e40c6d891793f2f41abee480d99",
+    "name": "codestra-middleware-staging-odoo-result-worker-staging-1",
+    "revision_label": "45c467899e0c7580538de72d543fb3de0b09cd75"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.scraper_odoo_delivery_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:scraper-protected-main-4780bd72",
+    "image_id": "sha256:dc97c48f3a29690635bf28de9f3d2562fac2dadb74b8744ea6e99c1bd4ffcda1",
+    "name": "codestra-middleware-staging-scraper-odoo-delivery-worker-1",
+    "revision_label": "4780bd72d1c574af4aed62d374ec50b208e8ea4c"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.social_delivery_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:social-staging-12cd5fc",
+    "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+    "name": "codestra-middleware-staging-social-delivery-worker-staging-1",
+    "revision_label": "unknown"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.social_dead_letter_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:social-staging-12cd5fc",
+    "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+    "name": "codestra-middleware-staging-social-dead-letter-worker-staging-1",
+    "revision_label": "unknown"
+  },
+  {
+    "command": [
+      "python",
+      "-m",
+      "app.entrypoints.social_reconciliation_worker"
+    ],
+    "health_status": "running",
+    "image": "codestra/middleware:social-staging-12cd5fc",
+    "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+    "name": "codestra-middleware-staging-social-reconciliation-worker-staging-1",
+    "revision_label": "unknown"
+  },
+  {
+    "command": [
+      "python3",
+      "/app/staging_callback_receiver.py"
+    ],
+    "health_status": "healthy",
+    "image": "codestra/middleware:current-hardened-20260723",
+    "image_id": "sha256:57a4a3a22278aa61bc443910927a308d594db287b8e2cd500ee12293e8a93f4d",
+    "name": "codestra-middleware-staging-callback-staging-1",
+    "revision_label": "f1c07e0-reprofix2"
+  },
+  {
+    "command": [
+      "postgres"
+    ],
+    "health_status": "healthy",
+    "image": "postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+    "image_id": "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+    "name": "codestra-middleware-staging-postgres-1",
+    "revision_label": null
+  }
+]

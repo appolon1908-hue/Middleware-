@@ -1,0 +1,63 @@
+services:
+  middleware-event-gateway:
+    image: codestra/middleware:breero-51416422
+    environment:
+      BREERO_INGRESS_ENABLED: "true"
+      BREERO_ODOO_DELIVERY_ENABLED: "false"
+      BREERO_HMAC_IDENTITIES_FILE: /run/secrets/breero-identities.json
+      DEPLOYED_SOURCE_SHA: 51416422eaaa959c8c7223ad1434287597eb8007
+      RUNTIME_ARTIFACT_CHECKSUM: sha256:961c0569a5033cdb494d211fd32cfe20d7efd42d3900f02c2d3f0ac7bfdcfa63
+    volumes:
+      - /etc/codestra/secrets/breero-ingress/identities.json:/run/secrets/breero-identities.json:ro
+      - /etc/codestra/secrets/breero-ingress/staging-hmac:/run/secrets/breero-staging-hmac:ro
+      - /etc/codestra/secrets/breero-ingress/production-hmac:/run/secrets/breero-production-hmac:ro
+
+  middleware-breero-odoo-worker:
+    image: codestra/middleware:breero-51416422
+    user: "10001:10001"
+    group_add: ["3999"]
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    env_file:
+      - /opt/codestra/env/middleware.env
+    environment:
+      SERVICE_NAME: middleware-breero-odoo-worker
+      QUEUE_NAME: breero-odoo
+      DATABASE_URL_FILE: /run/secrets/database_url
+      BREERO_INGRESS_ENABLED: "false"
+      BREERO_ODOO_DELIVERY_ENABLED: "true"
+      BREERO_ODOO_URL: http://odoo:8069
+      BREERO_ODOO_DATABASE: codestra_odoo
+      BREERO_ODOO_USERNAME: breero.integration
+      BREERO_ODOO_API_KEY_FILE: /run/secrets/breero_odoo_api_key
+      LIVE_WRITES_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      N8N_DELIVERY_ENABLED: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      PUBLISHER_CANARY_ENABLED: "false"
+    command: [python, -m, app.entrypoints.breero_odoo_worker]
+    volumes:
+      - /etc/codestra/secrets/middleware-runtime/middleware-integration-api-database-url:/run/secrets/database_url:ro
+      - /etc/codestra/secrets/codestra-compose/redis_url:/run/secrets/redis_url:ro
+      - /etc/codestra/secrets/codestra-compose/middleware_secret:/run/secrets/middleware_secret:ro
+      - /etc/codestra/secrets/codestra-compose/webhook_shared_secret:/run/secrets/webhook_shared_secret:ro
+      - /etc/codestra/secrets/middleware-runtime/quarantine-encryption-key:/run/secrets/quarantine-encryption-key:ro
+      - /etc/codestra/secrets/middleware-runtime/quarantine-fingerprint-key:/run/secrets/quarantine-fingerprint-key:ro
+      - /etc/codestra/secrets/telephony-publisher/keys.json:/run/secrets/telephony-publisher-keys.json:ro
+      - /etc/codestra/secrets/vicidial-callback-hmac:/run/secrets/vicidial-callback-hmac:ro
+      - /etc/codestra/secrets/vicidial-mtls:/run/secrets/vicidial-mtls:ro
+      - /etc/codestra/secrets/breero-odoo/api-key:/run/secrets/breero_odoo_api_key:ro
+    networks: [backend]
+    logging:
+      driver: json-file
+      options: {max-size: 20m, max-file: "5"}
+    cpus: 0.50
+    mem_limit: 512m
+    pids_limit: 128
+    stop_grace_period: 30s

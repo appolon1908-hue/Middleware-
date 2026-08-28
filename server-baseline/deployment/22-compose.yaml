@@ -1,0 +1,388 @@
+name: codestra-middleware-staging
+
+x-app-hardening: &app-hardening
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+  pids_limit: 128
+
+services:
+  postgres:
+    image: postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/postgres.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U middleware_staging -d middleware_staging"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    labels:
+      codestra.environment: STAGING
+      codestra.isolation: middleware-staging-only
+
+  redis:
+    image: redis@sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08
+    restart: unless-stopped
+    # The ACL file is root-owned mode 0600. Keep the staging Redis process
+    # root so it can read the mounted ACL and then rely on Redis ACLs for
+    # command/key authorization. Production should use a Docker secret with
+    # explicit uid/gid metadata instead of a bind-mounted ACL file.
+    user: "0:0"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+      - --maxmemory
+      - 384mb
+      - --maxmemory-policy
+      - noeviction
+      - --aclfile
+      - /run/secrets/redis-users.acl
+    mem_limit: 512m
+    volumes:
+      - redis_data:/data
+      - /etc/codestra/secrets/middleware-staging/redis-auth/users.acl:/run/secrets/redis-users.acl:ro
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli --no-auth-warning -u "$$(cat /run/secrets/redis-url)" ping | grep -qx PONG
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    labels:
+      codestra.environment: STAGING
+      codestra.isolation: middleware-staging-only
+
+  middleware-staging:
+    <<: *app-hardening
+    image: codestra/middleware:r1-45c4678
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/vicidial-mtls:/run/secrets/vicidial-mtls:ro
+      - /etc/codestra/secrets/middleware-staging/vicidial-adapter-hmac:/run/secrets/vicidial-adapter-hmac:ro
+      - /etc/codestra/secrets/middleware-staging/outbox_signature_secret:/run/secrets/outbox-signature-secret:ro
+      - /opt/codestra/staging/o19-s1/certs/caddy-root.crt:/run/secrets/caddy-root.crt:ro
+      - /opt/codestra/secrets/identity-staging/middleware_client_secret:/run/secrets/odoo-client-secret:ro
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+      - /etc/codestra/secrets/middleware-staging/n8n-internal-auth/header_name:/run/secrets/n8n-internal-auth-header:ro
+      - /etc/codestra/secrets/middleware-staging/n8n-internal-auth/token:/run/secrets/n8n-internal-auth-token:ro
+      - /etc/codestra/secrets/middleware-staging/social/postly_callback_hmac:/run/secrets/postly-callback-hmac:ro
+      - /etc/codestra/secrets/middleware-staging/postly/postiz_api_key:/run/secrets/postiz_api_key:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      N8N_INTERNAL_AUTH_HEADER_FILE: /run/secrets/n8n-internal-auth-header
+      N8N_INTERNAL_AUTH_TOKEN_FILE: /run/secrets/n8n-internal-auth-token
+      N8N_PRIVATE_SOURCE_CIDRS: "10.254.40.0/28"
+      OUTBOX_PROCESSING_ENABLED: "false"
+      OUTBOX_WORKER_ENABLED: "false"
+      N8N_DELIVERY_ENABLED: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      OUTBOX_SIGNATURE_SECRET_FILE: /run/secrets/outbox-signature-secret
+      ODOO_CLIENT_SECRET_FILE: /run/secrets/odoo-client-secret
+      N8N_WEBHOOK_URL: http://n8n-webhook-staging:5678/webhook/v1/events
+      ODOO_RESULTS_URL: http://odoo19-staging:8069/api/v1/integration/results
+      ODOO_TOKEN_URL: ${ODOO_TOKEN_URL:?required}
+      SOCIAL_CONTROL_PLANE_ENABLED: "true"
+      SOCIAL_MOCK_ADAPTER_ENABLED: "true"
+      POSTLY_ADAPTER_ENABLED: "false"
+      POSTIZ_API_KEY_FILE: /run/secrets/postiz_api_key
+      POSTLY_CALLBACK_ENABLED: "false"
+      POSTLY_CALLBACK_HMAC_FILE: /run/secrets/postly-callback-hmac
+      POSTLY_CALLBACK_SOURCE_CIDRS: ""
+      SOCIAL_DELIVERY_WORKER_ENABLED: "false"
+      SOCIAL_DEAD_LETTER_REPLAY_ENABLED: "false"
+      SOCIAL_RECONCILIATION_WORKER_ENABLED: "false"
+    command:
+      - /bin/sh
+      - -c
+      - alembic upgrade head && exec uvicorn app.entrypoints.integration_api:app --host 0.0.0.0 --port 8095
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      backend: {}
+      staging_edge:
+        aliases:
+          - middleware-staging
+      identity_staging: {}
+      middleware_control:
+        aliases:
+          - middleware-internal
+    expose:
+      - "8095"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8095/readyz")'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    labels:
+      codestra.environment: STAGING
+      codestra.domain: bridge-staging.codestra.agency
+      codestra.isolation: middleware-staging-only
+
+  notification-worker-staging:
+    <<: *app-hardening
+    image: codestra/middleware:staging-preflight-n8n-auth-20260801
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    command: ["python", "-m", "app.entrypoints.notification_worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/vicidial-mtls:/run/secrets/vicidial-mtls:ro
+      - /etc/codestra/secrets/middleware-staging/vicidial-adapter-hmac:/run/secrets/vicidial-adapter-hmac:ro
+      - /etc/codestra/secrets/middleware-staging/outbox_signature_secret:/run/secrets/outbox-signature-secret:ro
+      - /opt/codestra/staging/o19-s1/certs/caddy-root.crt:/run/secrets/caddy-root.crt:ro
+      - /opt/codestra/secrets/identity-staging/middleware_client_secret:/run/secrets/odoo-client-secret:ro
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      SERVICE_NAME: middleware-notification-worker
+      QUEUE_NAME: middleware.notification.v1
+      OUTBOX_PROCESSING_ENABLED: "false"
+      OUTBOX_WORKER_ENABLED: "false"
+      N8N_DELIVERY_ENABLED: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      OUTBOX_SIGNATURE_SECRET_FILE: /run/secrets/outbox-signature-secret
+      ODOO_CLIENT_SECRET_FILE: /run/secrets/odoo-client-secret
+      N8N_WEBHOOK_URL: http://n8n-webhook-staging:5678/webhook/v1/events
+      ODOO_RESULTS_URL: http://odoo19-staging:8069/api/v1/integration/results
+      ODOO_TOKEN_URL: ${ODOO_TOKEN_URL:?required}
+    networks:
+      - backend
+      - staging_edge
+      - identity_staging
+
+  scheduler-staging:
+    <<: *app-hardening
+    image: codestra/middleware:staging-preflight-n8n-auth-20260801
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    command: ["python", "-m", "app.entrypoints.scheduler"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/outbox_signature_secret:/run/secrets/outbox-signature-secret:ro
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      SERVICE_NAME: middleware-scheduler
+      QUEUE_NAME: middleware.scheduler.v1
+      OUTBOX_PROCESSING_ENABLED: "false"
+      OUTBOX_WORKER_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      OUTBOX_SIGNATURE_SECRET_FILE: /run/secrets/outbox-signature-secret
+    networks:
+      - backend
+
+  odoo-result-worker-staging:
+    <<: *app-hardening
+    image: codestra/middleware:r1-45c4678
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    command: ["python", "-m", "app.entrypoints.odoo_result_worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /opt/codestra/secrets/identity-staging/middleware_client_secret:/run/secrets/odoo-results-client-secret:ro
+      - /opt/codestra/staging/o19-s1/certs/caddy-root.crt:/run/secrets/odoo-results-ca:ro
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      ENVIRONMENT: staging
+      ODOO_RESULT_DELIVERY_ENABLED: "true"
+      TEST_SYN_ODOO_RESULT_DELIVERY_ENABLED: "true"
+      ODOO_RESULTS_CLIENT_ID: codestra-middleware-staging
+      ODOO_RESULTS_CLIENT_SECRET_FILE: /run/secrets/odoo-results-client-secret
+      ODOO_RESULTS_CA_FILE: /run/secrets/odoo-results-ca
+      ODOO_SERVICE_CREDENTIAL_REFERENCE: ${ODOO_SERVICE_CREDENTIAL_REFERENCE:?required}
+    networks:
+      - backend
+      - staging_edge
+      - identity_staging
+
+  social-delivery-worker-staging:
+    <<: *app-hardening
+    image: codestra/middleware:social-staging-12cd5fc
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    command: ["python", "-m", "app.entrypoints.social_delivery_worker"]
+    depends_on:
+      middleware-staging:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      SERVICE_NAME: middleware-social-delivery-worker
+      QUEUE_NAME: middleware.social.delivery.v1
+      SOCIAL_CONTROL_PLANE_ENABLED: "true"
+      SOCIAL_MOCK_ADAPTER_ENABLED: "true"
+      POSTLY_ADAPTER_ENABLED: "false"
+      POSTLY_CALLBACK_ENABLED: "false"
+      SOCIAL_DELIVERY_WORKER_ENABLED: "true"
+      SOCIAL_DEAD_LETTER_REPLAY_ENABLED: "false"
+      SOCIAL_RECONCILIATION_WORKER_ENABLED: "false"
+    networks:
+      - backend
+
+  social-dead-letter-worker-staging:
+    <<: *app-hardening
+    image: codestra/middleware:social-staging-12cd5fc
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    command: ["python", "-m", "app.entrypoints.social_dead_letter_worker"]
+    depends_on:
+      middleware-staging:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      SERVICE_NAME: middleware-social-dead-letter-worker
+      QUEUE_NAME: middleware.social.dead-letter.v1
+      SOCIAL_CONTROL_PLANE_ENABLED: "true"
+      SOCIAL_MOCK_ADAPTER_ENABLED: "true"
+      POSTLY_ADAPTER_ENABLED: "false"
+      POSTLY_CALLBACK_ENABLED: "false"
+      SOCIAL_DELIVERY_WORKER_ENABLED: "false"
+      SOCIAL_DEAD_LETTER_REPLAY_ENABLED: "false"
+      SOCIAL_RECONCILIATION_WORKER_ENABLED: "false"
+    networks:
+      - backend
+
+  social-reconciliation-worker-staging:
+    <<: *app-hardening
+    image: codestra/middleware:social-staging-12cd5fc
+    restart: unless-stopped
+    env_file:
+      - /etc/codestra/secrets/middleware-staging/middleware.env
+    command: ["python", "-m", "app.entrypoints.social_reconciliation_worker"]
+    depends_on:
+      middleware-staging:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /etc/codestra/secrets/middleware-staging/redis-auth/redis_url:/run/secrets/redis-url:ro
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      SERVICE_NAME: middleware-social-reconciliation-worker
+      QUEUE_NAME: middleware.social.reconciliation.v1
+      SOCIAL_CONTROL_PLANE_ENABLED: "true"
+      SOCIAL_MOCK_ADAPTER_ENABLED: "true"
+      POSTLY_ADAPTER_ENABLED: "false"
+      POSTLY_CALLBACK_ENABLED: "false"
+      SOCIAL_DELIVERY_WORKER_ENABLED: "false"
+      SOCIAL_DEAD_LETTER_REPLAY_ENABLED: "false"
+      SOCIAL_RECONCILIATION_WORKER_ENABLED: "true"
+    networks:
+      - backend
+
+  callback-staging:
+    image: codestra/middleware:current-hardened-20260723
+    restart: unless-stopped
+    command: ["python3", "/app/staging_callback_receiver.py"]
+    volumes:
+      - ./staging_callback_receiver.py:/app/staging_callback_receiver.py:ro
+      - /etc/codestra/secrets/staging-callback/tls:/run/tls:ro
+      - /etc/codestra/secrets/staging-callback/callback_hmac:/run/secrets/callback_hmac:ro
+      - callback_data:/data
+    networks:
+      staging_edge:
+        aliases:
+          - callback-staging
+    expose:
+      - "8443"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python3 -c 'import ssl,urllib.request; c=ssl.create_default_context(cafile="/run/tls/ca.crt"); urllib.request.urlopen("https://callback-staging:8443/healthz",context=c)'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      codestra.environment: STAGING
+      codestra.isolation: private-staging-callback-only
+
+networks:
+  backend:
+    internal: true
+    labels:
+      codestra.environment: STAGING
+  staging_edge:
+    external: true
+    name: codestra-n8n-staging_edge
+  identity_staging:
+    external: true
+    name: codestra-identity-staging_service
+  middleware_control:
+    name: codestra-n8n-middleware-staging-control
+    external: true
+
+volumes:
+  postgres_data:
+    labels:
+      codestra.environment: STAGING
+  redis_data:
+    labels:
+      codestra.environment: STAGING
+  callback_data:
+    labels:
+      codestra.environment: STAGING

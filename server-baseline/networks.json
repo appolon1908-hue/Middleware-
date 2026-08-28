@@ -1,0 +1,510 @@
+{
+  "codestra-middleware-1": {
+    "codestra-identity_identity_service": {
+      "aliases": [
+        "codestra-middleware-1",
+        "middleware"
+      ],
+      "ip_address": "172.21.0.10"
+    },
+    "codestra-odoo19-module-staging_isolated": {
+      "aliases": [
+        "codestra-middleware-1",
+        "middleware"
+      ],
+      "ip_address": "172.30.0.5"
+    },
+    "codestra-provisioning-service_private": {
+      "aliases": [
+        "codestra-middleware-1",
+        "middleware"
+      ],
+      "ip_address": "172.31.0.6"
+    },
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-1",
+        "middleware"
+      ],
+      "ip_address": "172.18.0.39"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-1",
+        "middleware"
+      ],
+      "ip_address": "172.19.0.7"
+    }
+  },
+  "codestra-middleware-breero-odoo-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-breero-odoo-worker-1",
+        "middleware-breero-odoo-worker"
+      ],
+      "ip_address": "172.18.0.16"
+    }
+  },
+  "codestra-middleware-event-gateway-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-event-gateway-1",
+        "middleware-event-gateway"
+      ],
+      "ip_address": "172.18.0.35"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-event-gateway-1",
+        "middleware-event-gateway"
+      ],
+      "ip_address": "172.19.0.25"
+    }
+  },
+  "codestra-middleware-evidence-runner-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-evidence-runner-1",
+        "middleware-evidence-runner"
+      ],
+      "ip_address": "172.18.0.8"
+    }
+  },
+  "codestra-middleware-extension-allocator-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-extension-allocator-1",
+        "middleware-extension-allocator"
+      ],
+      "ip_address": "172.18.0.9"
+    }
+  },
+  "codestra-middleware-external-webhook-worker-1": {
+    "codestra-n8n-middleware-staging-control": {
+      "aliases": [
+        "codestra-middleware-external-webhook-worker-1",
+        "middleware-external-webhook-worker"
+      ],
+      "ip_address": "10.254.40.5"
+    },
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-external-webhook-worker-1",
+        "middleware-external-webhook-worker"
+      ],
+      "ip_address": "172.18.0.44"
+    }
+  },
+  "codestra-middleware-integration-api-1": {
+    "codestra-identity_identity_service": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "172.21.0.11"
+    },
+    "codestra-internal-integration": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "10.254.41.6"
+    },
+    "codestra-n8n-middleware-staging-control": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "10.254.40.9"
+    },
+    "codestra-odoo19-module-staging_isolated": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "172.30.0.6"
+    },
+    "codestra-provisioning-service_private": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "172.31.0.9"
+    },
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "172.18.0.5"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-integration-api-1",
+        "middleware-integration-api"
+      ],
+      "ip_address": "172.19.0.10"
+    }
+  },
+  "codestra-middleware-n8n-runtime-worker-1": {
+    "codestra-n8n-middleware-staging-control": {
+      "aliases": [
+        "codestra-middleware-n8n-runtime-worker-1",
+        "middleware-n8n-runtime-worker"
+      ],
+      "ip_address": "10.254.40.6"
+    },
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-n8n-runtime-worker-1",
+        "middleware-n8n-runtime-worker"
+      ],
+      "ip_address": "172.18.0.43"
+    }
+  },
+  "codestra-middleware-notification-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-notification-worker-1",
+        "middleware-notification-worker"
+      ],
+      "ip_address": "172.18.0.15"
+    }
+  },
+  "codestra-middleware-odoo-result-worker-1": {
+    "codestra-identity_identity_service": {
+      "aliases": [
+        "codestra-middleware-odoo-result-worker-1",
+        "middleware-odoo-result-worker"
+      ],
+      "ip_address": "172.21.0.13"
+    },
+    "codestra-internal-integration": {
+      "aliases": [
+        "codestra-middleware-odoo-result-worker-1",
+        "middleware-odoo-result-worker"
+      ],
+      "ip_address": "10.254.41.2"
+    },
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-odoo-result-worker-1",
+        "middleware-odoo-result-worker"
+      ],
+      "ip_address": "172.18.0.21"
+    }
+  },
+  "codestra-middleware-pjsip-adapter-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-pjsip-adapter-1",
+        "middleware-pjsip-adapter"
+      ],
+      "ip_address": "172.18.0.12"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-pjsip-adapter-1",
+        "middleware-pjsip-adapter"
+      ],
+      "ip_address": "172.19.0.32"
+    }
+  },
+  "codestra-middleware-policy-engine-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-policy-engine-1",
+        "middleware-policy-engine"
+      ],
+      "ip_address": "172.18.0.7"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-policy-engine-1",
+        "middleware-policy-engine"
+      ],
+      "ip_address": "172.19.0.22"
+    }
+  },
+  "codestra-middleware-postly-polling-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-postly-polling-worker-1",
+        "middleware-postly-polling-worker"
+      ],
+      "ip_address": "172.18.0.32"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-postly-polling-worker-1",
+        "middleware-postly-polling-worker"
+      ],
+      "ip_address": "172.19.0.21"
+    }
+  },
+  "codestra-middleware-reconciliation-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-reconciliation-worker-1",
+        "middleware-reconciliation-worker"
+      ],
+      "ip_address": "172.18.0.3"
+    }
+  },
+  "codestra-middleware-scheduler-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-scheduler-1",
+        "middleware-scheduler"
+      ],
+      "ip_address": "172.18.0.23"
+    }
+  },
+  "codestra-middleware-scraper-odoo-delivery-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-scraper-odoo-delivery-worker-1",
+        "middleware-scraper-odoo-delivery-worker"
+      ],
+      "ip_address": "172.18.0.41"
+    }
+  },
+  "codestra-middleware-social-n8n-delivery-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-social-n8n-delivery-worker-1",
+        "middleware-social-n8n-delivery-worker"
+      ],
+      "ip_address": "172.18.0.40"
+    }
+  },
+  "codestra-middleware-staging-callback-staging-1": {
+    "codestra-n8n-staging_edge": {
+      "aliases": [
+        "codestra-middleware-staging-callback-staging-1",
+        "callback-staging",
+        "callback-staging"
+      ],
+      "ip_address": "172.25.0.2"
+    }
+  },
+  "codestra-middleware-staging-middleware-staging-1": {
+    "codestra-identity-staging_service": {
+      "aliases": [
+        "codestra-middleware-staging-middleware-staging-1",
+        "middleware-staging"
+      ],
+      "ip_address": "192.168.128.7"
+    },
+    "codestra-identity_identity_service": {
+      "aliases": [
+        "codestra-middleware-staging-middleware-staging-1",
+        "middleware-staging"
+      ],
+      "ip_address": "172.21.0.6"
+    },
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-middleware-staging-1",
+        "middleware-staging"
+      ],
+      "ip_address": "172.26.0.8"
+    },
+    "codestra-n8n-middleware-staging-control": {
+      "aliases": [
+        "codestra-middleware-staging-middleware-staging-1",
+        "middleware-staging",
+        "middleware-internal"
+      ],
+      "ip_address": "10.254.40.7"
+    },
+    "codestra-n8n-staging_edge": {
+      "aliases": [
+        "codestra-middleware-staging-middleware-staging-1",
+        "middleware-staging",
+        "middleware-staging"
+      ],
+      "ip_address": "172.25.0.11"
+    }
+  },
+  "codestra-middleware-staging-notification-worker-staging-1": {
+    "codestra-identity-staging_service": {
+      "aliases": [
+        "codestra-middleware-staging-notification-worker-staging-1",
+        "notification-worker-staging"
+      ],
+      "ip_address": "192.168.128.4"
+    },
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-notification-worker-staging-1",
+        "notification-worker-staging"
+      ],
+      "ip_address": "172.26.0.10"
+    },
+    "codestra-n8n-staging_edge": {
+      "aliases": [
+        "codestra-middleware-staging-notification-worker-staging-1",
+        "notification-worker-staging"
+      ],
+      "ip_address": "172.25.0.12"
+    }
+  },
+  "codestra-middleware-staging-odoo-result-worker-staging-1": {
+    "codestra-identity-staging_service": {
+      "aliases": [
+        "codestra-middleware-staging-odoo-result-worker-staging-1",
+        "odoo-result-worker-staging"
+      ],
+      "ip_address": "192.168.128.6"
+    },
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-odoo-result-worker-staging-1",
+        "odoo-result-worker-staging"
+      ],
+      "ip_address": "172.26.0.11"
+    },
+    "codestra-n8n-staging_edge": {
+      "aliases": [
+        "codestra-middleware-staging-odoo-result-worker-staging-1",
+        "odoo-result-worker-staging"
+      ],
+      "ip_address": "172.25.0.5"
+    }
+  },
+  "codestra-middleware-staging-postgres-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-postgres-1",
+        "postgres"
+      ],
+      "ip_address": "172.26.0.3"
+    }
+  },
+  "codestra-middleware-staging-redis-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-redis-1",
+        "redis"
+      ],
+      "ip_address": "172.26.0.5"
+    }
+  },
+  "codestra-middleware-staging-scheduler-staging-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-scheduler-staging-1",
+        "scheduler-staging"
+      ],
+      "ip_address": "172.26.0.9"
+    }
+  },
+  "codestra-middleware-staging-scraper-odoo-delivery-worker-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-scraper-odoo-delivery-worker-1",
+        "scraper-odoo-delivery-worker"
+      ],
+      "ip_address": "172.26.0.2"
+    },
+    "codestra-n8n-staging_edge": {
+      "aliases": [
+        "codestra-middleware-staging-scraper-odoo-delivery-worker-1",
+        "scraper-odoo-delivery-worker"
+      ],
+      "ip_address": "172.25.0.6"
+    }
+  },
+  "codestra-middleware-staging-social-dead-letter-worker-staging-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-social-dead-letter-worker-staging-1",
+        "social-dead-letter-worker-staging"
+      ],
+      "ip_address": "172.26.0.6"
+    }
+  },
+  "codestra-middleware-staging-social-delivery-worker-staging-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-social-delivery-worker-staging-1",
+        "social-delivery-worker-staging"
+      ],
+      "ip_address": "172.26.0.7"
+    }
+  },
+  "codestra-middleware-staging-social-reconciliation-worker-staging-1": {
+    "codestra-middleware-staging_backend": {
+      "aliases": [
+        "codestra-middleware-staging-social-reconciliation-worker-staging-1",
+        "social-reconciliation-worker-staging"
+      ],
+      "ip_address": "172.26.0.4"
+    }
+  },
+  "codestra-middleware-sync-worker-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-sync-worker-1",
+        "middleware-sync-worker"
+      ],
+      "ip_address": "172.18.0.33"
+    }
+  },
+  "codestra-middleware-telephony-provisioning-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-telephony-provisioning-1",
+        "middleware-telephony-provisioning"
+      ],
+      "ip_address": "172.18.0.6"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-telephony-provisioning-1",
+        "middleware-telephony-provisioning"
+      ],
+      "ip_address": "172.19.0.34"
+    }
+  },
+  "codestra-middleware-vicidial-adapter-1": {
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-vicidial-adapter-1",
+        "middleware-vicidial-adapter"
+      ],
+      "ip_address": "172.18.0.4"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-vicidial-adapter-1",
+        "middleware-vicidial-adapter"
+      ],
+      "ip_address": "172.19.0.33"
+    }
+  },
+  "codestra-middleware-webphone-session-issuer-1": {
+    "codestra-identity_identity_service": {
+      "aliases": [
+        "codestra-middleware-webphone-session-issuer-1",
+        "middleware-webphone-session-issuer"
+      ],
+      "ip_address": "172.21.0.4"
+    },
+    "codestra_backend": {
+      "aliases": [
+        "codestra-middleware-webphone-session-issuer-1",
+        "middleware-webphone-session-issuer"
+      ],
+      "ip_address": "172.18.0.17"
+    },
+    "codestra_edge": {
+      "aliases": [
+        "codestra-middleware-webphone-session-issuer-1",
+        "middleware-webphone-session-issuer"
+      ],
+      "ip_address": "172.19.0.26"
+    }
+  }
+}

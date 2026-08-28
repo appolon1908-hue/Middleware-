@@ -1,0 +1,18 @@
+services:
+  middleware-integration-api:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:09d4bd0f7b2376e0a06d3efae27a6642429389fa7e3277791ec0b36584e87175
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.integration_api"]
+    environment:
+      ALLOW_CAMPAIGN_ACTIVATION: "false"
+      AUTOMATION_ALLOWED_CAMPAIGNS: "MOY-SHIPPER-OUT,COD-WEB-OUT,MBL-NEW-LOAN-OUT,SCP-PRODUCT-OUT,SRP-STUDENT-OUT"
+      AUTOMATION_ENVIRONMENT: "production"
+      AUTOMATION_ACTIONS_ENABLED: "false"
+      ENABLE_EXTERNAL_DELIVERY: "false"
+      EXTERNAL_DELIVERY_ENABLED: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      LIVE_SMS_DELIVERY: "false"
+      N8N_EVENT_DELIVERY_ENABLED: "false"
+      N8N_PRODUCTION_WORKFLOWS_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+      ODOO_RESULT_DELIVERY_ENABLED: "false"
+      TEST_SYN_ODOO_RESULT_DELIVERY_ENABLED: "false"

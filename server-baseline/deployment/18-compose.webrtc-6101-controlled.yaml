@@ -1,0 +1,32 @@
+services:
+  middleware-webphone-session-issuer:
+    image: codestra/middleware:webrtc-6101-final
+    networks:
+      - middleware_backend
+      - identity_service
+      - middleware_edge
+    environment:
+      WEBPHONE_SESSION_ISSUER_ENABLED: "true"
+      WEBPHONE_STAGING_PROVISIONING_ENABLED: "true"
+      WEBPHONE_KEYCLOAK_ENABLED: "true"
+      WEBPHONE_ORIGIN_HOST: dialer.codestra.agency
+      KEYCLOAK_ISSUER: https://auth.codestra.co/realms/codestra
+      KEYCLOAK_JWKS_URL: https://auth.codestra.co/realms/codestra/protocol/openid-connect/certs
+      KEYCLOAK_USERINFO_URL: https://auth.codestra.co/admin/realms/codestra/users/{subject}
+      PROVISIONING_SERVICE_TOKEN_URL: ${PROVISIONING_SERVICE_TOKEN_URL:?required}
+      WEBPHONE_STAGING_ENDPOINT: "6101"
+      WEBPHONE_STAGING_CAMPAIGN: TEST_SYN
+      AGENT_WEBSOCKET_ENABLED: "true"
+      PRODUCTION_WEBRTC_ENABLED: "false"
+      LIVE_PSTN_DIALING: "false"
+      VICIDIAL_WRITE_ENABLED: "false"
+      VICIDIAL_WRITES_ENABLED: "false"
+      CALLBACK_DISPATCH_ENABLED: "false"
+      PRODUCTION_CALLBACKS_ENABLED: "false"
+      LIVE_SMS_DELIVERY: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      WEBPHONE_ENDPOINT_ADAPTER_URL: ""
+    volumes:
+      - /etc/codestra/secrets/codestra-compose/provisioning/client_secret:/run/secrets/provisioning/client_secret:ro
+      - /etc/codestra/secrets/codestra-compose/provisioning/ca-bundle.crt:/run/secrets/provisioning/ca.crt:ro
+      - /etc/codestra/secrets/codestra-compose/odoo_identity_hmac:/run/secrets/odoo/identity_hmac:ro

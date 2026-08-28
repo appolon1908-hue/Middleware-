@@ -1,0 +1,7 @@
+include:
+  - path: /opt/codestra/middleware/deploy/compose.runtime.yaml
+    env_file: ./middleware-runtime.env
+
+services:
+  middleware-scheduler:
+    image: codestra/middleware:production-rc-f08b63dec033941b5293f3c45cf08845a8f96270

@@ -1,0 +1,11 @@
+services:
+  middleware-event-gateway:
+    image: codestra/middleware:vicidial-ingress-0770332
+    volumes:
+      - /etc/codestra/secrets/telephony-publisher/keys-readiness.json:/run/secrets/telephony-publisher-keys.json:ro
+    environment:
+      READINESS_PUBLISHER_KEY_ID: vicidial-server-b-recovery-20260812
+      READINESS_PUBLISHER_CERT_SHA256: 185ce943a86c4f94b16dc003b20b75b193766e5dcec88ca2b88972c22e93982b
+      DEPLOYED_SOURCE_SHA: 0770332ba56edddda06eb9fbff909f544e59328e
+      RUNTIME_ARTIFACT_CHECKSUM: sha256:6f23e01427f89378ae890c20c38185c130f2e24550590c54fa323263513833b1
+      VICIDIAL_EVENT_INGRESS_ROUTING_ENABLED: "false"

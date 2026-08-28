@@ -1,0 +1,56 @@
+services:
+  middleware-staging:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.integration_api"]
+    ports: ["127.0.0.1:31883:8095"]
+    group_add: ["3999"]
+    volumes:
+      - /etc/codestra/secrets/middleware-runtime/quarantine-encryption-key:/run/secrets/quarantine-encryption-key:ro
+      - /etc/codestra/secrets/middleware-runtime/quarantine-fingerprint-key:/run/secrets/quarantine-fingerprint-key:ro
+      - /etc/codestra/secrets/middleware-runtime/quarantine-reviewer-key:/run/secrets/quarantine-reviewer-key:ro
+    environment: &callback-synthetic-only
+      CALLBACK_TEST_SYN_ENABLED: "true"
+      CALLBACK_ALLOWED_TENANT: "COD"
+      CALLBACK_ALLOWED_CAMPAIGN: "TEST_SYN"
+      CALLBACK_JWT_ISSUER: "https://auth.codestra.co/realms/codestra"
+      CALLBACK_JWT_AUDIENCE: "codestra-callback-api"
+      CALLBACK_JWT_JWKS_URL: "http://keycloak:8080/realms/codestra/protocol/openid-connect/certs"
+      CALLBACK_JWT_AUTHORIZED_PARTIES: "codestra-agent-desktop,codestra-agent-auth-gateway,codestra-callback-certifier"
+      CALLBACK_SCHEDULER_ENABLED: "false"
+      CALLBACK_WEBSOCKET_DELIVERY_ENABLED: "false"
+      CALLBACK_EMAIL_COMMAND_ENABLED: "false"
+      CALLBACK_DELIVERY_ENABLED: "false"
+      CALLBACK_DISPATCH_ENABLED: "false"
+      PRODUCTION_CALLBACKS_ENABLED: "false"
+      LIVE_EMAIL_DELIVERY: "false"
+      ALLOW_LIVE_EMAIL: "false"
+      LIVE_PSTN_DIALING: "false"
+      ODOO_DELIVERY_ENABLED: "false"
+      ODOO_RESULT_DELIVERY_ENABLED: "false"
+      ODOO_WRITE_ENABLED: "false"
+      ODOO_AUTOMATION_WRITES_ENABLED: "false"
+      QUARANTINE_ENCRYPTION_KEY_FILE: /run/secrets/quarantine-encryption-key
+      QUARANTINE_FINGERPRINT_SECRET_FILE: /run/secrets/quarantine-fingerprint-key
+      QUARANTINE_REVIEWER_SECRET_FILE: /run/secrets/quarantine-reviewer-key
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/readyz')"]
+    networks:
+      identity_prod: {}
+
+  scheduler-staging:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.scheduler"]
+    environment:
+      <<: *callback-synthetic-only
+      CALLBACK_SCHEDULER_ENABLED: "true"
+
+  notification-worker-staging:
+    image: ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98
+    command: ["/opt/venv/bin/python", "-m", "app.entrypoints.notification_worker"]
+    environment:
+      <<: *callback-synthetic-only
+
+networks:
+  identity_prod:
+    external: true
+    name: codestra-identity_identity_service

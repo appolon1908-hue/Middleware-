@@ -103,3 +103,23 @@ jobs:
 
       - name: Exercise isolated JetStream delivery and recovery
         run: bash scripts/nats_integration_ci.sh
+
+  temporal-workflow-integration:
+    name: Temporal critical workflow integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Exercise critical Temporal workflows
+        run: bash scripts/temporal_integration_ci.sh

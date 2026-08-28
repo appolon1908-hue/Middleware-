@@ -191,6 +191,34 @@ def test_staging_rejects_production_jetstream_namespace() -> None:
         Settings.from_env(env)
 
 
+def test_temporal_test_worker_requires_isolated_local_configuration() -> None:
+    settings = Settings.from_env(
+        {
+            "APP_ENV": "test",
+            "ALLOW_IN_MEMORY_STORAGE": "true",
+            "TEMPORAL_ADDRESS": "127.0.0.1:7233",
+            "TEMPORAL_NAMESPACE": "codestra-test",
+            "TEMPORAL_TASK_QUEUE": "codestra-test-critical",
+            "TEMPORAL_WORKER_MODE": "isolated",
+            "TEMPORAL_ALLOW_INSECURE_TEST_CONNECTION": "true",
+        }
+    )
+    assert settings.temporal_worker_mode == "isolated"
+
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "TEMPORAL_ADDRESS": "temporal.example:7233",
+                "TEMPORAL_NAMESPACE": "codestra-test",
+                "TEMPORAL_TASK_QUEUE": "codestra-test-critical",
+                "TEMPORAL_WORKER_MODE": "isolated",
+                "TEMPORAL_ALLOW_INSECURE_TEST_CONNECTION": "true",
+            }
+        )
+
+
 def test_staging_cannot_use_in_memory_storage() -> None:
     with pytest.raises(ConfigurationError):
         Settings.from_env(

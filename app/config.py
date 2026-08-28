@@ -94,6 +94,15 @@ class Settings:
     nats_allow_insecure_test_connection: bool
     production_activation_id: str | None
     production_dialing: str
+    temporal_address: str | None
+    temporal_namespace: str
+    temporal_task_queue: str
+    temporal_worker_mode: str
+    temporal_server_root_ca_file: Path | None
+    temporal_client_cert_file: Path | None
+    temporal_client_key_file: Path | None
+    temporal_tls_server_name: str | None
+    temporal_allow_insecure_test_connection: bool
     allow_in_memory_storage: bool
     max_request_body_bytes: int
     webhook_max_clock_skew_seconds: int
@@ -192,6 +201,42 @@ class Settings:
                 "PRODUCTION_DIALING",
                 "DISABLED",
             ).strip(),
+            temporal_address=source.get("TEMPORAL_ADDRESS") or None,
+            temporal_namespace=source.get(
+                "TEMPORAL_NAMESPACE",
+                "codestra-production",
+            ).strip(),
+            temporal_task_queue=source.get(
+                "TEMPORAL_TASK_QUEUE",
+                "codestra-production-critical",
+            ).strip(),
+            temporal_worker_mode=source.get(
+                "TEMPORAL_WORKER_MODE",
+                "disabled",
+            ).strip().lower(),
+            temporal_server_root_ca_file=(
+                Path(source["TEMPORAL_SERVER_ROOT_CA_FILE"])
+                if source.get("TEMPORAL_SERVER_ROOT_CA_FILE")
+                else None
+            ),
+            temporal_client_cert_file=(
+                Path(source["TEMPORAL_CLIENT_CERT_FILE"])
+                if source.get("TEMPORAL_CLIENT_CERT_FILE")
+                else None
+            ),
+            temporal_client_key_file=(
+                Path(source["TEMPORAL_CLIENT_KEY_FILE"])
+                if source.get("TEMPORAL_CLIENT_KEY_FILE")
+                else None
+            ),
+            temporal_tls_server_name=(
+                source.get("TEMPORAL_TLS_SERVER_NAME", "").strip() or None
+            ),
+            temporal_allow_insecure_test_connection=_bool(
+                source,
+                "TEMPORAL_ALLOW_INSECURE_TEST_CONNECTION",
+                False,
+            ),
             allow_in_memory_storage=_bool(source, "ALLOW_IN_MEMORY_STORAGE", False),
             max_request_body_bytes=_int(
                 source,
@@ -326,6 +371,72 @@ class Settings:
             raise ConfigurationError(
                 "NATS_ALLOW_INSECURE_TEST_CONNECTION requires isolated dispatch"
             )
+        if self.temporal_worker_mode not in {"disabled", "isolated", "production"}:
+            raise ConfigurationError(
+                "TEMPORAL_WORKER_MODE must be disabled, isolated, or production"
+            )
+        if self.temporal_worker_mode == "disabled":
+            if self.temporal_allow_insecure_test_connection:
+                raise ConfigurationError(
+                    "TEMPORAL_ALLOW_INSECURE_TEST_CONNECTION requires isolated mode"
+                )
+        else:
+            if not self.temporal_address:
+                raise ConfigurationError(
+                    "TEMPORAL_ADDRESS is required when the worker is enabled"
+                )
+            insecure_temporal_test = (
+                self.temporal_allow_insecure_test_connection
+                and self.app_env in {"test", "development"}
+                and self.temporal_address.startswith(("127.0.0.1:", "localhost:"))
+            )
+            if self.temporal_worker_mode == "production":
+                if self.app_env != "production":
+                    raise ConfigurationError(
+                        "production Temporal mode requires APP_ENV=production"
+                    )
+                expected_namespace = "codestra-production"
+                expected_task_queue = "codestra-production-critical"
+                if not self.production_activation_id or not re.fullmatch(
+                    r"[A-Z0-9][A-Z0-9._/-]{7,127}",
+                    self.production_activation_id,
+                ):
+                    raise ConfigurationError(
+                        "production Temporal mode requires PRODUCTION_ACTIVATION_ID"
+                    )
+            else:
+                if self.app_env == "production":
+                    raise ConfigurationError(
+                        "isolated Temporal mode is forbidden in production"
+                    )
+                environment = "staging" if self.app_env == "staging" else "test"
+                expected_namespace = f"codestra-{environment}"
+                expected_task_queue = f"codestra-{environment}-critical"
+            if self.temporal_namespace != expected_namespace:
+                raise ConfigurationError(
+                    "Temporal namespace does not match the selected environment"
+                )
+            if self.temporal_task_queue != expected_task_queue:
+                raise ConfigurationError(
+                    "Temporal task queue does not match the selected environment"
+                )
+            tls_paths = (
+                self.temporal_server_root_ca_file,
+                self.temporal_client_cert_file,
+                self.temporal_client_key_file,
+            )
+            if not insecure_temporal_test and any(
+                path is None or not _is_absolute_mount_path(path)
+                for path in tls_paths
+            ):
+                raise ConfigurationError(
+                    "Temporal requires absolute mounted CA, client certificate, "
+                    "and client key paths"
+                )
+            if not insecure_temporal_test and not self.temporal_tls_server_name:
+                raise ConfigurationError(
+                    "TEMPORAL_TLS_SERVER_NAME is required with TLS"
+                )
         if self.allow_in_memory_storage:
             if self.app_env not in {"test", "development"}:
                 raise ConfigurationError(

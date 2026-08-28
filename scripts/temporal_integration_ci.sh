@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+python3 -m venv .venv-temporal-integration
+trap 'rm -rf .venv-temporal-integration' EXIT
+. .venv-temporal-integration/bin/activate
+python -m pip install --disable-pip-version-check --no-input --quiet \
+  -r requirements-runtime.txt
+
+export TEMPORAL_INTEGRATION_TESTS=1
+pytest -q tests/integration/test_temporal_workflows.py
+
+echo "TEMPORAL_RECONCILIATION_RETRY=PASS"
+echo "TEMPORAL_DELAYED_CALLBACK=PASS"
+echo "TEMPORAL_PROVISIONING_COMPENSATION=PASS"
+echo "TEMPORAL_DEAD_LETTER_APPROVAL=PASS"

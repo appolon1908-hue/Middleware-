@@ -31,6 +31,8 @@ Every other workstream depends directly or transitively on it. CI rejects discon
 
 The executable intake runtime persists each accepted signed event and its NATS JetStream outbox record in one PostgreSQL transaction. The outbox worker publishes only canonical `codestra.events.*` subjects and requires an explicit production activation identity plus a mounted NATS credential. Temporal is the declared durable workflow plane. RabbitMQ is not a central Codestra bus; it remains inside the Klyrow and Telnexa provider boundaries.
 
+Critical Temporal workflows are implemented for reconciliation, delayed callbacks, provisioning with compensation, and operator-approved dead-letter recovery. See [`docs/TEMPORAL-WORKFLOWS.md`](docs/TEMPORAL-WORKFLOWS.md).
+
 ## Application-server sites
 
 Caddy currently exposes workstreams for:

@@ -12,7 +12,7 @@ python -m pip install --disable-pip-version-check --no-input --quiet --upgrade p
 python -m pip install --disable-pip-version-check --no-input --quiet -r requirements-runtime.txt
 
 python -m compileall -q app workers tests
-pytest -q
+pytest -q tests
 
 python - <<'PY'
 from app.contracts import WEBHOOK_ROUTES

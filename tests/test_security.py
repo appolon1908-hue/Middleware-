@@ -94,6 +94,54 @@ def test_external_effect_flags_fail_closed() -> None:
         )
 
 
+def test_jetstream_dispatch_requires_matching_gate_and_authorization() -> None:
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "OUTBOX_DISPATCH_ENABLED": "true",
+            }
+        )
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "SEND_EVENTS": "true",
+                "OUTBOX_DISPATCH_ENABLED": "true",
+            }
+        )
+
+
+def test_production_jetstream_dispatch_requires_approved_identity() -> None:
+    env = {
+        "APP_ENV": "production",
+        "DATABASE_URL": "postgresql://middleware.invalid/db",
+        "REDIS_URL": "redis://redis.invalid/0",
+        "NATS_URL": "tls://nats.invalid:4222",
+        "NATS_STREAM": "CODESTRA_EVENTS",
+        "NATS_SUBJECT_PREFIX": "codestra.events",
+        "NATS_CREDS_FILE": "/run/secrets/middleware-nats.creds",
+        "PRODUCTION_ACTIVATION_ID": "CHG-20260828-EVENTS",
+        "SEND_EVENTS": "true",
+        "OUTBOX_DISPATCH_ENABLED": "true",
+        "APP_SOURCE_SHA": "a" * 40,
+        "IMAGE_DIGEST": "sha256:" + "b" * 64,
+        "BUILD_TIME": "2026-08-28T12:00:00Z",
+    }
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+
+    settings = Settings.from_env(env)
+
+    assert settings.outbox_dispatch_enabled is True
+    assert settings.production_activation_id == "CHG-20260828-EVENTS"
+
+
 def test_staging_cannot_use_in_memory_storage() -> None:
     with pytest.raises(ConfigurationError):
         Settings.from_env(

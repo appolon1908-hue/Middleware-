@@ -9,8 +9,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import UUID, uuid4
 
-from sqlalchemy import Connection, RowMapping, Session, text
+from sqlalchemy import Connection, RowMapping, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from middleware.connector_sdk import manifest_digest, parse_manifest
 from middleware.connector_sdk.errors import ManifestValidationError

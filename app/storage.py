@@ -12,6 +12,7 @@ from .models import EventEnvelope, IngressResult
 
 RUNTIME_SCHEMA_VERSION = 1
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
+NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
 
 
@@ -318,6 +319,26 @@ class PostgresInboxStore:
                     now,
                 )
                 if row:
+                    # Durable acceptance and publication intent are committed
+                    # together. PostgreSQL remains authoritative; the worker
+                    # later publishes this row to JetStream at least once.
+                    await conn.execute(
+                        """
+                        INSERT INTO middleware_outbox (
+                            tenant_id, destination, event_type, payload,
+                            idempotency_key
+                        ) VALUES ($1,$2,$3,$4::jsonb,$5)
+                        """,
+                        envelope.tenant_id,
+                        NATS_JETSTREAM_DESTINATION,
+                        envelope.type,
+                        json.dumps(
+                            payload,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ),
+                        envelope.idempotency_key,
+                    )
                     return IngressResult(
                         event_id=envelope.id,
                         tenant_id=envelope.tenant_id,

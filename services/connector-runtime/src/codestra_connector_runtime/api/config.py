@@ -15,7 +15,10 @@ class RuntimeSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="CONNECTOR_RUNTIME_",
-        case_sensitive=True,
+        # Deployment platforms conventionally provide upper-case variables.
+        # Pydantic field names are lower-case, so strict case matching would
+        # silently ignore CONNECTOR_RUNTIME_DATABASE_URL and fail startup.
+        case_sensitive=False,
         extra="forbid",
     )
 
@@ -59,7 +62,7 @@ class RuntimeSettings(BaseSettings):
     webhook_secret_rotation_enabled: bool = False
     webhook_replay_request_enabled: bool = False
 
-    readiness_requires_migration: str = "20260828_0002"
+    readiness_requires_migration: str = "20260828_0004"
 
     @field_validator("release_sha")
     @classmethod

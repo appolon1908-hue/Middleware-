@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_connections (
         installation_id,
         external_account_reference
     ),
+    UNIQUE (tenant_id, connection_id),
     CHECK (jsonb_typeof(configuration) = 'object'),
     CHECK (jsonb_typeof(secret_references) = 'array'),
     CHECK (state IN ('PENDING', 'READY', 'DEGRADED', 'DISABLED', 'FAILED')),
@@ -90,8 +91,7 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_connections (
 CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_endpoints (
     webhook_id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
-    connection_id uuid NOT NULL
-        REFERENCES connector_sdk.connector_connections (connection_id),
+    connection_id uuid NOT NULL,
     endpoint_key text NOT NULL,
     route_path text NOT NULL,
     tenant_resolution text NOT NULL DEFAULT 'provider-account-mapping',
@@ -104,6 +104,10 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_endpoints (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (connection_id, endpoint_key),
+    UNIQUE (tenant_id, webhook_id),
+    FOREIGN KEY (tenant_id, connection_id)
+        REFERENCES connector_sdk.connector_connections
+            (tenant_id, connection_id),
     CHECK (endpoint_key ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
     CHECK (
         route_path LIKE '/v1/webhooks/%'
@@ -122,13 +126,15 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_endpoints (
 
 CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_event_keys (
     tenant_id uuid NOT NULL,
-    webhook_id uuid NOT NULL
-        REFERENCES connector_sdk.connector_webhook_endpoints (webhook_id),
+    webhook_id uuid NOT NULL,
     event_id text NOT NULL,
     body_sha256 text NOT NULL,
     first_received_at timestamptz NOT NULL DEFAULT now(),
     expires_at timestamptz NOT NULL,
     PRIMARY KEY (webhook_id, event_id),
+    FOREIGN KEY (tenant_id, webhook_id)
+        REFERENCES connector_sdk.connector_webhook_endpoints
+            (tenant_id, webhook_id),
     CHECK (body_sha256 ~ '^[a-f0-9]{64}$'),
     CHECK (expires_at > first_received_at)
 );
@@ -136,8 +142,7 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_event_keys (
 CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_inbox (
     inbox_id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
-    webhook_id uuid NOT NULL
-        REFERENCES connector_sdk.connector_webhook_endpoints (webhook_id),
+    webhook_id uuid NOT NULL,
     connector_id text NOT NULL,
     endpoint_key text NOT NULL,
     event_id text NOT NULL,
@@ -155,6 +160,9 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_inbox (
     processed_at timestamptz,
     error_code text,
     UNIQUE (webhook_id, event_id),
+    FOREIGN KEY (tenant_id, webhook_id)
+        REFERENCES connector_sdk.connector_webhook_endpoints
+            (tenant_id, webhook_id),
     CHECK (body_sha256 ~ '^[a-f0-9]{64}$'),
     CHECK (
         verification_state IN (
@@ -180,8 +188,7 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_webhook_inbox (
 CREATE TABLE IF NOT EXISTS connector_sdk.connector_operations (
     operation_id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
-    connection_id uuid NOT NULL
-        REFERENCES connector_sdk.connector_connections (connection_id),
+    connection_id uuid NOT NULL,
     command_id uuid NOT NULL,
     command_type text NOT NULL,
     idempotency_key text NOT NULL,
@@ -199,6 +206,9 @@ CREATE TABLE IF NOT EXISTS connector_sdk.connector_operations (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, connection_id, idempotency_key),
+    FOREIGN KEY (tenant_id, connection_id)
+        REFERENCES connector_sdk.connector_connections
+            (tenant_id, connection_id),
     CHECK (request_sha256 ~ '^[a-f0-9]{64}$'),
     CHECK (
         state IN (

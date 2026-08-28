@@ -30,6 +30,12 @@ python3 scripts/validate_workstream_manifest.py
 printf '==> Validating canonical connectivity contracts\n'
 python3 scripts/validate_connectivity_contracts.py
 
+printf '==> Validating the integration fabric\n'
+python3 scripts/validate_integration_fabric.py
+
+printf '==> Validating connector SDK contracts and generated artifacts\n'
+python3 scripts/validate_connector_sdk.py
+
 printf '==> Validating Keycloak identity, API audience, and webhook contracts\n'
 python3 scripts/validate_identity_webhook_contracts.py
 

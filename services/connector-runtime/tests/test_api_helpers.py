@@ -75,3 +75,25 @@ def test_settings_are_fail_closed(tmp_path: Path) -> None:
             connector_activation_enabled=True,
             release_sha="a" * 40,
         )
+
+
+def test_settings_accept_documented_uppercase_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key_file = tmp_path / "key"
+    key_file.write_bytes(b"x" * 32)
+    monkeypatch.setenv(
+        "CONNECTOR_RUNTIME_DATABASE_URL",
+        "postgresql+psycopg://example:example@localhost/example",
+    )
+    monkeypatch.setenv("CONNECTOR_RUNTIME_CURSOR_HMAC_KEY", "y" * 32)
+    monkeypatch.setenv(
+        "CONNECTOR_RUNTIME_BODY_ENCRYPTION_KEY_FILE",
+        str(key_file),
+    )
+
+    settings = RuntimeSettings()
+
+    assert settings.database_url.get_secret_value().endswith("/example")
+    assert settings.body_encryption_key_file == key_file

@@ -68,10 +68,11 @@ def _payload(
     return {
         "event_type": event_type,
         "tenant_id": tenant_id,
-        "external_account_reference": account,
+        "account_reference": account,
         "correlation_id": str(uuid.uuid4()),
         "causation_id": str(uuid.uuid4()),
         "occurred_at": "2026-08-27T21:00:00Z",
+        "data": {"message_id": "review-message"},
     }
 
 

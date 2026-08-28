@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "base_branch": "main",
   "deployment_from_workstream_branches": false,
   "canonical_contract_branch": "core/integration-contracts",
@@ -85,10 +85,22 @@
       "scope": "Temporary queues, caching, leases, idempotency state, locks, retry scheduling, recovery behavior, and Redis integration tests"
     },
     {
-      "branch": "platform/rabbitmq",
+      "branch": "platform/nats-jetstream",
       "category": "platform",
-      "runtime_status": "not_observed_on_middleware_host_verification_only",
-      "scope": "AMQP broker contracts, exchanges, queues, bindings, publisher confirms, consumer acknowledgements, dead-lettering, retry behavior, TLS, authorization, and runtime verification"
+      "runtime_status": "required_shared_primitive",
+      "scope": "Central durable at-least-once domain event transport, stream and consumer policy, service identity, deduplication, replay, and transport integration tests"
+    },
+    {
+      "branch": "platform/temporal",
+      "category": "platform",
+      "runtime_status": "required_shared_primitive",
+      "scope": "Recoverable long-running provisioning, reconciliation, callback, delayed-process, privacy, and controlled retry workflows"
+    },
+    {
+      "branch": "platform/rabbitmq",
+      "category": "legacy-provider-local",
+      "runtime_status": "provider_local_not_central_verification_only",
+      "scope": "Legacy inventory for provider-local Telnexa and Klyrow RabbitMQ only; it is forbidden as a Codestra central event transport or Middleware dependency"
     },
     {
       "branch": "integration/mautic",
@@ -212,7 +224,6 @@
     }
   ],
   "not_observed_with_verification_branches": [
-    "platform/rabbitmq",
     "integration/mautic",
     "integration/postal-email",
     "integration/jasmin-sms",

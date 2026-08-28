@@ -22,7 +22,7 @@ class ProblemError(Exception):
     extensions: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        super().__init__(self.detail)
+        Exception.__init__(self, self.detail)
 
 
 def _correlation_id(request: Request) -> str:

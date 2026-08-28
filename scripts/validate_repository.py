@@ -10,6 +10,7 @@ container scan, or application integration tests.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -71,6 +72,9 @@ EXPECTED_SAFETY_VALUES = {
     "PRODUCTION_CALLBACKS_ENABLED": "false",
     "N8N_PRODUCTION_WORKFLOWS_ENABLED": "false",
     "PRODUCTION_DIALING": "DISABLED",
+    "LIVE_SMS_DELIVERY": "false",
+    "LIVE_EMAIL_DELIVERY": "false",
+    "UNRESTRICTED_CRAWLING": "false",
 }
 
 ACTION_REF_RE = re.compile(
@@ -96,11 +100,29 @@ def is_live_env_file(path: Path) -> bool:
 
 
 def iter_repository_files() -> list[Path]:
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError(f"cannot enumerate repository files with Git: {exc}") from exc
+
     files: list[Path] = []
-    for path in ROOT.rglob("*"):
-        relative = path.relative_to(ROOT)
-        if ".git" in relative.parts:
+    for raw_relative in result.stdout.split(b"\0"):
+        if not raw_relative:
             continue
+        relative = Path(raw_relative.decode("utf-8", errors="strict"))
+        path = ROOT / relative
         if path.is_file() or path.is_symlink():
             files.append(path)
     return sorted(files)
@@ -252,7 +274,11 @@ def validate_workflow_pinning(errors: list[str]) -> None:
 
 def main() -> int:
     errors: list[str] = []
-    files = iter_repository_files()
+    try:
+        files = iter_repository_files()
+    except (RuntimeError, UnicodeError) as exc:
+        print(f"Middleware repository validation failed:\n  - {exc}", file=sys.stderr)
+        return 1
 
     validate_required_files(errors)
     validate_paths(files, errors)

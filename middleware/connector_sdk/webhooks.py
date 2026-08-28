@@ -107,7 +107,7 @@ class InMemoryReplayStore:
     """Atomic TTL replay store for tests and local development only."""
 
     def __init__(self) -> None:
-        self._claims: dict[str, tuple[str, int]] = {}
+        self._claims: dict[str, tuple[str, int, bool]] = {}
         self._lock = threading.Lock()
 
     def claim(
@@ -120,22 +120,41 @@ class InMemoryReplayStore:
         with self._lock:
             expired = [
                 existing
-                for existing, (_, expires_at) in self._claims.items()
+                for existing, (_, expires_at, _) in self._claims.items()
                 if expires_at <= now
             ]
             for existing in expired:
                 self._claims.pop(existing, None)
             prior = self._claims.get(event_key)
             if prior is not None:
-                prior_digest, _ = prior
+                prior_digest, _, _ = prior
                 if prior_digest == body_sha256:
                     return ReplayDecision.EXACT_REPLAY
                 return ReplayDecision.SEMANTIC_CONFLICT
             self._claims[event_key] = (
                 body_sha256,
                 now + ttl_seconds,
+                False,
             )
             return ReplayDecision.NEW
+
+    def is_completed(self, event_key: str, body_sha256: str) -> bool:
+        with self._lock:
+            prior = self._claims.get(event_key)
+            return bool(
+                prior is not None
+                and prior[0] == body_sha256
+                and prior[2]
+            )
+
+    def complete(self, event_key: str, body_sha256: str) -> None:
+        with self._lock:
+            prior = self._claims.get(event_key)
+            if prior is None or prior[0] != body_sha256:
+                raise WebhookVerificationError(
+                    "webhook replay claim disappeared before completion"
+                )
+            self._claims[event_key] = (prior[0], prior[1], True)
 
 
 def _case_insensitive_headers(
@@ -323,9 +342,22 @@ class WebhookProcessor:
         record = self._registry.get(connector_id)
         adapter = self._registry.adapter_factory(connector_id)(record.manifest)
 
-        # Exact replays are normalized again rather than dropped. This makes a
-        # retry recoverable when the first delivery was authenticated and
-        # claimed but normalization or durable inbox persistence failed.
+        # A successfully normalized delivery is idempotently acknowledged.
+        # A delivery that was claimed but failed before completion is allowed
+        # to retry with the same event ID and body digest.
+        if (
+            verified.replay_decision is ReplayDecision.EXACT_REPLAY
+            and self._replay_store.is_completed(
+                verified.replay_key,
+                verified.body_sha256,
+            )
+        ):
+            return WebhookProcessResult(
+                decision=verified.replay_decision,
+                verified=verified,
+                cloud_event=None,
+            )
+
         event = adapter.normalize_webhook(verified)
         if event.event_id != verified.event_id:
             raise WebhookVerificationError(
@@ -402,6 +434,10 @@ class WebhookProcessor:
             ),
             data=event.payload,
             extensions=extensions,
+        )
+        self._replay_store.complete(
+            verified.replay_key,
+            verified.body_sha256,
         )
         return WebhookProcessResult(
             decision=verified.replay_decision,

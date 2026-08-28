@@ -56,6 +56,7 @@ ALLOWED_DIRECTIONS = {
     "scrape",
     "state",
     "test",
+    "workflow",
 }
 
 ALLOWED_TRANSPORTS = {
@@ -67,6 +68,7 @@ ALLOWED_TRANSPORTS = {
     "postgresql",
     "prometheus_scrape",
     "redis",
+    "temporal_rpc",
 }
 
 ALLOWED_AUTHENTICATION = {
@@ -86,6 +88,7 @@ ALLOWED_RELIABILITY = {
     "at_least_once",
     "best_effort_observation",
     "durable_inbox",
+    "durable_workflow",
     "lease_retry",
     "read_only",
     "synchronous",
@@ -265,6 +268,14 @@ def main() -> int:
             "connectivity map and workstream manifest disagree on contract branch"
         )
 
+    connectivity_version = connectivity.get("version")
+    if (
+        not isinstance(connectivity_version, int)
+        or isinstance(connectivity_version, bool)
+        or connectivity_version < 2
+    ):
+        errors.append("connectivity map version must be at least 2")
+
     policies = connectivity.get("policies")
     if not isinstance(policies, dict):
         errors.append("connectivity policies must be an object")
@@ -408,7 +419,57 @@ def main() -> int:
     if duplicate_ids:
         errors.append("duplicate connection IDs: " + ", ".join(duplicate_ids))
 
-    disconnected = sorted(branches - connected_branches)
+    by_id = {
+        connection.get("id"): connection
+        for connection in raw_connections
+        if isinstance(connection, dict) and isinstance(connection.get("id"), str)
+    }
+    required_central_links = {
+        "event-ledger-to-nats": (
+            "core/event-ledger-outbox",
+            "platform/nats-jetstream",
+            "nats_jetstream",
+        ),
+        "workers-to-temporal": (
+            "core/workers-scheduler",
+            "platform/temporal",
+            "temporal_rpc",
+        ),
+    }
+    for connection_id, expected in required_central_links.items():
+        connection = by_id.get(connection_id)
+        if connection is None:
+            errors.append(f"required central connection is missing: {connection_id}")
+            continue
+        actual = (
+            connection.get("source_branch"),
+            connection.get("target_branch"),
+            connection.get("transport"),
+        )
+        if actual != expected:
+            errors.append(
+                f"{connection_id} must connect {expected[0]} to {expected[1]} "
+                f"using {expected[2]}"
+            )
+
+    central_rabbitmq_links = [
+        connection.get("id")
+        for connection in raw_connections
+        if isinstance(connection, dict)
+        and connection.get("target_branch") == "platform/rabbitmq"
+    ]
+    if central_rabbitmq_links:
+        errors.append(
+            "RabbitMQ is provider-local and cannot be a central connection target: "
+            + ", ".join(str(item) for item in central_rabbitmq_links)
+        )
+
+    provider_local_branches = {
+        branch
+        for branch, status in branch_status.items()
+        if status == "provider_local_not_central_verification_only"
+    }
+    disconnected = sorted(branches - connected_branches - provider_local_branches)
     if disconnected:
         errors.append(
             "workstreams with no communication connection: "

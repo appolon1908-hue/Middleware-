@@ -82,7 +82,7 @@ def _manifest() -> dict[str, object]:
         {
             "endpoint_key": "provider-events",
             "route_path": f"/v1/webhooks/apitest{suffix}/provider",
-            "signature_algorithm": "codestra-hmac-sha256-v1",
+            "signature_algorithm": "hmac-sha256",
             "signature_header": "X-Test-Signature",
             "timestamp_header": "X-Test-Timestamp",
             "event_id_header": "X-Test-Event-Id",
@@ -276,21 +276,30 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
                 UPDATE connector_sdk.connector_installations
                    SET state='ACTIVE'
                  WHERE connector_id=:connector_id
-                   AND environment='development';
+                   AND environment='development'
+                """
+            ),
+            {"connector_id": connector_id},
+        )
+        session.execute(
+            text(
+                """
                 UPDATE connector_sdk.connector_connections
                    SET state='READY'
-                 WHERE tenant_id=:tenant_id AND connection_id=:connection_id;
+                 WHERE tenant_id=:tenant_id AND connection_id=:connection_id
+                """
+            ),
+            {"tenant_id": tenant_id, "connection_id": connection_id},
+        )
+        session.execute(
+            text(
+                """
                 UPDATE connector_sdk.connector_webhook_endpoints
                    SET state='ACTIVE'
                  WHERE tenant_id=:tenant_id AND webhook_id=:webhook_id
                 """
             ),
-            {
-                "connector_id": connector_id,
-                "tenant_id": tenant_id,
-                "connection_id": connection_id,
-                "webhook_id": webhook_id,
-            },
+            {"tenant_id": tenant_id, "webhook_id": webhook_id},
         )
 
     event_id = "evt-api-durable"

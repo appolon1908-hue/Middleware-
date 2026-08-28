@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from fastapi import Depends, FastAPI, Header, Query, Request, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -95,7 +96,11 @@ def _response(
     }
     if etag is not None:
         headers["ETag"] = f'"v{etag}"'
-    return JSONResponse(status_code=status, content=body, headers=headers)
+    return JSONResponse(
+        status_code=status,
+        content=jsonable_encoder(body),
+        headers=headers,
+    )
 
 
 def _operation_result(

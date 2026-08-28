@@ -47,11 +47,11 @@ Redis is a short lease guard against concurrent duplicate processing. PostgreSQL
 
 Apply `migrations/0001_runtime.sql` before starting a non-test runtime.
 
-## Outbox, retry and DLQ
+## Outbox, JetStream, retry and DLQ
 
-The migration also creates a lease-based `middleware_outbox`. The store and generic worker implement `FOR UPDATE SKIP LOCKED`, bounded exponential retry, lease ownership and dead-letter transition.
+The same PostgreSQL transaction that accepts a new inbox event now creates its `nats-jetstream` outbox row. The store and worker implement `FOR UPDATE SKIP LOCKED`, bounded exponential retry, lease ownership, unknown-outcome quarantine, and dead-letter transition. JetStream publication uses a domain-separated `codestra.events.*` subject and a deterministic `Nats-Msg-Id`; the outbox is completed only after the server acknowledges the publish.
 
-No external provider handler is registered on this branch. `OUTBOX_DISPATCH_ENABLED=true` is explicitly rejected by the runtime safety configuration, and `workers/run_outbox.py` refuses to activate provider delivery.
+`workers/run_outbox.py` registers only the NATS JetStream transport. Provider, Odoo, n8n, telephony, SMS, email, social, and crawler writes are not registered. Dispatch requires `SEND_EVENTS=true` and `OUTBOX_DISPATCH_ENABLED=true` together, a production-only `PRODUCTION_ACTIVATION_ID`, an exact immutable release identity, and a mounted NATS service credential. Staging remains no-effect.
 
 ## Fail-closed runtime
 
@@ -59,8 +59,8 @@ In staging/production:
 
 - in-memory storage is prohibited;
 - PostgreSQL and Redis are required;
-- all external-effect flags must be false;
-- outbox dispatch must be false;
+- all provider/business external-effect flags must be false;
+- JetStream dispatch is disabled unless separately production-authorized;
 - API docs are disabled;
 - the application fails startup on unsafe or incomplete configuration.
 

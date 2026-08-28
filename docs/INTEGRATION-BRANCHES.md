@@ -15,6 +15,7 @@ The canonical machine-readable list is [`config/integration-branches.json`](../c
 | `configured_worker_not_observed` | Configuration references exist, but the expected worker was not observed. |
 | `configured_runtime_not_confirmed` | Configuration references exist, but active runtime and ownership are not confirmed. |
 | `not_observed_on_middleware_host_verification_only` | The branch exists for contracts, tests, inventory, and verification only. It does not authorize installation or activation. |
+| `provider_local_not_central_verification_only` | A provider-owned component recorded for compatibility; it cannot become a central middleware dependency. |
 
 ## Canonical shared contract workstream
 
@@ -45,9 +46,11 @@ Every other workstream depends directly or transitively on `core/integration-con
 | `platform/caddy` | Caddy | Active scope | Public HTTPS, reverse proxy, TLS, upstream health, security headers, access restrictions, and edge validation. |
 | `platform/postgresql` | PostgreSQL | Active scope | Durable records, event ledger, outbox, audit, mappings, schema, migrations, least-privilege roles, backup/restore, and rollback. |
 | `platform/redis` | Redis | Active scope | Temporary queues, cache, leases, idempotency state, locks, retry scheduling, recovery, and integration tests. |
-| `platform/rabbitmq` | RabbitMQ | Verification only | AMQP contracts, exchanges, queues, bindings, confirmations, acknowledgements, dead-lettering, retries, TLS, authorization, compatibility, and runtime inventory. |
+| `platform/nats-jetstream` | NATS JetStream | Required shared primitive | Canonical event subjects, durable consumers, replay, service credentials, acknowledgements, deduplication, and central event transport. |
+| `platform/temporal` | Temporal | Required shared primitive | Durable workflows, task queues, retries, timeouts, signals, workflow identity, and operational recovery. |
+| `platform/rabbitmq` | RabbitMQ | Provider-local only | Compatibility inventory for Klyrow and Telnexa. It is forbidden as a central Codestra event transport or Middleware dependency. |
 
-RabbitMQ does not replace or supplement Redis merely because its branch exists. A broker change requires a reviewed architecture decision, migration and rollback plan, queue-semantics tests, operational ownership, and runtime evidence.
+RabbitMQ does not replace NATS JetStream or supplement Redis merely because its branch exists. A central transport change requires a reviewed architecture decision, migration and rollback plan, queue-semantics tests, operational ownership, and runtime evidence.
 
 ## Verification-only application and testing workstreams
 
@@ -93,18 +96,17 @@ Preferred sequence:
 
 ```text
 1. core/integration-contracts
-2. platform/postgresql and platform/redis
+2. platform/postgresql, platform/redis, platform/nats-jetstream and platform/temporal
 3. integration/keycloak
 4. core/event-ledger-outbox
 5. core/webhook-inbox-replay
 6. core/workers-scheduler
 7. confirmed application adapters
 8. verification-only adapters after runtime confirmation
-9. platform/rabbitmq after an approved broker decision
-10. platform/kong
-11. platform/caddy
-12. testing/playwright against staging or isolated targets
-13. exporters, Prometheus, Loki, Alertmanager and Grafana
+9. platform/kong
+10. platform/caddy
+11. testing/playwright against staging or isolated targets
+12. exporters, Prometheus, Loki, Alertmanager and Grafana
 ```
 
 Use stacked pull requests when dependencies are unavoidable. Each PR identifies its dependency branches, connection IDs, exact merge order, and compatibility evidence.

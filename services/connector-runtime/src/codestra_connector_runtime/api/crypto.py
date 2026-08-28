@@ -64,11 +64,15 @@ class EncryptedBodyStore:
                 os.fsync(stream.fileno())
             os.chmod(temporary_path, 0o600)
             os.replace(temporary_path, target)
-            directory_fd = os.open(target.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+            # POSIX permits opening and fsyncing a directory so the rename is
+            # durable across a host crash. Windows does not expose that
+            # operation through os.open; the file fsync above remains valid.
+            if os.name != "nt":
+                directory_fd = os.open(target.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
         finally:
             if os.path.exists(temporary_path):
                 os.unlink(temporary_path)

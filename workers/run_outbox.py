@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import asyncio
 
+import asyncpg
+
 from app.config import ConfigurationError, Settings
+from app.nats_transport import NatsJetStreamPublisher
+from app.storage import NATS_JETSTREAM_DESTINATION, PostgresOutboxStore
+from app.worker import OutboxWorker
 
 
 async def main() -> None:
@@ -12,9 +17,27 @@ async def main() -> None:
         raise ConfigurationError(
             "OUTBOX_DISPATCH_ENABLED=false; outbox worker is intentionally disabled"
         )
-    raise ConfigurationError(
-        "no external provider handlers are registered on intake-runtime-v1"
+    if settings.database_url is None:
+        raise ConfigurationError("DATABASE_URL is required for the outbox worker")
+
+    pool = await asyncpg.create_pool(
+        settings.database_url,
+        min_size=1,
+        max_size=8,
+        command_timeout=10,
     )
+    publisher: NatsJetStreamPublisher | None = None
+    try:
+        publisher = await NatsJetStreamPublisher.connect(settings)
+        worker = OutboxWorker(
+            PostgresOutboxStore(pool),
+            {NATS_JETSTREAM_DESTINATION: publisher.publish},
+        )
+        await worker.run_forever()
+    finally:
+        if publisher is not None:
+            await publisher.close()
+        await pool.close()
 
 
 if __name__ == "__main__":

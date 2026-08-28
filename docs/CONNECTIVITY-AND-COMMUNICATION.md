@@ -43,14 +43,17 @@ Public and private clients
  event      webhook     workers
  ledger      inbox      scheduler
     |          |          |
-    +----------+----------+
-               |
-        +------+------+
-        |             |
- PostgreSQL          Redis
-                       |
-                 RabbitMQ
-              verification only
+    +-----+----+----+-----+
+          |         |
+    PostgreSQL     Redis
+          |
+          v
+ NATS JetStream <---- canonical events
+          |
+          v
+       workers ----> Temporal workflows
+
+ RabbitMQ: provider-local only (Klyrow/Telnexa), never the central bus
 
  core/integration-contracts
           |
@@ -91,7 +94,7 @@ CI validates that:
 1. every declared workstream has a dependency declaration;
 2. the dependency graph has no cycles;
 3. every workstream is connected to `core/integration-contracts`;
-4. every workstream participates in at least one declared communication connection;
+4. every central workstream participates in at least one declared communication connection; provider-local inventory branches are explicitly exempt;
 5. every connection names its transport, authentication, reliability, owner, runtime status, and contract;
 6. verification-only systems cannot be represented as active connections;
 7. required event metadata is present in the canonical envelope;
@@ -141,7 +144,7 @@ The preferred merge sequence is:
 
 ```text
 1. core/integration-contracts
-2. platform/postgresql and platform/redis
+2. platform/postgresql, platform/redis, platform/nats-jetstream and platform/temporal
 3. integration/keycloak
 4. core/event-ledger-outbox
 5. core/webhook-inbox-replay
@@ -153,7 +156,7 @@ The preferred merge sequence is:
 11. testing/playwright
 ```
 
-RabbitMQ, Mautic, Postal, Jasmin, Crawlee, Kyqra, and Beyvra remain verification-only until runtime ownership, source, network, credentials, data responsibility, rollback, and activation controls are confirmed.
+RabbitMQ remains provider-local to Klyrow and Telnexa and is forbidden as a central middleware transport. Mautic, Postal, Jasmin, Crawlee, Kyqra, and Beyvra remain verification-only until runtime ownership, source, network, credentials, data responsibility, rollback, and activation controls are confirmed.
 
 ## Keeping branches up to date
 

@@ -108,6 +108,22 @@ async def test_postgres_schema_and_duplicate_reconciliation(pool: asyncpg.Pool) 
     assert first.status == "accepted"
     assert second.status == "duplicate"
     assert second.duplicate is True
+    async with pool.acquire() as conn:
+        outbox = await conn.fetchrow(
+            """
+            SELECT destination, event_type, idempotency_key, payload
+              FROM middleware_outbox
+             WHERE tenant_id=$1 AND idempotency_key=$2
+            """,
+            item.tenant_id,
+            item.idempotency_key,
+        )
+    assert outbox is not None
+    assert outbox["destination"] == "nats-jetstream"
+    assert outbox["event_type"] == item.type
+    raw_payload = outbox["payload"]
+    payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
+    assert payload["id"] == item.id
 
 
 @pytest.mark.asyncio

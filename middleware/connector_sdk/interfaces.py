@@ -40,6 +40,12 @@ class ReplayStore(Protocol):
     ) -> ReplayDecision:
         """Atomically classify a new event, exact replay, or body conflict."""
 
+    def is_completed(self, event_key: str, body_sha256: str) -> bool:
+        """Return whether the exact delivery already completed normalization."""
+
+    def complete(self, event_key: str, body_sha256: str) -> None:
+        """Mark the claimed exact delivery as successfully normalized."""
+
 
 class CapabilityProvider(Protocol):
     def is_enabled(self, tenant_id: str, capability: str) -> bool:

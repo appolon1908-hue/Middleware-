@@ -2,7 +2,7 @@
 
 This repository is the source of truth for reviewed middleware contracts and Git workstreams connecting Codestra applications, public sites, provider-host services, messaging, telephony, crawlers, identity, persistence, and monitoring.
 
-> **Security notice:** this repository is currently public. Keep it limited to non-secret scaffolding, contracts, tests, and documentation until its visibility is changed to private. Do not import live application source, credentials, certificates, customer data, private configuration, or operational evidence while it is public.
+> **Security notice:** this repository is currently public. Runtime source and tests must remain non-secret and environment-neutral. Never commit credentials, certificates, customer data, private configuration, or operational evidence.
 
 ## Operating model
 
@@ -28,6 +28,8 @@ core/integration-contracts
 This branch owns common event, HTTP, webhook, provider-transport, identity, tenant, correlation, causation, idempotency, compatibility, error, and observability rules.
 
 Every other workstream depends directly or transitively on it. CI rejects disconnected branches, dependency cycles, unknown communication links, missing authentication, missing reliability behavior, missing contracts, and verification-only links represented as active.
+
+The executable intake runtime persists each accepted signed event and its NATS JetStream outbox record in one PostgreSQL transaction. The outbox worker publishes only canonical `codestra.events.*` subjects and requires an explicit production activation identity plus a mounted NATS credential. Temporal is the declared durable workflow plane. RabbitMQ is not a central Codestra bus; it remains inside the Klyrow and Telnexa provider boundaries.
 
 ## Application-server sites
 

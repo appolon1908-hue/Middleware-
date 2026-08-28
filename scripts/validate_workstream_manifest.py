@@ -17,7 +17,6 @@ BRANCH_RE = re.compile(
 )
 VERIFICATION_STATUS = "not_observed_on_middleware_host_verification_only"
 REQUIRED_VERIFICATION_BRANCHES = {
-    "platform/rabbitmq",
     "integration/mautic",
     "integration/postal-email",
     "integration/jasmin-sms",
@@ -29,6 +28,8 @@ REQUIRED_SHARED_BRANCHES = {
     "core/event-ledger-outbox",
     "core/webhook-inbox-replay",
     "core/workers-scheduler",
+    "platform/nats-jetstream",
+    "platform/temporal",
 }
 EXPECTED_SYNC_POLICY = {
     "main_must_be_ancestor_of_active_work": True,
@@ -65,8 +66,8 @@ def main() -> int:
         return fail(errors)
 
     version = manifest.get("version")
-    if not isinstance(version, int) or isinstance(version, bool) or version < 4:
-        errors.append("version must be an integer greater than or equal to 4")
+    if not isinstance(version, int) or isinstance(version, bool) or version < 5:
+        errors.append("version must be an integer greater than or equal to 5")
 
     if manifest.get("base_branch") != "main":
         errors.append("base_branch must be exactly 'main'")
@@ -172,6 +173,17 @@ def main() -> int:
             "required verification workstreams are missing: "
             + ", ".join(missing_required)
         )
+
+    by_branch = {
+        item.get("branch"): item
+        for item in raw_workstreams
+        if isinstance(item, dict) and isinstance(item.get("branch"), str)
+    }
+    rabbitmq = by_branch.get("platform/rabbitmq", {})
+    if rabbitmq.get("runtime_status") != (
+        "provider_local_not_central_verification_only"
+    ):
+        errors.append("RabbitMQ must remain provider-local and non-central")
 
     if errors:
         return fail(errors)

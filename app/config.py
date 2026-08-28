@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping
+from urllib.parse import urlparse
 
 
 FALSE_VALUES = {"0", "false", "no", "off", ""}
@@ -61,6 +63,15 @@ def _secret_env_name(producer_client_id: str) -> str:
     )
 
 
+def _is_absolute_mount_path(path: Path) -> bool:
+    value = str(path)
+    return (
+        path.is_absolute()
+        or value.startswith(("/", "\\"))
+        or re.match(r"^[A-Za-z]:[\\/]", value) is not None
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
@@ -75,6 +86,12 @@ class Settings:
     audience: str
     database_url: str | None
     redis_url: str | None
+    nats_url: str | None
+    nats_stream: str
+    nats_subject_prefix: str
+    nats_credentials_file: Path | None
+    production_activation_id: str | None
+    production_dialing: str
     allow_in_memory_storage: bool
     max_request_body_bytes: int
     webhook_max_clock_skew_seconds: int
@@ -118,6 +135,9 @@ class Settings:
                 "SOCIAL_DELIVERY_ENABLED",
                 "CRAWLER_EXECUTION_ENABLED",
                 "SCRAPPER_EXECUTION_ENABLED",
+                "LIVE_SMS_DELIVERY",
+                "LIVE_EMAIL_DELIVERY",
+                "UNRESTRICTED_CRAWLING",
             )
         }
         webhook_secrets = {
@@ -143,6 +163,24 @@ class Settings:
             audience=source.get("MIDDLEWARE_AUDIENCE", "middleware-api"),
             database_url=source.get("DATABASE_URL") or None,
             redis_url=source.get("REDIS_URL") or None,
+            nats_url=source.get("NATS_URL") or None,
+            nats_stream=source.get("NATS_STREAM", "CODESTRA_EVENTS").strip(),
+            nats_subject_prefix=source.get(
+                "NATS_SUBJECT_PREFIX",
+                "codestra.events",
+            ).strip(),
+            nats_credentials_file=(
+                Path(source["NATS_CREDS_FILE"])
+                if source.get("NATS_CREDS_FILE")
+                else None
+            ),
+            production_activation_id=(
+                source.get("PRODUCTION_ACTIVATION_ID", "").strip() or None
+            ),
+            production_dialing=source.get(
+                "PRODUCTION_DIALING",
+                "DISABLED",
+            ).strip(),
             allow_in_memory_storage=_bool(source, "ALLOW_IN_MEMORY_STORAGE", False),
             max_request_body_bytes=_int(
                 source,
@@ -181,16 +219,54 @@ class Settings:
             raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
         if self.audience != "middleware-api":
             raise ConfigurationError("MIDDLEWARE_AUDIENCE must be middleware-api")
-        enabled = sorted(name for name, value in self.external_effects.items() if value)
-        if enabled:
+        enabled = {
+            name for name, value in self.external_effects.items() if value
+        }
+        unsupported_enabled = sorted(enabled - {"SEND_EVENTS"})
+        if unsupported_enabled:
             raise ConfigurationError(
-                "external effects must remain disabled in intake-runtime-v1: "
-                + ", ".join(enabled)
+                "provider and business effects are not implemented by this runtime: "
+                + ", ".join(unsupported_enabled)
+            )
+        if self.production_dialing != "DISABLED":
+            raise ConfigurationError(
+                "PRODUCTION_DIALING must remain DISABLED"
+            )
+        if self.outbox_dispatch_enabled != ("SEND_EVENTS" in enabled):
+            raise ConfigurationError(
+                "OUTBOX_DISPATCH_ENABLED and SEND_EVENTS must be enabled or disabled together"
             )
         if self.outbox_dispatch_enabled:
-            raise ConfigurationError(
-                "OUTBOX_DISPATCH_ENABLED must remain false until a separate reviewed activation"
-            )
+            if self.app_env != "production":
+                raise ConfigurationError(
+                    "JetStream dispatch is allowed only after production authorization"
+                )
+            if not self.production_activation_id or not re.fullmatch(
+                r"[A-Z0-9][A-Z0-9._/-]{7,127}",
+                self.production_activation_id,
+            ):
+                raise ConfigurationError(
+                    "PRODUCTION_ACTIVATION_ID must identify the approved activation"
+                )
+            parsed_nats = urlparse(self.nats_url or "")
+            if parsed_nats.scheme != "tls" or not parsed_nats.hostname:
+                raise ConfigurationError(
+                    "NATS_URL must use tls:// with a hostname when dispatch is enabled"
+                )
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", self.nats_stream):
+                raise ConfigurationError("NATS_STREAM is invalid")
+            if not re.fullmatch(
+                r"[a-z0-9]+(?:\.[a-z0-9_-]+)+",
+                self.nats_subject_prefix,
+            ):
+                raise ConfigurationError("NATS_SUBJECT_PREFIX is invalid")
+            if (
+                self.nats_credentials_file is None
+                or not _is_absolute_mount_path(self.nats_credentials_file)
+            ):
+                raise ConfigurationError(
+                    "NATS_CREDS_FILE must be an absolute mounted credential path"
+                )
         if self.allow_in_memory_storage:
             if self.app_env not in {"test", "development"}:
                 raise ConfigurationError(

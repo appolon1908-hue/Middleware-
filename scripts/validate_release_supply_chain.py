@@ -127,6 +127,8 @@ def main() -> int:
         "severity-cutoff: high": "high vulnerability gate",
         "only-fixed: true": "actionable vulnerability gate",
         "cosign sign --yes": "image signature",
+        '--annotations "codestra.source_sha=$RELEASE_SOURCE_SHA"': "source annotation",
+        '--annotations "codestra.schema_head=0003_immutable_event_ledger"': "schema annotation",
         "cosign attest --yes": "SBOM attestation",
         "cosign sign-blob --yes": "manifest signature",
         "cosign verify-attestation": "SBOM attestation verification",

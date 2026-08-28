@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 : "${ADMIN_DATABASE_URL:?ADMIN_DATABASE_URL is required}"
 : "${APP_DATABASE_URL:?APP_DATABASE_URL is required}"
+: "${POSTGRES_TOOL_IMAGE:?POSTGRES_TOOL_IMAGE is required}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -40,13 +41,29 @@ pytest -q -m postgres
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
-pg_dump --format=custom --no-owner --no-acl "$ADMIN_PGURL" > "$TMP_DIR/connector.dump"
 BASE_URL="${ADMIN_PGURL%/*}"
 RESTORE_URL="$BASE_URL/connector_restore"
+
+# Run pg_dump and pg_restore from the same pinned PostgreSQL major version as
+# the disposable server. The hosted runner's client may be older than it.
+docker run --rm --network host \
+    -e PGPASSWORD=connector \
+    -v "$TMP_DIR:/backup" \
+    "$POSTGRES_TOOL_IMAGE" \
+    pg_dump -h 127.0.0.1 -U connector -d connector \
+        --format=custom --no-owner --no-acl --file=/backup/connector.dump
+
 psql "$BASE_URL/postgres" -v ON_ERROR_STOP=1 \
     -c 'DROP DATABASE IF EXISTS connector_restore' \
     -c 'CREATE DATABASE connector_restore'
-pg_restore --no-owner --no-acl --dbname "$RESTORE_URL" "$TMP_DIR/connector.dump"
+
+docker run --rm --network host \
+    -e PGPASSWORD=connector \
+    -v "$TMP_DIR:/backup:ro" \
+    "$POSTGRES_TOOL_IMAGE" \
+    pg_restore -h 127.0.0.1 -U connector -d connector_restore \
+        --no-owner --no-acl /backup/connector.dump
+
 psql "$RESTORE_URL" -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM connector_sdk.connector_installations'
 psql "$BASE_URL/postgres" -v ON_ERROR_STOP=1 \

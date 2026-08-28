@@ -1,0 +1,3229 @@
+{
+  "canonical_main_sha": "844d13c7ba808653a7d982c63353bc67cdc9adef",
+  "compose_inputs": [
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/01-callback-production-20260822.override.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-integration-api",
+        "middleware-notification-worker",
+        "middleware-scheduler",
+        "odoo"
+      ],
+      "source": "/home/codestra-admin/releases/callback-production-20260822.override.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/02-campaign-crm-middleware-d30babd.override.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-integration-api"
+      ],
+      "source": "/home/codestra-admin/releases/campaign-crm-middleware-d30babd.override.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "staging",
+      "file": "server-baseline/deployment/03-compose.breero-worker-a9e890c.yaml",
+      "health": false,
+      "limits": true,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-breero-odoo-worker",
+        "middleware-event-gateway"
+      ],
+      "source": "/opt/codestra/compose/compose.breero-worker-a9e890c.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "staging",
+      "file": "server-baseline/deployment/04-compose.external-webhook.yaml",
+      "health": false,
+      "limits": true,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-event-gateway",
+        "middleware-external-webhook-worker"
+      ],
+      "source": "/opt/codestra/compose/compose.external-webhook.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/05-compose.final-production-trust.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [
+        "codestra-identity-service",
+        "codestra-internal-integration"
+      ],
+      "secrets": [],
+      "services": [
+        "n8n",
+        "odoo",
+        "reverse-proxy"
+      ],
+      "source": "/opt/codestra/compose/compose.final-production-trust.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/06-compose.health-contract-remediation.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware",
+        "middleware-integration-api"
+      ],
+      "source": "/opt/codestra/compose/compose.health-contract-remediation.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/07-compose.live-delivery-breero.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-breero-odoo-worker"
+      ],
+      "source": "/opt/codestra/compose/compose.live-delivery-breero.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/08-compose.live-delivery-external-webhook.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-external-webhook-worker"
+      ],
+      "source": "/opt/codestra/compose/compose.live-delivery-external-webhook.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/09-compose.live-delivery-safety.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware",
+        "middleware-event-gateway",
+        "middleware-evidence-runner",
+        "middleware-extension-allocator",
+        "middleware-integration-api",
+        "middleware-n8n-runtime-worker",
+        "middleware-notification-worker",
+        "middleware-odoo-result-worker",
+        "middleware-pjsip-adapter",
+        "middleware-policy-engine",
+        "middleware-postly-polling-worker",
+        "middleware-reconciliation-worker",
+        "middleware-scheduler",
+        "middleware-social-n8n-delivery-worker",
+        "middleware-sync-worker",
+        "middleware-telephony-provisioning",
+        "middleware-vicidial-adapter",
+        "middleware-webphone-session-issuer"
+      ],
+      "source": "/opt/codestra/compose/compose.live-delivery-safety.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/10-compose.live-delivery-scraper.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-scraper-odoo-delivery-worker"
+      ],
+      "source": "/opt/codestra/compose/compose.live-delivery-scraper.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/11-compose.m07-exact-digest.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-webphone-session-issuer"
+      ],
+      "source": "/opt/codestra/compose/compose.m07-exact-digest.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/12-compose.middleware-runtime.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-scheduler"
+      ],
+      "source": "/opt/codestra/compose/compose.middleware-runtime.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/13-compose.phase-n2-activation.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-integration-api",
+        "middleware-postly-polling-worker",
+        "middleware-social-n8n-delivery-worker"
+      ],
+      "source": "/opt/codestra/compose/compose.phase-n2-activation.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/14-compose.schema2-recovery-20260812.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-event-gateway"
+      ],
+      "source": "/opt/codestra/compose/compose.schema2-recovery-20260812.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/15-compose.scraper-ingress-disabled.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-integration-api"
+      ],
+      "source": "/opt/codestra/compose/compose.scraper-ingress-disabled.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/16-compose.scraper-monitoring-worker-disabled.yaml",
+      "health": true,
+      "limits": true,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-scraper-odoo-delivery-worker"
+      ],
+      "source": "/opt/codestra/compose/compose.scraper-monitoring-worker-disabled.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/17-compose.server-a-readiness-5bb5a048.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-event-gateway"
+      ],
+      "source": "/opt/codestra/compose/compose.server-a-readiness-5bb5a048.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "staging",
+      "file": "server-baseline/deployment/18-compose.webrtc-6101-controlled.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-webphone-session-issuer"
+      ],
+      "source": "/opt/codestra/compose/compose.webrtc-6101-controlled.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "KEEP_AS_INPUT_ONLY",
+      "depends": [
+        "middleware",
+        "n8n",
+        "odoo",
+        "postgres",
+        "redis"
+      ],
+      "environment": "staging",
+      "file": "server-baseline/deployment/19-compose.yaml",
+      "health": true,
+      "limits": true,
+      "networks": [
+        "backend",
+        "edge",
+        "identity_service",
+        "identity_staging_service",
+        "n8n_staging_edge",
+        "odoo_module_staging",
+        "provisioning_private",
+        "qwen_auth_private"
+      ],
+      "secrets": [
+        "database_url",
+        "middleware_secret",
+        "n8n_db_password",
+        "n8n_encryption_key",
+        "odoo_db_password",
+        "postgres_superuser_password",
+        "redis_middleware_password",
+        "redis_middleware_username",
+        "redis_password",
+        "redis_url",
+        "redis_users_acl",
+        "webhook_shared_secret"
+      ],
+      "services": [
+        "backup",
+        "middleware",
+        "n8n",
+        "odoo",
+        "postgres",
+        "redis",
+        "reverse-proxy"
+      ],
+      "source": "/opt/codestra/compose/compose.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": [
+        "caddy_config",
+        "caddy_data",
+        "n8n_data",
+        "odoo_data",
+        "postgres_data",
+        "redis_data"
+      ]
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "staging",
+      "file": "server-baseline/deployment/20-callback-release-031447a.override.yaml",
+      "health": true,
+      "limits": false,
+      "networks": [
+        "identity_prod"
+      ],
+      "secrets": [],
+      "services": [
+        "middleware-staging",
+        "notification-worker-staging",
+        "scheduler-staging"
+      ],
+      "source": "/opt/codestra/middleware-staging/callback-release-031447a.override.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [
+        "middleware-staging",
+        "postgres"
+      ],
+      "environment": "staging",
+      "file": "server-baseline/deployment/21-compose.scraper-canary.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-staging",
+        "scraper-odoo-delivery-worker"
+      ],
+      "source": "/opt/codestra/middleware-staging/compose.scraper-canary.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "KEEP_AS_INPUT_ONLY",
+      "depends": [
+        "middleware-staging",
+        "postgres",
+        "redis"
+      ],
+      "environment": "staging",
+      "file": "server-baseline/deployment/22-compose.yaml",
+      "health": true,
+      "limits": true,
+      "networks": [
+        "backend",
+        "identity_staging",
+        "middleware_control",
+        "staging_edge"
+      ],
+      "secrets": [],
+      "services": [
+        "callback-staging",
+        "middleware-staging",
+        "notification-worker-staging",
+        "odoo-result-worker-staging",
+        "postgres",
+        "redis",
+        "scheduler-staging",
+        "social-dead-letter-worker-staging",
+        "social-delivery-worker-staging",
+        "social-reconciliation-worker-staging"
+      ],
+      "source": "/opt/codestra/middleware-staging/compose.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": [
+        "callback_data",
+        "postgres_data",
+        "redis_data"
+      ]
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/23-compose.campaign-crm-d30babd.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-odoo-result-worker"
+      ],
+      "source": "/opt/codestra/middleware/deploy/compose.campaign-crm-d30babd.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "staging",
+      "file": "server-baseline/deployment/24-compose.runtime.yaml",
+      "health": true,
+      "limits": true,
+      "networks": [
+        "codestra_internal_integration",
+        "identity_service",
+        "middleware_backend",
+        "middleware_edge",
+        "n8n_staging_control",
+        "odoo_module_staging",
+        "provisioning_private"
+      ],
+      "secrets": [
+        "middleware_secret",
+        "redis_url",
+        "webhook_shared_secret"
+      ],
+      "services": [
+        "middleware-event-gateway",
+        "middleware-evidence-runner",
+        "middleware-extension-allocator",
+        "middleware-integration-api",
+        "middleware-n8n-runtime-worker",
+        "middleware-notification-worker",
+        "middleware-odoo-result-worker",
+        "middleware-pjsip-adapter",
+        "middleware-policy-engine",
+        "middleware-postly-polling-worker",
+        "middleware-reconciliation-worker",
+        "middleware-scheduler",
+        "middleware-scraper-odoo-delivery-worker",
+        "middleware-social-n8n-delivery-worker",
+        "middleware-sync-worker",
+        "middleware-telephony-provisioning",
+        "middleware-vicidial-adapter",
+        "middleware-webphone-session-issuer"
+      ],
+      "source": "/opt/codestra/middleware/deploy/compose.runtime.yaml",
+      "target": "deploy/compose.staging.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/25-compose.private-vicidial-ingress.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [],
+      "source": "/opt/codestra/releases/middleware-51416422/deploy/readiness/compose.private-vicidial-ingress.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    },
+    {
+      "decision": "REPLACE",
+      "depends": [],
+      "environment": "production/runtime",
+      "file": "server-baseline/deployment/26-worker-recreate-safety.yaml",
+      "health": false,
+      "limits": false,
+      "networks": [],
+      "secrets": [],
+      "services": [
+        "middleware-odoo-result-worker"
+      ],
+      "source": "/tmp/worker-recreate-safety.yaml",
+      "target": "deploy/compose.production.yaml",
+      "volumes": []
+    }
+  ],
+  "connectors": [
+    {
+      "commands": "customer/lead/result commands",
+      "events": "result/read-back events",
+      "name": "Odoo",
+      "target": "connector-runtime Odoo"
+    },
+    {
+      "commands": "workflow.dispatch",
+      "events": "result/error/reconciliation",
+      "name": "n8n",
+      "target": "n8n orchestration connector"
+    },
+    {
+      "commands": "call/control/read",
+      "events": "call result/callback",
+      "name": "VICIdial",
+      "target": "vicidial-restricted connector"
+    },
+    {
+      "commands": "extension/config commands",
+      "events": "provision/status",
+      "name": "Asterisk/PJSIP",
+      "target": "new PJSIP connector"
+    },
+    {
+      "commands": "communications commands",
+      "events": "receipts",
+      "name": "Telnexa",
+      "target": "connector-runtime manifest"
+    },
+    {
+      "commands": "communications commands",
+      "events": "receipts",
+      "name": "Klyrow",
+      "target": "connector-runtime manifest"
+    },
+    {
+      "commands": "publish/cancel/media",
+      "events": "results/analytics",
+      "name": "Postiz/Postly",
+      "target": "social connector only"
+    },
+    {
+      "commands": "result intake",
+      "events": "validated lead",
+      "name": "Kyqra/scraper",
+      "target": "Kyqra connector + normalization"
+    },
+    {
+      "commands": "lead/result intake",
+      "events": "normalized lead",
+      "name": "Breero",
+      "target": "Breero connector"
+    },
+    {
+      "commands": "desired-state command",
+      "events": "operation status",
+      "name": "Provisioning service",
+      "target": "provisioning connector"
+    }
+  ],
+  "endpoints": [
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:271:ai_decision",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/ai/recommendations/{id}/{decision}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:325:authorized_action",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/actions/{action}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:175:record_audit_result",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/audit/result",
+      "request": "AutomationAuditResult",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:303:callbacks",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/automation/callbacks/{state}",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:294:context",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/automation/context/{resource}/{identifier}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "HMAC/signed webhook",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:209:receive_event",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/events",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:276:dead_letter",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/events/dead-letter",
+      "request": "Lifecycle",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:286:event_status",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/automation/events/{event_id}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:264:execution_transition",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/executions/{transition}",
+      "request": "Lifecycle",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:80:reserve_idempotency",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/idempotency/check",
+      "request": "IdempotencyReservation",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:246:policy_check",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/automation/policy-check",
+      "request": "EventEnvelope",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/automation.py:308:queue_status",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/automation/queues/status",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:182:callback",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/callbacks",
+      "request": "Callback",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:195:callback_patch",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "PATCH",
+      "path": "/api/v1/callbacks/{id}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:259:compliance",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/compliance/events",
+      "request": "Compliance",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/lead_reconciliation.py:93:metrics",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/crm-vicidial/reconciliation/metrics",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/lead_reconciliation.py:38:start_run",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/crm-vicidial/reconciliation/start",
+      "request": "StartRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/lead_reconciliation.py:66:finish_run",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/crm-vicidial/reconciliation/{run_id}/finish",
+      "request": "UUID",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:103:event",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/events/odoo",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "HMAC/signed webhook",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:103:event",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/events/vicidial",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "HMAC/signed webhook",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/events.py:34:ingest_vicidial",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/events/vicidial",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:153:event_status",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/events/{event_id}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:77:n8n_dispatch",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/n8n/dispatch",
+      "request": "CommandRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:95:n8n_error",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/n8n/errors",
+      "request": "CallbackResult",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:100:n8n_reconciliation",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/n8n/reconciliation",
+      "request": "CommandRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:90:n8n_result",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/n8n/results",
+      "request": "CallbackResult",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:59:odoo_command",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/odoo/commands",
+      "request": "CommandRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:72:odoo_command_status",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/odoo/commands/{command_id}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:49:odoo_health",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/odoo/health",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/integrations.py:54:odoo_readiness",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/odoo/readiness",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:91:analytics",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/postiz/analytics/platform",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:39:channels",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/postiz/channels",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:34:error_callback",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/postiz/errors",
+      "request": "PostizErrorResult",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:18:health",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/postiz/health",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:60:upload_media",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/postiz/media",
+      "request": "PostizMediaUploadRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:73:list_posts",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/postiz/posts",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:47:create_post",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/postiz/posts",
+      "request": "PostizPostRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:81:cancel_post",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/postiz/posts/{post_id}/cancel",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:23:readiness",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/integrations/postiz/readiness",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/integrations/postiz/routes.py:29:result_callback",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/integrations/postiz/results",
+      "request": "PostizResult",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/operations.py:26:dead_letters",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/operations/dead-letters",
+      "request": "int",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/operations.py:31:replay_item",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/operations/dead-letters/{item_id}/replay",
+      "request": "UUID",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/operations.py:43:recover",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/operations/maintenance/recover",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/operations.py:52:reconcile",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/operations/reconciliation",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/operations.py:21:reliability",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/operations/reliability",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/orchestration.py:114:create_lead_sync_intent",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/orchestration/lead-sync",
+      "request": "LeadSyncIntent",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/orchestration.py:59:create_provisioning_intent",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/orchestration/provisioning",
+      "request": "ProvisioningIntent",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/policy_engine.py:22:decide",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/policy/decisions",
+      "request": "PolicyRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/quarantine.py:88:list_records",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/quarantine",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/quarantine.py:127:detail",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/quarantine/{record_id}",
+      "request": "UUID",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/quarantine.py:191:create_correction",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/quarantine/{record_id}/corrections",
+      "request": "UUID",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/quarantine.py:264:reprocess",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/quarantine/{record_id}/reprocess",
+      "request": "UUID",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/quarantine.py:146:review",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/quarantine/{record_id}/review",
+      "request": "UUID",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:290:reconciliation",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/reconciliation/run",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:305:reconciliation_status",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/reconciliation/status",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/reports.py:26:report",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/api/v1/reports/{report_name}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:209:transfer",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/transfers/requests",
+      "request": "Transfer",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/control.py:229:transfer_decision",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v1/transfers/{id}/{decision}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "HMAC/signed webhook",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/publisher.py:196:receive_canary",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/api/v2/telephony/canary",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "public health/readiness",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/main.py:75:healthz",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/health",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "public health/readiness",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/main.py:75:healthz",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/healthz",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "public health/readiness",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/main.py:85:readyz",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/readiness",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "public health/readiness",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/main.py:85:readyz",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/readyz",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/mappings.py:75:list_campaign_mappings",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/mappings/campaigns",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/mappings.py:110:get_campaign_mapping",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/mappings/campaigns/{canonical_campaign_code}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:26:media",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/n8n/calls/{event_id}/media",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:37:transcription",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/n8n/calls/{event_id}/transcription-request",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:43:follow_up",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/n8n/follow-up-proposals",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:63:internal_alert",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/n8n/internal-alerts",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:90:job",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/n8n/jobs/{job_id}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:101:replay",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/n8n/jobs/{job_id}/replay",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:53:qa_review",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/n8n/qa-reviews",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:74:reconciliation",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/n8n/reconciliation",
+      "request": "int",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:18:callback",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/n8n/runs/{run_id}/callback",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:115:test_delay",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/n8n/test/delay/{milliseconds}",
+      "request": "int",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/n8n_staging.py:107:test_fault",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/n8n/test/fault/{status_code}",
+      "request": "int",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:57:audit",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/extensions/audit",
+      "request": "AuditRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:79:availability",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/telephony/extensions/availability",
+      "request": "int",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:68:pools",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/telephony/extensions/pools",
+      "request": "AsyncSession",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:90:reserve",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/extensions/reserve",
+      "request": "ReserveRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:146:provision",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/provisioning",
+      "request": "ProvisionRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:172:status",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/v1/telephony/provisioning/{request_id}",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:198:activate",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/provisioning/{request_id}/activate",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:208:deprovision",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/provisioning/{request_id}/deprovision",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:213:rollback",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/provisioning/{request_id}/rollback",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:203:suspend",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/provisioning/{request_id}/suspend",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "legacy shared bearer middleware guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/telephony.py:218:reconcile",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/v1/telephony/reconcile",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "public health/readiness",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/main.py:94:version",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/version",
+      "request": "inspect handler schema",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "KEEP",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:639:session_config",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "GET",
+      "path": "/webphone-api/v1/config",
+      "request": "Request",
+      "response": "FastAPI response/schema",
+      "side_effect": "read/health",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:551:provision",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/webphone-api/v1/provision",
+      "request": "ProvisionRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:561:refresh",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/webphone-api/v1/provision/{session_id}/refresh",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:584:revoke",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/webphone-api/v1/provision/{session_id}/revoke",
+      "request": "str",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:632:renew_session",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/webphone-api/v1/renew",
+      "request": "SessionAction",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:649:revoke_session",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/webphone-api/v1/revoke",
+      "request": "SessionAction",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    },
+    {
+      "action": "REPLACE",
+      "auth": "route-level Keycloak/JWT checks; excluded from global /api and /v1 guard",
+      "campaign": "route-specific payload/claim; canonical verification required",
+      "handler": "app/api/v1/webphone.py:608:create_session",
+      "main_equivalent": "canonical API/command or connector ingress; exact compatibility test required",
+      "method": "POST",
+      "path": "/webphone-api/v1/session",
+      "request": "ProvisionRequest",
+      "response": "FastAPI response/schema",
+      "side_effect": "write/command or state transition",
+      "tenant": "payload/header-derived in legacy source; canonical verified tenant context required"
+    }
+  ],
+  "functions": [
+    {
+      "canonical_equivalent": "`vicidial-restricted` connector",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-vicidial-adapter-1",
+      "dependencies": "VICIdial private endpoints; command ledger; telephony events",
+      "id": "F001",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-vicidial-adapter",
+      "rationale": "Preserve restricted telephony capabilities behind OAuth2+mTLS, explicit command prefixes and mandatory read-back.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/vicidial_adapter.py"
+      ],
+      "test_required": "VICIdial mock, mTLS, capability denial, idempotency, timeout and unknown-outcome tests"
+    },
+    {
+      "canonical_equivalent": "provisioning-service connector orchestrated by Middleware",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-telephony-provisioning-1",
+      "dependencies": "Provisioning service; VICIdial/PJSIP connectors; command ledger",
+      "id": "F002",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-telephony-provisioning",
+      "rationale": "Provisioning lifecycle/state belongs to provisioning service; Middleware retains tenant/capability authorization and orchestration only.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/telephony_provisioning.py"
+      ],
+      "test_required": "Provisioning mock, duplicate desired state, partial failure, rollback and read-back tests"
+    },
+    {
+      "canonical_equivalent": "new Asterisk/PJSIP connector to be added",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-pjsip-adapter-1",
+      "dependencies": "Asterisk/PJSIP provider; provisioning service; command ledger",
+      "id": "F003",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-pjsip-adapter",
+      "rationale": "PJSIP behavior is required but lacks a complete connector manifest in main; it must not remain an ad-hoc entrypoint.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/pjsip_adapter.py"
+      ],
+      "test_required": "Asterisk/PJSIP mock, mTLS, tenant, retry, read-back and forbidden-command tests"
+    },
+    {
+      "canonical_equivalent": "isolated webphone session connector/API with Keycloak validation",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-webphone-session-issuer-1",
+      "dependencies": "Keycloak; provisioning service; telephony session backend",
+      "id": "F004",
+      "image_id": "sha256:48dbb4201b4cf8abee1600936a84da52a92969ab124fb44a0007059e75d57e85",
+      "name": "middleware-webphone-session-issuer",
+      "rationale": "Short-lived browser session issuance remains separate from telephony command authority and must not expose provider credentials.",
+      "revision": "80954a1ecb4eae49a57a9de245f78fd9a2f825a1",
+      "source_files": [
+        "app/entrypoints/webphone_session_issuer.py"
+      ],
+      "test_required": "JWT audience/azp, tenant, expiry, replay, credential non-disclosure and revocation tests"
+    },
+    {
+      "canonical_equivalent": "`app.main`, `app.service`, `app.commands`, and connector-runtime API",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-integration-api-1",
+      "dependencies": "PostgreSQL; Redis; Keycloak; n8n; Odoo; provisioning; internal integration gateway",
+      "id": "F005",
+      "image_id": "sha256:09d4bd0f7b2376e0a06d3efae27a6642429389fa7e3277791ec0b36584e87175",
+      "name": "middleware-integration-api",
+      "rationale": "This is the principal server API surface. Required endpoint semantics must be inventoried and selectively ported; direct provider writes must become commands/connectors.",
+      "revision": "35448ef85ae56db3651a72b61db8e242b7aacd2e",
+      "source_files": [
+        "app/entrypoints/integration_api.py",
+        "app/main.py"
+      ],
+      "test_required": "Per-route contract matrix plus authorization, tenant, idempotency and no-direct-write tests"
+    },
+    {
+      "canonical_equivalent": "`app.main` intake API plus connector-runtime management API",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-1",
+      "dependencies": "PostgreSQL; Redis; Keycloak; provisioning service; Odoo boundary",
+      "id": "F006",
+      "image_id": "sha256:5dd751a9da60e2417c9ee553ddea68f54e76981dcc896eb3676b27617d121f38",
+      "name": "middleware",
+      "rationale": "The container duplicates the integration API and uses legacy route/write boundaries. Preserve only explicitly mapped endpoint behavior behind canonical auth, tenant, inbox/outbox and command controls.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/integration_api.py",
+        "app/main.py"
+      ],
+      "test_required": "API contract, JWT/OIDC, tenant isolation, idempotency, capability denial and legacy-route parity tests"
+    },
+    {
+      "canonical_equivalent": "Odoo connector plus canonical command/result events",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-odoo-result-worker-1",
+      "dependencies": "PostgreSQL; Odoo connector; Keycloak service identity",
+      "id": "F007",
+      "image_id": "sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2",
+      "name": "middleware-odoo-result-worker",
+      "rationale": "Delivery results remain required, but Odoo writes must pass through the command/capability boundary and record read-back.",
+      "revision": "d30babd35b7b82aab312f16940f5b8d2f7797f1d",
+      "source_files": [
+        "app/api/v1/integrations.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Odoo mock, tenant, duplicate, conflict, retry and read-back completion tests"
+    },
+    {
+      "canonical_equivalent": "canonical outbox worker and connector commands",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-notification-worker-1",
+      "dependencies": "PostgreSQL outbox; Redis; communications connectors",
+      "id": "F008",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "middleware-notification-worker",
+      "rationale": "Notification scheduling/delivery is required, but every external effect must use an explicit connector and capability.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/notification_worker.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Email/SMS mocks, capability denial, retry, receipt and opt-out tests"
+    },
+    {
+      "canonical_equivalent": "Temporal schedules/workflows and `core/workers-scheduler`",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-scheduler-1",
+      "dependencies": "Temporal; PostgreSQL; command ledger",
+      "id": "F009",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "middleware-scheduler",
+      "rationale": "Local polling semantics should be represented as durable Temporal schedules or database-backed leases, not an undocumented standalone scheduler.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/scheduler.py"
+      ],
+      "test_required": "Schedule idempotency, missed tick, overlapping lease, restart and delayed callback tests"
+    },
+    {
+      "canonical_equivalent": "same canonical API build with staging runtime profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-middleware-staging-1",
+      "dependencies": "Staging PostgreSQL/Redis/Keycloak/n8n",
+      "id": "F010",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "middleware-staging",
+      "rationale": "Staging is an environment of the canonical API, not a separate source history or implementation.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/integration_api.py",
+        "app/main.py"
+      ],
+      "test_required": "Same-image provenance, staging fail-closed profile and external-effects-disabled acceptance"
+    },
+    {
+      "canonical_equivalent": "same canonical notification/outbox worker with staging profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-notification-worker-staging-1",
+      "dependencies": "Staging PostgreSQL; Redis; mock connectors",
+      "id": "F011",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "notification-worker-staging",
+      "rationale": "Environment-specific deployment only; no separate source implementation should survive.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/notification_worker.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Same-image provenance and communications mocks with all live effects disabled"
+    },
+    {
+      "canonical_equivalent": "same Temporal scheduler/workflow build with staging queue",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-scheduler-staging-1",
+      "dependencies": "Staging Temporal; PostgreSQL",
+      "id": "F012",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "scheduler-staging",
+      "rationale": "Environment-specific instance of the scheduler replacement.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/scheduler.py"
+      ],
+      "test_required": "Same-image provenance, isolated task queue and restart tests"
+    },
+    {
+      "canonical_equivalent": "synthetic staging acceptance and release-manifest validators",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-evidence-runner-1",
+      "dependencies": "Release manifest; staging API; observability",
+      "id": "F013",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-evidence-runner",
+      "rationale": "Runtime evidence must come from reproducible acceptance/release tooling, not a permanently running mixed-revision utility container.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/evidence_runner.py"
+      ],
+      "test_required": "No-effect acceptance, source/digest attestation and evidence immutability tests"
+    },
+    {
+      "canonical_equivalent": "capability registry, operation policy and runtime-safety controls",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-policy-engine-1",
+      "dependencies": "Capability registry; Keycloak claims; command policy",
+      "id": "F014",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-policy-engine",
+      "rationale": "Server policy decisions may contain required behavior, but the new signed capability and activation design remains authoritative.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/policy_engine.py"
+      ],
+      "test_required": "Default deny, expiry, tenant mismatch, forbidden prefix and signed activation tests"
+    },
+    {
+      "canonical_equivalent": "connector event ingestion plus Temporal workflows",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-sync-worker-1",
+      "dependencies": "PostgreSQL; provider connectors; event ledger",
+      "id": "F015",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-sync-worker",
+      "rationale": "The generic sync scope is not explicit enough to port safely. Each synchronized resource must be assigned to a connector/event contract first.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/sync_worker.py"
+      ],
+      "test_required": "Resource-specific ownership, tenant, cursor, duplicate and convergence tests"
+    },
+    {
+      "canonical_equivalent": "generated n8n workflow packs plus command/event contracts",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-n8n-runtime-worker-1",
+      "dependencies": "PostgreSQL; n8n; Keycloak service identity; command ledger",
+      "id": "F016",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-n8n-runtime-worker",
+      "rationale": "Retain orchestration handoff while making Middleware the authorization and durable-command boundary.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Signed handoff, scope, idempotency, result correlation and forbidden-direct-write tests"
+    },
+    {
+      "canonical_equivalent": "Postly connector manifest and n8n workflow pack",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-social-n8n-delivery-worker-1",
+      "dependencies": "PostgreSQL; n8n; Postiz/Postly connector",
+      "id": "F017",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-social-n8n-delivery-worker",
+      "rationale": "Retain delivery orchestration but move provider calls behind the social connector; do not duplicate Postiz domain logic.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Social mock, duplicate, provider 429/500, callback and reconciliation tests"
+    },
+    {
+      "canonical_equivalent": "Temporal reconciliation workflows and command read-back",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-reconciliation-worker-1",
+      "dependencies": "Temporal; PostgreSQL command ledger; connector read-back",
+      "id": "F018",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-reconciliation-worker",
+      "rationale": "Reconciliation is a core requirement and must compare durable intent with provider read-back before completion.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/reconciliation_worker.py"
+      ],
+      "test_required": "Unknown outcome, mismatch, retry, rollback, dead-letter approval and restart tests"
+    },
+    {
+      "canonical_equivalent": "provisioning-service connector and tenant-onboarding command boundary",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-extension-allocator-1",
+      "dependencies": "Provisioning service; command ledger; telephony connector",
+      "id": "F019",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-extension-allocator",
+      "rationale": "Resource allocation belongs to provisioning service; Middleware should authorize/orchestrate the command without owning allocation state.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/extension_allocator.py"
+      ],
+      "test_required": "Idempotent provisioning mock, tenant, desired-state, read-back and duplicate allocation tests"
+    },
+    {
+      "canonical_equivalent": "`app.main` signed intake and connector-runtime `webhook_ingress`",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-event-gateway-1",
+      "dependencies": "PostgreSQL; Redis; edge ingress; provider signature secrets",
+      "id": "F020",
+      "image_id": "sha256:93cbb4a11765ad92e9bbf1a1bb9601f15a540164b4e7d6647cb0f16d588ab6e0",
+      "name": "middleware-event-gateway",
+      "rationale": "Provider ingress behavior remains required, but verification and acknowledgement must terminate in the canonical durable inbox/outbox.",
+      "revision": "4a3ac0b57a61baf63310c55048a7897556faa9a972083b86761e91391ae2317b",
+      "source_files": [
+        "app/entrypoints/event_gateway.py"
+      ],
+      "test_required": "Body limit, HMAC, timestamp, duplicate, conflict, tenant routing, restart and redelivery tests"
+    },
+    {
+      "canonical_equivalent": "connector-runtime inbox processing plus Temporal/outbox workers",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-external-webhook-worker-1",
+      "dependencies": "PostgreSQL inbox/outbox; n8n control network; connector contracts",
+      "id": "F021",
+      "image_id": "sha256:93cbb4a11765ad92e9bbf1a1bb9601f15a540164b4e7d6647cb0f16d588ab6e0",
+      "name": "middleware-external-webhook-worker",
+      "rationale": "Asynchronous webhook processing is valid only after durable acknowledgement; n8n delivery cannot be the source of write authority.",
+      "revision": "4a3ac0b57a61baf63310c55048a7897556faa9a972083b86761e91391ae2317b",
+      "source_files": [
+        "app/entrypoints/event_gateway.py",
+        "app/workers/outbox.py"
+      ],
+      "test_required": "Inbox lease, retry, dead-letter, timeout, n8n mock and restart tests"
+    },
+    {
+      "canonical_equivalent": "Breero connector feeding lead normalization and Odoo connector",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-breero-odoo-worker-1",
+      "dependencies": "Breero connector; lead normalization; Odoo connector; PostgreSQL",
+      "id": "F022",
+      "image_id": "sha256:961c0569a5033cdb494d211fd32cfe20d7efd42d3900f02c2d3f0ac7bfdcfa63",
+      "name": "middleware-breero-odoo-worker",
+      "rationale": "Preserve mapping behavior as two explicit connector boundaries with canonical lead provenance and review policy.",
+      "revision": "51416422eaaa959c8c7223ad1434287597eb8007",
+      "source_files": [
+        "app/core/lead_reconciliation.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Breero/Odoo mocks, mapping golden files, consent, suppression, duplicate and tenant tests"
+    },
+    {
+      "canonical_equivalent": "Postly social connector event ingestion",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-postly-polling-worker-1",
+      "dependencies": "Postly connector; PostgreSQL cursor/inbox; edge/provider API",
+      "id": "F023",
+      "image_id": "sha256:d3ac2b34d216064bc579feedca9cc2d4079ebe44943a6417ab31437c79df8dd8",
+      "name": "middleware-postly-polling-worker",
+      "rationale": "Polling may be retained only as connector-owned event acquisition with durable cursors, rate limits and normalized events.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/integrations/postiz/client.py",
+        "app/integrations/postiz/routes.py"
+      ],
+      "test_required": "Cursor restart, rate limit, duplicate event, provider 429/500 and normalization tests"
+    },
+    {
+      "canonical_equivalent": "Kyqra/scraper connector, lead normalization, and Odoo connector",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-scraper-odoo-delivery-worker-1",
+      "dependencies": "Scraper/Kyqra connector; lead normalization; Odoo connector",
+      "id": "F024",
+      "image_id": "sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492",
+      "name": "middleware-scraper-odoo-delivery-worker",
+      "rationale": "Scraper discoveries must enter review_pending and cannot write directly to Odoo.",
+      "revision": "bab6f4332fec77611f6a364fd3c9c7f9cc022051",
+      "source_files": [
+        "app/core/lead_reconciliation.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Review-required, provenance, suppression, no-contact, duplicate and Odoo mock tests"
+    },
+    {
+      "canonical_equivalent": "`platform/redis` runtime dependency",
+      "classification": "ALREADY_IMPLEMENTED",
+      "container": "codestra-middleware-staging-redis-1",
+      "dependencies": "Staging workers; Redis ACL secret; staging network",
+      "id": "F025",
+      "image_id": "sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08",
+      "name": "redis",
+      "rationale": "Redis remains an optional coordination/cache primitive; durable correctness cannot depend on it.",
+      "revision": "UNKNOWN_PROVENANCE",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "ACL, outage, restart, cache-loss and no-durability-dependency tests"
+    },
+    {
+      "canonical_equivalent": "same canonical Odoo connector worker with staging profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-odoo-result-worker-staging-1",
+      "dependencies": "Staging PostgreSQL; Odoo staging/mock; Keycloak",
+      "id": "F026",
+      "image_id": "sha256:d102957a1e88b9ad5bb5fae14f2e246676fc7e40c6d891793f2f41abee480d99",
+      "name": "odoo-result-worker-staging",
+      "rationale": "The unique staging revision is release drift, not a distinct supported component.",
+      "revision": "45c467899e0c7580538de72d543fb3de0b09cd75",
+      "source_files": [
+        "app/api/v1/integrations.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Same-image provenance and Odoo mock/read-back tests"
+    },
+    {
+      "canonical_equivalent": "same scraper\u2192normalization\u2192Odoo connector pipeline with staging profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-scraper-odoo-delivery-worker-1",
+      "dependencies": "Staging PostgreSQL; scraper mock; Odoo mock",
+      "id": "F027",
+      "image_id": "sha256:dc97c48f3a29690635bf28de9f3d2562fac2dadb74b8744ea6e99c1bd4ffcda1",
+      "name": "scraper-odoo-delivery-worker",
+      "rationale": "The staging-only image history must collapse into the canonical connector worker build.",
+      "revision": "4780bd72d1c574af4aed62d374ec50b208e8ea4c",
+      "source_files": [
+        "app/core/lead_reconciliation.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Same-image provenance, review_pending and Odoo mock tests"
+    },
+    {
+      "canonical_equivalent": "canonical Postly connector delivery worker",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-social-delivery-worker-staging-1",
+      "dependencies": "Staging PostgreSQL; Postly mock",
+      "id": "F028",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "name": "social-delivery-worker-staging",
+      "rationale": "Unknown image provenance is unacceptable; behavior must be covered by the canonical social connector.",
+      "revision": "unknown",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Same-image provenance, social mock and no-effect staging tests"
+    },
+    {
+      "canonical_equivalent": "canonical dead-letter/replay workflow",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-staging-social-dead-letter-worker-staging-1",
+      "dependencies": "Temporal; PostgreSQL; Postly connector",
+      "id": "F029",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "name": "social-dead-letter-worker-staging",
+      "rationale": "Use the operator-approved dead-letter replay workflow rather than a social-specific undocumented implementation.",
+      "revision": "unknown",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Approval, audit, correction, replay idempotency and tenant tests"
+    },
+    {
+      "canonical_equivalent": "canonical reconciliation workflow plus Postly read-back",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-social-reconciliation-worker-staging-1",
+      "dependencies": "Temporal; PostgreSQL; Postly connector",
+      "id": "F030",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "name": "social-reconciliation-worker-staging",
+      "rationale": "Social reconciliation is a connector specialization of the shared workflow, not a separate source lineage.",
+      "revision": "unknown",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Postly read-back mismatch, timeout, retry and restart tests"
+    },
+    {
+      "canonical_equivalent": "signed connector webhook ingress",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-staging-callback-staging-1",
+      "dependencies": "Staging ingress; connector inbox; n8n staging network",
+      "id": "F031",
+      "image_id": "sha256:57a4a3a22278aa61bc443910927a308d594db287b8e2cd500ee12293e8a93f4d",
+      "name": "callback-staging",
+      "rationale": "The standalone script and unknown/noncanonical revision should be replaced by the shared signed durable ingress.",
+      "revision": "f1c07e0-reprofix2",
+      "source_files": [
+        "app/api/v1/n8n_staging.py"
+      ],
+      "test_required": "Callback HMAC, timestamp, body limit, duplicate, tenant and durable-ack tests"
+    },
+    {
+      "canonical_equivalent": "`platform/postgresql` and canonical migration sets",
+      "classification": "ALREADY_IMPLEMENTED",
+      "container": "codestra-middleware-staging-postgres-1",
+      "dependencies": "Middleware schemas; connector-runtime schema; staging network",
+      "id": "F032",
+      "image_id": "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+      "name": "postgres",
+      "rationale": "PostgreSQL remains the durable store; reconcile schemas/migrations rather than porting the container as application code.",
+      "revision": "UNKNOWN_PROVENANCE",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Empty\u2192head, previous\u2192head, downgrade/upgrade, locking, checksum and restart tests"
+    }
+  ],
+  "images": [
+    {
+      "containers": [
+        "codestra-middleware-integration-api-1"
+      ],
+      "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:09d4bd0f7b2376e0a06d3efae27a6642429389fa7e3277791ec0b36584e87175",
+      "image_id": "sha256:09d4bd0f7b2376e0a06d3efae27a6642429389fa7e3277791ec0b36584e87175",
+      "revision": "35448ef85ae56db3651a72b61db8e242b7aacd2e",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-vicidial-adapter-1",
+        "codestra-middleware-telephony-provisioning-1",
+        "codestra-middleware-pjsip-adapter-1",
+        "codestra-middleware-evidence-runner-1",
+        "codestra-middleware-policy-engine-1",
+        "codestra-middleware-sync-worker-1",
+        "codestra-middleware-n8n-runtime-worker-1",
+        "codestra-middleware-social-n8n-delivery-worker-1",
+        "codestra-middleware-reconciliation-worker-1",
+        "codestra-middleware-extension-allocator-1"
+      ],
+      "image": "codestra/middleware@sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-webphone-session-issuer-1"
+      ],
+      "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:48dbb4201b4cf8abee1600936a84da52a92969ab124fb44a0007059e75d57e85",
+      "image_id": "sha256:48dbb4201b4cf8abee1600936a84da52a92969ab124fb44a0007059e75d57e85",
+      "revision": "80954a1ecb4eae49a57a9de245f78fd9a2f825a1",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-scraper-odoo-delivery-worker-1"
+      ],
+      "image": "codestra/middleware@sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492",
+      "image_id": "sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492",
+      "revision": "bab6f4332fec77611f6a364fd3c9c7f9cc022051",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-staging-callback-staging-1"
+      ],
+      "image": "codestra/middleware:current-hardened-20260723",
+      "image_id": "sha256:57a4a3a22278aa61bc443910927a308d594db287b8e2cd500ee12293e8a93f4d",
+      "revision": "f1c07e0-reprofix2",
+      "source": "codestra-app:/opt/codestra/middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-1"
+      ],
+      "image": "codestra/middleware:health-contract-b3ca9aa",
+      "image_id": "sha256:5dd751a9da60e2417c9ee553ddea68f54e76981dcc896eb3676b27617d121f38",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-notification-worker-1",
+        "codestra-middleware-scheduler-1",
+        "codestra-middleware-staging-middleware-staging-1",
+        "codestra-middleware-staging-notification-worker-staging-1",
+        "codestra-middleware-staging-scheduler-staging-1"
+      ],
+      "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-staging-social-delivery-worker-staging-1",
+        "codestra-middleware-staging-social-dead-letter-worker-staging-1",
+        "codestra-middleware-staging-social-reconciliation-worker-staging-1"
+      ],
+      "image": "codestra/middleware:social-staging-12cd5fc",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "revision": "unknown",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-event-gateway-1",
+        "codestra-middleware-external-webhook-worker-1"
+      ],
+      "image": "codestra/middleware:webhook-cert-pg-20260816",
+      "image_id": "sha256:93cbb4a11765ad92e9bbf1a1bb9601f15a540164b4e7d6647cb0f16d588ab6e0",
+      "revision": "4a3ac0b57a61baf63310c55048a7897556faa9a972083b86761e91391ae2317b",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-breero-odoo-worker-1"
+      ],
+      "image": "codestra/middleware:breero-51416422",
+      "image_id": "sha256:961c0569a5033cdb494d211fd32cfe20d7efd42d3900f02c2d3f0ac7bfdcfa63",
+      "revision": "51416422eaaa959c8c7223ad1434287597eb8007",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-odoo-result-worker-1"
+      ],
+      "image": "ghcr.io/codestra-srl/codestra-middleware@sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2",
+      "image_id": "sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2",
+      "revision": "d30babd35b7b82aab312f16940f5b8d2f7797f1d",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-staging-redis-1"
+      ],
+      "image": "redis@sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08",
+      "image_id": "sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08",
+      "revision": "UNKNOWN_PROVENANCE",
+      "source": "UPSTREAM_VENDOR_OR_UNKNOWN"
+    },
+    {
+      "containers": [
+        "codestra-middleware-staging-odoo-result-worker-staging-1"
+      ],
+      "image": "codestra/middleware:r1-45c4678",
+      "image_id": "sha256:d102957a1e88b9ad5bb5fae14f2e246676fc7e40c6d891793f2f41abee480d99",
+      "revision": "45c467899e0c7580538de72d543fb3de0b09cd75",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-postly-polling-worker-1"
+      ],
+      "image": "codestra/middleware@sha256:d3ac2b34d216064bc579feedca9cc2d4079ebe44943a6417ab31437c79df8dd8",
+      "image_id": "sha256:d3ac2b34d216064bc579feedca9cc2d4079ebe44943a6417ab31437c79df8dd8",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-staging-scraper-odoo-delivery-worker-1"
+      ],
+      "image": "codestra/middleware:scraper-protected-main-4780bd72",
+      "image_id": "sha256:dc97c48f3a29690635bf28de9f3d2562fac2dadb74b8744ea6e99c1bd4ffcda1",
+      "revision": "4780bd72d1c574af4aed62d374ec50b208e8ea4c",
+      "source": "https://github.com/Codestra-SRL/codestra-middleware"
+    },
+    {
+      "containers": [
+        "codestra-middleware-staging-postgres-1"
+      ],
+      "image": "postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+      "image_id": "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+      "revision": "UNKNOWN_PROVENANCE",
+      "source": "UPSTREAM_VENDOR_OR_UNKNOWN"
+    }
+  ],
+  "migration_waves": [
+    {
+      "depends_on": "all later waves",
+      "scope": "contracts; auth; tenant; capabilities; database; inbox/outbox; ledgers; NATS; Temporal; connector runtime",
+      "wave": "0 Foundation"
+    },
+    {
+      "depends_on": "Wave 0",
+      "scope": "health; config; provider read-back; status; mappings",
+      "wave": "1 Read-only"
+    },
+    {
+      "depends_on": "Wave 0",
+      "scope": "scheduler; notifications; reconciliation; sync",
+      "wave": "2 Durable internal"
+    },
+    {
+      "depends_on": "Waves 0-2",
+      "scope": "results; lead sync; CRM commands",
+      "wave": "3 Odoo"
+    },
+    {
+      "depends_on": "Waves 0-2",
+      "scope": "workflow dispatch; result ingestion",
+      "wave": "4 n8n"
+    },
+    {
+      "depends_on": "Waves 0-2",
+      "scope": "email; SMS; callbacks; receipts",
+      "wave": "5 Communications"
+    },
+    {
+      "depends_on": "Waves 0-2",
+      "scope": "Postiz/Postly boundary",
+      "wave": "6 Social"
+    },
+    {
+      "depends_on": "Waves 0-2",
+      "scope": "VICIdial; PJSIP; webphone; provisioning orchestration",
+      "wave": "7 Telephony"
+    },
+    {
+      "depends_on": "prior applicable waves",
+      "scope": "Kyqra; Breero; explicitly reviewed remainder",
+      "wave": "8 Specialized"
+    }
+  ],
+  "redis_namespaces": [
+    {
+      "name": "agent_presence",
+      "ttl_seconds": 90
+    },
+    {
+      "name": "active_call",
+      "ttl_seconds": 7200
+    },
+    {
+      "name": "call_agent",
+      "ttl_seconds": 7200
+    },
+    {
+      "name": "call_campaign",
+      "ttl_seconds": 7200
+    },
+    {
+      "name": "websocket_route",
+      "ttl_seconds": 90
+    },
+    {
+      "name": "screen_pop_context",
+      "ttl_seconds": 900
+    },
+    {
+      "name": "rate_limit",
+      "ttl_seconds": 60
+    },
+    {
+      "name": "distributed_lock",
+      "ttl_seconds": 30
+    },
+    {
+      "name": "appointment_preparation",
+      "ttl_seconds": 3600
+    },
+    {
+      "name": "ai_conversation",
+      "ttl_seconds": 3600
+    },
+    {
+      "name": "partial_transcript",
+      "ttl_seconds": 900
+    }
+  ],
+  "schema": "codestra.middleware.server-reconciliation.v1",
+  "server_capture_sha": "85b7898456abd4bdd0928b80ea925cafd8ad0f4c",
+  "server_original_source_sha": "7b9451b4db92982e5f0a4179d979ae94c043f943",
+  "tables": [
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "audit_event",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_audit_log",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_connections",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_dead_letters",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_idempotency_keys",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_installations",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_manifests",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_operations",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_outbox",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_webhook_endpoints",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_webhook_event_keys",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0001_connector_runtime.py",
+      "name": "connector_sdk.connector_webhook_inbox",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "services/connector-runtime/migrations/versions/20260828_0003_management_api.py",
+      "name": "connector_sdk.connector_webhook_routes",
+      "server_migration": null
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "credential_grant",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "event_inbox",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "idempotency_record",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "integration_delivery",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "integration_event",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "invalid_event_quarantine",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "lead_sync_request",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0002_command_ledger.sql",
+      "name": "middleware_command_attempts",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0002_command_ledger.sql",
+      "name": "middleware_command_audit",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0002_command_ledger.sql",
+      "name": "middleware_commands",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0003_immutable_event_ledger.sql",
+      "name": "middleware_event_ledger",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0001_runtime.sql",
+      "name": "middleware_inbox",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0001_runtime.sql",
+      "name": "middleware_outbox",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0001_runtime.sql",
+      "name": "middleware_reconciliation_audit",
+      "server_migration": null
+    },
+    {
+      "classification": "MAIN_ONLY",
+      "main_migration": "migrations/0001_runtime.sql",
+      "name": "middleware_schema_migrations",
+      "server_migration": null
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "orchestration_request",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "outbox_event",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "policy_decision",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "publisher_acknowledgement",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "publisher_nonce",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "quarantine_correction",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "reconciliation_checkpoint",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "reporting.dim_",
+      "server_migration": "migrations/versions/0004_automation_reporting.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "reporting.fact_",
+      "server_migration": "migrations/versions/0004_automation_reporting.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "security_rejection",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "sync_job",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "system_health_snapshot",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "telephony_extension_pool",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "telephony_extension_reservation",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "telephony_provisioning_saga",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "transfer_policy_decision",
+      "server_migration": "app/db/models.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "vicidial_campaign_registry",
+      "server_migration": "migrations/versions/0009_vicidial_campaign_registry.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "vicidial_identity_map",
+      "server_migration": "migrations/versions/0006_lead_reconciliation.py"
+    },
+    {
+      "classification": "PARTIAL_MATCH",
+      "main_migration": null,
+      "name": "vicidial_reconciliation_issue",
+      "server_migration": "migrations/versions/0006_lead_reconciliation.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "vicidial_sync_action",
+      "server_migration": "migrations/versions/0006_lead_reconciliation.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "vicidial_sync_run",
+      "server_migration": "migrations/versions/0006_lead_reconciliation.py"
+    },
+    {
+      "classification": "SERVER_ONLY",
+      "main_migration": null,
+      "name": "webhook_delivery",
+      "server_migration": "app/db/models.py"
+    }
+  ],
+  "unknowns": [],
+  "workers": [
+    {
+      "canonical_equivalent": "Odoo connector plus canonical command/result events",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-odoo-result-worker-1",
+      "dependencies": "PostgreSQL; Odoo connector; Keycloak service identity",
+      "id": "F007",
+      "image_id": "sha256:ab74b9eb56c9625597476ab6669b065b471314c912cb2d4677118de230e3d4e2",
+      "name": "middleware-odoo-result-worker",
+      "rationale": "Delivery results remain required, but Odoo writes must pass through the command/capability boundary and record read-back.",
+      "revision": "d30babd35b7b82aab312f16940f5b8d2f7797f1d",
+      "source_files": [
+        "app/api/v1/integrations.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Odoo mock, tenant, duplicate, conflict, retry and read-back completion tests"
+    },
+    {
+      "canonical_equivalent": "canonical outbox worker and connector commands",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-notification-worker-1",
+      "dependencies": "PostgreSQL outbox; Redis; communications connectors",
+      "id": "F008",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "middleware-notification-worker",
+      "rationale": "Notification scheduling/delivery is required, but every external effect must use an explicit connector and capability.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/notification_worker.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Email/SMS mocks, capability denial, retry, receipt and opt-out tests"
+    },
+    {
+      "canonical_equivalent": "Temporal schedules/workflows and `core/workers-scheduler`",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-scheduler-1",
+      "dependencies": "Temporal; PostgreSQL; command ledger",
+      "id": "F009",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "middleware-scheduler",
+      "rationale": "Local polling semantics should be represented as durable Temporal schedules or database-backed leases, not an undocumented standalone scheduler.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/scheduler.py"
+      ],
+      "test_required": "Schedule idempotency, missed tick, overlapping lease, restart and delayed callback tests"
+    },
+    {
+      "canonical_equivalent": "same canonical notification/outbox worker with staging profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-notification-worker-staging-1",
+      "dependencies": "Staging PostgreSQL; Redis; mock connectors",
+      "id": "F011",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "notification-worker-staging",
+      "rationale": "Environment-specific deployment only; no separate source implementation should survive.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/notification_worker.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Same-image provenance and communications mocks with all live effects disabled"
+    },
+    {
+      "canonical_equivalent": "same Temporal scheduler/workflow build with staging queue",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-scheduler-staging-1",
+      "dependencies": "Staging Temporal; PostgreSQL",
+      "id": "F012",
+      "image_id": "sha256:73fe86858d7a9303bbb151c77097aa43c0739e71c4781636e7db81dd4eadbf98",
+      "name": "scheduler-staging",
+      "rationale": "Environment-specific instance of the scheduler replacement.",
+      "revision": "9118e5bc01f9ce4a52add8753c096d061cd84848",
+      "source_files": [
+        "app/entrypoints/scheduler.py"
+      ],
+      "test_required": "Same-image provenance, isolated task queue and restart tests"
+    },
+    {
+      "canonical_equivalent": "synthetic staging acceptance and release-manifest validators",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-evidence-runner-1",
+      "dependencies": "Release manifest; staging API; observability",
+      "id": "F013",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-evidence-runner",
+      "rationale": "Runtime evidence must come from reproducible acceptance/release tooling, not a permanently running mixed-revision utility container.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/evidence_runner.py"
+      ],
+      "test_required": "No-effect acceptance, source/digest attestation and evidence immutability tests"
+    },
+    {
+      "canonical_equivalent": "capability registry, operation policy and runtime-safety controls",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-policy-engine-1",
+      "dependencies": "Capability registry; Keycloak claims; command policy",
+      "id": "F014",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-policy-engine",
+      "rationale": "Server policy decisions may contain required behavior, but the new signed capability and activation design remains authoritative.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/policy_engine.py"
+      ],
+      "test_required": "Default deny, expiry, tenant mismatch, forbidden prefix and signed activation tests"
+    },
+    {
+      "canonical_equivalent": "connector event ingestion plus Temporal workflows",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-sync-worker-1",
+      "dependencies": "PostgreSQL; provider connectors; event ledger",
+      "id": "F015",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-sync-worker",
+      "rationale": "The generic sync scope is not explicit enough to port safely. Each synchronized resource must be assigned to a connector/event contract first.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/sync_worker.py"
+      ],
+      "test_required": "Resource-specific ownership, tenant, cursor, duplicate and convergence tests"
+    },
+    {
+      "canonical_equivalent": "generated n8n workflow packs plus command/event contracts",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-n8n-runtime-worker-1",
+      "dependencies": "PostgreSQL; n8n; Keycloak service identity; command ledger",
+      "id": "F016",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-n8n-runtime-worker",
+      "rationale": "Retain orchestration handoff while making Middleware the authorization and durable-command boundary.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Signed handoff, scope, idempotency, result correlation and forbidden-direct-write tests"
+    },
+    {
+      "canonical_equivalent": "Postly connector manifest and n8n workflow pack",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-social-n8n-delivery-worker-1",
+      "dependencies": "PostgreSQL; n8n; Postiz/Postly connector",
+      "id": "F017",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-social-n8n-delivery-worker",
+      "rationale": "Retain delivery orchestration but move provider calls behind the social connector; do not duplicate Postiz domain logic.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Social mock, duplicate, provider 429/500, callback and reconciliation tests"
+    },
+    {
+      "canonical_equivalent": "Temporal reconciliation workflows and command read-back",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-reconciliation-worker-1",
+      "dependencies": "Temporal; PostgreSQL command ledger; connector read-back",
+      "id": "F018",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-reconciliation-worker",
+      "rationale": "Reconciliation is a core requirement and must compare durable intent with provider read-back before completion.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/reconciliation_worker.py"
+      ],
+      "test_required": "Unknown outcome, mismatch, retry, rollback, dead-letter approval and restart tests"
+    },
+    {
+      "canonical_equivalent": "provisioning-service connector and tenant-onboarding command boundary",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-extension-allocator-1",
+      "dependencies": "Provisioning service; command ledger; telephony connector",
+      "id": "F019",
+      "image_id": "sha256:1a9e13a0c930d36076b5742e17f948dc85d9bc6ace90e58052756c8b1ad42700",
+      "name": "middleware-extension-allocator",
+      "rationale": "Resource allocation belongs to provisioning service; Middleware should authorize/orchestrate the command without owning allocation state.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/entrypoints/extension_allocator.py"
+      ],
+      "test_required": "Idempotent provisioning mock, tenant, desired-state, read-back and duplicate allocation tests"
+    },
+    {
+      "canonical_equivalent": "connector-runtime inbox processing plus Temporal/outbox workers",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-external-webhook-worker-1",
+      "dependencies": "PostgreSQL inbox/outbox; n8n control network; connector contracts",
+      "id": "F021",
+      "image_id": "sha256:93cbb4a11765ad92e9bbf1a1bb9601f15a540164b4e7d6647cb0f16d588ab6e0",
+      "name": "middleware-external-webhook-worker",
+      "rationale": "Asynchronous webhook processing is valid only after durable acknowledgement; n8n delivery cannot be the source of write authority.",
+      "revision": "4a3ac0b57a61baf63310c55048a7897556faa9a972083b86761e91391ae2317b",
+      "source_files": [
+        "app/entrypoints/event_gateway.py",
+        "app/workers/outbox.py"
+      ],
+      "test_required": "Inbox lease, retry, dead-letter, timeout, n8n mock and restart tests"
+    },
+    {
+      "canonical_equivalent": "Breero connector feeding lead normalization and Odoo connector",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-breero-odoo-worker-1",
+      "dependencies": "Breero connector; lead normalization; Odoo connector; PostgreSQL",
+      "id": "F022",
+      "image_id": "sha256:961c0569a5033cdb494d211fd32cfe20d7efd42d3900f02c2d3f0ac7bfdcfa63",
+      "name": "middleware-breero-odoo-worker",
+      "rationale": "Preserve mapping behavior as two explicit connector boundaries with canonical lead provenance and review policy.",
+      "revision": "51416422eaaa959c8c7223ad1434287597eb8007",
+      "source_files": [
+        "app/core/lead_reconciliation.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Breero/Odoo mocks, mapping golden files, consent, suppression, duplicate and tenant tests"
+    },
+    {
+      "canonical_equivalent": "Postly social connector event ingestion",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-postly-polling-worker-1",
+      "dependencies": "Postly connector; PostgreSQL cursor/inbox; edge/provider API",
+      "id": "F023",
+      "image_id": "sha256:d3ac2b34d216064bc579feedca9cc2d4079ebe44943a6417ab31437c79df8dd8",
+      "name": "middleware-postly-polling-worker",
+      "rationale": "Polling may be retained only as connector-owned event acquisition with durable cursors, rate limits and normalized events.",
+      "revision": "b3ca9aa458fef843e3065aeff3397c656349f138",
+      "source_files": [
+        "app/integrations/postiz/client.py",
+        "app/integrations/postiz/routes.py"
+      ],
+      "test_required": "Cursor restart, rate limit, duplicate event, provider 429/500 and normalization tests"
+    },
+    {
+      "canonical_equivalent": "Kyqra/scraper connector, lead normalization, and Odoo connector",
+      "classification": "KEEP_AND_PORT",
+      "container": "codestra-middleware-scraper-odoo-delivery-worker-1",
+      "dependencies": "Scraper/Kyqra connector; lead normalization; Odoo connector",
+      "id": "F024",
+      "image_id": "sha256:55dfe9ddfa8bfa94a9202284cb5276311e009066784bbde5dc05d5e1c3776492",
+      "name": "middleware-scraper-odoo-delivery-worker",
+      "rationale": "Scraper discoveries must enter review_pending and cannot write directly to Odoo.",
+      "revision": "bab6f4332fec77611f6a364fd3c9c7f9cc022051",
+      "source_files": [
+        "app/core/lead_reconciliation.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Review-required, provenance, suppression, no-contact, duplicate and Odoo mock tests"
+    },
+    {
+      "canonical_equivalent": "same canonical Odoo connector worker with staging profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-odoo-result-worker-staging-1",
+      "dependencies": "Staging PostgreSQL; Odoo staging/mock; Keycloak",
+      "id": "F026",
+      "image_id": "sha256:d102957a1e88b9ad5bb5fae14f2e246676fc7e40c6d891793f2f41abee480d99",
+      "name": "odoo-result-worker-staging",
+      "rationale": "The unique staging revision is release drift, not a distinct supported component.",
+      "revision": "45c467899e0c7580538de72d543fb3de0b09cd75",
+      "source_files": [
+        "app/api/v1/integrations.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Same-image provenance and Odoo mock/read-back tests"
+    },
+    {
+      "canonical_equivalent": "same scraper\u2192normalization\u2192Odoo connector pipeline with staging profile",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-scraper-odoo-delivery-worker-1",
+      "dependencies": "Staging PostgreSQL; scraper mock; Odoo mock",
+      "id": "F027",
+      "image_id": "sha256:dc97c48f3a29690635bf28de9f3d2562fac2dadb74b8744ea6e99c1bd4ffcda1",
+      "name": "scraper-odoo-delivery-worker",
+      "rationale": "The staging-only image history must collapse into the canonical connector worker build.",
+      "revision": "4780bd72d1c574af4aed62d374ec50b208e8ea4c",
+      "source_files": [
+        "app/core/lead_reconciliation.py",
+        "app/workers/delivery.py"
+      ],
+      "test_required": "Same-image provenance, review_pending and Odoo mock tests"
+    },
+    {
+      "canonical_equivalent": "canonical Postly connector delivery worker",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-social-delivery-worker-staging-1",
+      "dependencies": "Staging PostgreSQL; Postly mock",
+      "id": "F028",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "name": "social-delivery-worker-staging",
+      "rationale": "Unknown image provenance is unacceptable; behavior must be covered by the canonical social connector.",
+      "revision": "unknown",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Same-image provenance, social mock and no-effect staging tests"
+    },
+    {
+      "canonical_equivalent": "canonical dead-letter/replay workflow",
+      "classification": "REPLACE_WITH_NEW_ARCHITECTURE",
+      "container": "codestra-middleware-staging-social-dead-letter-worker-staging-1",
+      "dependencies": "Temporal; PostgreSQL; Postly connector",
+      "id": "F029",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "name": "social-dead-letter-worker-staging",
+      "rationale": "Use the operator-approved dead-letter replay workflow rather than a social-specific undocumented implementation.",
+      "revision": "unknown",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Approval, audit, correction, replay idempotency and tenant tests"
+    },
+    {
+      "canonical_equivalent": "canonical reconciliation workflow plus Postly read-back",
+      "classification": "DUPLICATE",
+      "container": "codestra-middleware-staging-social-reconciliation-worker-staging-1",
+      "dependencies": "Temporal; PostgreSQL; Postly connector",
+      "id": "F030",
+      "image_id": "sha256:8e4a1afa8ca70a6c9136530074f6f8f1257e9f9a895f705fa50acb6f64b18fe6",
+      "name": "social-reconciliation-worker-staging",
+      "rationale": "Social reconciliation is a connector specialization of the shared workflow, not a separate source lineage.",
+      "revision": "unknown",
+      "source_files": [
+        "server-baseline/runtime-images.json (runtime-only evidence)"
+      ],
+      "test_required": "Postly read-back mismatch, timeout, retry and restart tests"
+    }
+  ]
+}

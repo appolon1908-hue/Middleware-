@@ -23,13 +23,20 @@ pytestmark = pytest.mark.skipif(
 async def pool() -> asyncpg.Pool:
     assert DATABASE_URL, "DATABASE_URL is required"
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
-    migration = Path("migrations/0001_runtime.sql").read_text(encoding="utf-8")
+    migrations = [
+        path.read_text(encoding="utf-8")
+        for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    ]
     async with pool.acquire() as conn:
         await conn.execute("DROP TABLE IF EXISTS middleware_reconciliation_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_outbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_inbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_schema_migrations CASCADE")
-        await conn.execute(migration)
+        await conn.execute("DROP TABLE IF EXISTS middleware_command_audit CASCADE")
+        await conn.execute("DROP TABLE IF EXISTS middleware_command_attempts CASCADE")
+        await conn.execute("DROP TABLE IF EXISTS middleware_commands CASCADE")
+        for migration in migrations:
+            await conn.execute(migration)
     try:
         yield pool
     finally:

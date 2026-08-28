@@ -15,10 +15,14 @@ async def main() -> None:
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise SystemExit("DATABASE_URL is required")
-    sql = (ROOT / "migrations" / "0001_runtime.sql").read_text(encoding="utf-8")
     conn = await asyncpg.connect(url, command_timeout=30)
     try:
-        await conn.execute(sql)
+        migrations = sorted((ROOT / "migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
+        if not migrations:
+            raise SystemExit("no runtime migrations found")
+        for migration in migrations:
+            await conn.execute(migration.read_text(encoding="utf-8"))
+            print(f"RUNTIME_MIGRATION_APPLIED={migration.name}")
     finally:
         await conn.close()
     print("RUNTIME_MIGRATION=PASS")

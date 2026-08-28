@@ -14,7 +14,8 @@
     "BEYVRA_OPERATIONS_WRITE": false,
     "BEYVRA_FINANCIAL_WRITE": false,
     "PRIVACY_WRITE": false,
-    "DEAD_LETTER_REPLAY": false
+    "DEAD_LETTER_REPLAY": false,
+    "PROVISIONING_WRITE": false
   },
   "activation_requirements": ["protected_merged_sha", "exact_head_tests", "independent_approval", "staging_no_effect", "backup_restore", "rollback_rehearsal", "bounded_canary", "runtime_readback"]
 }

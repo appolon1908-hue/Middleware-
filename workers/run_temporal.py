@@ -7,7 +7,11 @@ from datetime import timedelta
 from temporalio.worker import Worker
 
 from app.config import ConfigurationError, Settings
-from app.temporal_activities import FailClosedWorkflowActivities
+from app.commands import PostgresCommandStore
+from app.temporal_activities import (
+    CommandLedgerWorkflowActivities,
+    FailClosedWorkflowActivities,
+)
 from app.temporal_runtime import connect_temporal
 from app.temporal_workflows import WORKFLOWS
 
@@ -18,16 +22,26 @@ async def main() -> None:
         raise ConfigurationError(
             "TEMPORAL_WORKER_MODE=disabled; workflow worker is intentionally disabled"
         )
+    if settings.database_url is None:
+        raise ConfigurationError("DATABASE_URL is required for the Temporal worker")
     client = await connect_temporal(settings)
-    activities = FailClosedWorkflowActivities()
-    worker = Worker(
-        client,
-        task_queue=settings.temporal_task_queue,
-        workflows=list(WORKFLOWS),
-        activities=list(activities.registered()),
-        graceful_shutdown_timeout=timedelta(seconds=30),
-    )
-    await worker.run()
+    command_store = await PostgresCommandStore.connect(settings.database_url)
+    try:
+        safe_activities = FailClosedWorkflowActivities()
+        command_activities = CommandLedgerWorkflowActivities(command_store)
+        worker = Worker(
+            client,
+            task_queue=settings.temporal_task_queue,
+            workflows=list(WORKFLOWS),
+            activities=[
+                *safe_activities.registered(),
+                *command_activities.registered(),
+            ],
+            graceful_shutdown_timeout=timedelta(seconds=30),
+        )
+        await worker.run()
+    finally:
+        await command_store.close()
 
 
 if __name__ == "__main__":

@@ -3,11 +3,14 @@ from __future__ import annotations
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from uuid import UUID
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse
 
 from .config import ConfigurationError, Settings
+from .commands import CommandEnvelope, CommandError
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
 from .runtime import Runtime, build_runtime
 from .security import SecurityError
@@ -122,6 +125,29 @@ def create_app(
             retryable=exc.retryable,
         )
 
+    @app.exception_handler(CommandError)
+    async def command_error(request: Request, exc: CommandError) -> JSONResponse:
+        return _error_response(
+            request,
+            status_code=exc.status_code,
+            code=exc.code,
+            message=str(exc),
+            retryable=exc.retryable,
+        )
+
+    @app.exception_handler(FastApiValidationError)
+    async def validation_error(
+        request: Request,
+        exc: FastApiValidationError,
+    ) -> JSONResponse:
+        return _error_response(
+            request,
+            status_code=400,
+            code="invalid_request",
+            message="request does not match the canonical API contract",
+            retryable=False,
+        )
+
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -145,6 +171,78 @@ def create_app(
             "schema_head": resolved.schema_head,
             "build_time": resolved.build_time,
         }
+
+    @app.post("/v1/commands")
+    async def submit_command(
+        command: CommandEnvelope,
+        request: Request,
+    ) -> JSONResponse:
+        active = request.app.state.runtime
+        if active.commands is None:
+            raise StorageError("command ledger is unavailable")
+        claims = await active.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id="kong-gateway",
+            required_scope="middleware.request.forward",
+        )
+        from .security import authorize_tenant
+
+        authorize_tenant(claims, command.tenant_id)
+        if request.headers.get("X-Tenant-ID") != command.tenant_id:
+            from .security import RequestValidationError
+
+            raise RequestValidationError("X-Tenant-ID does not match command tenant")
+        if request.headers.get("X-Correlation-ID") != command.correlation_id:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "X-Correlation-ID does not match command correlation_id"
+            )
+        if request.headers.get("Idempotency-Key") != command.idempotency_key:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "Idempotency-Key does not match command idempotency_key"
+            )
+        subject = claims.get("sub")
+        if not isinstance(subject, str) or not subject:
+            from .security import AuthorizationError
+
+            raise AuthorizationError("token subject is required for commands")
+        operation = await active.commands.submit(
+            command,
+            authenticated_subject=subject,
+        )
+        status_code = 200 if operation.duplicate else 202
+        return JSONResponse(
+            status_code=status_code,
+            content=operation.model_dump(mode="json"),
+            headers={
+                "Location": f"/v1/operations/{operation.command_id}",
+                "X-Correlation-ID": operation.correlation_id,
+            },
+        )
+
+    @app.get("/v1/operations/{command_id}")
+    async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
+        active = request.app.state.runtime
+        if active.commands is None:
+            raise StorageError("command ledger is unavailable")
+        claims = await active.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id="kong-gateway",
+            required_scope="middleware.status.read",
+        )
+        tenant_id = request.headers.get("X-Tenant-ID", "")
+        from .security import authorize_tenant
+
+        authorize_tenant(claims, tenant_id)
+        operation = await active.commands.get(tenant_id, command_id)
+        return JSONResponse(
+            status_code=200,
+            content=operation.model_dump(mode="json"),
+            headers={"X-Correlation-ID": operation.correlation_id},
+        )
 
     def register(route: WebhookRoute) -> None:
         async def ingress(request: Request) -> JSONResponse:

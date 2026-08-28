@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
@@ -12,6 +13,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 class ActivityResult:
     status: str
     detail: str
+    provider_operation_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,30 @@ class DeadLetterReplayRequest:
     approval_reason: str
 
 
+@dataclass(frozen=True)
+class CommandExecutionRequest:
+    command_id: str
+    command_type: str
+    command_version: str
+    target: str
+    tenant_id: str
+    requested_by: str
+    correlation_id: str
+    idempotency_key: str
+    capability: str
+    payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class CommandTransitionRequest:
+    command_id: str
+    tenant_id: str
+    new_state: str
+    actor_id: str
+    reason: str
+    provider_operation_id: str | None = None
+
+
 ACTIVITY_RETRY_POLICY = RetryPolicy(
     initial_interval=timedelta(seconds=1),
     backoff_coefficient=2.0,
@@ -98,6 +124,16 @@ async def _activity(name: str, request: object) -> ActivityResult:
         request,
         result_type=ActivityResult,
         start_to_close_timeout=timedelta(seconds=30),
+        retry_policy=ACTIVITY_RETRY_POLICY,
+    )
+
+
+async def _command_transition(request: CommandTransitionRequest) -> ActivityResult:
+    return await workflow.execute_activity(
+        "record_command_transition",
+        request,
+        result_type=ActivityResult,
+        start_to_close_timeout=timedelta(seconds=15),
         retry_policy=ACTIVITY_RETRY_POLICY,
     )
 
@@ -247,9 +283,134 @@ class DeadLetterRecoveryWorkflow:
         )
 
 
+@workflow.defn(name="codestra.command-execution.v1")
+class CommandExecutionWorkflow:
+    @workflow.run
+    async def run(self, request: CommandExecutionRequest) -> WorkflowOutcome:
+        _require_identity(request.command_id, "command_id")
+        _require_identity(request.tenant_id, "tenant_id")
+        actor = "temporal:codestra.command-execution.v1"
+        await _command_transition(
+            CommandTransitionRequest(
+                request.command_id,
+                request.tenant_id,
+                "queued",
+                actor,
+                "Temporal workflow accepted durable command intent",
+            )
+        )
+        await _command_transition(
+            CommandTransitionRequest(
+                request.command_id,
+                request.tenant_id,
+                "dispatching",
+                actor,
+                "reserved command for one adapter execution attempt",
+            )
+        )
+        try:
+            executed = await workflow.execute_activity(
+                "execute_command",
+                request,
+                result_type=ActivityResult,
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(maximum_attempts=1),
+            )
+        except ActivityError as exc:
+            await _command_transition(
+                CommandTransitionRequest(
+                    request.command_id,
+                    request.tenant_id,
+                    "reconciliation_required",
+                    actor,
+                    f"adapter outcome is unknown and requires read-back: {exc}",
+                )
+            )
+            return WorkflowOutcome(
+                operation_id=request.command_id,
+                workflow_type="command_execution",
+                status="reconciliation_required",
+                detail="adapter execution did not produce a confirmed outcome",
+            )
+
+        await _command_transition(
+            CommandTransitionRequest(
+                request.command_id,
+                request.tenant_id,
+                "accepted",
+                actor,
+                "adapter accepted the idempotent command",
+                executed.provider_operation_id,
+            )
+        )
+        await _command_transition(
+            CommandTransitionRequest(
+                request.command_id,
+                request.tenant_id,
+                "readback_pending",
+                actor,
+                "provider read-back required before completion",
+                executed.provider_operation_id,
+            )
+        )
+        try:
+            readback = await _activity("readback_command", request)
+        except ActivityError as exc:
+            await _command_transition(
+                CommandTransitionRequest(
+                    request.command_id,
+                    request.tenant_id,
+                    "reconciliation_required",
+                    actor,
+                    f"provider read-back did not confirm the outcome: {exc}",
+                    executed.provider_operation_id,
+                )
+            )
+            return WorkflowOutcome(
+                operation_id=request.command_id,
+                workflow_type="command_execution",
+                status="reconciliation_required",
+                detail="provider read-back failed",
+            )
+        if readback.status != "matched":
+            await _command_transition(
+                CommandTransitionRequest(
+                    request.command_id,
+                    request.tenant_id,
+                    "reconciliation_required",
+                    actor,
+                    "provider read-back did not match durable command intent",
+                    executed.provider_operation_id,
+                )
+            )
+            return WorkflowOutcome(
+                operation_id=request.command_id,
+                workflow_type="command_execution",
+                status="reconciliation_required",
+                detail=readback.detail,
+            )
+        await _command_transition(
+            CommandTransitionRequest(
+                request.command_id,
+                request.tenant_id,
+                "completed",
+                actor,
+                "provider read-back matched durable command intent",
+                executed.provider_operation_id,
+            )
+        )
+        return WorkflowOutcome(
+            operation_id=request.command_id,
+            workflow_type="command_execution",
+            status="completed",
+            detail=readback.detail,
+        )
+
+
 WORKFLOWS = (
     ReconciliationWorkflow,
     DelayedCallbackWorkflow,
     ProvisioningWorkflow,
     DeadLetterRecoveryWorkflow,
+    CommandExecutionWorkflow,
 )

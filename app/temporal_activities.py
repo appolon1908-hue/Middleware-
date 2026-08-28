@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
+from .commands import CommandConflict, CommandNotFound, CommandState, PostgresCommandStore
 from .temporal_workflows import (
+    ActivityResult,
+    CommandExecutionRequest,
+    CommandTransitionRequest,
     DeadLetterReplayRequest,
     DelayedCallbackRequest,
     ProvisioningStepRequest,
@@ -61,4 +66,64 @@ class FailClosedWorkflowActivities:
             self.verify_provisioning,
             self.compensate_provisioning,
             self.replay_dead_letter,
+        )
+
+
+class CommandLedgerWorkflowActivities:
+    def __init__(self, store: PostgresCommandStore) -> None:
+        self.store = store
+
+    @activity.defn(name="record_command_transition")
+    async def record_command_transition(
+        self,
+        request: CommandTransitionRequest,
+    ) -> ActivityResult:
+        try:
+            operation = await self.store.transition(
+                request.tenant_id,
+                UUID(request.command_id),
+                new_state=request.new_state,  # type: ignore[arg-type]
+                actor_id=request.actor_id,
+                reason=request.reason,
+                provider_operation_id=request.provider_operation_id,
+            )
+        except (ValueError, CommandConflict, CommandNotFound) as exc:
+            raise ApplicationError(
+                str(exc),
+                non_retryable=True,
+                type="CommandTransitionRejected",
+            ) from exc
+        return ActivityResult(
+            status=operation.state,
+            detail=request.reason,
+            provider_operation_id=operation.provider_operation_id,
+        )
+
+    @activity.defn(name="execute_command")
+    async def execute_command(
+        self,
+        request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        raise ApplicationError(
+            "no production provider adapter is activated for this command",
+            non_retryable=True,
+            type="CapabilityDisabled",
+        )
+
+    @activity.defn(name="readback_command")
+    async def readback_command(
+        self,
+        request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        raise ApplicationError(
+            "no provider read-back adapter is activated for this command",
+            non_retryable=True,
+            type="CapabilityDisabled",
+        )
+
+    def registered(self) -> tuple[Any, ...]:
+        return (
+            self.record_command_transition,
+            self.execute_command,
+            self.readback_command,
         )

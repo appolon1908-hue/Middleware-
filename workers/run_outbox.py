@@ -6,16 +6,20 @@ import asyncio
 import asyncpg
 
 from app.config import ConfigurationError, Settings
+from app.commands import TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
 from app.storage import NATS_JETSTREAM_DESTINATION, PostgresOutboxStore
+from app.temporal_runtime import connect_temporal
+from app.temporal_transport import TemporalCommandDispatcher
 from app.worker import OutboxWorker
 
 
 async def main() -> None:
     settings = Settings.from_env()
-    if not settings.outbox_dispatch_enabled:
+    temporal_enabled = settings.temporal_worker_mode != "disabled"
+    if not settings.outbox_dispatch_enabled and not temporal_enabled:
         raise ConfigurationError(
-            "OUTBOX_DISPATCH_ENABLED=false; outbox worker is intentionally disabled"
+            "both JetStream and Temporal outbox dispatch are intentionally disabled"
         )
     if settings.database_url is None:
         raise ConfigurationError("DATABASE_URL is required for the outbox worker")
@@ -28,10 +32,20 @@ async def main() -> None:
     )
     publisher: NatsJetStreamPublisher | None = None
     try:
-        publisher = await NatsJetStreamPublisher.connect(settings)
+        handlers = {}
+        if settings.outbox_dispatch_enabled:
+            publisher = await NatsJetStreamPublisher.connect(settings)
+            handlers[NATS_JETSTREAM_DESTINATION] = publisher.publish
+        if temporal_enabled:
+            temporal_client = await connect_temporal(settings)
+            temporal_dispatcher = TemporalCommandDispatcher(
+                temporal_client,
+                settings.temporal_task_queue,
+            )
+            handlers[TEMPORAL_COMMAND_DESTINATION] = temporal_dispatcher.dispatch
         worker = OutboxWorker(
             PostgresOutboxStore(pool),
-            {NATS_JETSTREAM_DESTINATION: publisher.publish},
+            handlers,
         )
         await worker.run_forever()
     finally:

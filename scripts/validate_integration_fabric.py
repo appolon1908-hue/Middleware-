@@ -17,6 +17,7 @@ def validate() -> None:
     capabilities = load("config/capabilities.v2.json")
     registry = load("config/adapter-registry.v2.json")
     command = load("contracts/platform/command-envelope.v1.schema.json")
+    command_registry = load("connectors/generated/command-registry.v1.json")
     event = load("contracts/platform/event-envelope.v1.schema.json")
 
     assert ownership["schema_version"] == "2.0"
@@ -24,6 +25,15 @@ def validate() -> None:
     assert "direct_provider_write" in ownership["systems"]["n8n"]["forbidden"]
     assert capabilities["default_policy"] == "DENY"
     assert not any(capabilities["capabilities"].values())
+    assert command_registry["default_policy"] == "DENY"
+    prefixes: set[str] = set()
+    for policy in command_registry["commands"]:
+        assert policy["prefix"] not in prefixes
+        prefixes.add(policy["prefix"])
+        assert policy["required_capability"] in capabilities["capabilities"]
+        assert capabilities["capabilities"][policy["required_capability"]] is False
+        assert policy["readback_required"] is True
+        assert policy["unknown_outcome_requires_readback"] is True
 
     ids: set[str] = set()
     for adapter in registry["adapters"]:

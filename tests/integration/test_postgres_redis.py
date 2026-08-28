@@ -12,6 +12,7 @@ import pytest
 import pytest_asyncio
 from redis.asyncio import Redis
 
+from app.commands import CommandConflict, CommandEnvelope, PostgresCommandStore
 from app.models import EventEnvelope
 from app.replay import RedisReplayGuard, ReplayBusy
 from app.storage import PostgresInboxStore, PostgresOutboxStore, ReconciliationError, ReplayConflict
@@ -60,13 +61,20 @@ def semantic_digest(item: EventEnvelope) -> str:
 async def pool() -> asyncpg.Pool:
     assert DATABASE_URL, "DATABASE_URL is required"
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=8)
-    migration = Path("migrations/0001_runtime.sql").read_text(encoding="utf-8")
+    migrations = [
+        path.read_text(encoding="utf-8")
+        for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    ]
     async with pool.acquire() as conn:
         await conn.execute("DROP TABLE IF EXISTS middleware_reconciliation_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_outbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_inbox CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_schema_migrations CASCADE")
-        await conn.execute(migration)
+        await conn.execute("DROP TABLE IF EXISTS middleware_command_audit CASCADE")
+        await conn.execute("DROP TABLE IF EXISTS middleware_command_attempts CASCADE")
+        await conn.execute("DROP TABLE IF EXISTS middleware_commands CASCADE")
+        for migration in migrations:
+            await conn.execute(migration)
     try:
         yield pool
     finally:
@@ -193,6 +201,97 @@ async def test_postgres_idempotency_key_collision_fails_closed(pool: asyncpg.Poo
             body_sha256="0" * 64,
             semantic_sha256=semantic_digest(second),
         )
+
+
+@pytest.mark.asyncio
+async def test_command_intent_outbox_and_audit_are_one_durable_transaction(
+    pool: asyncpg.Pool,
+) -> None:
+    store = PostgresCommandStore(pool)
+    assert await store.ready() is True
+    command = CommandEnvelope.model_validate(
+        {
+            "command_id": "00000000-0000-4000-8000-000000000001",
+            "command_type": "crm.contact.create.v1",
+            "command_version": "1.0",
+            "target": "odoo-19",
+            "tenant_id": "tenant-test",
+            "requested_by": "user-1",
+            "correlation_id": "correlation-command-1",
+            "idempotency_key": "idempotency-command-1",
+            "capability": "ODOO_WRITE",
+            "payload": {"contact_id": "contact-1"},
+        }
+    )
+
+    accepted = await store.submit(command)
+    duplicate = await store.submit(command)
+    assert accepted.state == "persisted"
+    assert duplicate.duplicate is True
+
+    with pytest.raises(CommandConflict):
+        await store.submit(
+            command.model_copy(update={"payload": {"contact_id": "changed"}})
+        )
+
+    for new_state in (
+        "queued",
+        "dispatching",
+        "accepted",
+        "readback_pending",
+        "completed",
+    ):
+        await store.transition(
+            command.tenant_id,
+            command.command_id,
+            new_state=new_state,
+            actor_id="temporal:test",
+            reason=f"verified transition to {new_state}",
+            provider_operation_id=(
+                "provider-operation-1" if new_state == "accepted" else None
+            ),
+        )
+
+    operation = await store.get(command.tenant_id, command.command_id)
+    assert operation.state == "completed"
+    assert operation.provider_operation_id == "provider-operation-1"
+
+    async with pool.acquire() as conn:
+        outbox_count = await conn.fetchval(
+            """
+            SELECT count(*) FROM middleware_outbox
+            WHERE tenant_id=$1 AND destination='temporal-command'
+              AND idempotency_key=$2
+            """,
+            command.tenant_id,
+            command.idempotency_key,
+        )
+        audit_states = await conn.fetch(
+            """
+            SELECT new_state FROM middleware_command_audit
+            WHERE tenant_id=$1 AND command_id=$2 ORDER BY id
+            """,
+            command.tenant_id,
+            str(command.command_id),
+        )
+        attempts = await conn.fetchval(
+            """
+            SELECT count(*) FROM middleware_command_attempts
+            WHERE tenant_id=$1 AND command_id=$2
+            """,
+            command.tenant_id,
+            str(command.command_id),
+        )
+    assert outbox_count == 1
+    assert [row["new_state"] for row in audit_states] == [
+        "persisted",
+        "queued",
+        "dispatching",
+        "accepted",
+        "readback_pending",
+        "completed",
+    ]
+    assert attempts == 1
 
 
 async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:

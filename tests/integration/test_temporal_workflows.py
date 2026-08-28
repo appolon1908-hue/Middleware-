@@ -12,6 +12,9 @@ from temporalio.worker import Worker
 
 from app.temporal_workflows import (
     ActivityResult,
+    CommandExecutionRequest,
+    CommandExecutionWorkflow,
+    CommandTransitionRequest,
     DeadLetterApproval,
     DeadLetterRecoveryRequest,
     DeadLetterRecoveryWorkflow,
@@ -43,6 +46,8 @@ class DeterministicActivities:
         self.provisioned: list[str] = []
         self.compensations: list[str] = []
         self.replays: list[str] = []
+        self.command_transitions: list[str] = []
+        self.readback_status = "matched"
 
     @activity.defn(name="reconcile_operation")
     async def reconcile_operation(
@@ -107,6 +112,32 @@ class DeterministicActivities:
             f"approved by {value.operator_id}",
         )
 
+    @activity.defn(name="record_command_transition")
+    async def record_command_transition(
+        self,
+        request: CommandTransitionRequest,
+    ) -> ActivityResult:
+        self.command_transitions.append(request.new_state)
+        return ActivityResult(
+            request.new_state,
+            request.reason,
+            request.provider_operation_id,
+        )
+
+    @activity.defn(name="execute_command")
+    async def execute_command(
+        self,
+        request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        return ActivityResult("accepted", "provider accepted", "provider-op-1")
+
+    @activity.defn(name="readback_command")
+    async def readback_command(
+        self,
+        request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        return ActivityResult(self.readback_status, "provider state observed")
+
     def registered(self) -> list[Any]:
         return [
             self.reconcile_operation,
@@ -116,6 +147,9 @@ class DeterministicActivities:
             self.verify_provisioning,
             self.compensate_provisioning,
             self.replay_dead_letter,
+            self.record_command_transition,
+            self.execute_command,
+            self.readback_command,
         ]
 
 
@@ -191,3 +225,42 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
             recovered = await recovery.result()
             assert recovered.status == "completed"
             assert activities.replays == ["dead-letter-1"]
+
+            command_request = CommandExecutionRequest(
+                command_id="00000000-0000-4000-8000-000000000001",
+                command_type="crm.contact.create.v1",
+                command_version="1.0",
+                target="odoo-19",
+                tenant_id="tenant-test",
+                requested_by="user-1",
+                correlation_id="correlation-1",
+                idempotency_key="idempotency-1",
+                capability="ODOO_WRITE",
+                payload={"contact_id": "contact-1"},
+            )
+            command = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                command_request,
+                id="test-command-execution",
+                task_queue=TASK_QUEUE,
+            )
+            assert command.status == "completed"
+            assert activities.command_transitions == [
+                "queued",
+                "dispatching",
+                "accepted",
+                "readback_pending",
+                "completed",
+            ]
+
+            activities.command_transitions.clear()
+            activities.readback_status = "mismatch"
+            mismatch = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                command_request,
+                id="test-command-readback-mismatch",
+                task_queue=TASK_QUEUE,
+            )
+            assert mismatch.status == "reconciliation_required"
+            assert activities.command_transitions[-1] == "reconciliation_required"
+            assert "completed" not in activities.command_transitions

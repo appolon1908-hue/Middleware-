@@ -160,7 +160,7 @@ class Settings:
             app_version=source.get("APP_VERSION", "0.1.0").strip(),
             source_sha=source.get("APP_SOURCE_SHA", "unknown").strip(),
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
-            schema_head=source.get("SCHEMA_HEAD", "0001_runtime").strip(),
+            schema_head=source.get("SCHEMA_HEAD", "0002_command_ledger").strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             issuer=issuer,
             jwks_uri=jwks,
@@ -447,8 +447,10 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0001_runtime":
-            raise ConfigurationError("SCHEMA_HEAD must be 0001_runtime for intake-runtime-v1")
+        if self.schema_head != "0002_command_ledger":
+            raise ConfigurationError(
+                "SCHEMA_HEAD must be 0002_command_ledger"
+            )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):
                 raise ConfigurationError("APP_SOURCE_SHA must be an exact 40-character SHA")

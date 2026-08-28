@@ -18,7 +18,9 @@ def test_all_contract_routes_are_registered(test_settings, runtime) -> None:
     registered = {
         route.path
         for route in app.routes
-        if getattr(route, "methods", None) and "POST" in route.methods
+        if getattr(route, "methods", None)
+        and "POST" in route.methods
+        and route.path.startswith("/api/v1/")
     }
     assert registered == {item.path for item in WEBHOOK_ROUTES}
 
@@ -245,4 +247,4 @@ def test_health_ready_version(test_settings, runtime) -> None:
         version = client.get("/version").json()
         assert version["service"] == "middleware-api"
         assert version["environment"] == "test"
-        assert version["schema_head"] == "0001_runtime"
+        assert version["schema_head"] == "0002_command_ledger"

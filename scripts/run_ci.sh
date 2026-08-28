@@ -33,6 +33,9 @@ python3 scripts/validate_connectivity_contracts.py
 printf '==> Validating the integration fabric\n'
 python3 scripts/validate_integration_fabric.py
 
+printf '==> Validating locked runtime environment profiles\n'
+python3 scripts/validate_runtime_profiles.py
+
 printf '==> Validating connector SDK contracts and generated artifacts\n'
 python3 scripts/validate_connector_sdk.py
 

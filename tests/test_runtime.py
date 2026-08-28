@@ -247,4 +247,5 @@ def test_health_ready_version(test_settings, runtime) -> None:
         version = client.get("/version").json()
         assert version["service"] == "middleware-api"
         assert version["environment"] == "test"
+        assert version["runtime_profile_id"] == "local-unlocked"
         assert version["schema_head"] == "0003_immutable_event_ledger"

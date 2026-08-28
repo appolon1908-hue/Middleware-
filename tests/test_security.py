@@ -117,12 +117,20 @@ def test_jetstream_dispatch_requires_matching_gate_and_authorization() -> None:
 def test_production_jetstream_dispatch_requires_approved_identity() -> None:
     env = {
         "APP_ENV": "production",
-        "DATABASE_URL": "postgresql://middleware.invalid/db",
-        "REDIS_URL": "redis://redis.invalid/0",
-        "NATS_URL": "tls://nats.invalid:4222",
+        "RUNTIME_PROFILE_ID": "codestra-middleware-production-v1",
+        "DATABASE_URL": (
+            "postgresql://middleware_production:secret@"
+            "postgresql.middleware-production.svc.cluster.local:5432/"
+            "codestra_production?sslmode=verify-full"
+        ),
+        "REDIS_URL": (
+            "rediss://middleware-production:secret@"
+            "redis.middleware-production.svc.cluster.local:6379/0"
+        ),
+        "NATS_URL": "tls://nats.middleware-production.svc.cluster.local:4222",
         "NATS_STREAM": "CODESTRA_EVENTS",
         "NATS_SUBJECT_PREFIX": "codestra.events",
-        "NATS_CREDS_FILE": "/run/secrets/middleware-nats.creds",
+        "NATS_CREDS_FILE": "/run/secrets/middleware-production-nats.creds",
         "NATS_DISPATCH_MODE": "production",
         "PRODUCTION_ACTIVATION_ID": "CHG-20260828-EVENTS",
         "SEND_EVENTS": "true",
@@ -147,7 +155,7 @@ def test_staging_uses_an_isolated_jetstream_namespace() -> None:
     env = staging_env()
     env.update(
         {
-            "NATS_URL": "tls://nats-staging.invalid:4222",
+            "NATS_URL": "tls://nats.middleware-staging.svc.cluster.local:4222",
             "NATS_STREAM": "CODESTRA_STAGING_EVENTS",
             "NATS_SUBJECT_PREFIX": "codestra.staging.events",
             "NATS_CREDS_FILE": "/run/secrets/middleware-staging-nats.creds",
@@ -172,7 +180,7 @@ def test_staging_rejects_production_jetstream_namespace() -> None:
     env = staging_env()
     env.update(
         {
-            "NATS_URL": "tls://nats-staging.invalid:4222",
+            "NATS_URL": "tls://nats.middleware-staging.svc.cluster.local:4222",
             "NATS_STREAM": "CODESTRA_EVENTS",
             "NATS_SUBJECT_PREFIX": "codestra.events",
             "NATS_CREDS_FILE": "/run/secrets/middleware-staging-nats.creds",
@@ -232,8 +240,20 @@ def test_staging_cannot_use_in_memory_storage() -> None:
 def staging_env() -> dict[str, str]:
     return {
         "APP_ENV": "staging",
-        "DATABASE_URL": "postgresql://example.invalid/db",
-        "REDIS_URL": "redis://example.invalid/0",
+        "RUNTIME_PROFILE_ID": "codestra-middleware-staging-v1",
+        "DATABASE_URL": (
+            "postgresql://middleware_staging:secret@"
+            "postgresql.middleware-staging.svc.cluster.local:5432/"
+            "codestra_staging?sslmode=verify-full"
+        ),
+        "REDIS_URL": (
+            "rediss://middleware-staging:secret@"
+            "redis.middleware-staging.svc.cluster.local:6379/14"
+        ),
+        "NATS_STREAM": "CODESTRA_STAGING_EVENTS",
+        "NATS_SUBJECT_PREFIX": "codestra.staging.events",
+        "TEMPORAL_NAMESPACE": "codestra-staging",
+        "TEMPORAL_TASK_QUEUE": "codestra-staging-critical",
         "APP_SOURCE_SHA": "a" * 40,
         "IMAGE_DIGEST": "sha256:" + "b" * 64,
         "BUILD_TIME": "2026-08-26T23:00:00Z",
@@ -261,6 +281,105 @@ def test_staging_requires_every_webhook_secret() -> None:
         env[name] = "x" * 32
     settings = Settings.from_env(env)
     settings.validate_all_webhook_secrets()
+
+
+def test_runtime_profiles_reject_cross_environment_resources_and_activation() -> None:
+    env = staging_env()
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+
+    production_database = (
+        "postgresql://middleware_production:secret@"
+        "postgresql.middleware-production.svc.cluster.local:5432/"
+        "codestra_production?sslmode=verify-full"
+    )
+    with pytest.raises(ConfigurationError, match="DATABASE_URL"):
+        Settings.from_env({**env, "DATABASE_URL": production_database})
+    with pytest.raises(ConfigurationError, match="REDIS_URL"):
+        Settings.from_env(
+            {
+                **env,
+                "REDIS_URL": (
+                    "rediss://middleware-production:secret@"
+                    "redis.middleware-production.svc.cluster.local:6379/0"
+                ),
+            }
+        )
+    with pytest.raises(ConfigurationError, match="PRODUCTION_ACTIVATION_ID"):
+        Settings.from_env(
+            {**env, "PRODUCTION_ACTIVATION_ID": "CHG-20260828-PRODUCTION"}
+        )
+
+
+def test_runtime_profile_identity_is_mandatory_and_not_allowed_in_tests() -> None:
+    env = staging_env()
+    env.pop("RUNTIME_PROFILE_ID")
+    with pytest.raises(ConfigurationError, match="RUNTIME_PROFILE_ID"):
+        Settings.from_env(env)
+    with pytest.raises(ConfigurationError, match="reserved"):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "RUNTIME_PROFILE_ID": "codestra-middleware-staging-v1",
+            }
+        )
+
+
+def test_staging_temporal_is_bound_to_staging_identity_and_credentials() -> None:
+    env = staging_env()
+    env.update(
+        {
+            "TEMPORAL_ADDRESS": (
+                "temporal.middleware-staging.svc.cluster.local:7233"
+            ),
+            "TEMPORAL_WORKER_MODE": "isolated",
+            "TEMPORAL_SERVER_ROOT_CA_FILE": (
+                "/run/secrets/middleware-staging-temporal-ca.pem"
+            ),
+            "TEMPORAL_CLIENT_CERT_FILE": (
+                "/run/secrets/middleware-staging-temporal-client.pem"
+            ),
+            "TEMPORAL_CLIENT_KEY_FILE": (
+                "/run/secrets/middleware-staging-temporal-client-key.pem"
+            ),
+            "TEMPORAL_TLS_SERVER_NAME": (
+                "temporal.middleware-staging.svc.cluster.local"
+            ),
+        }
+    )
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+    assert Settings.from_env(env).temporal_worker_mode == "isolated"
+
+    with pytest.raises(ConfigurationError, match="TEMPORAL_ADDRESS"):
+        Settings.from_env(
+            {
+                **env,
+                "TEMPORAL_ADDRESS": (
+                    "temporal.middleware-production.svc.cluster.local:7233"
+                ),
+            }
+        )
+
+
+def test_locked_profiles_convert_malformed_resource_urls_to_configuration_errors() -> None:
+    env = staging_env()
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+    with pytest.raises(ConfigurationError, match="DATABASE_URL"):
+        Settings.from_env({**env, "DATABASE_URL": "postgresql://host:bad/db"})
+    with pytest.raises(ConfigurationError, match="REDIS_URL"):
+        Settings.from_env({**env, "REDIS_URL": "rediss://host:bad/14"})
 
 
 def test_webhook_secret_uses_supplied_environment_mapping() -> None:

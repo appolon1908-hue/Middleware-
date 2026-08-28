@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 FALSE_VALUES = {"0", "false", "no", "off", ""}
@@ -21,6 +22,8 @@ WEBHOOK_PRODUCERS = (
     "kyqra-gateway",
     "postly-adapter",
 )
+ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_PROFILES_PATH = ROOT / "config" / "runtime-profiles.v1.json"
 
 
 class ConfigurationError(RuntimeError):
@@ -72,9 +75,31 @@ def _is_absolute_mount_path(path: Path) -> bool:
     )
 
 
+def _runtime_profiles() -> dict[str, dict[str, object]]:
+    try:
+        value = json.loads(RUNTIME_PROFILES_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ConfigurationError("runtime profile registry cannot be loaded") from exc
+    if value.get("schema_version") != "1.0":
+        raise ConfigurationError("runtime profile registry version is unsupported")
+    raw_profiles = value.get("profiles")
+    if not isinstance(raw_profiles, list) or len(raw_profiles) != 2:
+        raise ConfigurationError("runtime profile registry must declare two profiles")
+    profiles: dict[str, dict[str, object]] = {}
+    for raw in raw_profiles:
+        if not isinstance(raw, dict):
+            raise ConfigurationError("runtime profile must be an object")
+        profile_id = raw.get("profile_id")
+        if not isinstance(profile_id, str) or profile_id in profiles:
+            raise ConfigurationError("runtime profile identity is invalid or duplicated")
+        profiles[profile_id] = raw
+    return profiles
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
+    runtime_profile_id: str | None
     app_version: str
     source_sha: str
     image_digest: str
@@ -157,6 +182,9 @@ class Settings:
         }
         settings = cls(
             app_env=source.get("APP_ENV", "development").strip().lower(),
+            runtime_profile_id=(
+                source.get("RUNTIME_PROFILE_ID", "").strip() or None
+            ),
             app_version=source.get("APP_VERSION", "0.1.0").strip(),
             source_sha=source.get("APP_SOURCE_SHA", "unknown").strip(),
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
@@ -278,6 +306,7 @@ class Settings:
             raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
         if self.audience != "middleware-api":
             raise ConfigurationError("MIDDLEWARE_AUDIENCE must be middleware-api")
+        self._validate_environment_profile()
         enabled = {
             name for name, value in self.external_effects.items() if value
         }
@@ -480,3 +509,148 @@ class Settings:
         if len(secret) < 32:
             raise ConfigurationError(f"{name} must contain at least 32 bytes")
         return secret
+
+    def _validate_environment_profile(self) -> None:
+        if self.app_env not in {"staging", "production"}:
+            if self.runtime_profile_id is not None:
+                raise ConfigurationError(
+                    "RUNTIME_PROFILE_ID is reserved for staging/production"
+                )
+            return
+        profiles = _runtime_profiles()
+        expected_id = f"codestra-middleware-{self.app_env}-v1"
+        if self.runtime_profile_id != expected_id:
+            raise ConfigurationError(
+                f"RUNTIME_PROFILE_ID must be {expected_id}"
+            )
+        profile = profiles.get(expected_id)
+        if profile is None or profile.get("environment") != self.app_env:
+            raise ConfigurationError("runtime profile does not match APP_ENV")
+        self._validate_database_profile(profile["database"])
+        self._validate_redis_profile(profile["redis"])
+
+        nats_profile = profile["nats"]
+        assert isinstance(nats_profile, dict)
+        if self.nats_stream != nats_profile["stream"]:
+            raise ConfigurationError("NATS_STREAM does not match the runtime profile")
+        if self.nats_subject_prefix != nats_profile["subject_prefix"]:
+            raise ConfigurationError(
+                "NATS_SUBJECT_PREFIX does not match the runtime profile"
+            )
+        if self.nats_url is not None:
+            try:
+                parsed_nats = urlparse(self.nats_url)
+                nats_port = parsed_nats.port
+            except ValueError as exc:
+                raise ConfigurationError("NATS_URL is malformed") from exc
+            if (
+                parsed_nats.scheme != "tls"
+                or parsed_nats.hostname != nats_profile["host"]
+                or nats_port != nats_profile["port"]
+                or parsed_nats.username is not None
+                or parsed_nats.password is not None
+                or parsed_nats.path not in {"", "/"}
+                or parsed_nats.query
+                or parsed_nats.fragment
+            ):
+                raise ConfigurationError("NATS_URL does not match the runtime profile")
+
+        temporal_profile = profile["temporal"]
+        assert isinstance(temporal_profile, dict)
+        if self.temporal_namespace != temporal_profile["namespace"]:
+            raise ConfigurationError(
+                "TEMPORAL_NAMESPACE does not match the runtime profile"
+            )
+        if self.temporal_task_queue != temporal_profile["task_queue"]:
+            raise ConfigurationError(
+                "TEMPORAL_TASK_QUEUE does not match the runtime profile"
+            )
+        if (
+            self.temporal_address is not None
+            and self.temporal_address != temporal_profile["address"]
+        ):
+            raise ConfigurationError(
+                "TEMPORAL_ADDRESS does not match the runtime profile"
+            )
+        temporal_host = str(temporal_profile["address"]).rsplit(":", 1)[0]
+        if (
+            self.temporal_tls_server_name is not None
+            and self.temporal_tls_server_name != temporal_host
+        ):
+            raise ConfigurationError(
+                "TEMPORAL_TLS_SERVER_NAME does not match the runtime profile"
+            )
+
+        secret_prefix = profile["secret_path_prefix"]
+        assert isinstance(secret_prefix, str)
+        for credential in (
+            self.nats_credentials_file,
+            self.temporal_server_root_ca_file,
+            self.temporal_client_cert_file,
+            self.temporal_client_key_file,
+        ):
+            normalized_credential = (
+                str(credential).replace("\\", "/")
+                if credential is not None
+                else None
+            )
+            if (
+                normalized_credential is not None
+                and not normalized_credential.startswith(secret_prefix)
+            ):
+                raise ConfigurationError(
+                    "mounted credential path does not match the runtime profile"
+                )
+        if (
+            profile["production_activation_allowed"] is not True
+            and self.production_activation_id is not None
+        ):
+            raise ConfigurationError(
+                "PRODUCTION_ACTIVATION_ID is forbidden by the runtime profile"
+            )
+
+    def _validate_database_profile(self, raw_profile: object) -> None:
+        assert isinstance(raw_profile, dict)
+        try:
+            parsed = urlparse(self.database_url or "")
+            port = parsed.port
+            query = parse_qs(parsed.query, strict_parsing=True)
+        except ValueError as exc:
+            raise ConfigurationError("DATABASE_URL is malformed") from exc
+        if (
+            parsed.scheme != raw_profile["scheme"]
+            or parsed.hostname != raw_profile["host"]
+            or port != raw_profile["port"]
+            or unquote(parsed.path.lstrip("/")) != raw_profile["name"]
+            or unquote(parsed.username or "") != raw_profile["username"]
+            or not parsed.password
+            or query != {"sslmode": [raw_profile["sslmode"]]}
+            or parsed.params
+            or parsed.fragment
+        ):
+            raise ConfigurationError(
+                "DATABASE_URL does not match the locked runtime profile"
+            )
+
+    def _validate_redis_profile(self, raw_profile: object) -> None:
+        assert isinstance(raw_profile, dict)
+        try:
+            parsed = urlparse(self.redis_url or "")
+            port = parsed.port
+            database = int(unquote(parsed.path.lstrip("/")))
+        except ValueError as exc:
+            raise ConfigurationError("REDIS_URL is malformed") from exc
+        if (
+            parsed.scheme != raw_profile["scheme"]
+            or parsed.hostname != raw_profile["host"]
+            or port != raw_profile["port"]
+            or unquote(parsed.username or "") != raw_profile["username"]
+            or not parsed.password
+            or database != raw_profile["database"]
+            or parsed.query
+            or parsed.params
+            or parsed.fragment
+        ):
+            raise ConfigurationError(
+                "REDIS_URL does not match the locked runtime profile"
+            )

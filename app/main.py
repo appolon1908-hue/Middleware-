@@ -166,6 +166,9 @@ def create_app(
             "service": "middleware-api",
             "version": resolved.app_version,
             "environment": resolved.app_env,
+            "runtime_profile_id": (
+                resolved.runtime_profile_id or "local-unlocked"
+            ),
             "source_sha": resolved.source_sha,
             "image_digest": resolved.image_digest,
             "schema_head": resolved.schema_head,

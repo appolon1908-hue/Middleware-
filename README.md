@@ -35,6 +35,10 @@ That same intake transaction appends a tenant-scoped, hash-chained canonical
 event to a database-enforced immutable ledger. See
 [`docs/IMMUTABLE-EVENT-LEDGER.md`](docs/IMMUTABLE-EVENT-LEDGER.md).
 
+Staging and production use separate, startup-enforced resource profiles while
+promoting the same image digest. See
+[`docs/RUNTIME-ENVIRONMENT-LOCKS.md`](docs/RUNTIME-ENVIRONMENT-LOCKS.md).
+
 Critical Temporal workflows are implemented for reconciliation, delayed callbacks, provisioning with compensation, and operator-approved dead-letter recovery. See [`docs/TEMPORAL-WORKFLOWS.md`](docs/TEMPORAL-WORKFLOWS.md).
 
 The sole durable event and command shapes live under `contracts/platform`; the

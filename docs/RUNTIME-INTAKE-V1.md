@@ -45,7 +45,8 @@ PostgreSQL is the correctness boundary. `middleware_inbox` has unique constraint
 
 Redis is a short lease guard against concurrent duplicate processing. PostgreSQL remains authoritative if Redis state expires.
 
-Apply `migrations/0001_runtime.sql` before starting a non-test runtime.
+Apply every numbered migration through `0003_immutable_event_ledger` before
+starting a non-test runtime.
 
 ## Outbox, JetStream, retry and DLQ
 
@@ -59,6 +60,7 @@ Staging may exercise the event plane only with `NATS_DISPATCH_MODE=isolated`, st
 
 In staging/production:
 
+- the environment-specific runtime profile and resource identities must match;
 - in-memory storage is prohibited;
 - PostgreSQL and Redis are required;
 - all provider/business external-effect flags must be false;

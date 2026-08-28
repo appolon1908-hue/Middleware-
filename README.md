@@ -73,7 +73,11 @@ site/booked4seasons            root active; www TLS handshake degraded
 site/breero                    production and staging frontends and APIs
 ```
 
-`platform/caddy` owns the edge. `operations/application-host` owns route inventory, safe restart boundaries, host health, backup references, and change records.
+`platform/caddy` owns Middleware-side route compatibility and edge validation.
+The canonical production Caddy desired state lives in
+[`appolon1908-hue/codestra-production-platform`](https://github.com/appolon1908-hue/codestra-production-platform)
+under `operations/caddy/`. `operations/application-host` owns route inventory,
+safe restart boundaries, host health, backup references, and change records.
 
 ## Provider-host stacks
 
@@ -94,7 +98,11 @@ Klyrow includes its gateway/API, worker, billing API/worker/scheduler, SMTP rela
 
 Telnexa includes Jasmin SMS, billing, Keycloak, RabbitMQ, Redis, PostgreSQL, Prometheus, Node Exporter, public routes, and internal mTLS access.
 
-Kyqra includes the crawler API, HTTP worker, browser worker, callback worker, PostgreSQL, Redis, and `crawler.kyqra.com`.
+Kyqra includes the crawler API, HTTP worker, browser worker, callback worker,
+PostgreSQL, Redis, and `crawler.kyqra.com`. Its only canonical application
+source is
+[`appolon1908-hue/kyqra-crawler`](https://github.com/appolon1908-hue/kyqra-crawler);
+the legacy `appolon1908-hue/kyqra` repository name is retired.
 
 The private integration gateway remains loopback/internal-mTLS only. The Codestra Business Scrapper source at `/opt/codestra-business-scrapper` remains recorded as not deployed.
 
@@ -140,6 +148,14 @@ Never commit:
 - files edited inside a running production container.
 
 ## Canonical controls
+
+Cross-service contract catalog, runtime composition, integrated Caddy/Kong
+desired state, multi-service release manifests, promotion evidence, and
+go/no-go records are owned by
+[`appolon1908-hue/codestra-production-platform`](https://github.com/appolon1908-hue/codestra-production-platform)
+on `release/production-activation`. This repository owns Middleware source,
+service contracts, artifacts, and compatibility workstreams; it does not own
+the central deployment manifest.
 
 - [`config/integration-branches.json`](config/integration-branches.json) — base workstream manifest and synchronization policy.
 - [`architecture/workstreams.py`](architecture/workstreams.py) — supplemental site/provider workstreams and runtime-status updates.

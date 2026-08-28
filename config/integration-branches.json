@@ -1,10 +1,25 @@
 {
-  "version": 5,
+  "version": 6,
   "base_branch": "main",
   "deployment_from_workstream_branches": false,
   "canonical_contract_branch": "core/integration-contracts",
   "connectivity_map": "config/connectivity-map.json",
   "canonical_event_schema": "contracts/platform/event-envelope.v1.schema.json",
+  "external_authorities": {
+    "integration_and_release": {
+      "repository": "appolon1908-hue/codestra-production-platform",
+      "branch": "release/production-activation",
+      "contract_catalog": "contracts/catalog.v1.json",
+      "runtime_composition": "composition/runtime-composition.v1.json",
+      "release_manifest_schema": "release/platform-release-manifest.v1.schema.json",
+      "caddy_config_home": "operations/caddy"
+    },
+    "crawler_source": {
+      "repository": "appolon1908-hue/kyqra-crawler",
+      "branch": "main",
+      "retired_repository": "appolon1908-hue/kyqra"
+    }
+  },
   "synchronization_policy": {
     "main_must_be_ancestor_of_active_work": true,
     "completed_workstreams_refresh_from_main": true,
@@ -70,7 +85,7 @@
       "branch": "platform/caddy",
       "category": "platform",
       "runtime_status": "declared_active_scope",
-      "scope": "Public HTTPS, reverse proxy, TLS, upstream health behavior, security headers, access controls, and edge validation"
+      "scope": "Middleware-side route compatibility and edge validation. Canonical production Caddy desired state lives in appolon1908-hue/codestra-production-platform at operations/caddy"
     },
     {
       "branch": "platform/postgresql",
@@ -214,7 +229,7 @@
       "branch": "integration/kyqra",
       "category": "configured-unverified",
       "runtime_status": "configured_worker_not_observed",
-      "scope": "Kyqra contracts and runtime verification only until a running worker, endpoint, ownership, and deployment path are confirmed"
+      "scope": "Kyqra contracts and runtime verification against the canonical appolon1908-hue/kyqra-crawler source only, until a running worker, endpoint, ownership, and deployment path are confirmed"
     },
     {
       "branch": "integration/beyvra",

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,7 +60,7 @@ def semantic_digest(item: EventEnvelope) -> str:
 
 
 @pytest_asyncio.fixture
-async def pool() -> asyncpg.Pool:
+async def pool() -> AsyncIterator[asyncpg.Pool]:
     assert DATABASE_URL, "DATABASE_URL is required"
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=8)
     migrations = [
@@ -84,7 +85,7 @@ async def pool() -> asyncpg.Pool:
 
 
 @pytest_asyncio.fixture
-async def redis_client() -> Redis:
+async def redis_client() -> AsyncIterator[Redis]:
     assert REDIS_URL, "REDIS_URL is required"
     client = Redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
     await client.flushdb()

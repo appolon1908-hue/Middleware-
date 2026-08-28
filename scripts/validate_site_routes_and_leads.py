@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import sys
@@ -12,7 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from architecture.site_architecture import architecture
+architecture = importlib.import_module("architecture.site_architecture").architecture
 BASE_MANIFEST = ROOT / "config" / "integration-branches.json"
 
 HOST_RE = re.compile(

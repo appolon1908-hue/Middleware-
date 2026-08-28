@@ -11,7 +11,7 @@ from app.nats_transport import NatsJetStreamPublisher
 from app.storage import NATS_JETSTREAM_DESTINATION, PostgresOutboxStore
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
-from app.worker import OutboxWorker
+from app.worker import Handler, OutboxWorker
 
 
 async def main() -> None:
@@ -32,7 +32,7 @@ async def main() -> None:
     )
     publisher: NatsJetStreamPublisher | None = None
     try:
-        handlers = {}
+        handlers: dict[str, Handler] = {}
         if settings.outbox_dispatch_enabled:
             publisher = await NatsJetStreamPublisher.connect(settings)
             handlers[NATS_JETSTREAM_DESTINATION] = publisher.publish

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from collections.abc import Callable
+from typing import Literal, cast
 
 from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -98,4 +99,5 @@ class RuntimeSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> RuntimeSettings:
-    return RuntimeSettings()  # type: ignore[call-arg]
+    settings_factory = cast(Callable[[], RuntimeSettings], RuntimeSettings)
+    return settings_factory()

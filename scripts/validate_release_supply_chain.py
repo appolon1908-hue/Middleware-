@@ -24,6 +24,8 @@ REQUIRED = (
     "requirements-runtime.txt",
     "requirements-test.in",
     "requirements-test.txt",
+    "requirements-quality.in",
+    "requirements-quality.txt",
     "requirements-connector-runtime.in",
     "requirements-connector-runtime.txt",
     "contracts/release-manifest.v1.schema.json",
@@ -93,11 +95,13 @@ def main() -> int:
 
     runtime_packages = validate_lock(ROOT / "requirements-runtime.txt", errors)
     test_packages = validate_lock(ROOT / "requirements-test.txt", errors)
+    quality_packages = validate_lock(ROOT / "requirements-quality.txt", errors)
     connector_packages = validate_lock(
         ROOT / "requirements-connector-runtime.txt", errors
     )
     runtime_direct = direct_requirements(ROOT / "requirements-runtime.in", errors)
     test_direct = direct_requirements(ROOT / "requirements-test.in", errors)
+    quality_direct = direct_requirements(ROOT / "requirements-quality.in", errors)
     connector_direct = direct_requirements(
         ROOT / "requirements-connector-runtime.in", errors
     )
@@ -114,6 +118,11 @@ def main() -> int:
         errors.append("production runtime lock contains test tooling")
     if not {"pytest", "pytest-asyncio"}.issubset(test_packages):
         errors.append("test lock is missing pytest tooling")
+    for package, version in quality_direct.items():
+        if quality_packages.get(package) != version:
+            errors.append(f"quality lock does not bind {package}=={version}")
+    if not {"ruff", "mypy", "types-jsonschema"}.issubset(quality_packages):
+        errors.append("quality lock is missing required static-analysis tooling")
     for package, version in connector_direct.items():
         if connector_packages.get(package) != version:
             errors.append(f"connector lock does not bind {package}=={version}")
@@ -249,7 +258,8 @@ def main() -> int:
         "RELEASE_SUPPLY_CHAIN=PASS "
         f"RUNTIME_PACKAGES={len(runtime_packages)} "
         f"TEST_PACKAGES={len(test_packages)} "
-        f"CONNECTOR_PACKAGES={len(connector_packages)}"
+        f"CONNECTOR_PACKAGES={len(connector_packages)} "
+        f"QUALITY_PACKAGES={len(quality_packages)}"
     )
     return 0
 

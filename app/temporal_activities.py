@@ -6,7 +6,7 @@ from uuid import UUID
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from .commands import CommandConflict, CommandNotFound, CommandState, PostgresCommandStore
+from .commands import CommandConflict, CommandNotFound, PostgresCommandStore
 from .temporal_workflows import (
     ActivityResult,
     CommandExecutionRequest,

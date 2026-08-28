@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import subprocess
 import sys
@@ -12,7 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from architecture.site_architecture import workstreams as supplemental_workstreams
+supplemental_workstreams = importlib.import_module(
+    "architecture.site_architecture"
+).workstreams
 
 BASE_MANIFEST = ROOT / "config" / "integration-branches.json"
 

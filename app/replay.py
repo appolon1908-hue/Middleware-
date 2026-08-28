@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from typing import Protocol
+from collections.abc import Awaitable
+from typing import Protocol, cast
 
 from redis.asyncio import Redis
 
@@ -90,12 +91,10 @@ class RedisReplayGuard:
         return token
 
     async def release(self, tenant_id: str, event_id: str, token: str) -> None:
-        await self.client.eval(
-            self._RELEASE_SCRIPT,
-            1,
-            self._key(tenant_id, event_id),
-            token,
+        operation = self.client.eval(
+            self._RELEASE_SCRIPT, 1, self._key(tenant_id, event_id), token
         )
+        await cast(Awaitable[object], operation)
 
     async def ready(self) -> bool:
         try:

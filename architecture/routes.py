@@ -44,7 +44,7 @@ PROVIDER_ROUTES = [('klyrow.com', 'site/klyrow', 'frontend', 'production', 'acti
  ('crawler.kyqra.com', 'site/kyqra-crawler', 'crawler_api', 'production', 'active', False, None, None)]
 PRIVATE_ROUTES = [('telnexa-internal-mtls', 'site/telnexa', 'private_only', 'internal_mtls'),
  ('private-app-integration-loopback', 'site/private-app-integration', 'private_only', 'loopback_and_internal_mtls')]
-STACKS = [('application-server-a', 'codestra', 'site/codestra', 'active', (), {}),
+STACKS: list[tuple[str, str, str, str, tuple[str, ...], dict[str, object]]] = [('application-server-a', 'codestra', 'site/codestra', 'active', (), {}),
  ('application-server-a', 'codestra-auth', 'site/codestra-auth', 'active', (), {}),
  ('application-server-a', 'codestra-social', 'site/codestra-social', 'active', (), {}),
  ('application-server-a', 'codestra-ai', 'site/codestra-ai', 'active', (), {}),

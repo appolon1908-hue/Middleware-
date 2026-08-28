@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import re
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 import structlog
-from fastapi import Depends, FastAPI, Header, Query, Request, Response
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -17,8 +16,6 @@ from sqlalchemy import text
 from middleware.connector_sdk import (
     ConnectorCatalogService,
     ConnectorRegistry,
-    manifest_digest,
-    parse_manifest,
 )
 from middleware.connector_sdk.errors import ConnectorError, ManifestValidationError
 

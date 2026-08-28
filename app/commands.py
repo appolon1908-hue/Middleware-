@@ -676,7 +676,7 @@ class PostgresCommandStore:
                 )
             if head != 3:
                 return False
-            observed_columns = {
+            observed_columns: dict[str, set[str]] = {
                 table: set() for table in self.REQUIRED_COLUMNS
             }
             for row in column_rows:

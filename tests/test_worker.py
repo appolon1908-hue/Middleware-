@@ -11,12 +11,12 @@ from app.worker import KnownSafeRetryError, OutboxWorker
 class FakeStore:
     def __init__(self, record: OutboxRecord | None) -> None:
         self.record = record
-        self.claim_args = None
-        self.failed = []
-        self.quarantined = []
-        self.renewed = []
-        self.resolved = []
-        self.events = []
+        self.claim_args: dict[str, object] | None = None
+        self.failed: list[tuple[int, dict[str, object]]] = []
+        self.quarantined: list[tuple[int, dict[str, object]]] = []
+        self.renewed: list[tuple[int, dict[str, object]]] = []
+        self.resolved: list[tuple[int, dict[str, object]]] = []
+        self.events: list[str] = []
         self.quarantine_error: Exception | None = None
 
     async def claim(self, **kwargs):
@@ -119,6 +119,7 @@ async def test_handler_timeout_leaves_precommitted_active_quarantine() -> None:
     assert not store.failed
     assert not store.resolved
     assert store.events[:2] == ["quarantine", "handler"]
+    assert store.claim_args is not None
     assert store.claim_args["max_attempts"] == 8
     assert store.claim_args["lease_seconds"] == 0.1
 

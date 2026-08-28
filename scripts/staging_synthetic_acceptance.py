@@ -147,7 +147,7 @@ def build_signed_event(
     event_id = f"synthetic-{generated.hex}"
     timestamp = str(int(time.time()) if now is None else now)
     occurred_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(timestamp)))
-    event = {
+    event: dict[str, Any] = {
         "event_id": event_id,
         "event_type": EVENT_TYPE,
         "event_version": "1.0",
@@ -180,7 +180,7 @@ def build_signed_event(
         )
     ).encode("utf-8")
     signature = hmac.new(secret, canonical, hashlib.sha256).hexdigest()
-    headers = {
+    headers: dict[str, str] = {
         "Content-Type": "application/json",
         "Idempotency-Key": event_id,
         "X-Codestra-Event-Id": event_id,

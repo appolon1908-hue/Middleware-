@@ -117,7 +117,7 @@ def signed_request(
 ) -> tuple[bytes, dict[str, str]]:
     now = int(time.time())
     occurred_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
-    event = {
+    event: dict[str, Any] = {
         "event_id": event_id,
         "event_type": "codestra.odoo.activity.completed",
         "event_version": "1.0",
@@ -149,7 +149,7 @@ def signed_request(
         )
     ).encode("utf-8")
     signature = hmac.new(SECRET, canonical, hashlib.sha256).hexdigest()
-    return body, {
+    headers: dict[str, str] = {
         "Authorization": "Bearer synthetic-odoo-token",
         "Content-Type": "application/json",
         "Idempotency-Key": event_id,
@@ -161,6 +161,7 @@ def signed_request(
         "X-Codestra-Signature": f"sha256={signature}",
         "X-Correlation-Id": event["correlation_id"],
     }
+    return body, headers
 
 
 @pytest.mark.asyncio
@@ -276,6 +277,7 @@ async def test_disposable_api_ledger_redis_jetstream_temporal_journey() -> None:
                 delivered = json.loads(message.data)
                 assert delivered["event_id"] == event_id
                 assert delivered["tenant_id"] == tenant_id
+                assert message.headers is not None
                 assert message.headers["X-Codestra-Event-Id"] == event_id
 
                 activities = SyntheticReconciliationActivity(event_id, tenant_id)

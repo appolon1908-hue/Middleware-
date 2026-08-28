@@ -5,12 +5,13 @@ import logging
 import os
 import socket
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from .storage import DEFAULT_MAX_OUTBOX_ATTEMPTS, OutboxRecord, PostgresOutboxStore
 
 
-Handler = Callable[[OutboxRecord], Awaitable[None]]
+Handler = Callable[[OutboxRecord], Coroutine[Any, Any, None]]
 log = logging.getLogger(__name__)
 
 
@@ -128,7 +129,7 @@ class OutboxWorker:
         heartbeat_task = asyncio.create_task(
             self._heartbeat_active_dispatch(record.id, heartbeat_stop)
         )
-        handler_task = asyncio.create_task(handler(record))
+        handler_task: asyncio.Task[None] = asyncio.create_task(handler(record))
         timed_out = False
         try:
             try:

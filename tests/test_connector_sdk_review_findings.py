@@ -9,7 +9,6 @@ import json
 import time
 import unittest
 import uuid
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -194,6 +193,7 @@ class ConnectorSdkReviewFindingTests(unittest.TestCase):
         self.assertIsInstance(result, WebhookProcessResult)
         self.assertEqual(result.decision, ReplayDecision.EXACT_REPLAY)
         self.assertIsNotNone(result.cloud_event)
+        assert result.cloud_event is not None
         self.assertEqual(result.cloud_event.id, "evt-recoverable")
 
     def test_webhook_requires_declared_inbound_event_direction(self) -> None:

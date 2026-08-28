@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
-import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
+from pydantic import SecretStr
 
 from codestra_connector_runtime.api.config import RuntimeSettings
 from codestra_connector_runtime.api.crypto import EncryptedBodyStore
@@ -59,8 +61,10 @@ def test_settings_are_fail_closed(tmp_path: Path) -> None:
     key_file = tmp_path / "key"
     key_file.write_bytes(b"x" * 32)
     settings = RuntimeSettings(
-        database_url="postgresql+psycopg://example:example@localhost/example",
-        cursor_hmac_key="y" * 32,
+        database_url=SecretStr(
+            "postgresql+psycopg://example:example@localhost/example"
+        ),
+        cursor_hmac_key=SecretStr("y" * 32),
         body_encryption_key_file=key_file,
     )
     assert settings.connector_install_enabled is False
@@ -69,8 +73,10 @@ def test_settings_are_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         RuntimeSettings(
             environment="production",
-            database_url="postgresql+psycopg://example:example@localhost/example",
-            cursor_hmac_key="y" * 32,
+            database_url=SecretStr(
+                "postgresql+psycopg://example:example@localhost/example"
+            ),
+            cursor_hmac_key=SecretStr("y" * 32),
             body_encryption_key_file=key_file,
             connector_activation_enabled=True,
             release_sha="a" * 40,
@@ -93,7 +99,8 @@ def test_settings_accept_documented_uppercase_environment(
         str(key_file),
     )
 
-    settings = RuntimeSettings()
+    settings_factory = cast(Callable[[], RuntimeSettings], RuntimeSettings)
+    settings = settings_factory()
 
     assert settings.database_url.get_secret_value().endswith("/example")
     assert settings.body_encryption_key_file == key_file

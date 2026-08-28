@@ -374,6 +374,7 @@ def create_app(
     return app
 
 
+app: FastAPI | None
 try:
     app = create_app()
 except ConfigurationError:

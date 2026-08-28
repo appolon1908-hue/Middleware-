@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from fastapi.routing import APIRoute
 from jsonschema import Draft202012Validator
 
 from app.contracts import ROUTE_BY_PATH, WEBHOOK_ROUTES
@@ -21,7 +22,8 @@ def test_all_contract_routes_are_registered(test_settings, runtime) -> None:
     registered = {
         route.path
         for route in app.routes
-        if getattr(route, "methods", None)
+        if isinstance(route, APIRoute)
+        and route.methods
         and "POST" in route.methods
         and route.path.startswith("/api/v1/")
     }

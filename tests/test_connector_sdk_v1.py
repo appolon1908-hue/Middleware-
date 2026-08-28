@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import argparse
 import hashlib
 import hmac
 import json
@@ -87,7 +88,7 @@ class FakeAdapter(ConnectorAdapter):
         self,
         request: CommandRequest,
     ) -> CommandResult:
-        safe_result = (
+        safe_result: dict[str, object] = (
             {"access_token": "leak"}
             if self.leak_result
             else {"submitted": True}
@@ -258,6 +259,7 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
             .manifest.webhook_policy_for("postal-events")
         )
         self.assertIsNotNone(webhook_policy)
+        assert webhook_policy is not None
         return WebhookProcessor(
             self.registry,
             MappingSecretResolver(
@@ -488,6 +490,7 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
             result.cloud_event,
             CloudEventEnvelope,
         )
+        assert result.cloud_event is not None
         event = result.cloud_event.as_dict()
         self.assertEqual(event["specversion"], "1.0")
         self.assertEqual(event["tenantid"], tenant_id)
@@ -595,15 +598,13 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
             "postal-events",
             request,
         )
-        self.assertEqual(
-            result.cloud_event.as_dict()["tenantid"],
-            authoritative_tenant,
-        )
+        assert result.cloud_event is not None
+        self.assertEqual(result.cloud_event.as_dict()["tenantid"], authoritative_tenant)
 
     def test_scaffolder_output_remains_disabled_and_valid(self) -> None:
         from scripts.scaffold_connector import build_manifest
 
-        class Args:
+        class Args(argparse.Namespace):
             connector_id = "sample-api"
             display_name = "Sample API"
             repository = "appolon1908-hue/sample-api"

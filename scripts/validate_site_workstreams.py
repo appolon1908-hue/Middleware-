@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import sys
@@ -12,7 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from architecture.site_architecture import architecture
+architecture = importlib.import_module("architecture.site_architecture").architecture
 BASE_MANIFEST = ROOT / "config" / "integration-branches.json"
 BASE_CONNECTIVITY = ROOT / "config" / "connectivity-map.json"
 
@@ -133,11 +134,14 @@ def main() -> int:
         for item in base_items
         if isinstance(item, dict) and isinstance(item.get("branch"), str)
     }
-    base_status = {
-        item.get("branch"): item.get("runtime_status")
-        for item in base_items
-        if isinstance(item, dict) and isinstance(item.get("branch"), str)
-    }
+    base_status: dict[str, str] = {}
+    for item in base_items:
+        if not isinstance(item, dict):
+            continue
+        branch = item.get("branch")
+        runtime_status = item.get("runtime_status")
+        if isinstance(branch, str) and isinstance(runtime_status, str):
+            base_status[branch] = runtime_status
 
     raw_new = data.get("workstreams", [])
     new_branches: list[str] = []
@@ -229,9 +233,9 @@ def main() -> int:
                 errors.append(f"connection {link_id} duplicates a base ID")
         if source not in combined or target not in combined:
             errors.append(f"connection {link_id} references an unknown branch")
-        if source in new_status:
+        if isinstance(source, str) and source in new_status:
             connected.add(source)
-        if target in new_status:
+        if isinstance(target, str) and target in new_status:
             connected.add(target)
         for field in ("transport", "auth", "reliability", "contract"):
             value = link.get(field)
@@ -239,7 +243,10 @@ def main() -> int:
                 errors.append(f"connection {link_id} has no {field}")
         if status not in ALLOWED_LINK_STATUS:
             errors.append(f"connection {link_id} has invalid status")
-        endpoint_statuses = {effective_status.get(source), effective_status.get(target)}
+        endpoint_statuses = {
+            effective_status.get(source) if isinstance(source, str) else None,
+            effective_status.get(target) if isinstance(target, str) else None,
+        }
         if endpoint_statuses & VERIFICATION_STATUSES and status not in {"verification_only", "not_deployed"}:
             errors.append(f"connection {link_id} activates verification/not-deployed work")
         if "source_checkout_not_deployed" in endpoint_statuses and status != "not_deployed":

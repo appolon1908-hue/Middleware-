@@ -37,8 +37,13 @@ def main():
     require(transport["runtimeUrlEnvironment"] == "NATS_URL", "runtime URL must remain external")
 
     normalization = contract["normalization"]
+    require(
+        normalization["canonicalEnvelope"]
+        == "contracts/platform/event-envelope.v1.schema.json",
+        "canonical envelope changed",
+    )
     require(normalization["canonicalType"] == "codestra.identity.account.provisioned", "canonical type changed")
-    require(normalization["canonicalSource"] == "urn:codestra:beyvra-backend", "canonical source changed")
+    require(normalization["canonicalSource"] == "beyvra-backend", "canonical source changed")
     require(normalization["canonicalTenant"] == "beyvra", "tenant changed")
 
     allowed = {"identity_ref", "local_user_ref", "roles", "authority"}

@@ -64,7 +64,7 @@ class MemoryInboxStore:
         body_sha256: str,
         semantic_sha256: str,
     ) -> IngressResult:
-        event_key = (envelope.tenant_id, envelope.id)
+        event_key = (envelope.tenant_id, envelope.event_id)
         idempotency_key = (envelope.tenant_id, envelope.idempotency_key)
         event_existing = self._event_items.get(event_key)
         idem_existing = self._idempotency_items.get(idempotency_key)
@@ -80,7 +80,7 @@ class MemoryInboxStore:
             return result.model_copy(update={"status": "duplicate", "duplicate": True})
 
         result = IngressResult(
-            event_id=envelope.id,
+            event_id=envelope.event_id,
             tenant_id=envelope.tenant_id,
             status="accepted",
             duplicate=False,
@@ -307,10 +307,10 @@ class PostgresInboxStore:
                     ON CONFLICT DO NOTHING
                     RETURNING event_id
                     """,
-                    envelope.id,
+                    envelope.event_id,
                     envelope.tenant_id,
                     producer_client_id,
-                    envelope.type,
+                    envelope.event_type,
                     body_sha256,
                     semantic_sha256,
                     envelope.idempotency_key,
@@ -331,7 +331,7 @@ class PostgresInboxStore:
                         """,
                         envelope.tenant_id,
                         NATS_JETSTREAM_DESTINATION,
-                        envelope.type,
+                        envelope.event_type,
                         json.dumps(
                             payload,
                             separators=(",", ":"),
@@ -340,7 +340,7 @@ class PostgresInboxStore:
                         envelope.idempotency_key,
                     )
                     return IngressResult(
-                        event_id=envelope.id,
+                        event_id=envelope.event_id,
                         tenant_id=envelope.tenant_id,
                         status="accepted",
                         duplicate=False,
@@ -355,7 +355,7 @@ class PostgresInboxStore:
                     ORDER BY received_at ASC
                     """,
                     envelope.tenant_id,
-                    envelope.id,
+                    envelope.event_id,
                     envelope.idempotency_key,
                 )
                 if not existing_rows:

@@ -9,7 +9,9 @@ from typing import Any, Literal, Mapping, Protocol
 from uuid import UUID
 
 import asyncpg
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .canonical_contracts import validate_contract
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +66,7 @@ class CommandEnvelope(BaseModel):
 
     command_id: UUID
     command_type: str = Field(
-        pattern=r"^[a-z0-9]+(?:[.-][a-z0-9]+)*\.v[1-9][0-9]*$",
+        pattern=r"^[a-z0-9]+(?:[.-][a-z0-9]+)+$",
         max_length=180,
     )
     command_version: Literal["1.0"]
@@ -91,6 +93,11 @@ class CommandEnvelope(BaseModel):
         if len(encoded) > 262_144:
             raise ValueError("command payload exceeds 262144 bytes")
         return value
+
+    @model_validator(mode="after")
+    def enforce_canonical_contract(self) -> "CommandEnvelope":
+        validate_contract("command", self.model_dump(mode="json"))
+        return self
 
 
 class CommandOperation(BaseModel):

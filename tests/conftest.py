@@ -79,18 +79,18 @@ def make_event(
     data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
-        "specversion": "1.0",
-        "id": event_id,
-        "type": event_type,
-        "source": f"urn:codestra:{producer}",
-        "subject": "resource-1",
-        "time": "2026-08-26T22:00:00Z",
+        "event_id": event_id,
+        "event_type": event_type,
+        "event_version": "1.0",
+        "occurred_at": "2026-08-26T21:59:59Z",
+        "received_at": "2026-08-26T22:00:00Z",
+        "source": producer,
         "tenant_id": tenant_id,
         "correlation_id": "corr-00000001",
         "causation_id": "cause-00000001",
         "idempotency_key": event_id,
-        "schema_version": 1,
-        "data": data or {"ok": True},
+        "payload": data or {"ok": True},
+        "metadata": {},
     }
 
 
@@ -110,7 +110,7 @@ def signed_headers(
             "POST",
             path,
             timestamp,
-            event["id"],
+            event["event_id"],
             producer,
             body_sha,
         )
@@ -119,9 +119,9 @@ def signed_headers(
     return body, {
         "Authorization": f"Bearer valid-{producer}-{scope}",
         "Content-Type": "application/json",
-        "Idempotency-Key": event["id"],
-        "X-Codestra-Event-Id": event["id"],
-        "X-Codestra-Event-Type": event["type"],
+        "Idempotency-Key": event["event_id"],
+        "X-Codestra-Event-Id": event["event_id"],
+        "X-Codestra-Event-Type": event["event_type"],
         "X-Codestra-Source": producer,
         "X-Codestra-Tenant-Id": event["tenant_id"],
         "X-Codestra-Timestamp": timestamp,

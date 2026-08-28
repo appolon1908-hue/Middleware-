@@ -12,7 +12,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "config" / "integration-branches.json"
 CONNECTIVITY_PATH = ROOT / "config" / "connectivity-map.json"
-EVENT_SCHEMA_PATH = ROOT / "contracts" / "event-envelope.schema.json"
+EVENT_SCHEMA_PATH = (
+    ROOT / "contracts" / "platform" / "event-envelope.v1.schema.json"
+)
 
 LINK_ID_RE = re.compile(r"^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$")
 
@@ -28,18 +30,18 @@ EXPECTED_POLICIES = {
 }
 
 REQUIRED_EVENT_FIELDS = {
-    "specversion",
-    "id",
-    "type",
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "received_at",
     "source",
-    "subject",
-    "time",
     "tenant_id",
     "correlation_id",
     "causation_id",
     "idempotency_key",
-    "schema_version",
-    "data",
+    "payload",
+    "metadata",
 }
 
 ALLOWED_DIRECTIONS = {
@@ -200,13 +202,16 @@ def validate_event_schema(errors: list[str]) -> None:
             + ", ".join(missing_properties)
         )
 
-    specversion = properties.get("specversion")
-    if not isinstance(specversion, dict) or specversion.get("const") != "1.0":
-        errors.append("event envelope specversion must be fixed to '1.0'")
+    event_version = properties.get("event_version")
+    if (
+        not isinstance(event_version, dict)
+        or event_version.get("const") != "1.0"
+    ):
+        errors.append("event envelope event_version must be fixed to '1.0'")
 
-    data = properties.get("data")
-    if not isinstance(data, dict) or data.get("type") != "object":
-        errors.append("event envelope data must be an object")
+    payload = properties.get("payload")
+    if not isinstance(payload, dict) or payload.get("type") != "object":
+        errors.append("event envelope payload must be an object")
 
 
 def main() -> int:
@@ -250,7 +255,7 @@ def main() -> int:
     if manifest.get("connectivity_map") != "config/connectivity-map.json":
         errors.append("manifest connectivity_map path is not canonical")
     if manifest.get("canonical_event_schema") != (
-        "contracts/event-envelope.schema.json"
+        "contracts/platform/event-envelope.v1.schema.json"
     ):
         errors.append("manifest canonical_event_schema path is not canonical")
 

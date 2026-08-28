@@ -33,6 +33,11 @@ The executable intake runtime persists each accepted signed event and its NATS J
 
 Critical Temporal workflows are implemented for reconciliation, delayed callbacks, provisioning with compensation, and operator-approved dead-letter recovery. See [`docs/TEMPORAL-WORKFLOWS.md`](docs/TEMPORAL-WORKFLOWS.md).
 
+The sole durable event and command shapes live under `contracts/platform`; the
+runtime validates against those files directly. Provider wire formats are
+normalized projections, not alternate ledgers. See
+[`docs/CANONICAL-CONTRACTS.md`](docs/CANONICAL-CONTRACTS.md).
+
 Effectful requests use the tenant-scoped PostgreSQL command ledger and
 `codestra.command-execution.v1` workflow. A command cannot become complete until
 provider read-back matches its durable intent. See

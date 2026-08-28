@@ -78,7 +78,7 @@ class NatsJetStreamPublisher:
             raise NatsTransportError("outbox row targets an unsupported destination")
         if record.payload.get("tenant_id") != record.tenant_id:
             raise NatsTransportError("outbox tenant does not match event envelope")
-        if record.payload.get("type") != record.event_type:
+        if record.payload.get("event_type") != record.event_type:
             raise NatsTransportError("outbox event type does not match event envelope")
 
         subject = event_subject(self.subject_prefix, record.event_type)
@@ -97,7 +97,7 @@ class NatsJetStreamPublisher:
             "X-Codestra-Event-Type": record.event_type,
             "X-Codestra-Idempotency-Key": record.idempotency_key,
         }
-        event_id = record.payload.get("id")
+        event_id = record.payload.get("event_id")
         if isinstance(event_id, str) and event_id:
             headers["X-Codestra-Event-Id"] = event_id
         correlation_id = record.payload.get("correlation_id")

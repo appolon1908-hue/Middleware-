@@ -71,18 +71,45 @@ def contains_in_order(values: list[str], required: list[str]) -> bool:
     return True
 
 
-def validate_schema(path: Path, required_fields: set[str], errors: list[str]) -> None:
+def validate_schema(
+    path: Path,
+    *,
+    canonical_ref: str,
+    envelope_field: str,
+    envelope_value: str,
+    required_payload_fields: set[str],
+    errors: list[str],
+) -> None:
     schema = load(path, errors)
     if schema is None:
         return
-    required = schema.get("required")
-    if not isinstance(required, list):
-        errors.append(f"{path.relative_to(ROOT)} required must be an array")
+    all_of = schema.get("allOf")
+    if not isinstance(all_of, list) or len(all_of) != 2:
+        errors.append(f"{path.relative_to(ROOT)} must extend one canonical envelope")
         return
-    missing = sorted(required_fields - set(required))
+    if all_of[0] != {"$ref": canonical_ref}:
+        errors.append(f"{path.relative_to(ROOT)} canonical reference is invalid")
+    specialization = all_of[1]
+    if not isinstance(specialization, dict):
+        errors.append(f"{path.relative_to(ROOT)} specialization must be an object")
+        return
+    properties = specialization.get("properties", {})
+    if properties.get(envelope_field, {}).get("const") != envelope_value:
+        errors.append(f"{path.relative_to(ROOT)} has an invalid envelope type")
+    payload = properties.get("payload")
+    if not isinstance(payload, dict) or payload.get("type") != "object":
+        errors.append(f"{path.relative_to(ROOT)} payload schema is missing")
+        return
+    required = payload.get("required")
+    if not isinstance(required, list):
+        errors.append(f"{path.relative_to(ROOT)} payload required must be an array")
+        return
+    missing = sorted(required_payload_fields - set(required))
     if missing:
-        errors.append(f"{path.relative_to(ROOT)} missing: " + ", ".join(missing))
-    if not schema.get("allOf"):
+        errors.append(
+            f"{path.relative_to(ROOT)} payload missing: " + ", ".join(missing)
+        )
+    if not specialization.get("allOf"):
         errors.append(f"{path.relative_to(ROOT)} must contain conditional safety rules")
 
 
@@ -235,13 +262,38 @@ def main() -> int:
 
     validate_schema(
         ROOT / "contracts" / "lead-intake.schema.json",
-        {"tenant_id", "source_kind", "source_system", "submission_id", "provenance", "consent", "review", "data"},
-        errors,
+        canonical_ref=(
+            "https://contracts.codestra.co/platform/event-envelope.v1.schema.json"
+        ),
+        envelope_field="event_type",
+        envelope_value="codestra.lead.intake",
+        required_payload_fields={
+            "source_kind",
+            "source_system",
+            "submission_id",
+            "provenance",
+            "consent",
+            "review",
+            "data",
+        },
+        errors=errors,
     )
     validate_schema(
         ROOT / "contracts" / "odoo-lead-command.schema.json",
-        {"command_id", "tenant_id", "idempotency_key", "initial_stage", "review_required", "allow_external_contact", "lead"},
-        errors,
+        canonical_ref=(
+            "https://contracts.codestra.co/platform/command-envelope.v1.schema.json"
+        ),
+        envelope_field="command_type",
+        envelope_value="crm.lead.upsert",
+        required_payload_fields={
+            "lead_source",
+            "source_record_id",
+            "initial_stage",
+            "review_required",
+            "allow_external_contact",
+            "lead",
+        },
+        errors=errors,
     )
 
     for path in (

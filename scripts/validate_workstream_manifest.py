@@ -84,7 +84,7 @@ def main() -> int:
         errors.append("connectivity_map must reference config/connectivity-map.json")
 
     if manifest.get("canonical_event_schema") != (
-        "contracts/event-envelope.schema.json"
+        "contracts/platform/event-envelope.v1.schema.json"
     ):
         errors.append(
             "canonical_event_schema must reference the canonical event schema"

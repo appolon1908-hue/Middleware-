@@ -19,6 +19,8 @@ def validate() -> None:
     command = load("contracts/platform/command-envelope.v1.schema.json")
     command_registry = load("connectors/generated/command-registry.v1.json")
     event = load("contracts/platform/event-envelope.v1.schema.json")
+    event_alias = load("contracts/event-envelope.schema.json")
+    catalog = load("contracts/platform/contract-catalog.v1.json")
 
     assert ownership["schema_version"] == "2.0"
     assert ownership["systems"]["middleware"]["owns"]
@@ -48,6 +50,44 @@ def validate() -> None:
     assert "wallet." in beyvra["forbidden_prefixes"]
     assert command["additionalProperties"] is False
     assert event["additionalProperties"] is False
+    assert event_alias["$ref"] == (
+        "https://contracts.codestra.co/platform/event-envelope.v1.schema.json"
+    )
+    assert catalog["canonical"] == {
+        "event": "contracts/platform/event-envelope.v1.schema.json",
+        "command": "contracts/platform/command-envelope.v1.schema.json",
+        "api": "contracts/platform/integration-fabric-api.v2.yaml",
+    }
+    assert all(
+        projection["normalization_required"] is True
+        for projection in catalog["wire_projections"]
+    )
+    assert set(command["required"]) == {
+        "command_id",
+        "command_type",
+        "command_version",
+        "target",
+        "tenant_id",
+        "requested_by",
+        "correlation_id",
+        "idempotency_key",
+        "capability",
+        "payload",
+    }
+    assert set(event["required"]) == {
+        "event_id",
+        "event_type",
+        "event_version",
+        "occurred_at",
+        "received_at",
+        "source",
+        "tenant_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_key",
+        "payload",
+        "metadata",
+    }
 
 
 if __name__ == "__main__":

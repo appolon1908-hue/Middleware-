@@ -16,8 +16,9 @@
     "runtimeUrlEnvironment": "NATS_URL"
   },
   "normalization": {
+    "canonicalEnvelope": "contracts/platform/event-envelope.v1.schema.json",
     "canonicalType": "codestra.identity.account.provisioned",
-    "canonicalSource": "urn:codestra:beyvra-backend",
+    "canonicalSource": "beyvra-backend",
     "canonicalTenant": "beyvra",
     "identityReference": "payload.identity_ref",
     "localUserReference": "payload.local_user_ref"

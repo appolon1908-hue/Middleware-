@@ -1,7 +1,7 @@
 {
     "version": 2,
     "canonical_contract_branch": "core/integration-contracts",
-    "canonical_event_schema": "contracts/event-envelope.schema.json",
+    "canonical_event_schema": "contracts/platform/event-envelope.v1.schema.json",
     "http_conventions": "contracts/http-conventions.md",
     "observability_conventions": "contracts/observability-conventions.md",
     "policies": {

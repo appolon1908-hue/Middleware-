@@ -4,7 +4,7 @@
   "deployment_from_workstream_branches": false,
   "canonical_contract_branch": "core/integration-contracts",
   "connectivity_map": "config/connectivity-map.json",
-  "canonical_event_schema": "contracts/event-envelope.schema.json",
+  "canonical_event_schema": "contracts/platform/event-envelope.v1.schema.json",
   "synchronization_policy": {
     "main_must_be_ancestor_of_active_work": true,
     "completed_workstreams_refresh_from_main": true,

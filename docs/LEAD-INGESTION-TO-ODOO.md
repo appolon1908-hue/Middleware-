@@ -42,7 +42,7 @@ A public form submission must include:
 - correlation and causation IDs;
 - capture time and source route;
 - explicit consent status and channel choices;
-- schema version;
+- canonical event version `1.0`;
 - provenance showing that the person submitted the form;
 - normalized contact or company data.
 
@@ -88,7 +88,10 @@ Conflicting identifiers are quarantined for review rather than silently merged.
 
 ## Odoo command
 
-`contracts/odoo-lead-command.schema.json` defines the command delivered by the transactional outbox.
+`contracts/odoo-lead-command.schema.json` extends the canonical command
+envelope. Lead-specific fields live under `payload`; the top-level identity,
+version, target, requester, correlation, idempotency, and capability fields stay
+identical to every other durable command.
 
 The Odoo adapter owns:
 

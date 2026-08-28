@@ -34,19 +34,20 @@ def envelope(
     idempotency_key: str = "idem-0001",
     value: int = 1,
 ) -> EventEnvelope:
+    now = datetime.now(timezone.utc)
     return EventEnvelope(
-        specversion="1.0",
-        id=event_id,
-        type="codestra.odoo.contact_updated",
-        source="urn:codestra:odoo-integration",
-        subject="contact/1",
-        time=datetime.now(timezone.utc),
+        event_id=event_id,
+        event_type="codestra.odoo.contact_updated",
+        event_version="1.0",
+        occurred_at=now,
+        received_at=now,
+        source="odoo-integration",
         tenant_id="tenant-test",
         correlation_id="corr-1",
         causation_id="cause-1",
         idempotency_key=idempotency_key,
-        schema_version=1,
-        data={"value": value},
+        payload={"value": value},
+        metadata={},
     )
 
 
@@ -128,10 +129,10 @@ async def test_postgres_schema_and_duplicate_reconciliation(pool: asyncpg.Pool) 
         )
     assert outbox is not None
     assert outbox["destination"] == "nats-jetstream"
-    assert outbox["event_type"] == item.type
+    assert outbox["event_type"] == item.event_type
     raw_payload = outbox["payload"]
     payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
-    assert payload["id"] == item.id
+    assert payload["event_id"] == item.event_id
 
 
 @pytest.mark.asyncio
@@ -156,7 +157,7 @@ async def test_postgres_concurrent_same_event_is_single_accept(pool: asyncpg.Poo
         count = await conn.fetchval(
             "SELECT count(*) FROM middleware_inbox WHERE tenant_id=$1 AND event_id=$2",
             item.tenant_id,
-            item.id,
+            item.event_id,
         )
     assert count == 1
 

@@ -35,18 +35,18 @@ def _record(*, record_id: int, event_id: str, idempotency_key: str) -> OutboxRec
         event_type="codestra.odoo.contact_updated",
         idempotency_key=idempotency_key,
         payload={
-            "specversion": "1.0",
-            "id": event_id,
-            "type": "codestra.odoo.contact_updated",
-            "source": "urn:codestra:integration-test",
-            "subject": "contact/42",
-            "time": "2026-08-28T12:00:00Z",
+            "event_id": event_id,
+            "event_type": "codestra.odoo.contact_updated",
+            "event_version": "1.0",
+            "occurred_at": "2026-08-28T11:59:59Z",
+            "received_at": "2026-08-28T12:00:00Z",
+            "source": "integration-test",
             "tenant_id": "tenant-nats-test",
             "correlation_id": "corr-nats-test",
             "causation_id": "cause-nats-test",
             "idempotency_key": idempotency_key,
-            "schema_version": 1,
-            "data": {"contact_id": 42},
+            "payload": {"contact_id": 42},
+            "metadata": {},
         },
         attempt_count=1,
     )
@@ -121,7 +121,7 @@ async def test_ack_deduplication_and_new_consumer_replay(
         stream=STREAM,
     )
     messages = await first.fetch(1, timeout=3)
-    assert json.loads(messages[0].data)["id"] == "evt-nats-dedup"
+    assert json.loads(messages[0].data)["event_id"] == "evt-nats-dedup"
     assert messages[0].headers["X-Codestra-Tenant-Id"] == "tenant-nats-test"
     await messages[0].ack()
 
@@ -131,7 +131,7 @@ async def test_ack_deduplication_and_new_consumer_replay(
         stream=STREAM,
     )
     replayed = await replay.fetch(1, timeout=3)
-    assert json.loads(replayed[0].data)["id"] == "evt-nats-dedup"
+    assert json.loads(replayed[0].data)["event_id"] == "evt-nats-dedup"
     await replayed[0].ack()
 
     await asyncio.sleep(2.2)

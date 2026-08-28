@@ -75,7 +75,7 @@ def test_semantically_identical_reformatted_retry_is_duplicate(test_settings, ru
         pretty = json.dumps(event, indent=2, sort_keys=False).encode()
         timestamp = str(int(time.time()))
         body_sha = hashlib.sha256(pretty).hexdigest()
-        canonical = "\n".join(("v1", "POST", path, timestamp, event["id"], route.producer_client_id, body_sha)).encode()
+        canonical = "\n".join(("v1", "POST", path, timestamp, event["event_id"], route.producer_client_id, body_sha)).encode()
         signature = hmac.new(SECRET, canonical, hashlib.sha256).hexdigest()
         retry_headers = dict(headers)
         retry_headers["X-Codestra-Timestamp"] = timestamp
@@ -102,7 +102,7 @@ def test_same_event_id_with_changed_payload_conflicts(test_settings, runtime) ->
     with TestClient(app) as client:
         assert client.post(path, content=body, headers=headers).status_code == 202
 
-        changed = {**event, "data": {"ok": False}}
+        changed = {**event, "payload": {"ok": False}}
         changed_body, changed_headers = signed_headers(
             path=path,
             producer=route.producer_client_id,

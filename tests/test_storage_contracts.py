@@ -12,18 +12,18 @@ from app.storage import MemoryInboxStore, PostgresInboxStore, ReplayConflict
 
 def envelope(*, event_id: str, idempotency_key: str, value: int = 1) -> EventEnvelope:
     return EventEnvelope(
-        specversion="1.0",
-        id=event_id,
-        type="codestra.test.event",
-        source="urn:codestra:test-source",
-        subject="subject/1",
-        time=datetime.now(timezone.utc),
+        event_id=event_id,
+        event_type="codestra.test.event",
+        event_version="1.0",
+        occurred_at=datetime.now(timezone.utc),
+        received_at=datetime.now(timezone.utc),
+        source="test-source",
         tenant_id="tenant-test",
         correlation_id="corr-1",
         causation_id="cause-1",
         idempotency_key=idempotency_key,
-        schema_version=1,
-        data={"value": value},
+        payload={"value": value},
+        metadata={},
     )
 
 

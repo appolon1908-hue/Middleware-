@@ -44,11 +44,11 @@ def record(**overrides: object) -> OutboxRecord:
         "idempotency_key": "idem-event-7",
         "payload": {
             "tenant_id": "tenant-a",
-            "type": "codestra.odoo.contact_updated",
+            "event_type": "codestra.odoo.contact_updated",
             "correlation_id": "corr-7",
             "causation_id": "cause-7",
-            "id": "event-7",
-            "data": {"contact_id": 42},
+            "event_id": "event-7",
+            "payload": {"contact_id": 42},
         },
         "attempt_count": 1,
     }
@@ -79,7 +79,7 @@ async def test_publish_preserves_tenant_idempotency_and_correlation() -> None:
 
     subject, body, headers, timeout = jetstream.calls[0]
     assert subject == "codestra.events.odoo.contact_updated"
-    assert json.loads(body)["data"] == {"contact_id": 42}
+    assert json.loads(body)["payload"] == {"contact_id": 42}
     assert headers["X-Codestra-Tenant-Id"] == "tenant-a"
     assert headers["X-Codestra-Event-Id"] == "event-7"
     assert headers["X-Correlation-ID"] == "corr-7"
@@ -100,6 +100,6 @@ async def test_publish_fails_before_transport_on_envelope_mismatch() -> None:
 
     with pytest.raises(NatsTransportError):
         await publisher.publish(
-            record(payload={"tenant_id": "tenant-b", "type": "wrong"})
+            record(payload={"tenant_id": "tenant-b", "event_type": "wrong"})
         )
     assert jetstream.calls == []

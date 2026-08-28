@@ -1,24 +1,66 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.codestra.co/command-envelope.v1.schema.json",
-  "title": "Codestra Command Envelope v1",
+  "$id": "https://contracts.codestra.co/platform/command-envelope.v1.schema.json",
+  "title": "Codestra Canonical Command Envelope v1",
+  "description": "The sole durable representation for a governed cross-system mutation request.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["command_id", "command_type", "tenant_id", "actor", "correlation_id", "causation_id", "idempotency_key", "capability_snapshot", "payload"],
+  "required": [
+    "command_id",
+    "command_type",
+    "command_version",
+    "target",
+    "tenant_id",
+    "requested_by",
+    "correlation_id",
+    "idempotency_key",
+    "capability",
+    "payload"
+  ],
   "properties": {
-    "command_id": {"type": "string", "format": "uuid"},
-    "command_type": {"type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]*$"},
-    "tenant_id": {"type": "string", "format": "uuid"},
-    "actor": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "id"],
-      "properties": {"type": {"enum": ["human", "service", "system"]}, "id": {"type": "string", "minLength": 1, "maxLength": 300}}
+    "command_id": {
+      "type": "string",
+      "format": "uuid"
     },
-    "correlation_id": {"type": "string", "format": "uuid"},
-    "causation_id": {"type": "string", "minLength": 1, "maxLength": 180},
-    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 180},
-    "capability_snapshot": {"type": "object", "additionalProperties": {"type": "boolean"}},
-    "payload": {"type": "object"}
+    "command_type": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$",
+      "maxLength": 180
+    },
+    "command_version": {
+      "const": "1.0"
+    },
+    "target": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 180
+    },
+    "capability": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,100}$"
+    },
+    "payload": {
+      "type": "object"
+    }
   }
 }

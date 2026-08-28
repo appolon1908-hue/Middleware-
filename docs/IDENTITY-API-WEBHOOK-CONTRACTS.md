@@ -96,7 +96,7 @@ acknowledgment, and deduplicates by authoritative event ID. Delivery is at least
 once, so every handler must be idempotent.
 
 All event types use the `codestra.` namespace required by
-`contracts/event-envelope.schema.json`.
+`contracts/platform/event-envelope.v1.schema.json`.
 
 ## Source-readiness record
 

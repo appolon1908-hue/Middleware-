@@ -76,11 +76,11 @@ async def accept_webhook(
         raise RequestValidationError("body does not match the canonical event envelope") from exc
 
     authorize_tenant(claims, envelope.tenant_id)
-    if envelope.type not in route.event_types:
+    if envelope.event_type not in route.event_types:
         raise EventTypeError("event type is not allowed for this route")
-    if signed.event_type != envelope.type:
+    if signed.event_type != envelope.event_type:
         raise RequestValidationError("X-Codestra-Event-Type does not match body")
-    if signed.event_id != envelope.id:
+    if signed.event_id != envelope.event_id:
         raise RequestValidationError("X-Codestra-Event-Id does not match body")
     if signed.tenant_id != envelope.tenant_id:
         raise RequestValidationError("X-Codestra-Tenant-Id does not match body")
@@ -88,13 +88,16 @@ async def accept_webhook(
         raise RequestValidationError("X-Correlation-Id does not match body")
     if envelope.idempotency_key != signed.idempotency_key:
         raise RequestValidationError("body idempotency_key does not match headers")
-    if envelope.source != f"urn:codestra:{route.producer_client_id}":
+    if envelope.source != route.producer_client_id:
         raise RequestValidationError("body source does not match route producer")
 
     semantic_sha = semantic_digest(envelope)
     token: str | None = None
     try:
-        token = await runtime.replay.acquire(envelope.tenant_id, envelope.id)
+        token = await runtime.replay.acquire(
+            envelope.tenant_id,
+            envelope.event_id,
+        )
         try:
             result = await runtime.inbox.accept(
                 envelope,
@@ -108,6 +111,10 @@ async def accept_webhook(
         raise ProcessingConflictError(str(exc)) from exc
     finally:
         if token is not None:
-            await runtime.replay.release(envelope.tenant_id, envelope.id, token)
+            await runtime.replay.release(
+                envelope.tenant_id,
+                envelope.event_id,
+                token,
+            )
 
     return result, 200 if result.duplicate else 202

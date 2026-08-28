@@ -387,24 +387,27 @@ def validate_webhooks(
     if webhooks.get("consumerBaseUrlEnvironment") != "MIDDLEWARE_API_BASE_URL":
         fail("webhook consumer URL must use MIDDLEWARE_API_BASE_URL")
     schema_path = webhooks.get("eventEnvelopeSchema")
-    if schema_path != "contracts/event-envelope.schema.json":
+    if schema_path != "contracts/platform/event-envelope.v1.schema.json":
         fail("webhooks must use the canonical event-envelope schema")
     schema = load_json(ROOT / schema_path)
     required = set(schema.get("required", []))
     for field in {
-        "id",
-        "type",
+        "event_id",
+        "event_type",
+        "event_version",
+        "occurred_at",
+        "received_at",
         "source",
         "tenant_id",
         "correlation_id",
         "causation_id",
         "idempotency_key",
-        "schema_version",
-        "data",
+        "payload",
+        "metadata",
     }:
         if field not in required:
             fail(f"event envelope is missing required field {field}")
-    pattern = schema.get("properties", {}).get("type", {}).get("pattern")
+    pattern = schema.get("properties", {}).get("event_type", {}).get("pattern")
     if not isinstance(pattern, str) or not pattern.startswith("^codestra"):
         fail("event envelope type pattern must require the codestra namespace")
 

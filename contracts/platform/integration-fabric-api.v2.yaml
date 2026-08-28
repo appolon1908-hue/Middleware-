@@ -7,6 +7,26 @@ servers:
   - url: https://api.codestra.co
     description: Public gateway; runtime activation is outside this contract.
 paths:
+  /v1/commands:
+    post:
+      operationId: submitCommand
+      security: [{oauth2: [middleware.request.forward]}]
+      parameters:
+        - {$ref: '#/components/parameters/HeaderTenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './command-envelope.v1.schema.json'
+      responses:
+        '202': {$ref: '#/components/responses/CommandOperation'}
+        '200': {$ref: '#/components/responses/CommandOperation'}
+        '400': {description: Invalid canonical command or header mismatch}
+        '403': {description: Tenant, subject, owner, or capability denied}
+        '409': {description: Command identity reused with different content}
   /v1/platform/tenants:
     post:
       operationId: createTenant
@@ -63,14 +83,17 @@ paths:
         - {$ref: '#/components/parameters/IdempotencyKey'}
       responses:
         '202': {$ref: '#/components/responses/OperationAccepted'}
-  /v1/operations/{operation_id}:
+  /v1/operations/{command_id}:
     get:
-      operationId: getOperation
-      security: [{oauth2: [operation.read]}]
+      operationId: getCommandOperation
+      security: [{oauth2: [middleware.status.read]}]
       parameters:
-        - {name: operation_id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: command_id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: '#/components/parameters/HeaderTenantId'}
       responses:
-        '200': {description: Current operation state}
+        '200': {$ref: '#/components/responses/CommandOperation'}
+        '403': {description: Tenant access denied}
+        '404': {description: Command operation not found}
   /v1/dead-letters/{dead_letter_id}/replay:
     post:
       operationId: requestDeadLetterReplay
@@ -122,6 +145,8 @@ components:
             integration.connection.write: Create or change connection metadata
             integration.connection.test: Request a no-effect connection test
             operation.read: Read operation state
+            middleware.request.forward: Submit a governed command
+            middleware.status.read: Read an authorized command operation
             operations.replay.request: Request protected dead-letter replay
             automation.job.claim: Claim authorized automation work
             automation.job.heartbeat: Extend the current lease
@@ -133,6 +158,16 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    HeaderTenantId:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 180}
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -144,6 +179,17 @@ components:
       required: true
       schema: {type: string, minLength: 1, maxLength: 128}
   responses:
+    CommandOperation:
+      description: Current durable command operation
+      headers:
+        Location:
+          schema: {type: string}
+        X-Correlation-ID:
+          schema: {type: string}
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommandOperation'
     OperationAccepted:
       description: Durable asynchronous operation accepted
       content:
@@ -164,3 +210,48 @@ components:
                 properties:
                   correlation_id: {type: string, format: uuid}
                   api_version: {const: v1}
+  schemas:
+    CommandOperation:
+      type: object
+      additionalProperties: false
+      required:
+        - command_id
+        - tenant_id
+        - command_type
+        - command_version
+        - target
+        - requested_by
+        - correlation_id
+        - idempotency_key
+        - capability
+        - state
+        - created_at
+        - updated_at
+        - duplicate
+      properties:
+        command_id: {type: string, format: uuid}
+        tenant_id: {type: string}
+        command_type: {type: string}
+        command_version: {const: '1.0'}
+        target: {type: string}
+        requested_by: {type: string}
+        correlation_id: {type: string}
+        idempotency_key: {type: string}
+        capability: {type: string}
+        state:
+          type: string
+          enum:
+            - persisted
+            - queued
+            - dispatching
+            - accepted
+            - readback_pending
+            - completed
+            - failed
+            - reconciliation_required
+            - dead_lettered
+        provider_operation_id: {type: [string, 'null']}
+        last_error: {type: [string, 'null']}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        duplicate: {type: boolean}

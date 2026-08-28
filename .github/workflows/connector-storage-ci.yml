@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17.6-alpine
+        image: postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
         env:
           POSTGRES_USER: connector
           POSTGRES_PASSWORD: connector
@@ -28,7 +28,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql+psycopg://connector:connector@127.0.0.1:5432/connector
+      ADMIN_DATABASE_URL: postgresql+psycopg://connector:connector@127.0.0.1:5432/connector
+      APP_DATABASE_URL: postgresql+psycopg://connector_app_test:connector_app_test@127.0.0.1:5432/connector
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services/connector-runtime/src
     steps:
       - name: Check out exact source

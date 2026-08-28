@@ -27,10 +27,18 @@ _SEMVER_RE = re.compile(
     r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
 )
 _TRACEPARENT_RE = re.compile(
-    r"^(?!ff)([0-9a-f]{2})-"
+    r"^00-"
     r"((?!0{32})[0-9a-f]{32})-"
     r"((?!0{16})[0-9a-f]{16})-"
     r"([0-9a-f]{2})$"
+)
+_RFC3339_RE = re.compile(
+    r"^(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})T"
+    r"(?P<hour>[01][0-9]|2[0-3]):"
+    r"(?P<minute>[0-5][0-9]):"
+    r"(?P<second>[0-5][0-9])"
+    r"(?P<fraction>\.[0-9]+)?"
+    r"(?P<offset>Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$"
 )
 _TRACESTATE_KEY = re.compile(
     r"^(?:[a-z0-9][a-z0-9_*/-]{0,255}|"
@@ -53,7 +61,7 @@ def deep_freeze(value: Any) -> Any:
 
 
 def deep_thaw(value: Any) -> Any:
-    """Convert recursively frozen JSON-like values to ordinary serializable values."""
+    """Convert recursively frozen JSON-like values to serializable values."""
     if isinstance(value, Mapping):
         return {str(key): deep_thaw(child) for key, child in value.items()}
     if isinstance(value, tuple):
@@ -229,8 +237,8 @@ def validate_tracestate(value: str | None) -> str | None:
 
 
 def validate_rfc3339(value: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise StandardsValidationError("timestamp must be a non-empty RFC 3339 string")
+    if not isinstance(value, str) or _RFC3339_RE.fullmatch(value) is None:
+        raise StandardsValidationError("timestamp is not RFC 3339")
     candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
         parsed = datetime.fromisoformat(candidate)

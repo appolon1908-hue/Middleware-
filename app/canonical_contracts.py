@@ -56,4 +56,3 @@ def validate_contract(name: ContractName, instance: dict[str, Any]) -> None:
     raise CanonicalContractError(
         f"canonical {name} contract rejected {location}: {error.message}"
     )
-

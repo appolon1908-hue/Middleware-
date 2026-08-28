@@ -26,4 +26,3 @@ python scripts/verify_event_ledger.py --tenant-id <internal-tenant-id>
 The verifier recomputes every canonical payload hash, checks gapless tenant
 sequences and previous-hash links, then recomputes each entry hash. It emits
 only counts, never event payloads. Any mismatch exits non-zero.
-

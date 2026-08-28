@@ -41,4 +41,3 @@ exactly one adapter, capability, and mandatory read-back policy.
 worker's provider activities also fail closed until a reviewed adapter is
 explicitly bound. Enabling a configuration flag alone therefore cannot activate
 a provider write.
-

@@ -32,4 +32,3 @@ production activation is a separate reviewed release action.
 
 `GET /version` exposes the selected runtime profile ID so deployment evidence
 can prove which environment lock the process enforced.
-

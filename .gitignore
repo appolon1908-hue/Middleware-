@@ -61,7 +61,8 @@ private-evidence/
 build/
 dist/
 *.egg-info/
-artifacts/
+artifacts/*
+!artifacts/baseline-report.md
 
 # Editors and operating systems
 .idea/

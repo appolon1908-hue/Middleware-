@@ -232,8 +232,12 @@ class WebhookIngressService:
                 correlation_id=correlation_id,
                 traceparent=request.headers.get("traceparent"),
             )
-        except Exception:
-            if created:
+        except ProblemError as error:
+            # Only a semantic conflict proves that the durable event key owns
+            # a different body digest, so this new file cannot be referenced
+            # by a successful concurrent delivery. For other failures, retain
+            # the encrypted body rather than race a concurrent commit.
+            if created and error.code == "WEBHOOK_SEMANTIC_CONFLICT":
                 try:
                     self.body_store.delete(reference)
                 except OSError as cleanup_error:

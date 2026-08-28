@@ -399,6 +399,27 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
     assert conflict.json()["code"] == "WEBHOOK_SEMANTIC_CONFLICT"
     assert set((tmp_path / "bodies").rglob("*.bin")) == encrypted_before_conflict
 
+    retained_event_headers = dict(webhook_headers)
+    retained_event_headers["X-Test-Event-Id"] = "evt-db-failure-retained"
+    files_before_failure = set((tmp_path / "bodies").rglob("*.bin"))
+    original_persist = app.state.repository.persist_verified_webhook
+
+    def fail_database_persistence(**_kwargs):
+        raise RuntimeError("synthetic database failure")
+
+    app.state.repository.persist_verified_webhook = fail_database_persistence
+    try:
+        failed = test_client.post(
+            webhook_path,
+            content=body,
+            headers=retained_event_headers,
+        )
+    finally:
+        app.state.repository.persist_verified_webhook = original_persist
+    assert failed.status_code == 500
+    assert failed.json()["code"] == "INTERNAL_ERROR"
+    assert len(set((tmp_path / "bodies").rglob("*.bin")) - files_before_failure) == 1
+
 
 def test_management_body_limit_precedes_schema_parsing(client) -> None:
     test_client, _, _, _ = client

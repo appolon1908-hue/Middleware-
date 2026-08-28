@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.codestra.co/command-envelope.v1.schema.json",
+  "title": "Codestra Command Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["command_id", "command_type", "tenant_id", "actor", "correlation_id", "causation_id", "idempotency_key", "capability_snapshot", "payload"],
+  "properties": {
+    "command_id": {"type": "string", "format": "uuid"},
+    "command_type": {"type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]*$"},
+    "tenant_id": {"type": "string", "format": "uuid"},
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {"type": {"enum": ["human", "service", "system"]}, "id": {"type": "string", "minLength": 1, "maxLength": 300}}
+    },
+    "correlation_id": {"type": "string", "format": "uuid"},
+    "causation_id": {"type": "string", "minLength": 1, "maxLength": 180},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 180},
+    "capability_snapshot": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "payload": {"type": "object"}
+  }
+}

@@ -12,7 +12,7 @@ from .errors import (
     ConnectorVersionConflictError,
 )
 from .manifest import manifest_digest, parse_manifest
-from .models import ConnectorState
+from .models import ConnectorManifest, ConnectorState
 from .registry import ConnectorRegistry
 from .standards import SemanticVersion
 
@@ -28,19 +28,52 @@ class ConnectorCatalogService:
         self._registry = registry
 
     def list_connectors(self) -> list[dict[str, Any]]:
-        return [
-            self._projection(record)
-            for record in self._registry.list()
-        ]
+        return [self._projection(record) for record in self._registry.list()]
 
     def get_connector(self, connector_id: str) -> dict[str, Any]:
         return self._projection(self._registry.get(connector_id))
+
+    def _assert_candidate_invariants(self, candidate: ConnectorManifest) -> None:
+        """Validate a candidate against the complete current registry.
+
+        Validation occurs before any mutation, so a prefix or webhook conflict
+        cannot partially install a connector and corrupt the catalog.
+        """
+        errors: list[str] = []
+        for record in self._registry.list():
+            existing = record.manifest
+            if existing.connector_id == candidate.connector_id:
+                continue
+            for incoming in candidate.command_policies:
+                for current in existing.command_policies:
+                    if (
+                        incoming.prefix.startswith(current.prefix)
+                        or current.prefix.startswith(incoming.prefix)
+                    ):
+                        errors.append(
+                            "command prefix conflict: "
+                            f"{incoming.prefix} ({candidate.connector_id}) and "
+                            f"{current.prefix} ({existing.connector_id})"
+                        )
+            existing_routes = {
+                webhook.route_path for webhook in existing.webhook_policies
+            }
+            for webhook in candidate.webhook_policies:
+                if webhook.route_path in existing_routes:
+                    errors.append(
+                        "webhook route conflict: "
+                        f"{webhook.route_path} belongs to "
+                        f"{existing.connector_id} and {candidate.connector_id}"
+                    )
+        if errors:
+            raise ConnectorVersionConflictError("; ".join(sorted(set(errors))))
 
     def validate_candidate(
         self,
         raw_manifest: Mapping[str, Any],
     ) -> dict[str, Any]:
         manifest = parse_manifest(raw_manifest)
+        self._assert_candidate_invariants(manifest)
         warnings: list[str] = []
         if manifest.runtime_binding.status == "UNVERIFIED_TEMPLATE_ONLY":
             warnings.append("runtime binding is not verified")
@@ -62,6 +95,7 @@ class ConnectorCatalogService:
         if actual != expected_digest:
             raise ValueError("manifest digest does not match expected digest")
         manifest = parse_manifest(raw_manifest)
+        self._assert_candidate_invariants(manifest)
         try:
             existing = self._registry.get(manifest.connector_id)
         except ConnectorNotFoundError:

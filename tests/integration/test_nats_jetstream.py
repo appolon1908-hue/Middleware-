@@ -10,6 +10,7 @@ import nats
 import pytest
 import pytest_asyncio
 from nats.js.api import StorageType, StreamConfig
+from nats.js.errors import NotFoundError
 
 from app.config import Settings
 from app.nats_transport import NatsJetStreamPublisher
@@ -77,18 +78,20 @@ async def publisher() -> AsyncIterator[NatsJetStreamPublisher]:
     jetstream = bootstrap.jetstream()
     try:
         try:
-            await jetstream.delete_stream(STREAM)
-        except Exception:
-            pass
-        await jetstream.add_stream(
-            config=StreamConfig(
-                name=STREAM,
-                subjects=[f"{SUBJECT_PREFIX}.>"],
-                storage=StorageType.FILE,
-                duplicate_window=2.0,
-                num_replicas=1,
+            info = await jetstream.stream_info(STREAM)
+        except NotFoundError:
+            await jetstream.add_stream(
+                config=StreamConfig(
+                    name=STREAM,
+                    subjects=[f"{SUBJECT_PREFIX}.>"],
+                    storage=StorageType.FILE,
+                    duplicate_window=2.0,
+                    num_replicas=1,
+                )
             )
-        )
+        else:
+            assert info.config.subjects == [f"{SUBJECT_PREFIX}.>"]
+            await jetstream.purge_stream(STREAM)
     finally:
         await bootstrap.close()
 

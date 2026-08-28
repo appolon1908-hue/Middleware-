@@ -24,7 +24,7 @@ docker run --detach \
 python3 -m venv .venv-nats-integration
 . .venv-nats-integration/bin/activate
 python -m pip install --disable-pip-version-check --no-input --quiet \
-  -r requirements-runtime.txt
+  --require-hashes -r requirements-test.txt
 
 python - <<'PY'
 import asyncio

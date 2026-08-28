@@ -142,6 +142,8 @@ Never commit:
 - [`contracts/http-conventions.md`](contracts/http-conventions.md) — HTTP, identity, idempotency, webhook, retry, health, and error rules.
 - [`contracts/provider-transport-conventions.md`](contracts/provider-transport-conventions.md) — Caddy/Nginx, mTLS, RabbitMQ, SMTP, SMS, database, and provider transport rules.
 - [`contracts/observability-conventions.md`](contracts/observability-conventions.md) — release identity, metrics, logs, traces, dashboards, and alerts.
+- [`contracts/release-manifest.v1.schema.json`](contracts/release-manifest.v1.schema.json) — canonical image, source, SBOM, scan, migration, and build evidence.
+- [`docs/RELEASE-SUPPLY-CHAIN.md`](docs/RELEASE-SUPPLY-CHAIN.md) — exact-digest build, keyless signing, verification, and promotion controls.
 - [`docs/SERVER-CONNECTION.md`](docs/SERVER-CONNECTION.md) — read-only server/Git connection and safe source import.
 - [`scripts/discover_middleware_runtime.sh`](scripts/discover_middleware_runtime.sh) — read-only middleware-host inventory.
 - [`scripts/audit_all_workstream_sync.py`](scripts/audit_all_workstream_sync.py) — base and supplemental branch synchronization audit.

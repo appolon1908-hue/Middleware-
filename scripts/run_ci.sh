@@ -36,6 +36,9 @@ python3 scripts/validate_integration_fabric.py
 printf '==> Validating locked runtime environment profiles\n'
 python3 scripts/validate_runtime_profiles.py
 
+printf '==> Validating signed release supply chain\n'
+python3 scripts/validate_release_supply_chain.py
+
 printf '==> Validating connector SDK contracts and generated artifacts\n'
 python3 scripts/validate_connector_sdk.py
 

@@ -3,7 +3,7 @@
   "branch": "feature/intake-runtime-v1",
   "middlewareApi": {
     "sourceState": "runtime-source-present-unverified",
-    "paths": ["app", "migrations", "requirements-runtime.txt", "Dockerfile.runtime"]
+    "paths": ["app", "migrations", "requirements-runtime.in", "requirements-runtime.txt", "requirements-test.in", "requirements-test.txt", "Dockerfile.runtime"]
   },
   "middlewareWorker": {
     "sourceState": "runtime-source-present-unverified",

@@ -9,7 +9,8 @@ trap 'rm -rf .venv-ci' EXIT
 
 . .venv-ci/bin/activate
 python -m pip install --disable-pip-version-check --no-input --quiet --upgrade pip
-python -m pip install --disable-pip-version-check --no-input --quiet -r requirements-runtime.txt
+python -m pip install --disable-pip-version-check --no-input --quiet \
+  --require-hashes -r requirements-test.txt
 
 python -m compileall -q app workers tests
 pytest -q tests

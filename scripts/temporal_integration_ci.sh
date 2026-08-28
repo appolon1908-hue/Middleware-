@@ -8,7 +8,7 @@ python3 -m venv .venv-temporal-integration
 trap 'rm -rf .venv-temporal-integration' EXIT
 . .venv-temporal-integration/bin/activate
 python -m pip install --disable-pip-version-check --no-input --quiet \
-  -r requirements-runtime.txt
+  --require-hashes -r requirements-test.txt
 
 export TEMPORAL_INTEGRATION_TESTS=1
 pytest -q tests/integration/test_temporal_workflows.py

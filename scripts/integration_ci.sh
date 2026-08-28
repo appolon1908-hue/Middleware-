@@ -57,7 +57,8 @@ python3 -m venv .venv-integration
 trap 'rm -rf .venv-integration' EXIT
 . .venv-integration/bin/activate
 python -m pip install --disable-pip-version-check --no-input --quiet --upgrade pip
-python -m pip install --disable-pip-version-check --no-input --quiet -r requirements-runtime.txt
+python -m pip install --disable-pip-version-check --no-input --quiet \
+  --require-hashes -r requirements-test.txt
 
 pytest -q tests/integration
 

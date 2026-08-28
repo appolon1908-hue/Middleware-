@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import time
@@ -16,12 +17,14 @@ from fastapi import Request
 
 from middleware.connector_sdk import parse_manifest
 
+from .body_limits import read_bounded_body
 from .config import RuntimeSettings
 from .crypto import EncryptedBodyStore
 from .problems import ProblemError
 from .repository import ConnectorRepository
 
 _EVENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,8 +88,7 @@ class WebhookIngressService:
     @staticmethod
     def _signature(value: str) -> str:
         candidate = value.strip()
-        if candidate.startswith("v1="):
-            candidate = candidate[3:]
+        candidate = candidate.removeprefix("v1=")
         if len(candidate) != 64:
             raise ProblemError(
                 status=401,
@@ -142,15 +144,14 @@ class WebhookIngressService:
                 detail="The webhook endpoint is not declared by the connector.",
             )
 
-        body = await request.body()
-        if len(body) > policy.maximum_body_bytes:
-            raise ProblemError(
-                status=413,
-                code="WEBHOOK_BODY_TOO_LARGE",
-                title="Webhook body too large",
-                detail="The webhook body exceeds the connector policy.",
-            )
         headers = self._headers(request)
+        body = await read_bounded_body(
+            request,
+            maximum_bytes=policy.maximum_body_bytes,
+            too_large_code="WEBHOOK_BODY_TOO_LARGE",
+            title="Webhook body too large",
+            detail="The webhook body exceeds the connector policy.",
+        )
         try:
             signature = self._signature(headers[policy.signature_header.lower()])
             timestamp_text = headers[policy.timestamp_header.lower()]
@@ -190,9 +191,12 @@ class WebhookIngressService:
         aliases = [str(ingress["secret_reference_current"])]
         previous = ingress.get("secret_reference_previous")
         previous_until = ingress.get("previous_secret_valid_until")
-        if previous and previous_until:
-            if isinstance(previous_until, datetime) and previous_until > datetime.now(timezone.utc):
-                aliases.append(str(previous))
+        if (
+            previous
+            and isinstance(previous_until, datetime)
+            and previous_until > datetime.now(timezone.utc)
+        ):
+            aliases.append(str(previous))
         signed = str(timestamp).encode("ascii") + b"." + body
         authenticated = False
         for alias in aliases:
@@ -209,7 +213,7 @@ class WebhookIngressService:
 
         tenant_id = str(ingress["tenant_id"])
         body_sha256 = hashlib.sha256(body).hexdigest()
-        reference = self.body_store.persist(
+        reference, created = self.body_store.persist_with_status(
             body,
             tenant_id=tenant_id,
             webhook_id=str(webhook_id),
@@ -218,15 +222,26 @@ class WebhookIngressService:
         correlation_id = UUID(
             str(getattr(request.state, "correlation_id", uuid4()))
         )
-        duplicate, inbox_id = self.repository.persist_verified_webhook(
-            ingress=ingress,
-            event_id=event_id,
-            body_sha256=body_sha256,
-            encrypted_body_reference=reference,
-            signature_version="codestra-hmac-sha256-v1",
-            correlation_id=correlation_id,
-            traceparent=request.headers.get("traceparent"),
-        )
+        try:
+            duplicate, inbox_id = self.repository.persist_verified_webhook(
+                ingress=ingress,
+                event_id=event_id,
+                body_sha256=body_sha256,
+                encrypted_body_reference=reference,
+                signature_version="codestra-hmac-sha256-v1",
+                correlation_id=correlation_id,
+                traceparent=request.headers.get("traceparent"),
+            )
+        except Exception:
+            if created:
+                try:
+                    self.body_store.delete(reference)
+                except OSError as cleanup_error:
+                    _LOG.error(
+                        "encrypted webhook body cleanup failed after database rejection",
+                        extra={"error_type": type(cleanup_error).__name__},
+                    )
+            raise
         return 202, {
             "data": {
                 "inbox_id": str(inbox_id),

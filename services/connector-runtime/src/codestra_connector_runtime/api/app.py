@@ -2,32 +2,31 @@
 
 from __future__ import annotations
 
-import json
 import re
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 import structlog
-from fastapi import Depends, FastAPI, Header, Query, Request, Response
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from middleware.connector_sdk import (
     ConnectorCatalogService,
     ConnectorRegistry,
-    manifest_digest,
-    parse_manifest,
 )
 from middleware.connector_sdk.errors import ConnectorError, ManifestValidationError
 
 from .auth import Principal, require_scopes
+from .body_limits import read_bounded_body
 from .config import RuntimeSettings, get_settings
 from .crypto import EncryptedBodyStore
 from .cursor import CursorCodec
 from .database import Database
-from .problems import ProblemError, install_problem_handlers
+from .problems import ProblemError, install_problem_handlers, problem_response
 from .repository import ConnectorRepository, IdempotentReplay, _etag_version
 from .schemas import (
     ConnectionCreateRequest,
@@ -45,6 +44,7 @@ _CORRELATION = re.compile(
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def _meta(correlation_id: UUID) -> dict[str, str]:
@@ -81,6 +81,17 @@ def _request_id(request: Request) -> str | None:
 def _traceparent(request: Request) -> str | None:
     value = request.headers.get("traceparent")
     return value[:256] if value else None
+
+
+def _is_public_webhook_ingress(request: Request) -> bool:
+    parts = request.url.path.strip("/").split("/")
+    if request.method != "POST" or len(parts) != 5 or parts[:2] != ["v1", "webhooks"]:
+        return False
+    try:
+        UUID(parts[4])
+    except ValueError:
+        return False
+    return True
 
 
 def _response(
@@ -228,7 +239,24 @@ def create_app() -> FastAPI:
             else uuid4()
         )
         request.state.correlation_id = correlation_id
-        response = await call_next(request)
+        try:
+            if (
+                request.method in _BODY_METHODS
+                and not _is_public_webhook_ingress(request)
+            ):
+                await read_bounded_body(
+                    request,
+                    maximum_bytes=_settings(request).maximum_management_body_bytes,
+                    too_large_code="MANAGEMENT_BODY_TOO_LARGE",
+                    title="Management request body too large",
+                    detail=(
+                        "The request body exceeds the management API limit."
+                    ),
+                )
+        except ProblemError as error:
+            response = problem_response(request, error)
+        else:
+            response = await call_next(request)
         response.headers["X-Correlation-ID"] = str(correlation_id)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "no-store"
@@ -255,7 +283,7 @@ def create_app() -> FastAPI:
         try:
             request.app.state.database.ping()
             checks["database"] = "pass"
-        except Exception:
+        except SQLAlchemyError:
             checks["database"] = "fail"
             ready = False
         try:
@@ -263,7 +291,7 @@ def create_app() -> FastAPI:
             checks["migration"] = str(migration or "missing")
             if migration != settings.readiness_requires_migration:
                 ready = False
-        except Exception:
+        except SQLAlchemyError:
             checks["migration"] = "fail"
             ready = False
         if not settings.body_encryption_key_file.is_file():

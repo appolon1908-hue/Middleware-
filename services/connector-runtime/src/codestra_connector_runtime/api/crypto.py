@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import os
 import tempfile
@@ -18,11 +19,11 @@ class EncryptedBodyStore:
     key: bytes
 
     @classmethod
-    def from_key_file(cls, root: Path, key_file: Path) -> "EncryptedBodyStore":
+    def from_key_file(cls, root: Path, key_file: Path) -> EncryptedBodyStore:
         raw = key_file.read_bytes().strip()
         try:
             decoded = base64.b64decode(raw, validate=True)
-        except Exception:
+        except (binascii.Error, ValueError):
             decoded = raw
         if len(decoded) not in {16, 24, 32}:
             raise ValueError("body encryption key must be 16, 24, or 32 bytes")
@@ -38,6 +39,22 @@ class EncryptedBodyStore:
         webhook_id: str,
         event_id: str,
     ) -> str:
+        reference, _ = self.persist_with_status(
+            body,
+            tenant_id=tenant_id,
+            webhook_id=webhook_id,
+            event_id=event_id,
+        )
+        return reference
+
+    def persist_with_status(
+        self,
+        body: bytes,
+        *,
+        tenant_id: str,
+        webhook_id: str,
+        event_id: str,
+    ) -> tuple[str, bool]:
         body_digest = hashlib.sha256(body).hexdigest()
         safe_event = hashlib.sha256(event_id.encode("utf-8")).hexdigest()[:24]
         relative = Path(tenant_id) / webhook_id / f"{safe_event}-{body_digest}.bin"
@@ -45,12 +62,12 @@ class EncryptedBodyStore:
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(target.parent, 0o700)
         if target.exists():
-            return "file:" + relative.as_posix()
+            return "file:" + relative.as_posix(), False
 
         nonce = os.urandom(12)
         associated = (
             f"{tenant_id}:{webhook_id}:{event_id}:{body_digest}"
-        ).encode("utf-8")
+        ).encode()
         ciphertext = AESGCM(self.key).encrypt(nonce, body, associated)
         payload = b"CRB1" + nonce + ciphertext
         file_descriptor, temporary_path = tempfile.mkstemp(
@@ -76,7 +93,25 @@ class EncryptedBodyStore:
         finally:
             if os.path.exists(temporary_path):
                 os.unlink(temporary_path)
-        return "file:" + relative.as_posix()
+        return "file:" + relative.as_posix(), True
+
+    def delete(self, reference: str) -> None:
+        """Delete a newly-created encrypted body after database rejection."""
+
+        if not reference.startswith("file:"):
+            raise ValueError("unsupported encrypted body reference")
+        relative = Path(reference.removeprefix("file:"))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("invalid encrypted body reference")
+        target = self.root / relative
+        target.unlink(missing_ok=True)
+        parent = target.parent
+        while parent != self.root:
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
 
     def read(
         self,
@@ -99,7 +134,7 @@ class EncryptedBodyStore:
         ciphertext = payload[16:]
         associated = (
             f"{tenant_id}:{webhook_id}:{event_id}:{body_sha256}"
-        ).encode("utf-8")
+        ).encode()
         body = AESGCM(self.key).decrypt(nonce, ciphertext, associated)
         if hashlib.sha256(body).hexdigest() != body_sha256:
             raise ValueError("encrypted body digest does not match")

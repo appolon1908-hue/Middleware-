@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-import copy
 import hashlib
 import hmac
 import json
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from uuid import UUID
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import text
-
 from codestra_connector_runtime.api.app import create_app
 from codestra_connector_runtime.api.auth import Principal, principal_dependency
 from codestra_connector_runtime.api.config import get_settings
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
 from middleware.connector_sdk import manifest_digest
 
 pytestmark = pytest.mark.postgres
@@ -87,7 +88,7 @@ def _manifest() -> dict[str, object]:
             "timestamp_header": "X-Test-Timestamp",
             "event_id_header": "X-Test-Event-Id",
             "maximum_clock_skew_seconds": 300,
-            "maximum_body_bytes": 1048576,
+            "maximum_body_bytes": 1024,
             "acknowledgement_deadline_seconds": 5,
             "replay_retention_seconds": 604800,
             "secret_reference": "WEBHOOK_TEST_SECRET",
@@ -317,8 +318,33 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
         "X-Test-Timestamp": str(now),
         "X-Test-Event-Id": event_id,
     }
-    accepted = test_client.post(webhook_path, content=body, headers=webhook_headers)
-    assert accepted.status_code == 202, accepted.text
+    oversized = test_client.post(
+        webhook_path,
+        content=b"x" * 1025,
+        headers=webhook_headers,
+    )
+    assert oversized.status_code == 413
+    assert oversized.json()["code"] == "WEBHOOK_BODY_TOO_LARGE"
+
+    barrier = Barrier(2)
+
+    def first_delivery():
+        barrier.wait(timeout=5)
+        return test_client.post(webhook_path, content=body, headers=webhook_headers)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: first_delivery(), range(2)))
+    assert [response.status_code for response in responses] == [202, 202]
+    assert sorted(response.json()["data"]["duplicate"] for response in responses) == [
+        False,
+        True,
+    ]
+    assert len({response.json()["data"]["inbox_id"] for response in responses}) == 1
+    accepted = next(
+        response
+        for response in responses
+        if response.json()["data"]["duplicate"] is False
+    )
     assert accepted.json()["data"]["duplicate"] is False
     inbox_id = accepted.json()["data"]["inbox_id"]
 
@@ -363,6 +389,7 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
     ).hexdigest()
     changed_headers = dict(webhook_headers)
     changed_headers["X-Test-Signature"] = "v1=" + changed_signature
+    encrypted_before_conflict = set((tmp_path / "bodies").rglob("*.bin"))
     conflict = test_client.post(
         webhook_path,
         content=changed_body,
@@ -370,6 +397,19 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
     )
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "WEBHOOK_SEMANTIC_CONFLICT"
+    assert set((tmp_path / "bodies").rglob("*.bin")) == encrypted_before_conflict
+
+
+def test_management_body_limit_precedes_schema_parsing(client) -> None:
+    test_client, _, _, _ = client
+    oversized = b'{' + b'"x":' + b'"' + b'x' * 1_048_576 + b'"}'
+    response = test_client.post(
+        "/v1/connectors/validate",
+        content=oversized,
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+    assert response.json()["code"] == "MANAGEMENT_BODY_TOO_LARGE"
 
 
 def test_cross_tenant_connection_read_is_denied(client) -> None:

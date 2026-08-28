@@ -5,11 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Connection, RowMapping, text
+from sqlalchemy import RowMapping, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,11 +50,9 @@ def _etag_version(if_match: str | None) -> int:
             detail="If-Match is required for this operation.",
         )
     value = if_match.strip()
-    if value.startswith("W/"):
-        value = value[2:]
+    value = value.removeprefix("W/")
     value = value.strip('"')
-    if value.startswith("v"):
-        value = value[1:]
+    value = value.removeprefix("v")
     try:
         version = int(value)
     except ValueError as error:
@@ -1068,6 +1065,25 @@ class ConnectorRepository:
         webhook_id = UUID(str(ingress["webhook_id"]))
         inbox_id = uuid4()
         with self.database.session(tenant_id) as session:
+            claimed = session.execute(
+                text(
+                    """
+                    INSERT INTO connector_sdk.connector_webhook_event_keys
+                      (tenant_id, webhook_id, event_id, body_sha256,
+                       expires_at)
+                    VALUES (:tenant_id, :webhook_id, :event_id,
+                            :body_sha256, now() + interval '7 days')
+                    ON CONFLICT (webhook_id, event_id) DO NOTHING
+                    RETURNING body_sha256
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "webhook_id": webhook_id,
+                    "event_id": event_id,
+                    "body_sha256": body_sha256,
+                },
+            ).scalar_one_or_none()
             prior = session.execute(
                 text(
                     """
@@ -1083,32 +1099,14 @@ class ConnectorRepository:
                     "webhook_id": webhook_id,
                     "event_id": event_id,
                 },
-            ).scalar_one_or_none()
-            duplicate = prior is not None
+            ).scalar_one()
+            duplicate = claimed is None
             if prior is not None and prior != body_sha256:
                 raise ProblemError(
                     status=409,
                     code="WEBHOOK_SEMANTIC_CONFLICT",
                     title="Webhook semantic conflict",
                     detail="The provider event ID was reused with a different body.",
-                )
-            if prior is None:
-                session.execute(
-                    text(
-                        """
-                        INSERT INTO connector_sdk.connector_webhook_event_keys
-                          (tenant_id, webhook_id, event_id, body_sha256,
-                           expires_at)
-                        VALUES (:tenant_id, :webhook_id, :event_id,
-                                :body_sha256, now() + interval '7 days')
-                        """
-                    ),
-                    {
-                        "tenant_id": tenant_id,
-                        "webhook_id": webhook_id,
-                        "event_id": event_id,
-                        "body_sha256": body_sha256,
-                    },
                 )
             existing_inbox = session.execute(
                 text(

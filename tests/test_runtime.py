@@ -242,10 +242,45 @@ def test_oversized_body_is_rejected_before_buffering(test_settings, runtime) -> 
 def test_health_ready_version(test_settings, runtime) -> None:
     app = create_app(settings=test_settings, runtime=runtime)
     with TestClient(app) as client:
-        assert client.get("/health").status_code == 200
-        assert client.get("/ready").json() == {"status": "ready"}
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json() == {
+            "status": "ok",
+            "service": "middleware-api",
+            "component": "api",
+        }
+        readiness = client.get("/ready")
+        assert readiness.status_code == 200
+        assert readiness.json()["status"] == "ready"
+        assert readiness.json()["components"] == {
+            "inbox_store": "ready",
+            "replay_guard": "ready",
+            "identity_jwks": "ready",
+            "command_store": "not_configured",
+        }
+        assert "checked_at" in readiness.json()
         version = client.get("/version").json()
         assert version["service"] == "middleware-api"
         assert version["environment"] == "test"
         assert version["runtime_profile_id"] == "local-unlocked"
         assert version["schema_head"] == "0003_immutable_event_ledger"
+
+
+def test_readiness_reports_named_failure_without_dependency_details(
+    test_settings,
+    runtime,
+) -> None:
+    class UnavailableReplayGuard(MemoryReplayGuard):
+        async def ready(self) -> bool:
+            return False
+
+    runtime.replay = UnavailableReplayGuard()
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    value = response.json()
+    assert value["status"] == "not_ready"
+    assert value["components"]["replay_guard"] == "not_ready"
+    assert "redis" not in response.text.lower()

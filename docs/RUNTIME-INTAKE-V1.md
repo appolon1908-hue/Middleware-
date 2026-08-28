@@ -8,6 +8,7 @@ Health:
 - `GET /health`
 - `GET /ready`
 - `GET /version`
+- `GET /metrics` (Keycloak `monitoring-readonly` client with `metrics.read`)
 
 Authenticated signed ingress:
 - `POST /api/v1/odoo/events`
@@ -20,6 +21,25 @@ Authenticated signed ingress:
 - `POST /api/v1/postly/events`
 
 The route set is loaded from `config/api-webhook-contracts.json`; code and contract cannot silently drift.
+
+## Operational evidence
+
+`/health` proves only that the API process can answer. `/ready` performs bounded,
+parallel checks of the inbox store, replay guard, Keycloak JWKS, and command store;
+it returns `503` with named component states if a mandatory dependency is not ready.
+The response includes immutable release and migration identity but never connection
+strings, credentials, tenant data, or dependency exception text.
+
+`/metrics` exports low-cardinality Prometheus request, latency, active-request,
+authentication-denial, readiness, process-start, and release-identity series. The
+endpoint is not anonymous: the caller must be the existing `monitoring-readonly`
+service identity and hold `metrics.read`. Metric labels use route templates and do
+not include tenant, event, idempotency, correlation, or payload values.
+
+Every HTTP response receives a validated or server-generated `X-Correlation-ID`.
+A valid W3C `traceparent` is propagated; malformed values are dropped. Completed
+requests are logged as structured JSON with safe operation names and release
+identity, without headers, bodies, tokens, customer data, or raw URLs.
 
 ## Security
 

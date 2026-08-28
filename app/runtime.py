@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable
 from dataclasses import dataclass
 
 from .commands import (
@@ -15,6 +16,18 @@ from .security import KeycloakJwtVerifier, TokenVerifier
 from .storage import InboxStore, MemoryInboxStore, PostgresInboxStore
 
 
+@dataclass(frozen=True)
+class ReadinessReport:
+    components: dict[str, str]
+
+    @property
+    def ready(self) -> bool:
+        return all(
+            status in {"ready", "not_configured"}
+            for status in self.components.values()
+        )
+
+
 @dataclass
 class Runtime:
     settings: Settings
@@ -23,19 +36,36 @@ class Runtime:
     tokens: TokenVerifier
     commands: CommandService | None = None
 
-    async def ready(self) -> bool:
-        checks = [
-            self.inbox.ready(),
-            self.replay.ready(),
-            self.tokens.ready(),
-        ]
+    async def readiness(self) -> ReadinessReport:
+        checks: dict[str, Awaitable[bool] | None] = {
+            "inbox_store": self.inbox.ready(),
+            "replay_guard": self.replay.ready(),
+            "identity_jwks": self.tokens.ready(),
+        }
         if self.commands is not None:
-            checks.append(self.commands.store.ready())
+            checks["command_store"] = self.commands.store.ready()
+        else:
+            checks["command_store"] = None
+
+        async def bounded(check: Awaitable[bool] | None) -> str:
+            if check is None:
+                return "not_configured"
+            try:
+                result = await asyncio.wait_for(
+                    check,
+                    timeout=self.settings.readiness_timeout_seconds,
+                )
+            except Exception:
+                return "not_ready"
+            return "ready" if result is True else "not_ready"
+
         results = await asyncio.gather(
-            *checks,
-            return_exceptions=True,
+            *(bounded(check) for check in checks.values()),
         )
-        return all(result is True for result in results)
+        return ReadinessReport(dict(zip(checks, results, strict=True)))
+
+    async def ready(self) -> bool:
+        return (await self.readiness()).ready
 
     async def close(self) -> None:
         await self.inbox.close()

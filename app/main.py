@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import AsyncIterator
 from uuid import UUID
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from .config import ConfigurationError, Settings
 from .commands import CommandEnvelope, CommandError
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
+from .observability import (
+    MiddlewareObservability,
+    safe_correlation_id,
+    safe_traceparent,
+)
 from .runtime import Runtime, build_runtime
 from .security import SecurityError
 from .service import IngressError, PayloadTooLargeError, accept_webhook
@@ -19,10 +25,21 @@ from .storage import StorageError
 
 
 def _correlation_id(request: Request) -> str:
-    supplied = request.headers.get("X-Correlation-ID")
-    if supplied and 1 <= len(supplied) <= 128:
+    assigned = getattr(request.state, "correlation_id", None)
+    if isinstance(assigned, str):
+        return assigned
+    supplied = safe_correlation_id(request.headers.get("X-Correlation-ID"))
+    if supplied is not None:
         return supplied
     return str(uuid.uuid4())
+
+
+def _operation(request: Request) -> str:
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    if isinstance(template, str) and template.startswith("/"):
+        return template
+    return "unmatched"
 
 
 def _error_response(
@@ -94,9 +111,43 @@ def create_app(
         redoc_url=None,
         lifespan=lifespan,
     )
+    telemetry = MiddlewareObservability(resolved)
+    app.state.observability = telemetry
+
+    @app.middleware("http")
+    async def observe_request(request: Request, call_next):
+        request.state.correlation_id = (
+            safe_correlation_id(request.headers.get("X-Correlation-ID"))
+            or str(uuid.uuid4())
+        )
+        request.state.traceparent = safe_traceparent(
+            request.headers.get("traceparent")
+        )
+        started = telemetry.start_request()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Correlation-ID"] = request.state.correlation_id
+            if request.state.traceparent is not None:
+                response.headers["traceparent"] = request.state.traceparent
+            return response
+        finally:
+            telemetry.finish_request(
+                started=started,
+                operation=_operation(request),
+                method=request.method,
+                status_code=status_code,
+                correlation_id=request.state.correlation_id,
+                traceparent=request.state.traceparent,
+            )
 
     @app.exception_handler(SecurityError)
     async def security_error(request: Request, exc: SecurityError) -> JSONResponse:
+        request.app.state.observability.record_auth_denial(
+            _operation(request),
+            exc.code,
+        )
         return _error_response(
             request,
             status_code=exc.status_code,
@@ -150,15 +201,42 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "service": "middleware-api",
+            "component": "api",
+        }
 
     @app.get("/ready")
     async def ready(request: Request) -> JSONResponse:
-        is_ready = await request.app.state.runtime.ready()
+        report = await request.app.state.runtime.readiness()
+        request.app.state.observability.record_readiness(report.components)
         return JSONResponse(
-            status_code=200 if is_ready else 503,
-            content={"status": "ready" if is_ready else "not_ready"},
+            status_code=200 if report.ready else 503,
+            content={
+                "status": "ready" if report.ready else "not_ready",
+                "service": "middleware-api",
+                "component": "api",
+                "environment": resolved.app_env,
+                "release_sha": resolved.source_sha,
+                "image_digest": resolved.image_digest,
+                "schema_or_migration_head": resolved.schema_head,
+                "checked_at": datetime.now(UTC).isoformat(),
+                "components": report.components,
+            },
         )
+
+    @app.get("/metrics")
+    async def metrics(request: Request) -> Response:
+        await request.app.state.runtime.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id="monitoring-readonly",
+            required_scope="metrics.read",
+        )
+        report = await request.app.state.runtime.readiness()
+        request.app.state.observability.record_readiness(report.components)
+        body, media_type = request.app.state.observability.render()
+        return Response(content=body, headers={"Content-Type": media_type})
 
     @app.get("/version")
     async def version() -> dict[str, str]:

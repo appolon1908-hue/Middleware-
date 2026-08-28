@@ -108,6 +108,7 @@ class Settings:
     issuer: str
     jwks_uri: str
     jwks_timeout_seconds: int
+    readiness_timeout_seconds: int
     audience: str
     database_url: str | None
     redis_url: str | None
@@ -198,6 +199,13 @@ class Settings:
             jwks_timeout_seconds=_int(
                 source,
                 "JWKS_TIMEOUT_SECONDS",
+                3,
+                minimum=1,
+                maximum=10,
+            ),
+            readiness_timeout_seconds=_int(
+                source,
+                "READINESS_TIMEOUT_SECONDS",
                 3,
                 minimum=1,
                 maximum=10,

@@ -8,8 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = (
-    "python:3.12.14-slim-bookworm@"
-    "sha256:0f5b26b9518d002b6173fd61daad821fa340635ebfec5bba471013f9ca114579"
+    "python:3.13.15-slim-trixie@"
+    "sha256:7ce4b6dfe35e55397b7cda544f8a13f191b7ae28dc5aad71fe664dbc9bc2623f"
 )
 REQUIRED = (
     "requirements-runtime.in",

@@ -156,6 +156,7 @@ def main() -> int:
     checks = {
         "workflow_run:": "post-CI release trigger",
         "branches: [main]": "main-only release",
+        "target: runtime": "production runtime build target",
         "packages: write": "GHCR write permission",
         "id-token: write": "keyless signing permission",
         "provenance: mode=max": "maximum build provenance",
@@ -179,6 +180,25 @@ def main() -> int:
         errors.append("release workflow must not reference a latest tag")
     if "pull_request:" in workflow:
         errors.append("release workflow must never publish from pull_request")
+
+    release_manifest = (ROOT / "scripts/release_manifest.py").read_text(
+        encoding="utf-8"
+    )
+    require(
+        release_manifest,
+        FINAL_BASE,
+        "release-manifest final base-image identity",
+        errors,
+    )
+    release_schema = (
+        ROOT / "contracts/release-manifest.v1.schema.json"
+    ).read_text(encoding="utf-8")
+    require(
+        release_schema,
+        FINAL_BASE,
+        "release-manifest schema final base-image identity",
+        errors,
+    )
 
     middleware_ci = (ROOT / ".github/workflows/middleware-ci.yml").read_text(
         encoding="utf-8"

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from types import MappingProxyType
 from typing import Any, Mapping
+
+from .standards import deep_freeze, deep_thaw
 
 
 class ConnectorCell(str, Enum):
@@ -74,6 +75,7 @@ class WebhookPolicy:
     maximum_body_bytes: int
     acknowledgement_deadline_seconds: int
     secret_reference: str
+    replay_retention_seconds: int = 604800
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +115,7 @@ class ConnectorManifest:
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+        object.__setattr__(self, "metadata", deep_freeze(self.metadata))
 
     def command_policy_for(self, command_type: str) -> CommandPolicy | None:
         matches = [
@@ -143,6 +145,13 @@ class CommandContext:
     causation_id: str
     idempotency_key: str
     capability_snapshot: Mapping[str, bool]
+    traceparent: str | None = None
+    tracestate: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "capability_snapshot", deep_freeze(self.capability_snapshot)
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +163,9 @@ class CommandRequest:
     payload: Mapping[str, Any]
     context: CommandContext
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "payload", deep_freeze(self.payload))
+
 
 @dataclass(frozen=True, slots=True)
 class CommandResult:
@@ -164,12 +176,18 @@ class CommandResult:
     retryable: bool = False
     error_code: str | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "safe_result", deep_freeze(self.safe_result))
+
 
 @dataclass(frozen=True, slots=True)
 class ConnectionTestResult:
     ok: bool
     code: str
     safe_details: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "safe_details", deep_freeze(self.safe_details))
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,12 +196,18 @@ class ConnectorHealth:
     checked_at_epoch: int
     safe_details: Mapping[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "safe_details", deep_freeze(self.safe_details))
+
 
 @dataclass(frozen=True, slots=True)
 class WebhookRequest:
     headers: Mapping[str, str]
     body: bytes
     received_at_epoch: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "headers", deep_freeze(self.headers))
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,16 +218,69 @@ class VerifiedWebhook:
     body_sha256: str
     timestamp_epoch: int
     replay_key: str
+    signature_version: str
+    replay_decision: ReplayDecision
     body: bytes
     headers: Mapping[str, str]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "headers", deep_freeze(self.headers))
 
 
 @dataclass(frozen=True, slots=True)
 class NormalizedWebhookEvent:
     event_id: str
     event_type: str
-    tenant_id: str
+    external_account_reference: str
     correlation_id: str
     causation_id: str
     occurred_at: str
     payload: Mapping[str, Any]
+    subject: str | None = None
+    traceparent: str | None = None
+    tracestate: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "payload", deep_freeze(self.payload))
+
+
+@dataclass(frozen=True, slots=True)
+class CloudEventEnvelope:
+    specversion: str
+    id: str
+    source: str
+    type: str
+    time: str
+    datacontenttype: str
+    data: Mapping[str, Any]
+    subject: str | None = None
+    dataschema: str | None = None
+    extensions: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "data", deep_freeze(self.data))
+        object.__setattr__(self, "extensions", deep_freeze(self.extensions))
+
+    def as_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "specversion": self.specversion,
+            "id": self.id,
+            "source": self.source,
+            "type": self.type,
+            "time": self.time,
+            "datacontenttype": self.datacontenttype,
+            "data": deep_thaw(self.data),
+        }
+        if self.subject is not None:
+            result["subject"] = self.subject
+        if self.dataschema is not None:
+            result["dataschema"] = self.dataschema
+        result.update(deep_thaw(self.extensions))
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookProcessResult:
+    decision: ReplayDecision
+    verified: VerifiedWebhook
+    cloud_event: CloudEventEnvelope | None

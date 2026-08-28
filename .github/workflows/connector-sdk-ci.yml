@@ -11,6 +11,7 @@ on:
       - "scripts/scaffold_connector.py"
       - "scripts/validate_connector_sdk.py"
       - "tests/test_connector_sdk_v1.py"
+      - "tests/test_connector_sdk_standards_v1.py"
       - ".github/workflows/connector-sdk-ci.yml"
 
 permissions:
@@ -24,15 +25,22 @@ jobs:
       - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Reject whitespace errors
-        run: git diff --check
-      - name: Compile SDK
+
+      - name: Prove exact pull-request source identity
+        run: |
+          test "${{ github.event.pull_request.head.sha }}" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "${{ github.event.pull_request.base.sha }}" HEAD
+          git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+
+      - name: Compile SDK and standards tests
         run: >-
           python3 -m compileall -q
           middleware/connector_sdk
@@ -40,9 +48,15 @@ jobs:
           scripts/scaffold_connector.py
           scripts/validate_connector_sdk.py
           tests/test_connector_sdk_v1.py
-      - name: Validate manifests, generated source, API, and storage
+          tests/test_connector_sdk_standards_v1.py
+
+      - name: Validate manifests, generated source, API, storage, and standards
         run: |
           python3 scripts/generate_connector_artifacts.py --check
           python3 scripts/validate_connector_sdk.py
-      - name: Run Connector SDK regression tests
-        run: python3 -m unittest -v tests.test_connector_sdk_v1
+
+      - name: Run Connector SDK regression and interoperability tests
+        run: >-
+          python3 -m unittest -v
+          tests.test_connector_sdk_v1
+          tests.test_connector_sdk_standards_v1

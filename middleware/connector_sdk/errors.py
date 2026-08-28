@@ -22,7 +22,7 @@ class ConnectorNotFoundError(ConnectorError):
 
 
 class ConnectorVersionConflictError(ConnectorError):
-    """Raised when a connector version cannot replace the installed version."""
+    """Raised when connector version or immutable manifest identity conflicts."""
 
 
 class ConnectorStateError(ConnectorError):
@@ -42,7 +42,11 @@ class WebhookVerificationError(ConnectorError):
 
 
 class ReplayDetectedError(WebhookVerificationError):
-    """Raised when a webhook event or body digest has already been claimed."""
+    """Legacy exact-replay exception. Exact replays are normally acknowledged."""
+
+
+class TenantResolutionError(WebhookVerificationError):
+    """Raised when a verified provider identity cannot map to one tenant."""
 
 
 class UnknownOutcomeError(ConnectorError):
@@ -50,4 +54,8 @@ class UnknownOutcomeError(ConnectorError):
 
 
 class ReadBackRequiredError(ConnectorError):
-    """Raised when a command requires authoritative destination read-back."""
+    """Raised when authoritative destination read-back is incomplete."""
+
+
+class StandardsValidationError(ConnectorError):
+    """Raised when a standards-profile value is malformed."""

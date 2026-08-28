@@ -34,8 +34,8 @@ jobs:
       - name: Run fail-closed bootstrap validation
         run: bash scripts/run_ci.sh
 
-  runtime-image-smoke:
-    name: Build and smoke-test runtime image
+  docker-runtime-build:
+    name: docker-runtime-build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -54,10 +54,21 @@ jobs:
           build_time="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           docker build \
             --file Dockerfile.runtime \
-            --build-arg "SOURCE_SHA=$SOURCE_SHA" \
-            --build-arg "BUILD_TIME=$build_time" \
+            --target runtime \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=ci-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=$build_time" \
             --tag "codestra-middleware-ci:$SOURCE_SHA" \
             .
+
+      - name: Verify non-root runtime, OCI labels, and secret-free layers
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          bash scripts/verify_container_image.sh \
+            "codestra-middleware-ci:$SOURCE_SHA" \
+            "$SOURCE_SHA" \
+            "ci-$SOURCE_SHA"
 
       - name: Prove packaged runtime can construct the application
         env:
@@ -70,6 +81,159 @@ jobs:
             --env ALLOW_IN_MEMORY_STORAGE=true \
             "codestra-middleware-ci:$SOURCE_SHA" \
             -c "from app.commands import CommandPolicyRegistry; from app.main import create_app; assert CommandPolicyRegistry.load().policies; assert create_app().title == 'Codestra Middleware API'; print('RUNTIME_IMAGE_SMOKE=PASS')"
+
+  docker-test-build:
+    name: docker-test-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Build actual test target without cache
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          docker build --no-cache \
+            --file Dockerfile.runtime \
+            --target test \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=ci-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=1970-01-01T00:00:00Z" \
+            --build-arg "GIT_TREE_ID=$(git rev-parse 'HEAD^{tree}')" \
+            --tag "codestra-middleware-test-ci:$SOURCE_SHA" \
+            .
+          docker run --rm "codestra-middleware-test-ci:$SOURCE_SHA"
+
+      - name: Rebuild test target and enforce OpenSSL policy
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          docker build \
+            --file Dockerfile.runtime \
+            --target test \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=ci-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=1970-01-01T00:00:00Z" \
+            --build-arg "GIT_TREE_ID=$(git rev-parse 'HEAD^{tree}')" \
+            --tag "codestra-middleware-test-rebuild-ci:$SOURCE_SHA" \
+            .
+          test "$(docker run --rm --entrypoint openssl "codestra-middleware-test-rebuild-ci:$SOURCE_SHA" version | awk '{print $2}')" = "3.0.20"
+
+  connector-runtime-build:
+    name: connector-runtime-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Build independent connector runtime
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          docker build \
+            --file Dockerfile.runtime \
+            --target connector-runtime \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=ci-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=1970-01-01T00:00:00Z" \
+            --tag "codestra-connector-runtime-ci:$SOURCE_SHA" \
+            .
+          bash scripts/verify_container_image.sh \
+            "codestra-connector-runtime-ci:$SOURCE_SHA" \
+            "$SOURCE_SHA" \
+            "ci-$SOURCE_SHA"
+          docker run --rm --entrypoint python \
+            "codestra-connector-runtime-ci:$SOURCE_SHA" \
+            -c "import codestra_connector_runtime; import middleware.connector_sdk; print('CONNECTOR_RUNTIME_IMPORT=PASS')"
+
+  container-security:
+    name: container-security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Build production image for scanning
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          docker build \
+            --file Dockerfile.runtime \
+            --target runtime \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=ci-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=1970-01-01T00:00:00Z" \
+            --tag "codestra-middleware-security-ci:$SOURCE_SHA" \
+            .
+          docker build \
+            --file Dockerfile.runtime \
+            --target connector-runtime \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=ci-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=1970-01-01T00:00:00Z" \
+            --tag "codestra-connector-security-ci:$SOURCE_SHA" \
+            .
+
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: codestra-middleware-security-ci:${{ github.sha }}
+          format: spdx-json
+          output-file: middleware.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Reject fixable high or critical vulnerabilities
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          sbom: middleware.spdx.json
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+
+      - name: Generate Connector Runtime SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: codestra-connector-security-ci:${{ github.sha }}
+          format: spdx-json
+          output-file: connector-runtime.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Reject Connector Runtime fixable high or critical vulnerabilities
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          sbom: connector-runtime.spdx.json
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: middleware-runtime-sbom-${{ github.sha }}
+          path: |
+            middleware.spdx.json
+            connector-runtime.spdx.json
+          if-no-files-found: error
 
   runtime-integration:
     name: Disposable PostgreSQL Redis integration

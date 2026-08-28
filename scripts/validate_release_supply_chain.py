@@ -7,15 +7,25 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = (
-    "python:3.13.15-slim-trixie@"
-    "sha256:7ce4b6dfe35e55397b7cda544f8a13f191b7ae28dc5aad71fe664dbc9bc2623f"
+RUNTIME_BASE = (
+    "python:3.13.15-slim-bookworm@"
+    "sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"
+)
+TEST_BASE = (
+    "python:3.13.15-bookworm@"
+    "sha256:62eafe52c91cad83c2c74e630bfde917da8c253673e695665d454def84fc9a13"
+)
+FINAL_BASE = (
+    "gcr.io/distroless/python3-debian13:nonroot@"
+    "sha256:f3d5ddc6c64a019fe520e7f005f2880be21e6afc461b10a3c15ef2e4edc71e33"
 )
 REQUIRED = (
     "requirements-runtime.in",
     "requirements-runtime.txt",
     "requirements-test.in",
     "requirements-test.txt",
+    "requirements-connector-runtime.in",
+    "requirements-connector-runtime.txt",
     "contracts/release-manifest.v1.schema.json",
     "contracts/runtime-safety-readback.v1.schema.json",
     "scripts/release_manifest.py",
@@ -83,8 +93,14 @@ def main() -> int:
 
     runtime_packages = validate_lock(ROOT / "requirements-runtime.txt", errors)
     test_packages = validate_lock(ROOT / "requirements-test.txt", errors)
+    connector_packages = validate_lock(
+        ROOT / "requirements-connector-runtime.txt", errors
+    )
     runtime_direct = direct_requirements(ROOT / "requirements-runtime.in", errors)
     test_direct = direct_requirements(ROOT / "requirements-test.in", errors)
+    connector_direct = direct_requirements(
+        ROOT / "requirements-connector-runtime.in", errors
+    )
     for package, version in {**runtime_direct, **test_direct}.items():
         if test_packages.get(package) != version:
             errors.append(f"test lock does not bind {package}=={version}")
@@ -98,20 +114,40 @@ def main() -> int:
         errors.append("production runtime lock contains test tooling")
     if not {"pytest", "pytest-asyncio"}.issubset(test_packages):
         errors.append("test lock is missing pytest tooling")
+    for package, version in connector_direct.items():
+        if connector_packages.get(package) != version:
+            errors.append(f"connector lock does not bind {package}=={version}")
+    if {"pytest", "pytest-asyncio"} & set(connector_packages):
+        errors.append("connector production lock contains test tooling")
 
     dockerfile = (ROOT / "Dockerfile.runtime").read_text(encoding="utf-8")
-    require(dockerfile, f"FROM {BASE}", "digest-pinned base image", errors)
+    require(dockerfile, f"ARG RUNTIME_BASE={RUNTIME_BASE}", "digest-pinned runtime base", errors)
+    require(dockerfile, f"ARG TEST_BASE={TEST_BASE}", "digest-pinned test base", errors)
+    require(dockerfile, f"ARG FINAL_BASE={FINAL_BASE}", "digest-pinned final base", errors)
     require(dockerfile, "--require-hashes", "hashed dependency install", errors)
+    for target in ("runtime", "worker", "connector-runtime", "test"):
+        require(dockerfile, f" AS {target}", f"supported {target} target", errors)
+    for label in (
+        "org.opencontainers.image.source",
+        "org.opencontainers.image.revision",
+        "org.opencontainers.image.version",
+        "org.opencontainers.image.created",
+    ):
+        require(dockerfile, label, f"OCI label {label}", errors)
+    if "apt-get upgrade" in dockerfile or "apk upgrade" in dockerfile:
+        errors.append("Dockerfile performs an uncontrolled OS package upgrade")
+    if "openssl=3.5.7-r0" in dockerfile:
+        errors.append("obsolete captured OpenSSL package pin returned")
     require(
         dockerfile,
-        "COPY connectors ./connectors",
+        "connectors ./connectors",
         "generated command registry bundle",
         errors,
     )
-    require(dockerfile, "COPY migrations ./migrations", "migration bundle", errors)
+    require(dockerfile, "migrations ./migrations", "migration bundle", errors)
     require(
         dockerfile,
-        "COPY scripts/migrate_runtime.py ./scripts/migrate_runtime.py",
+        "scripts/migrate_runtime.py ./scripts/migrate_runtime.py",
         "migration runner",
         errors,
     )
@@ -149,10 +185,16 @@ def main() -> int:
     )
     require(
         middleware_ci,
-        "Build and smoke-test runtime image",
+        "docker-runtime-build",
         "pre-release runtime image smoke test",
         errors,
     )
+    for job in (
+        "docker-test-build",
+        "connector-runtime-build",
+        "container-security",
+    ):
+        require(middleware_ci, job, f"required CI job {job}", errors)
     require(
         middleware_ci,
         "postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
@@ -186,7 +228,8 @@ def main() -> int:
     print(
         "RELEASE_SUPPLY_CHAIN=PASS "
         f"RUNTIME_PACKAGES={len(runtime_packages)} "
-        f"TEST_PACKAGES={len(test_packages)}"
+        f"TEST_PACKAGES={len(test_packages)} "
+        f"CONNECTOR_PACKAGES={len(connector_packages)}"
     )
     return 0
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from copy import deepcopy
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
@@ -58,19 +60,13 @@ def test_generated_release_manifest_matches_json_schema(tmp_path: Path) -> None:
 
 
 def test_manifest_is_canonical_and_binds_workspace_evidence(tmp_path: Path) -> None:
-    source_sha = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
+    source_sha = os.environ.get("CODESTRA_TEST_SOURCE_SHA") or subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+        capture_output=True, text=True,
     ).stdout.strip()
-    tree_id = subprocess.run(
-        ["git", "rev-parse", "HEAD^{tree}"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
+    tree_id = os.environ.get("CODESTRA_TEST_GIT_TREE_ID") or subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, check=True,
+        capture_output=True, text=True,
     ).stdout.strip()
     sbom, report = evidence(tmp_path)
     value = build_manifest(
@@ -88,12 +84,26 @@ def test_manifest_is_canonical_and_binds_workspace_evidence(tmp_path: Path) -> N
     path.write_bytes(canonical_json(value))
 
     loaded = load_manifest(path)
-    verify_workspace(loaded, root=ROOT, evidence_dir=tmp_path)
+    if os.environ.get("CODESTRA_TEST_SOURCE_SHA"):
+        with patch(
+            "scripts.release_manifest._git_identity",
+            return_value=(source_sha, tree_id),
+        ):
+            verify_workspace(loaded, root=ROOT, evidence_dir=tmp_path)
+    else:
+        verify_workspace(loaded, root=ROOT, evidence_dir=tmp_path)
 
     sbom_path = tmp_path / loaded["artifacts"]["sbom"]["path"]
     sbom_path.write_text('{"tampered":true}\n', encoding="utf-8")
     with pytest.raises(ReleaseManifestError, match="evidence digest mismatch"):
-        verify_workspace(loaded, root=ROOT, evidence_dir=tmp_path)
+        if os.environ.get("CODESTRA_TEST_SOURCE_SHA"):
+            with patch(
+                "scripts.release_manifest._git_identity",
+                return_value=(source_sha, tree_id),
+            ):
+                verify_workspace(loaded, root=ROOT, evidence_dir=tmp_path)
+        else:
+            verify_workspace(loaded, root=ROOT, evidence_dir=tmp_path)
 
 
 def test_manifest_rejects_substitution_and_unknown_fields(tmp_path: Path) -> None:

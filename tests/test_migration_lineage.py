@@ -48,11 +48,18 @@ def test_repository_alembic_graph_is_complete_and_acyclic() -> None:
     assert graph["20260828_0004"] == ("20260828_0003",)
 
 
+def test_runtime_manifest_exactly_matches_reviewed_alembic_source() -> None:
+    module = _load_module()
+    assert module.load_authority_manifest(ROOT) == module.discover_repository_graph(ROOT)
+    assert module.authority_graph(ROOT) == module.discover_repository_graph(ROOT)
+
+
 def test_known_database_revision_is_accepted() -> None:
     module = _load_module()
     report = module.validate_observed_revisions(["20260828_0004"], root=ROOT)
     assert report.alembic_table_present is True
     assert report.database_revisions == ("20260828_0004",)
+    assert "20260828_0004" in report.authority_revisions
 
 
 def test_unknown_staging_revision_fails_closed() -> None:
@@ -89,9 +96,17 @@ async def test_database_with_unknown_revision_is_rejected() -> None:
     assert "SELECT version_num" in conn.queries[1]
 
 
-def test_runtime_migration_checks_lineage_before_sql_execution() -> None:
+def test_runtime_migration_is_self_contained_and_checks_before_sql_execution() -> None:
     source = (ROOT / "scripts" / "migrate_runtime.py").read_text(encoding="utf-8")
-    lineage_check = source.index("inspect_database_lineage")
+    assert "from migration_lineage" not in source
+    assert "config" in source and "migration-lineage.v1.json" in source
+    lineage_check = source.index("await verify_database_lineage")
     migration_loop = source.index("for migration in migrations")
     execute_migration = source.index("await conn.execute")
     assert lineage_check < migration_loop < execute_migration
+
+
+def test_runtime_image_already_packages_lineage_manifest_via_config_copy() -> None:
+    dockerfile = (ROOT / "Dockerfile.runtime").read_text(encoding="utf-8")
+    assert "COPY --chown=65532:65532 config ./config" in dockerfile
+    assert "COPY --chown=65532:65532 scripts/migrate_runtime.py ./scripts/migrate_runtime.py" in dockerfile

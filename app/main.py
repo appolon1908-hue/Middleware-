@@ -9,11 +9,17 @@ from uuid import UUID
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
+from pydantic import ValidationError
 
 from .commands import CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
 from .control_plane_auth import authorize_command, caller_for_authorization
+from .lead_intake import (
+    INTAKE_PRODUCER_CLIENT_ID,
+    LeadSubmission,
+    accept_lead_submission,
+)
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -22,8 +28,13 @@ from .observability import (
 from .runtime import Runtime, build_runtime
 from .runtime_safety import runtime_safety_readback
 from .security import SecurityError
-from .service import IngressError, PayloadTooLargeError, accept_webhook
-from .storage import StorageError
+from .service import (
+    IngressError,
+    PayloadTooLargeError,
+    ReplayConflictError,
+    accept_webhook,
+)
+from .storage import ReplayConflict, StorageError
 
 
 def _correlation_id(request: Request) -> str:
@@ -263,6 +274,58 @@ def create_app(
             required_scope="health.read",
         )
         return runtime_safety_readback(request.app.state.runtime.settings)
+
+    @app.post("/v1/intake/leads")
+    async def submit_lead(request: Request) -> JSONResponse:
+        from .security import RequestValidationError, authorize_tenant
+
+        active = request.app.state.runtime
+        content_type = request.headers.get("Content-Type", "")
+        if content_type.split(";", 1)[0].strip().lower() != "application/json":
+            raise RequestValidationError("Content-Type must be application/json")
+
+        tenant_id = request.headers.get("X-Tenant-ID", "")
+        correlation_id = request.headers.get("X-Correlation-ID", "")
+        idempotency_key = request.headers.get("Idempotency-Key", "")
+        if not tenant_id:
+            raise RequestValidationError("X-Tenant-ID is required")
+        if not correlation_id or len(correlation_id) > 180:
+            raise RequestValidationError("X-Correlation-ID must contain 1 to 180 characters")
+        if not idempotency_key or not 8 <= len(idempotency_key) <= 180:
+            raise RequestValidationError("Idempotency-Key must contain 8 to 180 characters")
+
+        claims = await active.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id=INTAKE_PRODUCER_CLIENT_ID,
+            required_scope="leads.write",
+        )
+        authorize_tenant(claims, tenant_id)
+
+        raw = await _read_limited_body(request, active.settings.max_request_body_bytes)
+        try:
+            submission = LeadSubmission.model_validate_json(raw)
+        except (ValidationError, ValueError) as exc:
+            raise RequestValidationError(
+                "body does not match the canonical lead intake contract"
+            ) from exc
+        if submission.tenantId != tenant_id:
+            raise RequestValidationError("X-Tenant-ID does not match submission tenantId")
+
+        try:
+            result = await accept_lead_submission(
+                active,
+                submission,
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+            )
+        except ReplayConflict as exc:
+            raise ReplayConflictError(str(exc)) from exc
+
+        return JSONResponse(
+            status_code=200 if result.duplicate else 202,
+            content=result.model_dump(mode="json"),
+            headers={"X-Correlation-ID": result.correlation_id},
+        )
 
     @app.post("/v1/commands")
     async def submit_command(

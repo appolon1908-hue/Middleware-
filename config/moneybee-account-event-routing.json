@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "eventType": "codestra.moneybee.account.provisioned",
   "eventSchemaVersion": 1,
   "source": {
@@ -9,7 +9,8 @@
     "identityContract": "config/moneybee-backend-producer-identity.json",
     "requiredAudience": "middleware-api",
     "requiredScope": "moneybee.events.publish",
-    "idempotencyKey": "idempotency_key"
+    "idempotencyKey": "idempotency_key",
+    "canonicalEnvelope": "contracts/event-envelope.schema.json"
   },
   "authoritativeBoundaries": {
     "humanIdentityAuthority": "keycloak",
@@ -17,6 +18,25 @@
     "crossSystemMutationBoundary": "middleware",
     "crmAuthority": "odoo",
     "automationAuthority": "n8n"
+  },
+  "orchestrationOwnership": {
+    "baseCrmProjection": {
+      "owner": "middleware",
+      "destination": "odoo-integration",
+      "command": "crm.contact.upsert.v1",
+      "n8nMustNotDuplicate": true
+    },
+    "borrowerOnboarding": {
+      "owner": "n8n",
+      "trigger": "onboarding.started.v1",
+      "mayRequestBaseCrmProjection": false,
+      "allowedResponsibilities": [
+        "onboarding.tasks",
+        "document.followup",
+        "operations.escalation",
+        "marketing.consent.branch"
+      ]
+    }
   },
   "prohibitedPayloadFields": [
     "password",

@@ -18,6 +18,7 @@ from .observability import (
     safe_correlation_id,
     safe_traceparent,
 )
+from .product_consumers import PRODUCT_CONSUMERS
 from .runtime import Runtime, build_runtime
 from .runtime_safety import runtime_safety_readback
 from .security import SecurityError
@@ -295,6 +296,11 @@ def create_app(
             raise RequestValidationError(
                 "Idempotency-Key does not match command idempotency_key"
             )
+        PRODUCT_CONSUMERS.authorize(
+            command,
+            consumer_id=request.headers.get("X-Codestra-Consumer-Id"),
+            consumer_scope=request.headers.get("X-Codestra-Consumer-Scope"),
+        )
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject:
             from .security import AuthorizationError

@@ -145,6 +145,8 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         "X-Tenant-ID": body["tenant_id"],
         "X-Correlation-ID": body["correlation_id"],
         "Idempotency-Key": body["idempotency_key"],
+        "X-Codestra-Consumer-Id": "moneybee-backend",
+        "X-Codestra-Consumer-Scope": "moneybee.middleware.command.write",
     }
     app = create_app(settings=test_settings, runtime=runtime)
     with TestClient(app) as client:
@@ -183,3 +185,41 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         )
         assert invalid.status_code == 400
         assert invalid.json()["error"]["code"] == "invalid_request"
+
+
+def test_command_api_requires_registered_product_consumer(
+    test_settings,
+) -> None:
+    body = command_payload()
+    app = create_app(
+        settings=test_settings,
+        runtime=Runtime(
+            settings=test_settings,
+            inbox=MemoryInboxStore(),
+            replay=MemoryReplayGuard(),
+            tokens=CommandTokenVerifier(),
+            commands=CommandService(MemoryCommandStore(), enabled_policy()),
+        ),
+    )
+    headers = {
+        "Authorization": "Bearer middleware.request.forward",
+        "X-Tenant-ID": body["tenant_id"],
+        "X-Correlation-ID": body["correlation_id"],
+        "Idempotency-Key": body["idempotency_key"],
+    }
+    with TestClient(app) as client:
+        missing = client.post("/v1/commands", json=body, headers=headers)
+        assert missing.status_code == 400
+        assert missing.json()["error"]["code"] == "invalid_request"
+
+        forbidden = client.post(
+            "/v1/commands",
+            json=body,
+            headers={
+                **headers,
+                "X-Codestra-Consumer-Id": "social-codestra",
+                "X-Codestra-Consumer-Scope": "social.middleware.command.write",
+            },
+        )
+        assert forbidden.status_code == 403
+        assert forbidden.json()["error"]["code"] == "authorization_denied"

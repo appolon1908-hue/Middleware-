@@ -40,6 +40,11 @@ the audience and the caller has the exact operation scope.
   email, crawler, or social-provider grant.
 - Middleware is the normal command boundary to Odoo, VICIdial, Telnexa, Klyrow,
   Kyqra, and Postly.
+- Product backends are named consumers behind Kong. Kong still authenticates to
+  Middleware as the forwarding gateway, but command requests must also include
+  the gateway-validated `X-Codestra-Consumer-Id` and
+  `X-Codestra-Consumer-Scope` headers. Middleware checks those headers against
+  `config/product-consumers.v1.json` before a command can be persisted.
 - Provider and adapter events return only to `middleware-api` using an exact
   middleware audience and producer-specific publish scope.
 - `monitoring-readonly` receives only `health.read` and `metrics.read`.
@@ -112,3 +117,20 @@ integration:
 
 These states must move only through separately reviewed implementation PRs with
 exact-head tests and staging evidence.
+
+## Product consumers
+
+The current registered product consumers are:
+
+```text
+beyvra-backend          -> beyvra.operations.* only; financial prefixes forbidden
+breero-backend          -> crm.*, email.*, sms.*
+larim-a-backend         -> crm.*, email.*, sms.*
+moneybee-backend        -> crm.*, sms.*, telephony.*
+social-codestra         -> social.* only
+transportation-backend  -> crm.*, email.*, sms.*
+```
+
+This registry is contract-only until Kong and Keycloak import matching clients,
+scopes, and route plugins. Production capabilities remain disabled by
+`config/capabilities.v2.json`.

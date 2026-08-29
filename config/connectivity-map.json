@@ -184,6 +184,41 @@
             "platform/nats-jetstream",
             "platform/temporal"
         ],
+        "product/breero": [
+            "core/integration-contracts",
+            "core/event-ledger-outbox",
+            "core/webhook-inbox-replay",
+            "integration/keycloak",
+            "platform/kong"
+        ],
+        "product/larim-a": [
+            "core/integration-contracts",
+            "core/event-ledger-outbox",
+            "core/webhook-inbox-replay",
+            "integration/keycloak",
+            "platform/kong"
+        ],
+        "product/moneybee": [
+            "core/integration-contracts",
+            "core/event-ledger-outbox",
+            "core/webhook-inbox-replay",
+            "integration/keycloak",
+            "platform/kong"
+        ],
+        "product/social-codestra": [
+            "core/integration-contracts",
+            "core/event-ledger-outbox",
+            "core/webhook-inbox-replay",
+            "integration/keycloak",
+            "platform/kong"
+        ],
+        "product/transportation": [
+            "core/integration-contracts",
+            "core/event-ledger-outbox",
+            "core/webhook-inbox-replay",
+            "integration/keycloak",
+            "platform/kong"
+        ],
         "integration/kyqra": [
             "core/integration-contracts",
             "core/event-ledger-outbox",
@@ -619,6 +654,66 @@
             "owner_branch": "integration/beyvra",
             "runtime_status": "verification_only",
             "contract": "contracts/beyvra-identity-provisioned.schema.json"
+        },
+        {
+            "id": "breero-to-kong",
+            "source_branch": "product/breero",
+            "target_branch": "platform/kong",
+            "direction": "request_response",
+            "transport": "https",
+            "authentication": "oidc_jwt",
+            "reliability": "synchronous",
+            "owner_branch": "product/breero",
+            "runtime_status": "verification_only",
+            "contract": "contracts/http-conventions.md"
+        },
+        {
+            "id": "larim-a-to-kong",
+            "source_branch": "product/larim-a",
+            "target_branch": "platform/kong",
+            "direction": "request_response",
+            "transport": "https",
+            "authentication": "oidc_jwt",
+            "reliability": "synchronous",
+            "owner_branch": "product/larim-a",
+            "runtime_status": "verification_only",
+            "contract": "contracts/http-conventions.md"
+        },
+        {
+            "id": "moneybee-to-kong",
+            "source_branch": "product/moneybee",
+            "target_branch": "platform/kong",
+            "direction": "request_response",
+            "transport": "https",
+            "authentication": "oidc_jwt",
+            "reliability": "synchronous",
+            "owner_branch": "product/moneybee",
+            "runtime_status": "verification_only",
+            "contract": "contracts/http-conventions.md"
+        },
+        {
+            "id": "social-codestra-to-kong",
+            "source_branch": "product/social-codestra",
+            "target_branch": "platform/kong",
+            "direction": "request_response",
+            "transport": "https",
+            "authentication": "oidc_jwt",
+            "reliability": "synchronous",
+            "owner_branch": "product/social-codestra",
+            "runtime_status": "verification_only",
+            "contract": "contracts/http-conventions.md"
+        },
+        {
+            "id": "transportation-to-kong",
+            "source_branch": "product/transportation",
+            "target_branch": "platform/kong",
+            "direction": "request_response",
+            "transport": "https",
+            "authentication": "oidc_jwt",
+            "reliability": "synchronous",
+            "owner_branch": "product/transportation",
+            "runtime_status": "verification_only",
+            "contract": "contracts/http-conventions.md"
         }
     ]
 }

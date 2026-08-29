@@ -226,6 +226,36 @@
       "scope": "Background workers, schedulers, concurrency, queue ownership, graceful shutdown, retries, health, readiness, and restart behavior"
     },
     {
+      "branch": "product/breero",
+      "category": "product",
+      "runtime_status": "configured_runtime_not_confirmed",
+      "scope": "Breero home-services backend as a Kong-named Middleware command consumer for CRM, email, and SMS operations only"
+    },
+    {
+      "branch": "product/larim-a",
+      "category": "product",
+      "runtime_status": "configured_runtime_not_confirmed",
+      "scope": "LARIM-A home-services marketplace backend as a classified Kong-named Middleware command consumer for CRM, email, and SMS operations only"
+    },
+    {
+      "branch": "product/moneybee",
+      "category": "product",
+      "runtime_status": "configured_runtime_not_confirmed",
+      "scope": "Moneybee loan backend as a Kong-named Middleware command consumer for CRM, SMS, and telephony operations; direct N8N and provider calls remain prohibited"
+    },
+    {
+      "branch": "product/social-codestra",
+      "category": "product",
+      "runtime_status": "configured_runtime_not_confirmed",
+      "scope": "social.codestra.co as a Kong-named Middleware command consumer for social publishing operations only"
+    },
+    {
+      "branch": "product/transportation",
+      "category": "product",
+      "runtime_status": "configured_runtime_not_confirmed",
+      "scope": "Transportation and logistics backend as a Kong-named Middleware command consumer for CRM, email, and SMS operations only"
+    },
+    {
       "branch": "integration/kyqra",
       "category": "configured-unverified",
       "runtime_status": "configured_worker_not_observed",

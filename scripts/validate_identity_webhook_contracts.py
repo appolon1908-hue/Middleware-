@@ -35,6 +35,65 @@ EXPECTED_WEBHOOK_PRODUCERS = {
     "kyqra-gateway",
     "postly-adapter",
 }
+EXPECTED_PRODUCT_CONSUMERS = {
+    "beyvra-backend": {
+        "repository": "appolon1908-hue/beyvra-backend",
+        "required_scope": "beyvra.middleware.command.write",
+        "allowed": {"beyvra.operations."},
+        "forbidden": {
+            "broker.",
+            "chain.",
+            "custody.",
+            "deposit.",
+            "hold.",
+            "ledger.",
+            "order.",
+            "payment.",
+            "provider.",
+            "trade.",
+            "transfer.",
+            "wallet.",
+            "withdrawal.",
+        },
+    },
+    "breero-backend": {
+        "repository": "appolon1908-hue/Breero.com",
+        "required_scope": "breero.middleware.command.write",
+        "allowed": {"crm.", "email.", "sms."},
+        "forbidden": {"beyvra.operations.", "crawler.", "social.", "telephony."},
+    },
+    "larim-a-backend": {
+        "repository": "appolon1908-hue/LARIM-A-Backend",
+        "required_scope": "larim-a.middleware.command.write",
+        "allowed": {"crm.", "email.", "sms."},
+        "forbidden": {"beyvra.operations.", "crawler.", "social.", "telephony."},
+    },
+    "moneybee-backend": {
+        "repository": "appolon1908-hue/Moneybee-Backend",
+        "required_scope": "moneybee.middleware.command.write",
+        "allowed": {"crm.", "sms.", "telephony."},
+        "forbidden": {"beyvra.operations.", "crawler.", "social."},
+    },
+    "social-codestra": {
+        "repository": "appolon1908-hue/social.codestra.co",
+        "required_scope": "social.middleware.command.write",
+        "allowed": {"social."},
+        "forbidden": {
+            "beyvra.operations.",
+            "crm.",
+            "crawler.",
+            "email.",
+            "sms.",
+            "telephony.",
+        },
+    },
+    "transportation-backend": {
+        "repository": "appolon1908-hue/transportation-backend-",
+        "required_scope": "transportation.middleware.command.write",
+        "allowed": {"crm.", "email.", "sms."},
+        "forbidden": {"beyvra.operations.", "crawler.", "social.", "telephony."},
+    },
+}
 EXPECTED_REQUIRED_HEADERS = {
     "Authorization",
     "Content-Type",
@@ -539,11 +598,52 @@ def validate_webhooks(
                 fail(f"{workstream} must depend on integration/keycloak")
 
 
+def validate_product_consumers() -> dict[str, Any]:
+    raw = load_json(CONFIG / "product-consumers.v1.json")
+    if raw.get("schema_version") != "1.0":
+        fail("product-consumers.v1.json: schema_version must be 1.0")
+    if raw.get("default_policy") != "DENY":
+        fail("product consumers must be DENY by default")
+    consumers = raw.get("consumers")
+    if not isinstance(consumers, list) or not consumers:
+        fail("product consumers must be a non-empty array")
+    observed: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(consumers):
+        if not isinstance(item, dict):
+            fail(f"product consumers[{index}] must be an object")
+        consumer_id = item.get("client_id")
+        if consumer_id not in EXPECTED_PRODUCT_CONSUMERS:
+            fail(f"unknown product consumer: {consumer_id!r}")
+        assert isinstance(consumer_id, str)
+        if consumer_id in observed:
+            fail(f"duplicate product consumer: {consumer_id}")
+        expected = EXPECTED_PRODUCT_CONSUMERS[consumer_id]
+        if item.get("repository") != expected["repository"]:
+            fail(f"{consumer_id}: repository mismatch")
+        if item.get("classification") != "product":
+            fail(f"{consumer_id}: classification must be product")
+        if item.get("required_scope") != expected["required_scope"]:
+            fail(f"{consumer_id}: required scope mismatch")
+        allowed = item.get("allowed_command_prefixes")
+        forbidden = item.get("forbidden_command_prefixes")
+        if set(allowed or []) != expected["allowed"]:
+            fail(f"{consumer_id}: allowed command prefixes changed")
+        if set(forbidden or []) != expected["forbidden"]:
+            fail(f"{consumer_id}: forbidden command prefixes changed")
+        if set(allowed or []) & set(forbidden or []):
+            fail(f"{consumer_id}: allowed and forbidden prefixes overlap")
+        observed[consumer_id] = item
+    if set(observed) != set(EXPECTED_PRODUCT_CONSUMERS):
+        fail("product consumer registry is incomplete")
+    return observed
+
+
 def validate() -> None:
     access = load_json(CONFIG / "identity-access-map.json")
     webhooks = load_json(CONFIG / "api-webhook-contracts.json")
     service_by_id, grant_index = validate_access(access)
     validate_webhooks(webhooks, service_by_id, grant_index)
+    product_consumers = validate_product_consumers()
 
     source_states: dict[str, int] = {}
     for service in service_by_id.values():
@@ -553,6 +653,7 @@ def validate() -> None:
     print(f"SERVICE_GRANTS={len(grant_index)}")
     print(f"WEBHOOK_CONTRACTS={len(webhooks['webhooks'])}")
     print(f"WEBHOOK_EVENT_TYPES={sum(len(item['eventTypes']) for item in webhooks['webhooks'])}")
+    print(f"PRODUCT_CONSUMERS={len(product_consumers)}")
     print(f"SOURCE_STATE_COUNTS={json.dumps(source_states, sort_keys=True, separators=(',', ':'))}")
     print("IDENTITY_ACCESS_POLICY=PASS")
     print("API_WEBHOOK_CONTRACT_POLICY=PASS")

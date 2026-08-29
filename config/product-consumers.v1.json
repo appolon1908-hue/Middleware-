@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "default_policy": "DENY",
+  "consumers": [
+    {
+      "client_id": "beyvra-backend",
+      "repository": "appolon1908-hue/beyvra-backend",
+      "classification": "product",
+      "product": "Financial trading backend",
+      "status": "registered",
+      "required_scope": "beyvra.middleware.command.write",
+      "allowed_command_prefixes": ["beyvra.operations."],
+      "forbidden_command_prefixes": ["trade.", "order.", "wallet.", "ledger.", "hold.", "payment.", "withdrawal.", "deposit.", "transfer.", "custody.", "chain.", "broker.", "provider."]
+    },
+    {
+      "client_id": "breero-backend",
+      "repository": "appolon1908-hue/Breero.com",
+      "classification": "product",
+      "product": "Home services booking platform",
+      "status": "registered",
+      "required_scope": "breero.middleware.command.write",
+      "allowed_command_prefixes": ["crm.", "email.", "sms."],
+      "forbidden_command_prefixes": ["telephony.", "social.", "crawler.", "beyvra.operations."]
+    },
+    {
+      "client_id": "larim-a-backend",
+      "repository": "appolon1908-hue/LARIM-A-Backend",
+      "classification": "product",
+      "product": "Home services marketplace backend",
+      "status": "classified",
+      "required_scope": "larim-a.middleware.command.write",
+      "allowed_command_prefixes": ["crm.", "email.", "sms."],
+      "forbidden_command_prefixes": ["telephony.", "social.", "crawler.", "beyvra.operations."]
+    },
+    {
+      "client_id": "moneybee-backend",
+      "repository": "appolon1908-hue/Moneybee-Backend",
+      "classification": "product",
+      "product": "Loan company backend",
+      "status": "registered",
+      "required_scope": "moneybee.middleware.command.write",
+      "allowed_command_prefixes": ["crm.", "sms.", "telephony."],
+      "forbidden_command_prefixes": ["social.", "crawler.", "beyvra.operations."]
+    },
+    {
+      "client_id": "social-codestra",
+      "repository": "appolon1908-hue/social.codestra.co",
+      "classification": "product",
+      "product": "Social platform",
+      "status": "registered",
+      "required_scope": "social.middleware.command.write",
+      "allowed_command_prefixes": ["social."],
+      "forbidden_command_prefixes": ["crm.", "email.", "sms.", "telephony.", "crawler.", "beyvra.operations."]
+    },
+    {
+      "client_id": "transportation-backend",
+      "repository": "appolon1908-hue/transportation-backend-",
+      "classification": "product",
+      "product": "Transport and logistics backend",
+      "status": "contract_source_missing",
+      "required_scope": "transportation.middleware.command.write",
+      "allowed_command_prefixes": ["crm.", "email.", "sms."],
+      "forbidden_command_prefixes": ["telephony.", "social.", "crawler.", "beyvra.operations."]
+    }
+  ]
+}

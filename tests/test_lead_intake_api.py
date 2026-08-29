@@ -40,6 +40,7 @@ def lead_payload(**updates: Any) -> dict[str, Any]:
     value: dict[str, Any] = {
         "tenantId": "tenant-1",
         "siteId": "landing-001",
+        "submittedAt": "2026-08-29T19:45:00+00:00",
         "source": "landing_page",
         "formId": "credit-repair-lead",
         "campaignId": "campaign-001",
@@ -130,7 +131,7 @@ def test_lead_intake_enforces_auth_tenant_and_required_headers(test_settings) ->
             json=lead_payload(),
             headers=headers(**{"X-Tenant-ID": "tenant-2"}),
         )
-        assert wrong_header_tenant.status_code == 400
+        assert wrong_header_tenant.status_code == 403
 
         wrong_claim_tenant = client.post(
             "/v1/intake/leads",
@@ -166,6 +167,15 @@ def test_lead_intake_rejects_invalid_contract(test_settings) -> None:
             headers=headers(**{"Idempotency-Key": "lead-idempotency-002"}),
         )
         assert invalid_source.status_code == 400
+
+        missing_submitted_at = lead_payload()
+        missing_submitted_at.pop("submittedAt")
+        missing_timestamp = client.post(
+            "/v1/intake/leads",
+            json=missing_submitted_at,
+            headers=headers(**{"Idempotency-Key": "lead-idempotency-003"}),
+        )
+        assert missing_timestamp.status_code == 400
 
 
 def test_lead_intake_rejects_oversized_body(test_settings) -> None:

@@ -56,6 +56,20 @@
       "allowed_targets": ["odoo-19"],
       "compatibility_only": false
     },
+    "kyqra-saas": {
+      "command_scope": "kyqra.middleware.command.write",
+      "status_scope": "kyqra.middleware.status.read",
+      "allowed_command_prefixes": ["crawler.", "sms."],
+      "allowed_targets": ["kyqra-crawler", "telnexa-sms"],
+      "compatibility_only": false
+    },
+    "klyrow-saas": {
+      "command_scope": "klyrow.middleware.command.write",
+      "status_scope": "klyrow.middleware.status.read",
+      "allowed_command_prefixes": ["email."],
+      "allowed_targets": ["klyrow-email"],
+      "compatibility_only": false
+    },
     "social-codestra": {
       "command_scope": "social.middleware.command.write",
       "status_scope": "social.middleware.status.read",

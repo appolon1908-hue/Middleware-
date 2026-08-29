@@ -52,6 +52,70 @@ def test_accept_and_idempotent_duplicate(test_settings, runtime) -> None:
         assert second.json()["duplicate"] is True
 
 
+def test_accepts_sdk_call_disposition_event_on_vicidial_route(test_settings, runtime) -> None:
+    path = "/api/v1/vicidial/events"
+    route = ROUTE_BY_PATH[path]
+    event = make_event(
+        producer=route.producer_client_id,
+        event_type="codestra.events.call_disposition_updated",
+        data={
+            "event_type": "call_disposition_updated",
+            "correlation_id": "11111111-1111-4111-8111-111111111111",
+            "causation_id": "1745850000.42",
+            "odoo_contact_id": 4301,
+            "odoo_lead_id": None,
+            "disposition": "sale_completed",
+            "phone_number": "+15551234567",
+            "duration_seconds": 180,
+            "campaign_id": "campaign-alpha",
+            "provider_call_id": "1745850000.42",
+            "dry_run": False,
+        },
+    )
+    body, headers = signed_headers(
+        path=path,
+        producer=route.producer_client_id,
+        scope=route.required_scope,
+        event=event,
+    )
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        response = client.post(path, content=body, headers=headers)
+
+    assert response.status_code == 202, response.text
+
+
+def test_accepts_sdk_sms_received_event_on_telnexa_route(test_settings, runtime) -> None:
+    path = "/api/v1/telnexa/events"
+    route = ROUTE_BY_PATH[path]
+    event = make_event(
+        producer=route.producer_client_id,
+        event_type="codestra.events.sms_received",
+        data={
+            "event_type": "sms_received",
+            "correlation_id": "22222222-2222-4222-8222-222222222222",
+            "causation_id": "telnexa-message-123",
+            "odoo_contact_id": 4301,
+            "odoo_message_id": None,
+            "from_number": "+15557654321",
+            "body_preview": "Reply received",
+            "provider_event_id": "telnexa-message-123",
+            "dry_run": False,
+        },
+    )
+    body, headers = signed_headers(
+        path=path,
+        producer=route.producer_client_id,
+        scope=route.required_scope,
+        event=event,
+    )
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        response = client.post(path, content=body, headers=headers)
+
+    assert response.status_code == 202, response.text
+
+
 def test_semantically_identical_reformatted_retry_is_duplicate(test_settings, runtime) -> None:
     path = "/api/v1/odoo/events"
     route = ROUTE_BY_PATH[path]

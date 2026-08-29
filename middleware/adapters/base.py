@@ -297,13 +297,16 @@ class BaseAdapter:
         provider_event_id = require_nonempty(provider_event_id, "provider_event_id")
         if self.store.webhook_seen(self.ADAPTER_NAME, provider_event_id):
             return WebhookResult("ignored", event_type, provider_event_id)
-        self.store.record_webhook(self.ADAPTER_NAME, provider_event_id)
         if event_type not in self.WEBHOOK_EVENTS:
+            self.store.record_webhook(self.ADAPTER_NAME, provider_event_id)
             return WebhookResult("ignored", event_type, provider_event_id)
         try:
             self._process_webhook(event_type, payload)
         except Exception as exc:
+            # Failed processing is deliberately not deduplicated: a provider retry
+            # must be allowed to attempt processing again with the same event ID.
             return WebhookResult("failed", event_type, provider_event_id, str(exc))
+        self.store.record_webhook(self.ADAPTER_NAME, provider_event_id)
         return WebhookResult("processed", event_type, provider_event_id)
 
     def verify_capability(self, capability: str) -> bool:

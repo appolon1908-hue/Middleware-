@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import EventEnvelope, IngressResult
 from .runtime import Runtime
@@ -41,6 +41,7 @@ class LeadSubmission(BaseModel):
 
     tenantId: str = Field(min_length=1, max_length=128)
     siteId: str = Field(min_length=1, max_length=180)
+    submittedAt: datetime
     source: Literal["form", "landing_page", "chat", "voice", "api", "other"]
     formId: str | None = Field(default=None, max_length=180)
     campaignId: str | None = Field(default=None, max_length=180)
@@ -55,6 +56,13 @@ class LeadSubmission(BaseModel):
     fields: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("submittedAt")
+    @classmethod
+    def require_submitted_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("submittedAt must include an explicit timezone")
+        return value
+
 
 def build_lead_submitted_event(
     submission: LeadSubmission,
@@ -63,13 +71,13 @@ def build_lead_submitted_event(
     correlation_id: str,
 ) -> EventEnvelope:
     event_id = _stable_event_id(submission.tenantId, idempotency_key)
-    now = datetime.now(UTC)
+    submitted_at = submission.submittedAt
     return EventEnvelope(
         event_id=event_id,
         event_type=LEAD_SUBMITTED,
         event_version="1.0",
-        occurred_at=now,
-        received_at=now,
+        occurred_at=submitted_at,
+        received_at=submitted_at,
         source="middleware-api",
         tenant_id=submission.tenantId,
         customer_id=None,

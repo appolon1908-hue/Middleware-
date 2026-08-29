@@ -96,6 +96,17 @@ class AutomationService:
         delivery_token: str,
         workflow_family: str,
     ) -> dict[str, Any]:
+        for field_name, value in {
+            "job_id": job_id,
+            "tenant_id": tenant_id,
+            "actor_id": actor_id,
+            "workflow_key": workflow_key,
+            "workflow_version": workflow_version,
+            "delivery_token": delivery_token,
+            "workflow_family": workflow_family,
+        }.items():
+            if not isinstance(value, str) or not value:
+                raise AutomationError(400, "MISSING_FIELD", f"{field_name} is required")
         if job_id in self.jobs:
             raise AutomationError(409, "JOB_EXISTS", "job already exists")
         job = Job(

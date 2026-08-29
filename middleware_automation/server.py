@@ -36,6 +36,16 @@ class AutomationHandler(BaseHTTPRequestHandler):
 
     def _route(self, method: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
         parts = [part for part in path.split("/") if part]
+        if method == "POST" and path == "/v2/automation/jobs":
+            return SERVICE.seed_job(
+                job_id=str(body.get("job_id", "")),
+                tenant_id=str(body.get("tenant_id", "")),
+                actor_id=str(body.get("actor_id", "")),
+                workflow_key=str(body.get("workflow_key", "")),
+                workflow_version=str(body.get("workflow_version", "")),
+                delivery_token=str(body.get("delivery_token", "")),
+                workflow_family=str(body.get("workflow_family", "")),
+            )
         if method == "POST" and path == "/v2/automation/jobs/claim":
             return SERVICE.claim_job(body)
         if method == "POST" and path == "/v2/automation/jobs/reconcile":
@@ -88,4 +98,7 @@ def run(host: str = "127.0.0.1", port: int = 8095) -> None:
 
 
 if __name__ == "__main__":
-    run()
+    run(
+        host=os.environ.get("AUTOMATION_HOST", "127.0.0.1"),
+        port=int(os.environ.get("AUTOMATION_PORT", "8095")),
+    )

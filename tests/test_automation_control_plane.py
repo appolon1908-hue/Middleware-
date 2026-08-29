@@ -1,10 +1,51 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from middleware_automation import AutomationError, AutomationService
+from middleware_automation.adapters import adapter_for
+from middleware_automation.postgres_repository import apply_migrations, migration_files
+
+
+class FakeCursor:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+        self.row = None
+
+    def __enter__(self) -> "FakeCursor":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def execute(self, sql, params=None):
+        self.statements.append(sql)
+
+    def fetchone(self):
+        return self.row
+
+    def fetchall(self):
+        return []
+
+
+class FakeConnection:
+    def __init__(self) -> None:
+        self.cursor_instance = FakeCursor()
+        self.committed = False
+        self.rolled_back = False
+
+    def cursor(self) -> FakeCursor:
+        return self.cursor_instance
+
+    def commit(self) -> None:
+        self.committed = True
+
+    def rollback(self) -> None:
+        self.rolled_back = True
 
 
 class AutomationControlPlaneTests(unittest.TestCase):
@@ -253,6 +294,75 @@ class AutomationControlPlaneTests(unittest.TestCase):
                 f"idem-{index}",
             )
             self.assertEqual(adapter_name, command["adapter_result"]["adapter"])
+
+    def test_non_dry_run_adapter_is_fail_closed_without_delivery_flag(self) -> None:
+        old_value = os.environ.pop("ENABLE_ODOO_DELIVERY", None)
+        try:
+            adapter = adapter_for("crm.odoo.state-sync")
+            self.assertIsNotNone(adapter)
+            result = adapter.execute("crm.odoo.state-sync", {"lead_id": "L-1"}, dry_run=False)
+            self.assertEqual("DELIVERY_DISABLED", result["status"])
+            self.assertEqual("ENABLE_ODOO_DELIVERY", result["flag"])
+        finally:
+            if old_value is not None:
+                os.environ["ENABLE_ODOO_DELIVERY"] = old_value
+
+    def test_enabled_adapter_posts_to_runtime_configured_endpoint(self) -> None:
+        class FakeResponse:
+            status = 202
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return None
+
+            def read(self):
+                return b'{"accepted": true}'
+
+        old_flag = os.environ.get("ENABLE_ODOO_DELIVERY")
+        old_base = os.environ.get("ODOO_ADAPTER_BASE_URL")
+        try:
+            os.environ["ENABLE_ODOO_DELIVERY"] = "true"
+            os.environ["ODOO_ADAPTER_BASE_URL"] = "https://odoo-adapter.internal"
+            adapter = adapter_for("crm.odoo.state-sync")
+            self.assertIsNotNone(adapter)
+            with patch("middleware_automation.adapters.urlopen", return_value=FakeResponse()) as opened:
+                result = adapter.execute("crm.odoo.state-sync", {"lead_id": "L-1"}, dry_run=False)
+            request = opened.call_args.args[0]
+            self.assertEqual("https://odoo-adapter.internal/automation/commands", request.full_url)
+            self.assertEqual("SENT", result["status"])
+            self.assertEqual(202, result["http_status"])
+            self.assertEqual({"accepted": True}, result["response"])
+        finally:
+            if old_flag is None:
+                os.environ.pop("ENABLE_ODOO_DELIVERY", None)
+            else:
+                os.environ["ENABLE_ODOO_DELIVERY"] = old_flag
+            if old_base is None:
+                os.environ.pop("ODOO_ADAPTER_BASE_URL", None)
+            else:
+                os.environ["ODOO_ADAPTER_BASE_URL"] = old_base
+
+    def test_postgresql_migration_schema_is_applyable(self) -> None:
+        files = migration_files()
+        self.assertTrue(files)
+        ddl = "\n".join(path.read_text(encoding="utf-8") for path in files)
+        for table_name in (
+            "automation_jobs",
+            "automation_job_steps",
+            "automation_commands",
+            "automation_dead_letters",
+            "automation_reconciliation_runs",
+            "automation_dispatch_outbox",
+        ):
+            self.assertIn(f"CREATE TABLE IF NOT EXISTS {table_name}", ddl)
+
+        connection = FakeConnection()
+        applied = apply_migrations(connection)
+        self.assertEqual([path.name for path in files], applied)
+        self.assertTrue(connection.committed)
+        self.assertFalse(connection.rolled_back)
 
 
 if __name__ == "__main__":

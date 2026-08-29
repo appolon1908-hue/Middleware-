@@ -27,6 +27,16 @@ EXPECTED = {
     "social": "appolon1908-hue/social.codestra.co",
 }
 REFERENCE = "appolon1908-hue/codestra-production-platform"
+CONNECTOR_OWNERS = {
+    "beyvra-nonfinancial": "beyvra-backend",
+    "klyrow-email": "klyrow-email",
+    "kyqra-crawler": "kyqra-crawler",
+    "odoo-19": "odoo",
+    "postly-social": "social",
+    "provisioning-service": "provisioning",
+    "telnexa-sms": "telnexa-sms",
+    "vicidial-restricted": "vicidial-asterisk",
+}
 
 
 def fail(message: str) -> None:
@@ -76,6 +86,30 @@ def main() -> None:
     if refs[0].get("repository") != REFERENCE:
         fail("reference_only_repo_changed")
 
+    # Connector manifests are Middleware integration contracts, but their
+    # repository field must continue to point at the destination's principal
+    # source repository rather than Middleware or the historical platform repo.
+    manifest_dir = ROOT / "connectors" / "manifests"
+    seen_connectors: set[str] = set()
+    for path in sorted(manifest_dir.glob("*.connector.json")):
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        connector_id = manifest.get("connector_id")
+        repository = manifest.get("repository")
+        if connector_id not in CONNECTOR_OWNERS:
+            fail(f"unregistered_connector_owner:{connector_id}")
+        component = CONNECTOR_OWNERS[connector_id]
+        expected_repo = by_component.get(component)
+        if repository != expected_repo:
+            fail(
+                f"connector_repository_drift:{connector_id}:"
+                f"{repository}:expected:{expected_repo}"
+            )
+        if repository in {REFERENCE, "appolon1908-hue/Middleware-"}:
+            fail(f"connector_points_to_nonprincipal:{connector_id}")
+        seen_connectors.add(connector_id)
+    if seen_connectors != set(CONNECTOR_OWNERS):
+        fail("connector_manifest_inventory_changed")
+
     text_targets = [
         ROOT / "README.md",
         ROOT / "docs" / "CI-ENVIRONMENTS-AND-HANDOFF.md",
@@ -96,6 +130,7 @@ def main() -> None:
 
     print("REPOSITORY_AUTHORITY_POLICY=PASS")
     print("OWNING_REPOSITORY_IS_PRINCIPAL=YES")
+    print("CONNECTOR_PRINCIPAL_REPOSITORIES=PASS")
     print("CODESTRA_PRODUCTION_PLATFORM=REFERENCE_ONLY")
     print("CADDY_PRINCIPAL=appolon1908-hue/Caddy")
 

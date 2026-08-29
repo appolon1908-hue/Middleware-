@@ -25,6 +25,12 @@
       "scope": "Workflow automation, normalized event processing, signed webhooks, inactive-by-default workflow exports, replay protection, and n8n adapter tests"
     },
     {
+      "branch": "integration/n8n-control-plane-v2-20260827",
+      "category": "application",
+      "runtime_status": "declared_active_scope",
+      "scope": "Dated Middleware and n8n automation control-plane v2 contract, operation policy, command families, lease behavior, and Stage 4 release dependency checks"
+    },
+    {
       "branch": "integration/vicidial",
       "category": "telephony",
       "runtime_status": "declared_active_scope",

@@ -56,6 +56,7 @@ Public and private clients
           |
           +--> Odoo 19
           +--> n8n
+          +--> n8n control plane v2
           +--> VICIdial
           +--> Asterisk/PJSIP
           +--> Telnexa SMS

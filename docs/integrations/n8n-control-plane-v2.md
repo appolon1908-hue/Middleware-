@@ -157,6 +157,7 @@ core/event-ledger-outbox
 core/webhook-inbox-replay
 core/workers-scheduler
 integration/n8n
+integration/n8n-control-plane-v2-20260827
 ```
 
 ## Acceptance gates

@@ -30,6 +30,9 @@ REQUIRED_SHARED_BRANCHES = {
     "core/webhook-inbox-replay",
     "core/workers-scheduler",
 }
+REQUIRED_CONTROL_BRANCHES = {
+    "integration/n8n-control-plane-v2-20260827",
+}
 EXPECTED_SYNC_POLICY = {
     "main_must_be_ancestor_of_active_work": True,
     "completed_workstreams_refresh_from_main": True,
@@ -139,6 +142,13 @@ def main() -> int:
     if missing_shared:
         errors.append(
             "required shared workstreams are missing: " + ", ".join(missing_shared)
+        )
+
+    missing_control = sorted(REQUIRED_CONTROL_BRANCHES - branch_set)
+    if missing_control:
+        errors.append(
+            "required automation control-plane workstreams are missing: "
+            + ", ".join(missing_control)
         )
 
     declared_verification = manifest.get("not_observed_with_verification_branches")

@@ -30,6 +30,7 @@ Every other workstream depends directly or transitively on `core/integration-con
 |---|---|---|
 | `integration/odoo-19` | Odoo 19 | CRM, contacts, leads, activities, campaigns, callbacks, appointments, delivery results, reconciliation, and adapter tests. |
 | `integration/n8n` | n8n | Workflow automation, normalized events, signed webhooks, inactive-by-default exports, replay protection, and adapter tests. |
+| `integration/n8n-control-plane-v2-20260827` | n8n control plane v2 | Dated Middleware and n8n automation contract, operation policy, command families, lease behavior, and Stage 4 release dependency checks. |
 | `integration/vicidial` | VICIdial | Campaigns, agents, dispositions, call results, callbacks, restricted commands, read-back comparison, and write-denial tests. Direct database writes are prohibited. |
 | `integration/asterisk-pjsip` | Asterisk/PJSIP | Endpoints, extensions, trunks, call infrastructure, authentication, routing contracts, health, and telephony tests. |
 | `integration/telnexa-sms` | Telnexa | SMS submission, delivery callbacks, inbound events, signatures, replay protection, suppression, rate limits, and reconciliation. |

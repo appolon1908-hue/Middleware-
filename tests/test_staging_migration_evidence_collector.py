@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +17,8 @@ def source() -> str:
 
 
 def test_shell_syntax_is_valid() -> None:
+    if shutil.which("bash") is None:
+        pytest.skip("bash is required for shell syntax validation")
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
 
 

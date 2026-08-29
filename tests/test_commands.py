@@ -111,13 +111,12 @@ class CommandTokenVerifier:
         expected_client_id: str,
         required_scope: str,
     ) -> dict[str, Any]:
-        assert expected_client_id == "kong-gateway"
         if authorization != f"Bearer {required_scope}":
             from app.security import AuthenticationError
 
             raise AuthenticationError("invalid command token")
         return {
-            "azp": "kong-gateway",
+            "azp": expected_client_id,
             "scope": required_scope,
             "aud": "middleware-api",
             "tenant_id": "tenant-1",
@@ -141,12 +140,11 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
     )
     body = command_payload()
     headers = {
-        "Authorization": "Bearer middleware.request.forward",
+        "Authorization": "Bearer moneybee.middleware.command.write",
         "X-Tenant-ID": body["tenant_id"],
         "X-Correlation-ID": body["correlation_id"],
         "Idempotency-Key": body["idempotency_key"],
         "X-Codestra-Consumer-Id": "moneybee-backend",
-        "X-Codestra-Consumer-Scope": "moneybee.middleware.command.write",
     }
     app = create_app(settings=test_settings, runtime=runtime)
     with TestClient(app) as client:
@@ -162,8 +160,9 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         status = client.get(
             f"/v1/operations/{body['command_id']}",
             headers={
-                "Authorization": "Bearer middleware.status.read",
+                "Authorization": "Bearer moneybee.middleware.command.write",
                 "X-Tenant-ID": "tenant-1",
+                "X-Codestra-Consumer-Id": "moneybee-backend",
             },
         )
         assert status.status_code == 200, status.text
@@ -172,8 +171,9 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         wrong_tenant = client.get(
             f"/v1/operations/{body['command_id']}",
             headers={
-                "Authorization": "Bearer middleware.status.read",
+                "Authorization": "Bearer moneybee.middleware.command.write",
                 "X-Tenant-ID": "tenant-2",
+                "X-Codestra-Consumer-Id": "moneybee-backend",
             },
         )
         assert wrong_tenant.status_code == 403
@@ -202,7 +202,7 @@ def test_command_api_requires_registered_product_consumer(
         ),
     )
     headers = {
-        "Authorization": "Bearer middleware.request.forward",
+        "Authorization": "Bearer moneybee.middleware.command.write",
         "X-Tenant-ID": body["tenant_id"],
         "X-Correlation-ID": body["correlation_id"],
         "Idempotency-Key": body["idempotency_key"],
@@ -218,7 +218,7 @@ def test_command_api_requires_registered_product_consumer(
             headers={
                 **headers,
                 "X-Codestra-Consumer-Id": "social-codestra",
-                "X-Codestra-Consumer-Scope": "social.middleware.command.write",
+                "Authorization": "Bearer social.middleware.command.write",
             },
         )
         assert forbidden.status_code == 403

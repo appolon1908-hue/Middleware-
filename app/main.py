@@ -272,10 +272,13 @@ def create_app(
         active = request.app.state.runtime
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
+        consumer = PRODUCT_CONSUMERS.resolve(
+            request.headers.get("X-Codestra-Consumer-Id")
+        )
         claims = await active.tokens.verify(
             request.headers.get("Authorization", ""),
-            expected_client_id="kong-gateway",
-            required_scope="middleware.request.forward",
+            expected_client_id=consumer.client_id,
+            required_scope=consumer.required_scope,
         )
         from .security import authorize_tenant
 
@@ -296,11 +299,7 @@ def create_app(
             raise RequestValidationError(
                 "Idempotency-Key does not match command idempotency_key"
             )
-        PRODUCT_CONSUMERS.authorize(
-            command,
-            consumer_id=request.headers.get("X-Codestra-Consumer-Id"),
-            consumer_scope=request.headers.get("X-Codestra-Consumer-Scope"),
-        )
+        PRODUCT_CONSUMERS.authorize_command(command, consumer=consumer)
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject:
             from .security import AuthorizationError
@@ -325,10 +324,13 @@ def create_app(
         active = request.app.state.runtime
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
+        consumer = PRODUCT_CONSUMERS.resolve(
+            request.headers.get("X-Codestra-Consumer-Id")
+        )
         claims = await active.tokens.verify(
             request.headers.get("Authorization", ""),
-            expected_client_id="kong-gateway",
-            required_scope="middleware.status.read",
+            expected_client_id=consumer.client_id,
+            required_scope=consumer.required_scope,
         )
         tenant_id = request.headers.get("X-Tenant-ID", "")
         from .security import authorize_tenant

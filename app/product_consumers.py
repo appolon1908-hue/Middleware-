@@ -55,23 +55,20 @@ class ProductConsumerRegistry:
             )
         return cls(tuple(parsed))
 
-    def authorize(
-        self,
-        command: CommandEnvelope,
-        *,
-        consumer_id: str | None,
-        consumer_scope: str | None,
-    ) -> ProductConsumer:
+    def resolve(self, consumer_id: str | None) -> ProductConsumer:
         if consumer_id is None or not consumer_id.strip():
             raise RequestValidationError("X-Codestra-Consumer-Id is required")
-        if consumer_scope is None or not consumer_scope.strip():
-            raise RequestValidationError("X-Codestra-Consumer-Scope is required")
         consumer = self._consumers.get(consumer_id.strip())
         if consumer is None:
             raise AuthorizationError("product consumer is not registered")
-        scopes = set(consumer_scope.split())
-        if consumer.required_scope not in scopes:
-            raise AuthorizationError("product consumer scope is not allowed")
+        return consumer
+
+    def authorize_command(
+        self,
+        command: CommandEnvelope,
+        *,
+        consumer: ProductConsumer,
+    ) -> ProductConsumer:
         if any(
             command.command_type.startswith(prefix)
             for prefix in consumer.forbidden_command_prefixes
@@ -83,6 +80,20 @@ class ProductConsumerRegistry:
         ):
             raise AuthorizationError("product consumer command prefix is not allowed")
         return consumer
+
+    def authorize(
+        self,
+        command: CommandEnvelope,
+        *,
+        consumer_id: str | None,
+        consumer_scope: str | None = None,
+    ) -> ProductConsumer:
+        consumer = self.resolve(consumer_id)
+        if consumer_scope is not None:
+            scopes = set(consumer_scope.split())
+            if consumer.required_scope not in scopes:
+                raise AuthorizationError("product consumer scope is not allowed")
+        return self.authorize_command(command, consumer=consumer)
 
 
 def _required_string(item: dict[str, object], key: str) -> str:

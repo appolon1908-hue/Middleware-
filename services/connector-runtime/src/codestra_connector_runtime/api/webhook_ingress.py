@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import Request
 from starlette.requests import ClientDisconnect
 
@@ -23,6 +24,7 @@ from .problems import ProblemError
 from .repository import ConnectorRepository
 
 _EVENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
+_LOG = structlog.get_logger(__name__)
 
 
 async def read_limited_body(
@@ -201,6 +203,7 @@ class WebhookIngressService:
                 detail="The webhook endpoint is not declared by the connector.",
             )
 
+        headers = self._headers(request)
         body = await read_limited_body(
             request,
             maximum_bytes=policy.maximum_body_bytes,
@@ -208,7 +211,6 @@ class WebhookIngressService:
             error_title="Webhook body too large",
             error_detail="The webhook body exceeds the connector policy.",
         )
-        headers = self._headers(request)
         try:
             signature = self._signature(headers[policy.signature_header.lower()])
             timestamp_text = headers[policy.timestamp_header.lower()]
@@ -286,9 +288,19 @@ class WebhookIngressService:
                 correlation_id=correlation_id,
                 traceparent=request.headers.get("traceparent"),
             )
-        except Exception:
-            if body_created:
-                self.body_store.remove(reference)
+        except ProblemError as error:
+            # A semantic conflict proves that the accepted event key owns a
+            # different digest, so this newly-created file cannot be referenced
+            # by a concurrent successful delivery. For unknown database errors,
+            # retain the body for reconciliation instead of racing a commit.
+            if body_created and error.code == "WEBHOOK_SEMANTIC_CONFLICT":
+                try:
+                    self.body_store.remove(reference)
+                except OSError as cleanup_error:
+                    _LOG.error(
+                        "encrypted_webhook_body_cleanup_failed",
+                        error_type=type(cleanup_error).__name__,
+                    )
             raise
         return 202, {
             "data": {

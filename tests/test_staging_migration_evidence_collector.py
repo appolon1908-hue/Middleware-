@@ -68,13 +68,25 @@ def test_collector_does_not_dump_container_environment_or_file_contents() -> Non
     assert "sha256sum \"$file\"" in value
 
 
-def test_search_scope_is_operator_bounded() -> None:
+def test_search_scope_is_operator_bounded_and_discovers_nested_repositories() -> None:
     value = source()
     assert 'SEARCH_ROOTS="${SEARCH_ROOTS:-}"' in value
     assert 'append_search_root "$compose_workdir"' in value
     assert "find \"$root\" -xdev -type f" in value
+    assert "discover_git_repositories" in value
+    assert "-type d -name .git" in value
+    assert "-type f -name .git" in value
+    assert 'append_git_repository "$repository"' in value
     assert "DEEP_GIT_SEARCH" in value
     assert "rev-list --all" in value
+
+
+def test_deep_git_search_treats_status_one_as_normal_no_match() -> None:
+    value = source()
+    assert 'grep_status=$?' in value
+    assert 'if [[ "$grep_status" -ne 1 ]]' in value
+    assert 'matches=""' in value
+    assert "git grep failed for repository=" in value
 
 
 def test_evidence_summary_records_no_effect_guarantees() -> None:

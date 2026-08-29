@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+from typing import Any
+from uuid import uuid4
+
+import jwt
+from fastapi.testclient import TestClient
+
+from app.commands import CommandPolicy, CommandPolicyRegistry, CommandService, MemoryCommandStore
+from app.main import create_app
+from app.replay import MemoryReplayGuard
+from app.runtime import Runtime
+from app.security import AuthenticationError, AuthorizationError
+from app.storage import MemoryInboxStore
+
+
+def _token(client_id: str, scopes: list[str], *, tenant_id: str = "tenant-1") -> str:
+    return jwt.encode(
+        {
+            "azp": client_id,
+            "scope": " ".join(scopes),
+            "aud": "middleware-api",
+            "tenant_id": tenant_id,
+            "sub": "user-123",
+            "iss": "https://auth.codestra.co/realms/codestra",
+            "iat": 1_700_000_000,
+            "exp": 1_700_000_300,
+            "jti": str(uuid4()),
+        },
+        "test-only-key",
+        algorithm="HS256",
+    )
+
+
+class ProductTokenVerifier:
+    async def verify(
+        self,
+        authorization: str,
+        *,
+        expected_client_id: str,
+        required_scope: str,
+    ) -> dict[str, Any]:
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise AuthenticationError("Authorization must be a Bearer token")
+        try:
+            claims = jwt.decode(
+                token,
+                options={
+                    "verify_signature": False,
+                    "verify_exp": False,
+                    "verify_aud": False,
+                    "verify_iss": False,
+                },
+            )
+        except Exception as exc:
+            raise AuthenticationError("invalid bearer token") from exc
+        if claims.get("azp") != expected_client_id:
+            raise AuthorizationError("token azp does not match producer")
+        scopes = set(str(claims.get("scope") or "").split())
+        if required_scope not in scopes:
+            raise AuthorizationError("required scope is missing")
+        return claims
+
+    async def ready(self) -> bool:
+        return True
+
+
+def _runtime(test_settings) -> Runtime:
+    policies = CommandPolicyRegistry(
+        (
+            CommandPolicy(
+                prefix="crm.",
+                target="odoo-19",
+                capability="ODOO_WRITE",
+                readback_required=True,
+            ),
+            CommandPolicy(
+                prefix="social.",
+                target="postly-social",
+                capability="SOCIAL_PUBLISH",
+                readback_required=True,
+            ),
+            CommandPolicy(
+                prefix="telephony.",
+                target="vicidial-restricted",
+                capability="PRODUCTION_DIALING",
+                readback_required=True,
+            ),
+        ),
+        {
+            "ODOO_WRITE": True,
+            "SOCIAL_PUBLISH": True,
+            "PRODUCTION_DIALING": True,
+        },
+    )
+    return Runtime(
+        settings=test_settings,
+        inbox=MemoryInboxStore(),
+        replay=MemoryReplayGuard(),
+        tokens=ProductTokenVerifier(),
+        commands=CommandService(MemoryCommandStore(), policies),
+    )
+
+
+def _command(*, command_type: str = "crm.contact.create.v1", target: str = "odoo-19", capability: str = "ODOO_WRITE") -> dict[str, Any]:
+    return {
+        "command_id": str(uuid4()),
+        "command_type": command_type,
+        "command_version": "1.0",
+        "target": target,
+        "tenant_id": "tenant-1",
+        "requested_by": "user-123",
+        "correlation_id": "correlation-product-auth-001",
+        "idempotency_key": "idempotency-product-auth-001",
+        "capability": capability,
+        "payload": {"contact_id": "contact-1"},
+    }
+
+
+def _headers(body: dict[str, Any], token: str | None) -> dict[str, str]:
+    headers = {
+        "X-Tenant-ID": body["tenant_id"],
+        "X-Correlation-ID": body["correlation_id"],
+        "Idempotency-Key": body["idempotency_key"],
+    }
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def test_valid_moneybee_token_can_submit_crm_command(test_settings) -> None:
+    body = _command()
+    token = _token("moneybee-backend", ["moneybee.middleware.command.write"])
+    with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+        response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+    assert response.status_code == 202, response.text
+    assert response.json()["state"] == "persisted"
+
+
+def test_missing_and_invalid_tokens_are_401(test_settings) -> None:
+    body = _command()
+    with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+        missing = client.post("/v1/commands", json=body, headers=_headers(body, None))
+        invalid = client.post("/v1/commands", json=body, headers=_headers(body, "not.a.valid-jwt"))
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+
+
+def test_wrong_moneybee_scope_is_403(test_settings) -> None:
+    body = _command()
+    token = _token("moneybee-backend", ["breero.middleware.command.write"])
+    with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+        response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+    assert response.status_code == 403
+
+
+def test_social_token_cannot_submit_crm_command(test_settings) -> None:
+    body = _command()
+    token = _token("social-codestra", ["social.middleware.command.write"])
+    with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+        response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+    assert response.status_code == 403
+
+
+def test_business_products_cannot_submit_telephony_commands(test_settings) -> None:
+    for client_id, scope in (
+        ("breero-backend", "breero.middleware.command.write"),
+        ("transportation-backend", "transportation.middleware.command.write"),
+        ("larim-a-backend", "larim-a.middleware.command.write"),
+    ):
+        body = _command(
+            command_type="telephony.call.start.v1",
+            target="vicidial-restricted",
+            capability="PRODUCTION_DIALING",
+        )
+        token = _token(client_id, [scope])
+        with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+            response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+        assert response.status_code == 403, (client_id, response.text)

@@ -104,6 +104,11 @@ async def test_command_policy_fails_closed() -> None:
 
 
 class CommandTokenVerifier:
+    _TOKENS = {
+        "middleware.request.forward": "legacy-command-token",
+        "middleware.status.read": "legacy-status-token",
+    }
+
     async def verify(
         self,
         authorization: str,
@@ -112,7 +117,7 @@ class CommandTokenVerifier:
         required_scope: str,
     ) -> dict[str, Any]:
         assert expected_client_id == "kong-gateway"
-        if authorization != f"Bearer {required_scope}":
+        if authorization != f"Bearer {self._TOKENS[required_scope]}":
             from app.security import AuthenticationError
 
             raise AuthenticationError("invalid command token")
@@ -141,7 +146,7 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
     )
     body = command_payload()
     headers = {
-        "Authorization": "Bearer middleware.request.forward",
+        "Authorization": "Bearer legacy-command-token",
         "X-Tenant-ID": body["tenant_id"],
         "X-Correlation-ID": body["correlation_id"],
         "Idempotency-Key": body["idempotency_key"],
@@ -160,7 +165,7 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         status = client.get(
             f"/v1/operations/{body['command_id']}",
             headers={
-                "Authorization": "Bearer middleware.status.read",
+                "Authorization": "Bearer legacy-status-token",
                 "X-Tenant-ID": "tenant-1",
             },
         )
@@ -170,7 +175,7 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         wrong_tenant = client.get(
             f"/v1/operations/{body['command_id']}",
             headers={
-                "Authorization": "Bearer middleware.status.read",
+                "Authorization": "Bearer legacy-status-token",
                 "X-Tenant-ID": "tenant-2",
             },
         )

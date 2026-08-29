@@ -16,6 +16,7 @@ from .canonical_contracts import validate_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPORAL_COMMAND_DESTINATION = "temporal-command"
+ODOO_COMMAND_DESTINATION = "odoo-command"
 CommandState = Literal[
     "persisted",
     "queued",

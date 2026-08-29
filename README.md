@@ -19,9 +19,14 @@ This repository is the source of truth for reviewed middleware contracts and Git
 
 `site/*`, `integration/*`, `platform/*`, `operations/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches.
 
+Codestra uses a **decentralized release model**: every repository releases independently from its own accepted source/artifact identity. Cross-repository features couple through versioned contracts and a combined evidence note; there is no central mutable release-authority repository that can override an owning repository's release.
+
 For the current branch inventory, CI matrix, staging/production environment
 policy, and the exact point where production-readiness work stopped, see
 [`docs/CI-ENVIRONMENTS-AND-HANDOFF.md`](docs/CI-ENVIRONMENTS-AND-HANDOFF.md).
+
+For the current source-authority decisions and repository audit, see
+[`docs/STAGE0_GROUND_TRUTH_20260829.md`](docs/STAGE0_GROUND_TRUTH_20260829.md).
 
 ## Canonical communication layer
 
@@ -65,7 +70,7 @@ Caddy currently exposes workstreams for:
 
 ```text
 site/codestra                  codestra.co and www redirect
-site/codestra-auth             auth.codestra.co — degraded HTTP 502
+site/codestra-auth             auth.codestra.co — degraded HTTP 502 in recorded source status
 site/codestra-social           social.codestra.co / Postiz
 site/codestra-ai               ai.codestra.co
 site/beyvra                    public, www, platform, API, admin, staging
@@ -73,11 +78,11 @@ site/booked4seasons            root active; www TLS handshake degraded
 site/breero                    production and staging frontends and APIs
 ```
 
-`platform/caddy` owns Middleware-side route compatibility and edge validation.
-The canonical production Caddy desired state lives in
-[`appolon1908-hue/codestra-production-platform`](https://github.com/appolon1908-hue/codestra-production-platform)
-under `operations/caddy/`. `operations/application-host` owns route inventory,
-safe restart boundaries, host health, backup references, and change records.
+`platform/caddy` owns Middleware-side route compatibility and edge validation. Historical production Caddy/runtime reconciliation material is retained in `appolon1908-hue/codestra-production-platform`, but that repository is no longer the central release authority.
+
+The canonical **future shared API-edge Caddy source authority** is `appolon1908-hue/Kong` under the reviewed `deploy/caddy/` ownership model. Existing host Caddy files remain runtime truth until an explicit read-only inventory, checksum-parity, staging validation and rollback-tested migration moves them into the Kong-owned source boundary.
+
+`operations/application-host` owns route inventory, safe restart boundaries, host health, backup references, and change records.
 
 ## Provider-host stacks
 
@@ -96,7 +101,7 @@ platform/mariadb
 
 Klyrow includes its gateway/API, worker, billing API/worker/scheduler, SMTP relay, Mautic, Postal, RabbitMQ, PostgreSQL, MariaDB, Prometheus, Grafana, and public route contracts.
 
-Telnexa includes Jasmin SMS, billing, Keycloak, RabbitMQ, Redis, PostgreSQL, Prometheus, Node Exporter, public routes, and internal mTLS access.
+Telnexa includes Jasmin SMS, billing, Keycloak, RabbitMQ, Redis, PostgreSQL, Prometheus, Node Exporter, public routes, and internal mTLS access. Telnexa is SMS-only in the cross-system authority model; VICIdial/Asterisk voice is owned by `appolon1908-hue/Vicidialer-Codestra` and coordinated through Middleware.
 
 Kyqra includes the crawler API, HTTP worker, browser worker, callback worker,
 PostgreSQL, Redis, and `crawler.kyqra.com`. Its only canonical application
@@ -104,7 +109,7 @@ source is
 [`appolon1908-hue/kyqra-crawler`](https://github.com/appolon1908-hue/kyqra-crawler);
 the legacy `appolon1908-hue/kyqra` repository name is retired.
 
-The private integration gateway remains loopback/internal-mTLS only. The Codestra Business Scrapper source at `/opt/codestra-business-scrapper` remains recorded as not deployed.
+The private integration gateway remains loopback/internal-mTLS only. The Codestra Business Scrapper source remains recorded as not deployed unless a separately reviewed runtime inventory proves otherwise.
 
 See [`docs/SITE-ARCHITECTURE.md`](docs/SITE-ARCHITECTURE.md).
 
@@ -147,15 +152,18 @@ Never commit:
 - logs, backups, or secret-bearing evidence;
 - files edited inside a running production container.
 
-## Canonical controls
+## Release evidence and canonical controls
 
-Cross-service contract catalog, runtime composition, integrated Caddy/Kong
-desired state, multi-service release manifests, promotion evidence, and
-go/no-go records are owned by
-[`appolon1908-hue/codestra-production-platform`](https://github.com/appolon1908-hue/codestra-production-platform)
-on `release/production-activation`. This repository owns Middleware source,
-service contracts, artifacts, and compatibility workstreams; it does not own
-the central deployment manifest.
+Each owning repository controls its own reviewed source, immutable artifact, migration and release gates. Middleware does **not** become a central release authority for other repositories.
+
+Because Middleware is the cross-system write boundary, this repository owns the **combined evidence note** for a feature spanning more than one repository. The note records exact repository SHAs, image/artifact digests, contract versions, CI evidence, staging/read-back/rollback evidence and any separately approved production capability activation. See:
+
+- [`docs/CROSS_REPOSITORY_RELEASE_EVIDENCE.md`](docs/CROSS_REPOSITORY_RELEASE_EVIDENCE.md)
+- [`docs/releases/RELEASE_EVIDENCE_TEMPLATE.md`](docs/releases/RELEASE_EVIDENCE_TEMPLATE.md)
+
+Historical multi-service release manifests and go/no-go records in `appolon1908-hue/codestra-production-platform` remain evidence for older runtime states. They do not override the decentralized owning-repository release model and must not be used as mutable authority for new releases.
+
+Canonical Middleware controls include:
 
 - [`config/integration-branches.json`](config/integration-branches.json) — base workstream manifest and synchronization policy.
 - [`architecture/workstreams.py`](architecture/workstreams.py) — supplemental site/provider workstreams and runtime-status updates.
@@ -166,7 +174,7 @@ the central deployment manifest.
 - [`contracts/http-conventions.md`](contracts/http-conventions.md) — HTTP, identity, idempotency, webhook, retry, health, and error rules.
 - [`contracts/provider-transport-conventions.md`](contracts/provider-transport-conventions.md) — Caddy/Nginx, mTLS, RabbitMQ, SMTP, SMS, database, and provider transport rules.
 - [`contracts/observability-conventions.md`](contracts/observability-conventions.md) — release identity, metrics, logs, traces, dashboards, and alerts.
-- [`contracts/release-manifest.v1.schema.json`](contracts/release-manifest.v1.schema.json) — canonical image, source, SBOM, scan, migration, and build evidence.
+- [`contracts/release-manifest.v1.schema.json`](contracts/release-manifest.v1.schema.json) — canonical image, source, SBOM, scan, migration, and build evidence shape.
 - [`docs/RELEASE-SUPPLY-CHAIN.md`](docs/RELEASE-SUPPLY-CHAIN.md) — exact-digest build, keyless signing, verification, and promotion controls.
 - [`docs/SERVER-CONNECTION.md`](docs/SERVER-CONNECTION.md) — read-only server/Git connection and safe source import.
 - [`scripts/discover_middleware_runtime.sh`](scripts/discover_middleware_runtime.sh) — read-only middleware-host inventory.

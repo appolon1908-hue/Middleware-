@@ -56,14 +56,14 @@
       "allowed_targets": ["odoo-19"],
       "compatibility_only": false
     },
-    "kyqra-saas": {
+    "kyqra": {
       "command_scope": "kyqra.middleware.command.write",
       "status_scope": "kyqra.middleware.status.read",
       "allowed_command_prefixes": ["crawler.", "sms."],
       "allowed_targets": ["kyqra-crawler", "telnexa-sms"],
       "compatibility_only": false
     },
-    "klyrow-saas": {
+    "klyrow": {
       "command_scope": "klyrow.middleware.command.write",
       "status_scope": "klyrow.middleware.status.read",
       "allowed_command_prefixes": ["email."],

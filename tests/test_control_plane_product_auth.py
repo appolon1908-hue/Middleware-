@@ -184,8 +184,8 @@ def test_social_token_cannot_submit_crm_command(test_settings) -> None:
     assert response.status_code == 403
 
 
-def test_kyqra_saas_can_submit_crawler_and_sms_commands(test_settings) -> None:
-    token = _token("kyqra-saas", ["kyqra.middleware.command.write"])
+def test_kyqra_can_submit_crawler_and_sms_commands(test_settings) -> None:
+    token = _token("kyqra", ["kyqra.middleware.command.write"])
     for command_type, target, capability in (
         ("crawler.job.submit.v1", "kyqra-crawler", "CRAWLER_EXECUTION"),
         ("sms.message.submit.v1", "telnexa-sms", "SMS_DELIVERY"),
@@ -196,29 +196,29 @@ def test_kyqra_saas_can_submit_crawler_and_sms_commands(test_settings) -> None:
         assert response.status_code == 202, (command_type, response.text)
 
 
-def test_klyrow_saas_can_submit_email_commands(test_settings) -> None:
+def test_klyrow_can_submit_email_commands(test_settings) -> None:
     body = _command(
         command_type="email.message.submit.v1",
         target="klyrow-email",
         capability="EMAIL_DELIVERY",
     )
-    token = _token("klyrow-saas", ["klyrow.middleware.command.write"])
+    token = _token("klyrow", ["klyrow.middleware.command.write"])
     with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
         response = client.post("/v1/commands", json=body, headers=_headers(body, token))
     assert response.status_code == 202, response.text
 
 
-def test_saas_products_cannot_cross_control_plane_boundaries(test_settings) -> None:
+def test_products_cannot_cross_control_plane_boundaries(test_settings) -> None:
     cases = (
         (
-            "kyqra-saas",
+            "kyqra",
             "kyqra.middleware.command.write",
             "email.message.submit.v1",
             "klyrow-email",
             "EMAIL_DELIVERY",
         ),
         (
-            "klyrow-saas",
+            "klyrow",
             "klyrow.middleware.command.write",
             "sms.message.submit.v1",
             "telnexa-sms",

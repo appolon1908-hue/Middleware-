@@ -4,10 +4,14 @@ from app.lead_delivery import build_odoo_lead_upsert_command
 from app.lead_intake import LeadSubmission, build_lead_submitted_event
 
 
+SUBMITTED_AT = datetime(2026, 8, 29, 19, 45, tzinfo=UTC)
+
+
 def test_lead_event_maps_to_idempotent_odoo_command() -> None:
     submission = LeadSubmission(
         tenantId="tenant-1",
         siteId="site-1",
+        submittedAt=SUBMITTED_AT,
         source="landing_page",
         campaignId="campaign-1",
         name="Ada Example",
@@ -36,6 +40,7 @@ def test_odoo_mapping_rejects_unrelated_events() -> None:
     submission = LeadSubmission(
         tenantId="tenant-1",
         siteId="site-1",
+        submittedAt=SUBMITTED_AT,
         source="form",
     )
     event = build_lead_submitted_event(

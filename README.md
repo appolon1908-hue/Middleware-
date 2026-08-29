@@ -1,173 +1,182 @@
 # Codestra Middleware
 
-This repository is the source of truth for reviewed middleware contracts and Git workstreams connecting Codestra applications, public sites, provider-host services, messaging, telephony, crawlers, identity, persistence, and monitoring.
+`appolon1908-hue/Middleware-` is the principal Git source for the Codestra cross-system integration control plane. It owns Middleware application/runtime source, durable integration state, trusted adapters, read-back/reconciliation and the contracts that govern cross-system writes.
 
-> **Security notice:** this repository is currently public. Runtime source and tests must remain non-secret and environment-neutral. Never commit credentials, certificates, customer data, private configuration, or operational evidence.
+> **Security:** keep this repository secret-free and environment-neutral. Never commit credentials, certificates, customer data, private connection strings or secret-bearing runtime evidence.
 
-## Operating model
+## Permanent repository-authority rule
 
-1. Select the declared workstream in [`docs/INTEGRATION-BRANCHES.md`](docs/INTEGRATION-BRANCHES.md) or the supplemental site registry in [`architecture/workstreams.py`](architecture/workstreams.py).
-2. Read its dependencies and communication links in [`config/connectivity-map.json`](config/connectivity-map.json) and [`architecture/site_architecture.py`](architecture/site_architecture.py).
-3. Refresh the branch from the latest reviewed `main`.
-4. Change only the declared component and the minimum required shared contracts.
-5. Open a pull request and pass exact-head repository, workstream, connectivity, site-route, lead-intake, and project tests.
-6. Merge into protected `main`.
-7. Build one immutable artifact from the merged SHA.
-8. Deploy that digest to staging with external effects disabled.
-9. Run authentication, tenant-isolation, duplicate, replay, migration, integration, backup/restore, and rollback tests.
-10. Deploy the identical accepted digest to production only after explicit approval.
+**If a Codestra component has its own GitHub repository, that repository is the principal source for that component.** Middleware may integrate with it; Middleware must not become a second application/runtime source for it.
 
-`site/*`, `integration/*`, `platform/*`, `operations/*`, `core/*`, `observability/*`, and `testing/*` are review workstreams, not deployment branches.
+The rule is machine-readable in [`config/repository-authorities.v1.json`](config/repository-authorities.v1.json) and enforced by [`scripts/validate_repository_authorities.py`](scripts/validate_repository_authorities.py).
 
-For the current branch inventory, CI matrix, staging/production environment
-policy, and the exact point where production-readiness work stopped, see
-[`docs/CI-ENVIRONMENTS-AND-HANDOFF.md`](docs/CI-ENVIRONMENTS-AND-HANDOFF.md).
+Critical principal repositories include:
 
-## Canonical communication layer
+| Component | Principal repository |
+|---|---|
+| Middleware | `appolon1908-hue/Middleware-` |
+| Caddy | `appolon1908-hue/Caddy` |
+| Kong | `appolon1908-hue/Kong` |
+| Keycloak | `appolon1908-hue/Keycloak` |
+| n8n | `appolon1908-hue/N8N` |
+| Odoo | `appolon1908-hue/Odoo` |
+| Telnexa SMS/Jasmin | `appolon1908-hue/telnexa` |
+| Telnexa website | `appolon1908-hue/Telnexa-web` |
+| Klyrow email platform | `appolon1908-hue/klyrow.com` |
+| Klyrow website | `appolon1908-hue/klyrow-Website-` |
+| Kyqra crawler | `appolon1908-hue/kyqra-crawler` |
+| VICIdial/Asterisk connector | `appolon1908-hue/Vicidialer-Codestra` |
+| Provisioning | `appolon1908-hue/codestra-provisioning-service` |
+| SDK / connector kit | `appolon1908-hue/SDK-repository` |
+| Social/Postiz | `appolon1908-hue/social.codestra.co` |
 
-```text
-core/integration-contracts
-```
+Independent products keep their own repositories as well. Middleware can hold integration contracts/adapters for MoneyBee, Beyvra, Breero, LARIM-A and other products, but their application source remains in their product repositories.
 
-This branch owns common event, HTTP, webhook, provider-transport, identity, tenant, correlation, causation, idempotency, compatibility, error, and observability rules.
+See [`docs/REPOSITORY-AUTHORITY-POLICY.md`](docs/REPOSITORY-AUTHORITY-POLICY.md) and [`docs/STAGE0_GROUND_TRUTH_20260829.md`](docs/STAGE0_GROUND_TRUTH_20260829.md).
 
-Every other workstream depends directly or transitively on it. CI rejects disconnected branches, dependency cycles, unknown communication links, missing authentication, missing reliability behavior, missing contracts, and verification-only links represented as active.
+## `codestra-production-platform` is reference only
 
-The executable intake runtime persists each accepted signed event and its NATS JetStream outbox record in one PostgreSQL transaction. The outbox worker publishes only canonical `codestra.events.*` subjects and requires an explicit production activation identity plus a mounted NATS credential. Temporal is the declared durable workflow plane. RabbitMQ is not a central Codestra bus; it remains inside the Klyrow and Telnexa provider boundaries.
+`appolon1908-hue/codestra-production-platform` is retained as historical runtime/deployment/reconciliation and rollback evidence. It may be consulted to migrate old source into the correct dedicated repository, but it is not a central release authority and must not receive new implementation for a component that has its own repository.
 
-That same intake transaction appends a tenant-scoped, hash-chained canonical
-event to a database-enforced immutable ledger. See
-[`docs/IMMUTABLE-EVENT-LEDGER.md`](docs/IMMUTABLE-EVENT-LEDGER.md).
+Example: the historical `operations/caddy/api.codestra.co.caddy` baseline is a migration reference; future shared Caddy source belongs in `appolon1908-hue/Caddy`.
 
-Staging and production use separate, startup-enforced resource profiles while
-promoting the same image digest. See
-[`docs/RUNTIME-ENVIRONMENT-LOCKS.md`](docs/RUNTIME-ENVIRONMENT-LOCKS.md).
+Historical records are preserved for provenance. They do not override the accepted source in an owning repository.
 
-Promotion also requires effective runtime safety read-back and a synthetic
-no-provider-effect acceptance journey. See
-[`docs/SYNTHETIC-STAGING-ACCEPTANCE.md`](docs/SYNTHETIC-STAGING-ACCEPTANCE.md).
+## Middleware owns the cross-system write boundary
 
-Critical Temporal workflows are implemented for reconciliation, delayed callbacks, provisioning with compensation, and operator-approved dead-letter recovery. See [`docs/TEMPORAL-WORKFLOWS.md`](docs/TEMPORAL-WORKFLOWS.md).
-
-The sole durable event and command shapes live under `contracts/platform`; the
-runtime validates against those files directly. Provider wire formats are
-normalized projections, not alternate ledgers. See
-[`docs/CANONICAL-CONTRACTS.md`](docs/CANONICAL-CONTRACTS.md).
-
-Effectful requests use the tenant-scoped PostgreSQL command ledger and
-`codestra.command-execution.v1` workflow. A command cannot become complete until
-provider read-back matches its durable intent. See
-[`docs/COMMAND-LEDGER.md`](docs/COMMAND-LEDGER.md).
-
-## Application-server sites
-
-Caddy currently exposes workstreams for:
+The permanent integration rule is:
 
 ```text
-site/codestra                  codestra.co and www redirect
-site/codestra-auth             auth.codestra.co — degraded HTTP 502
-site/codestra-social           social.codestra.co / Postiz
-site/codestra-ai               ai.codestra.co
-site/beyvra                    public, www, platform, API, admin, staging
-site/booked4seasons            root active; www TLS handshake degraded
-site/breero                    production and staging frontends and APIs
+                         Keycloak
+                            |
+                            v
+                           Kong
+                            ^
+                            |
+                          Caddy
+                            |
+                            v
+                       Middleware
+           +----------------+----------------+
+           |                |                |
+           v                v                v
+  VICIdial connector   Telnexa/Jasmin   Klyrow/Email
+           |             SMS only            |
+           v                                 v
+   VICIdial/Asterisk                      Postal/Mautic
+           |
+           +-------------> Odoo <-------------+
+                              ^
+                              |
+                             n8n
+                      orchestration only
 ```
 
-`platform/caddy` owns Middleware-side route compatibility and edge validation.
-The canonical production Caddy desired state lives in
-[`appolon1908-hue/codestra-production-platform`](https://github.com/appolon1908-hue/codestra-production-platform)
-under `operations/caddy/`. `operations/application-host` owns route inventory,
-safe restart boundaries, host health, backup references, and change records.
+Middleware owns authorization at the cross-system boundary, tenant isolation, canonical command/event contracts, semantic idempotency, durable inbox/outbox/audit state, Temporal command execution, provider adapter invocation, read-back, reconciliation, bounded retry/dead-letter and capability enforcement.
 
-## Provider-host stacks
+No browser, site, crawler, scraper, n8n workflow or provider should write directly across system boundaries when the mutation belongs to Middleware governance.
 
-The provider-host architecture adds aggregate site workstreams:
+## Correct adapter/runtime split
+
+Derived integration code in Middleware is allowed when it serves the Middleware boundary and does not duplicate the destination runtime.
+
+Examples:
+
+- `TelnexaAdapter` in Middleware: **allowed**. Jasmin/Telnexa runtime source: **belongs in `telnexa`**.
+- VICIdial command/read-back adapter in Middleware: **allowed**. Restricted Asterisk/VICIdial connector runtime: **belongs in `Vicidialer-Codestra`**.
+- Odoo command mapping in Middleware: **allowed**. Odoo addons/modules: **belong in `Odoo`**.
+- generated Kong expectation/contract fixture: **allowed**. Kong service/routes/plugin implementation: **belongs in `Kong`**.
+- generated n8n contract/template fixture: **allowed**. n8n workflow source: **belongs in `N8N`**.
+- Middleware Connector Runtime: **belongs here**. Developer-facing connector kit/SDK packages: **belong in `SDK-repository`**.
+
+## Canonical Middleware runtime
+
+The executable intake runtime persists each accepted signed event and its NATS JetStream outbox record atomically. Critical workflows use Temporal. The tenant-scoped command ledger makes effectful commands durable and requires provider confirmation/read-back before completion.
+
+Relevant source and documentation include:
+
+- `app/` — Middleware API, security, storage, workers, command and Temporal runtime.
+- `middleware/connector_sdk/` — privileged Middleware connector interfaces and validation.
+- `services/connector-runtime/` — independently packaged Middleware Connector Runtime.
+- `contracts/platform/` — canonical durable event/command shapes.
+- `connectors/manifests/` — Middleware integration manifests and derived contract inputs.
+- [`docs/COMMAND-LEDGER.md`](docs/COMMAND-LEDGER.md)
+- [`docs/TEMPORAL-WORKFLOWS.md`](docs/TEMPORAL-WORKFLOWS.md)
+- [`docs/CANONICAL-CONTRACTS.md`](docs/CANONICAL-CONTRACTS.md)
+
+RabbitMQ is not the central Codestra bus; it remains within provider/product boundaries where applicable.
+
+## Provider boundaries
+
+Telnexa/Jasmin is SMS-only. VICIdial/Asterisk is the voice/contact-center system, with its specific connector owned by `Vicidialer-Codestra`. Klyrow owns email/customer-communications runtime. `kyqra-crawler` is the canonical Kyqra crawler source; legacy `kyqra` is retained only for historical reference.
+
+The approved business-write pattern remains:
 
 ```text
-site/klyrow
-site/telnexa
-site/kyqra-crawler
-site/private-app-integration
-site/codestra-business-scrapper
-operations/provider-host
-platform/nginx-provider
-platform/mariadb
+site/provider/crawler event
+        -> Caddy/Kong or private governed ingress
+        -> Middleware durable signed boundary
+        -> policy + idempotency + reconciliation
+        -> trusted adapter
+        -> destination principal system
+        -> authoritative read-back
 ```
 
-Klyrow includes its gateway/API, worker, billing API/worker/scheduler, SMTP relay, Mautic, Postal, RabbitMQ, PostgreSQL, MariaDB, Prometheus, Grafana, and public route contracts.
+## Caddy and Kong
 
-Telnexa includes Jasmin SMS, billing, Keycloak, RabbitMQ, Redis, PostgreSQL, Prometheus, Node Exporter, public routes, and internal mTLS access.
+`appolon1908-hue/Caddy` owns shared Caddy edge source. `appolon1908-hue/Kong` owns Kong gateway source. Middleware may validate their compatibility, but it does not own either runtime.
 
-Kyqra includes the crawler API, HTTP worker, browser worker, callback worker,
-PostgreSQL, Redis, and `crawler.kyqra.com`. Its only canonical application
-source is
-[`appolon1908-hue/kyqra-crawler`](https://github.com/appolon1908-hue/kyqra-crawler);
-the legacy `appolon1908-hue/kyqra` repository name is retired.
+Any Middleware `platform/caddy` or route-registry material is compatibility/reference material only. It must not be deployed as a competing Caddy source.
 
-The private integration gateway remains loopback/internal-mTLS only. The Codestra Business Scrapper source at `/opt/codestra-business-scrapper` remains recorded as not deployed.
+## Operating and release model
 
-See [`docs/SITE-ARCHITECTURE.md`](docs/SITE-ARCHITECTURE.md).
+1. Change Middleware source only for a Middleware-owned responsibility or versioned integration contract.
+2. Change an external component in its principal repository.
+3. Run exact-head CI in every affected repository.
+4. Build immutable artifacts from accepted source identities.
+5. Keep live effects disabled during staging integration.
+6. Prove authentication, tenant isolation, duplicate/replay behavior, migrations, provider read-back, backup/restore and rollback.
+7. Record every participating repository SHA/artifact in the combined evidence note.
+8. Activate capabilities separately and only after explicit approval.
 
-## Forms, crawler results, and scraper results to Odoo
+There is no central mutable repository that can silently override another repository's accepted release.
 
-The only approved write path is:
+Because Middleware is the cross-system write boundary, this repository owns the **combined release-evidence note**, not the release of the other repositories. See:
 
-```text
-website form / crawler result / approved scraper result
-                    -> edge or private integration gateway
-                    -> durable signed inbox
-                    -> core/lead-intake-normalization
-                    -> consent, suppression, provenance, dedupe, review policy
-                    -> transactional outbox
-                    -> integration/odoo-19
-                    -> Odoo CRM
-```
-
-No site, crawler, scraper, n8n workflow, provider service, or browser test writes directly to Odoo.
-
-Public forms may create or update `new` leads after validation, consent, and suppression checks. Crawler and scraper discoveries enter Odoo as `review_pending` with `review_required=true` and `allow_external_contact=false`.
-
-See:
-
-- [`contracts/lead-intake.schema.json`](contracts/lead-intake.schema.json)
-- [`contracts/odoo-lead-command.schema.json`](contracts/odoo-lead-command.schema.json)
-- [`docs/LEAD-INGESTION-TO-ODOO.md`](docs/LEAD-INGESTION-TO-ODOO.md)
+- [`docs/CROSS_REPOSITORY_RELEASE_EVIDENCE.md`](docs/CROSS_REPOSITORY_RELEASE_EVIDENCE.md)
+- [`docs/releases/RELEASE_EVIDENCE_TEMPLATE.md`](docs/releases/RELEASE_EVIDENCE_TEMPLATE.md)
+- [`docs/CI-ENVIRONMENTS-AND-HANDOFF.md`](docs/CI-ENVIRONMENTS-AND-HANDOFF.md)
 
 ## Repository scope
 
-Commit only application source, workers, tests, migrations, locked dependencies, Dockerfiles, non-secret templates, contracts, route registries, credential-free workflow exports, monitoring configuration, and operational documentation.
+Commit here:
 
-Never commit:
+- Middleware application and worker source;
+- Middleware migrations and durable-state contracts;
+- Middleware Connector Runtime;
+- trusted adapter translations and destination read-back/reconciliation logic;
+- versioned cross-system contracts;
+- non-secret compatibility fixtures and generated desired-state expectations;
+- Middleware deployment templates, tests, observability and operational docs;
+- cross-repository evidence templates.
 
-- `.env`, passwords, tokens, private keys, certificates, or live connection strings;
-- PostgreSQL, MariaDB, Redis, RabbitMQ, inbox, outbox, dead-letter, session, or runtime data;
-- Odoo, n8n, telephony, SMS, email, marketing, crawler, identity, gateway, or provider credentials;
-- production payloads or customer personally identifiable information;
-- browser traces, screenshots, videos, or HAR files containing credentials or customer data;
-- logs, backups, or secret-bearing evidence;
-- files edited inside a running production container.
+Do not commit here as principal source:
 
-## Canonical controls
+- Caddy runtime configuration owned by `Caddy`;
+- Kong implementation owned by `Kong`;
+- Keycloak realm/client implementation owned by `Keycloak`;
+- n8n workflow implementation owned by `N8N`;
+- Odoo module implementation owned by `Odoo`;
+- Telnexa/Jasmin runtime owned by `telnexa`;
+- Klyrow/Postal/Mautic runtime owned by `klyrow.com`;
+- VICIdial/Asterisk connector runtime owned by `Vicidialer-Codestra`;
+- crawler runtime owned by `kyqra-crawler`;
+- provisioning runtime owned by `codestra-provisioning-service`;
+- distributable SDK/connector-kit packages owned by `SDK-repository`;
+- independent product application source.
 
-Cross-service contract catalog, runtime composition, integrated Caddy/Kong
-desired state, multi-service release manifests, promotion evidence, and
-go/no-go records are owned by
-[`appolon1908-hue/codestra-production-platform`](https://github.com/appolon1908-hue/codestra-production-platform)
-on `release/production-activation`. This repository owns Middleware source,
-service contracts, artifacts, and compatibility workstreams; it does not own
-the central deployment manifest.
+Never commit `.env`, passwords, tokens, private keys, certificates, live connection strings, databases, queue state, customer PII, recordings, logs or secret-bearing backups/evidence.
 
-- [`config/integration-branches.json`](config/integration-branches.json) — base workstream manifest and synchronization policy.
-- [`architecture/workstreams.py`](architecture/workstreams.py) — supplemental site/provider workstreams and runtime-status updates.
-- [`architecture/routes.py`](architecture/routes.py) — Caddy/Nginx routes, stack membership, and lead sources.
-- [`architecture/site_architecture.py`](architecture/site_architecture.py) — supplemental dependency, communication, stack, and Odoo-intake graph.
-- [`config/connectivity-map.json`](config/connectivity-map.json) — base dependency and communication graph.
-- [`contracts/event-envelope.schema.json`](contracts/event-envelope.schema.json) — canonical asynchronous event.
-- [`contracts/http-conventions.md`](contracts/http-conventions.md) — HTTP, identity, idempotency, webhook, retry, health, and error rules.
-- [`contracts/provider-transport-conventions.md`](contracts/provider-transport-conventions.md) — Caddy/Nginx, mTLS, RabbitMQ, SMTP, SMS, database, and provider transport rules.
-- [`contracts/observability-conventions.md`](contracts/observability-conventions.md) — release identity, metrics, logs, traces, dashboards, and alerts.
-- [`contracts/release-manifest.v1.schema.json`](contracts/release-manifest.v1.schema.json) — canonical image, source, SBOM, scan, migration, and build evidence.
-- [`docs/RELEASE-SUPPLY-CHAIN.md`](docs/RELEASE-SUPPLY-CHAIN.md) — exact-digest build, keyless signing, verification, and promotion controls.
-- [`docs/SERVER-CONNECTION.md`](docs/SERVER-CONNECTION.md) — read-only server/Git connection and safe source import.
-- [`scripts/discover_middleware_runtime.sh`](scripts/discover_middleware_runtime.sh) — read-only middleware-host inventory.
-- [`scripts/audit_all_workstream_sync.py`](scripts/audit_all_workstream_sync.py) — base and supplemental branch synchronization audit.
+## Current safety posture
+
+Repository source readiness is not runtime activation. Provider/business effect flags remain fail-closed until their separate staging and approval gates pass. No documentation or authority change in this repository authorizes production deployment, Caddy reload, SMS/email delivery, production dialing, unrestricted crawling or Odoo/provider writes.

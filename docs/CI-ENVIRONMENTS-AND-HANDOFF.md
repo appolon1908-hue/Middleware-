@@ -1,129 +1,125 @@
 # CI, environments, and current handoff
 
-Status snapshot: 2026-08-28
+Status snapshot: 2026-08-29
 
-This document is the concise operating reference for source branches, CI,
-staging and production promotion, and the next unfinished production work. It
-does not authorize a deployment or replace environment-specific evidence.
+This is the concise operating reference for Middleware source, CI, environment promotion, and the next gated work in the CRM/telephony/messaging mission. It does not authorize deployment and does not replace repository-specific runtime evidence.
 
-## Branch and environment model
+## Repository and release model
 
-The repository uses `main` as the only release source branch. Staging and
-production are deployment environments, not Git branches. The same immutable
-image digest must be accepted in staging and then promoted to production.
+Middleware uses `main` as its release source branch. Staging and production are deployment environments, not Git branches. The same immutable Middleware artifact accepted in staging may be promoted only after the applicable approval and read-back gates.
 
-| Name | Kind | Current state | Purpose |
-|---|---|---|---|
-| `main` | release source branch | Present remotely at `cdb07b4`; Middleware CI and Signed Middleware Release passed for this commit | Merged, release-eligible source once required protection is confirmed |
-| `integration/system-architecture-alignment` | retained workstream branch | Merged into `main`; retained remotely at `c07cc64` for audit history | Historical integration review; not a deployment source |
-| `testing/playwright` | testing workstream branch | Present remotely | Browser test source; not a staging environment |
-| `staging` | intended deployment environment | No remote Git branch; GitHub Environment existence was not available locally | Deploy and test an immutable digest with external effects disabled |
-| `production` | intended deployment environment | No remote Git branch; GitHub Environment existence was not available locally | Promote the staging-accepted digest after approval |
+Codestra uses a decentralized source model: **if a component has its own GitHub repository, that repository is its principal source**. Repositories couple through versioned contracts and evidence, not by copying their runtimes into Middleware.
 
-Do not create `staging` or `production` source branches. Environment-specific
-differences belong in protected environment configuration and secret managers,
-while source remains identical.
+The canonical machine-readable mapping is `config/repository-authorities.v1.json`; `scripts/validate_repository_authorities.py` fails CI when this rule is violated.
+
+`appolon1908-hue/codestra-production-platform` is reference-only: historical runtime inventory, deployment provenance, rollback/recovery evidence and migration comparison. It is not central release authority and cannot be principal source for a component that has a dedicated repository.
+
+For a cross-repository feature, Middleware owns the combined evidence note because it is the cross-system write boundary. That evidence role does not give Middleware authority to merge, deploy or activate another repository.
+
+See:
+
+- `docs/REPOSITORY-AUTHORITY-POLICY.md`
+- `docs/STAGE0_GROUND_TRUTH_20260829.md`
+- `docs/CROSS_REPOSITORY_RELEASE_EVIDENCE.md`
+- `docs/releases/RELEASE_EVIDENCE_TEMPLATE.md`
 
 ## CI coverage
 
-| Workflow | Pull requests | Push to `main` | Responsibility |
-|---|---|---|---|
-| `Middleware CI` | Yes | Yes | Repository validators, locked unit tests, runtime-image build/smoke, PostgreSQL/Redis integration, NATS, Temporal, and synthetic no-effect acceptance |
-| `Connector SDK v1 validation` | Relevant paths | Relevant paths | Connector manifests, generated artifacts, contracts, and SDK regression tests |
-| `Connector storage v1` | Relevant paths | Relevant paths | Alembic migrations, RLS/tenant isolation, concurrency, backup/restore, and downgrade/upgrade |
-| `Connector Runtime API validation` | Relevant paths | Relevant paths | Connector management API plus PostgreSQL integration and migration replay |
-| `Signed Middleware Release` | No direct trigger | After successful `Middleware CI` on `main` | Build, scan, sign, verify, and preserve immutable release evidence |
+| Workflow | Responsibility |
+|---|---|
+| `Middleware CI` | Repository validators, locked tests, runtime image smoke, PostgreSQL/Redis, NATS, Temporal, synthetic no-effect acceptance and security gates |
+| `Connector SDK v1 validation` | Middleware-consumed connector manifests, generated artifacts, contracts and regression tests |
+| `Connector storage v1` | Alembic migrations, RLS/tenant isolation, concurrency, backup/restore and downgrade/upgrade |
+| `Connector Runtime API validation` | Middleware Connector Runtime management API, PostgreSQL integration and migration replay |
+| `Signed Middleware Release` | Build, scan, sign and verify the Middleware artifact only |
 
-The three connector workflows check out the exact pull-request head SHA during
-review and the exact `github.sha` after merge to `main`. Connector Runtime CI
-provides both `DATABASE_URL` for Alembic and `ADMIN_DATABASE_URL` for its tests.
-
-Recommended protected-branch checks:
-
-- `Validate middleware repository`
-- `Build and smoke-test runtime image`
-- `Disposable PostgreSQL Redis integration`
-- `Disposable NATS JetStream integration`
-- `Temporal critical workflow integration`
-- `Synthetic no-effect acceptance E2E`
-- all connector checks when their paths are changed
-
-GitHub branch protection and GitHub Environments are repository settings and
-cannot be proven by workflow YAML. Confirm them in GitHub before merging or
-promoting a release.
+Recommended protected checks include repository validation, principal-repository authority validation, runtime image build/smoke, disposable PostgreSQL/Redis, NATS, Temporal critical workflows, synthetic no-effect E2E and all affected connector checks.
 
 ## Promotion model
 
+For Middleware itself:
+
 ```text
-workstream pull request
+workstream PR
   -> exact-head CI
   -> protected merge to main
   -> exact-main-SHA CI
-  -> signed immutable image and release evidence
-  -> deploy digest to staging
-  -> runtime read-back, synthetic acceptance, backup/restore and rollback proof
+  -> immutable signed Middleware artifact
+  -> staging with external effects disabled
+  -> runtime read-back + synthetic acceptance + restore/rollback proof
   -> explicit production approval
-  -> deploy the identical digest to production
+  -> promote the identical accepted artifact
 ```
 
-The attached architecture assigns runtime composition and deployment promotion
-to `appolon1908-hue/codestra-production-platform`, whose protected integration
-baseline is `release/production-activation`. That repository owns the central
-contract catalog, runtime composition, multi-service release manifest,
-integrated Caddy/Kong desired state, and promotion evidence. This repository
-produces Middleware source, contracts, and signed service artifacts.
+For a feature spanning repositories:
 
-Caddy's canonical Git home is
-`appolon1908-hue/codestra-production-platform:operations/caddy/`. The local
-`platform/caddy` branch is a Middleware compatibility and review workstream,
-not the production Caddy deployment source.
+```text
+versioned contract
+  -> implementation in each principal repository
+  -> exact accepted SHA/artifact per repository
+  -> cross-repository staging acceptance
+  -> Middleware evidence note listing every immutable identity
+  -> separately approved capability activation
+```
 
-The canonical crawler source is `appolon1908-hue/kyqra-crawler`. The legacy
-`appolon1908-hue/kyqra` repository name is retired and must not appear in new
-contracts, composition, or release records.
+## Caddy and gateway ownership
 
-## Last left off
+The dedicated repository `appolon1908-hue/Caddy` is now the principal source for shared Codestra Caddy edge configuration. The initial `api.codestra.co` baseline is imported there from the historical `codestra-production-platform:release/production-activation:operations/caddy/api.codestra.co.caddy` reference without claiming runtime convergence.
 
-Completed in this work session:
+`appolon1908-hue/Kong` owns Kong services, route/plugin policy, Keycloak OIDC enforcement and gateway reconciliation. Kong does not own Caddy source merely because Caddy forwards to Kong.
 
-- reviewed actual runtime source, dependencies, tests, release configuration,
-  migrations, and security-sensitive settings;
-- merged and pushed the integration review to `main`;
-- confirmed there are no remote `staging` or `production` branches and that
-  `testing/playwright` is a test workstream only;
-- added exact-SHA `main` triggers to all connector workflows;
-- corrected Connector Runtime CI so Alembic receives `DATABASE_URL`;
-- packaged the generated command registry required by the application and added
-  an image build/smoke job to `Middleware CI`;
-- upgraded FastAPI, Starlette, PyJWT, pytest, the Python base image, and hashed
-  locks; `pip-audit` reported no known vulnerabilities;
-- corrected the Cosign v3 annotation flag and completed the signed release;
-- established `codestra-production-platform` as the machine-readable contract,
-  runtime-composition, release-manifest, and Caddy configuration authority;
-- selected `appolon1908-hue/kyqra-crawler` as the only canonical crawler source.
+Middleware `platform/caddy` material is compatibility/review evidence only and must not become a second Caddy runtime source. New shared-edge Caddy source belongs in `appolon1908-hue/Caddy`.
 
-No deployment, GitHub Environment creation, capability activation, Caddy
-reload, or provider-system mutation has been performed.
+No live Caddy configuration has been changed. Runtime convergence requires read-only inventory, checksum comparison, staging Caddy → Kong/Middleware validation, rollback rehearsal, controlled reload and post-change read-back.
 
-## Remaining production blockers
+## Principal provider/product ownership
 
-Work should continue in this order:
+```text
+Caddy                   = appolon1908-hue/Caddy
+Kong                    = appolon1908-hue/Kong
+Keycloak                = appolon1908-hue/Keycloak
+N8N                     = appolon1908-hue/N8N
+Odoo                    = appolon1908-hue/Odoo
+Telnexa/Jasmin          = appolon1908-hue/telnexa (SMS only)
+Telnexa website         = appolon1908-hue/Telnexa-web
+Klyrow/Postal/Mautic    = appolon1908-hue/klyrow.com
+Klyrow website          = appolon1908-hue/klyrow-Website-
+Kyqra crawler           = appolon1908-hue/kyqra-crawler
+VICIdial/Asterisk       = appolon1908-hue/Vicidialer-Codestra
+Provisioning            = appolon1908-hue/codestra-provisioning-service
+SDK / connector kit     = appolon1908-hue/SDK-repository
+Social/Postiz           = appolon1908-hue/social.codestra.co
+Middleware              = appolon1908-hue/Middleware-
+```
 
-1. Make Connector Runtime a self-contained, hash-locked, independently built
-   artifact instead of relying on a CI-only monorepo `PYTHONPATH`.
-2. Add streaming request-size enforcement and bounded encrypted-body retention
-   to Connector Runtime.
-3. Implement reviewed provider command and read-back adapters plus a separately
-   authorized capability activation path. Keep all effects disabled until then.
-4. Define least-privilege database roles, grants, migration locking and migration
-   checksum policy in the deployment authority.
-5. Add a deployed-topology staging test that starts the API, outbox worker and
-   Temporal worker as separate processes and proves the full event path.
-6. Finish the `codestra-production-platform` runtime audit for migration jobs,
-   worker deployment,
-   secret mounts, observability, backups, rollback, staging promotion, and
-   production approval.
+Independent products such as MoneyBee, Beyvra, Breero, LARIM-A and the public Codestra site also remain in their dedicated repositories; Middleware may integrate with them but may not absorb their application source.
 
-The next code task is blocker 1: make Connector Runtime independently buildable
-and hash-locked, then rerun its unit, migration, PostgreSQL, image-smoke,
-dependency-audit, and release-supply-chain gates.
+## Middleware-only ownership
+
+Middleware continues to own the cross-system command/event boundary, durable command ledger, inbox/outbox/audit state, Middleware Temporal command execution, trusted provider adapters, read-back/reconciliation, idempotency, capability enforcement and the privileged Middleware Connector Runtime.
+
+A Telnexa adapter in Middleware is correct; a Jasmin runtime copy is not. A VICIdial command mapping in Middleware is correct; the Asterisk/VICIdial connector runtime belongs in `Vicidialer-Codestra`. Generated compatibility expectations are allowed; the external runtime remains in its principal repository.
+
+## Current gated status
+
+### Stage 0
+
+Source authority is resolved and now enforced by CI. The dedicated Caddy repository corrects the earlier temporary assumption that Kong should own future Caddy source.
+
+### Stage 1
+
+Keycloak/Kong source contracts have green source validation, but the live exit gate still requires a real Client Credentials token to be issued, accepted on the reviewed Kong route, rejected when invalid, and revalidated by Middleware. Do not declare Stage 1 complete from Git configuration alone.
+
+### Stage 2
+
+Middleware has substantial Phase 4 source and provider adapter work. Remaining provider runtime binding must respect each provider's actual confirmation semantics. Telnexa SMS final delivery truth is asynchronous DLR; VICIdial and crawler operations have direct read-back surfaces. No provider activation should bypass the Stage 1 live identity gate.
+
+### Stage 3+
+
+Odoo business modules, n8n runtime binding, provider staging acceptance, gateway activation, full staging acceptance and production launch retain their real-runtime/read-back gates.
+
+## Immediate next gate
+
+Do not skip dependency order. The next runtime gate remains Stage 1 live identity acceptance. Repository ownership cleanup does not activate or deploy anything.
+
+No production deployment, live Caddy reload, provider write, SMS/email delivery, production dialing, unrestricted crawling or production activation is authorized by this document.

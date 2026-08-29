@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 from .config import ConfigurationError, Settings
 from .commands import CommandEnvelope, CommandError
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
+from .n8n_control_plane import router as n8n_control_plane_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -114,6 +115,7 @@ def create_app(
     )
     telemetry = MiddlewareObservability(resolved)
     app.state.observability = telemetry
+    app.include_router(n8n_control_plane_router)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):

@@ -149,9 +149,50 @@ search_working_tree() {
     done
 }
 
+append_git_repository() {
+  local repository="$1"
+  [[ -n "$repository" && -d "$repository" ]] || return 0
+  git -C "$repository" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  case ":${repositories_joined}:" in
+    *":${repository}:"*) return 0 ;;
+  esac
+  repositories+=("$repository")
+  repositories_joined="${repositories_joined:+$repositories_joined:}$repository"
+}
+
+discover_git_repositories() {
+  local root="$1"
+  local marker=""
+  local repository=""
+  append_git_repository "$root"
+  while IFS= read -r -d '' marker; do
+    repository="${marker%/.git}"
+    append_git_repository "$repository"
+  done < <(
+    find "$root" -xdev \
+      \( -path '*/node_modules' -o -path '*/.venv' -o -path '*/venv' -o -path '*/data' \) -prune -o \
+      \( -type d -name .git -o -type f -name .git \) -print0 2>/dev/null
+  )
+}
+
+repositories=()
+repositories_joined=""
+for root in "${roots[@]}"; do
+  discover_git_repositories "$root"
+done
+
+printf '\nGIT_REPOSITORIES\n'
+if ((${#repositories[@]} == 0)); then
+  printf 'GIT_REPOSITORIES=NONE\n'
+else
+  printf '%s\n' "${repositories[@]}"
+fi
+
 search_git_history() {
   local root="$1"
-  [[ -d "$root/.git" || -f "$root/.git" ]] || return 0
+  local matches=""
+  local grep_status=0
+
   printf '\nGIT_REPOSITORY=%s\n' "$root"
   printf 'GIT_HEAD=%s\n' "$(git -C "$root" rev-parse HEAD 2>/dev/null || printf UNAVAILABLE)"
   printf 'GIT_BRANCH=%s\n' "$(git -C "$root" symbolic-ref --short -q HEAD 2>/dev/null || printf DETACHED_OR_UNAVAILABLE)"
@@ -167,12 +208,25 @@ search_git_history() {
 
   if [[ "$DEEP_GIT_SEARCH" == "1" ]]; then
     while IFS= read -r commit; do
-      git -C "$root" grep -IlF -- "$MIGRATION_REVISION" "$commit" -- \
-        '*.py' '*.sql' '*.json' '*.yaml' '*.yml' '*.toml' '*.txt' '*.md' 2>/dev/null |
+      [[ -n "$commit" ]] || continue
+      if matches="$(
+        git -C "$root" grep -IlF -- "$MIGRATION_REVISION" "$commit" -- \
+          '*.py' '*.sql' '*.json' '*.yaml' '*.yml' '*.toml' '*.txt' '*.md' 2>/dev/null
+      )"; then
+        :
+      else
+        grep_status=$?
+        if [[ "$grep_status" -ne 1 ]]; then
+          fail "git grep failed for repository=$root commit=$commit status=$grep_status"
+        fi
+        matches=""
+      fi
+      if [[ -n "$matches" ]]; then
         while IFS= read -r object_path; do
           [[ -n "$object_path" ]] || continue
           printf '%s\t%s\t%s\n' "$root" "$commit" "$object_path" | tee -a "$OUTPUT_DIR/deep-git-hits.tsv"
-        done
+        done <<<"$matches"
+      fi
     done < <(git -C "$root" rev-list --all 2>/dev/null)
   fi
 }
@@ -183,8 +237,8 @@ for root in "${roots[@]}"; do
 done
 
 printf '\nGIT_HISTORY_REVISION_HITS\n'
-for root in "${roots[@]}"; do
-  search_git_history "$root"
+for repository in "${repositories[@]}"; do
+  search_git_history "$repository"
 done
 
 file_hits="$(wc -l <"$OUTPUT_DIR/file-hits.tsv" | tr -d ' ')"

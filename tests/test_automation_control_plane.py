@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import os
 import tempfile
 import unittest
@@ -9,6 +10,14 @@ from unittest.mock import patch
 from middleware_automation import AutomationError, AutomationService
 from middleware_automation.adapters import adapter_for
 from middleware_automation.postgres_repository import apply_migrations, migration_files
+from scripts.verify_stage4_runtime_gate import validate_gate
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_json(path: str) -> dict:
+    return json.loads((ROOT / path).read_text(encoding="utf-8"))
 
 
 class FakeCursor:
@@ -386,6 +395,18 @@ class AutomationControlPlaneTests(unittest.TestCase):
         self.assertEqual([path.name for path in files], applied)
         self.assertTrue(connection.committed)
         self.assertFalse(connection.rolled_back)
+
+    def test_stage4_runtime_gate_is_ordered_and_fail_closed(self) -> None:
+        gate = load_json("config/stage4-runtime-gate.v1.json")
+        errors, lines = validate_gate(gate)
+        self.assertEqual([], errors)
+        self.assertEqual("NO_GO", gate["status"])
+        self.assertTrue(lines[0].startswith("STEP=middleware_original_bearer_ci"))
+        self.assertEqual(
+            "BLOCKED_UNTIL_ALL_STEPS_PASS",
+            gate["production_activation"],
+        )
+        self.assertFalse(gate["live_mutation_performed"])
 
 
 if __name__ == "__main__":

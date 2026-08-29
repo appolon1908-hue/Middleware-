@@ -9,9 +9,16 @@ container scan, or application integration tests.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
+
+try:
+    from verify_stage4_runtime_gate import validate_gate
+except ImportError:  # imported as a package in tests
+    from .verify_stage4_runtime_gate import validate_gate  # type: ignore
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_FILE_BYTES = 10 * 1024 * 1024
@@ -21,6 +28,7 @@ REQUIRED_FILES = (
     Path(".gitignore"),
     Path(".dockerignore"),
     Path("config/preproduction-safety.env.example"),
+    Path("config/stage4-runtime-gate.v1.json"),
 )
 
 FORBIDDEN_TOP_LEVEL_DIRECTORIES = {
@@ -250,6 +258,26 @@ def validate_workflow_pinning(errors: list[str]) -> None:
                 )
 
 
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def validate_stage4_runtime_gate(errors: list[str]) -> None:
+    path = ROOT / "config/stage4-runtime-gate.v1.json"
+    if not path.is_file():
+        return
+    try:
+        gate = load_json(path)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        errors.append(f"invalid Stage 4 runtime gate: {exc}")
+        return
+    if not isinstance(gate, dict):
+        errors.append("Stage 4 runtime gate must be a JSON object")
+        return
+    gate_errors, _ = validate_gate(gate)
+    errors.extend(f"invalid Stage 4 runtime gate: {error}" for error in gate_errors)
+
+
 def main() -> int:
     errors: list[str] = []
     files = iter_repository_files()
@@ -259,6 +287,7 @@ def main() -> int:
     validate_file_contents(files, errors)
     validate_safety_baseline(errors)
     validate_workflow_pinning(errors)
+    validate_stage4_runtime_gate(errors)
 
     if errors:
         print("Middleware repository validation failed:", file=sys.stderr)

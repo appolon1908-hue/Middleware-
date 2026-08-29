@@ -1,8 +1,8 @@
 {
   "schema_version": "2.1",
   "status": "SOURCE_ONLY",
-  "implementation_status": "NOT_IMPLEMENTED",
-  "runtime_test_evidence": "NOT_AVAILABLE",
+  "implementation_status": "SOURCE_IMPLEMENTED",
+  "runtime_test_evidence": "LOCAL_NO_EFFECT_ONLY",
   "independent_approval": "PENDING",
   "authority": {
     "job_ledger": "codestra-middleware-postgresql",
@@ -102,14 +102,14 @@
   },
   "evidence_state": {
     "design_contract": "PRESENT",
-    "database_migrations": "PENDING",
-    "runtime_api": "PENDING",
-    "authorization_tests": "PENDING",
-    "idempotency_tests": "PENDING",
+    "database_migrations": "SOURCE_PRESENT",
+    "runtime_api": "SOURCE_PRESENT",
+    "authorization_tests": "SOURCE_PRESENT",
+    "idempotency_tests": "SOURCE_PRESENT",
     "concurrency_tests": "PENDING",
     "lease_recovery_tests": "PENDING",
     "unknown_outcome_tests": "PENDING",
-    "staging_no_effect_tests": "PENDING",
+    "staging_no_effect_tests": "PENDING_LIVE_STAGING",
     "backup_restore_tests": "PENDING",
     "rollback_rehearsal": "PENDING"
   }

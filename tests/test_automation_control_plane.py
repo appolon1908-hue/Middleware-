@@ -247,7 +247,9 @@ class AutomationControlPlaneTests(unittest.TestCase):
     def test_all_enterprise_adapters_are_registered(self) -> None:
         samples = {
             "crm.odoo.state-sync": "odoo",
-            "email.klyrow.dispatch": "klyrow",
+            "email.klyrow.send": "klyrow",
+            "email.klyrow.smtp-relay": "klyrow-smtp",
+            "email.klyrow.event": "klyrow",
             "sms.telnexa.dispatch": "telnexa",
             "telephony.vicidial.reconcile": "vicidial",
             "crawler.kyqra.reconcile": "kyqra",
@@ -294,6 +296,27 @@ class AutomationControlPlaneTests(unittest.TestCase):
                 f"idem-{index}",
             )
             self.assertEqual(adapter_name, command["adapter_result"]["adapter"])
+
+    def test_klyrow_email_and_smtp_are_separate_fail_closed_paths(self) -> None:
+        for variable in ("ENABLE_EMAIL_DELIVERY", "ENABLE_KLYROW_SMTP_RELAY", "ENABLE_EMAIL_EVENTS"):
+            os.environ.pop(variable, None)
+
+        smtp = adapter_for("email.klyrow.smtp-relay")
+        email = adapter_for("email.klyrow.send")
+        event = adapter_for("email.klyrow.event")
+        self.assertIsNotNone(smtp)
+        self.assertIsNotNone(email)
+        self.assertIsNotNone(event)
+        self.assertEqual("messaging.email.smtp", smtp.domain)
+        self.assertEqual("klyrow-smtp", smtp.name)
+        self.assertEqual(
+            "PAYLOAD_INVALID",
+            smtp.execute("email.klyrow.smtp-relay", {"tenant_id": "t1"}, dry_run=False)["status"],
+        )
+        valid_payload = {"tenant_id": "t1", "domain": "klyrow.com", "message_id": "m1"}
+        result = smtp.execute("email.klyrow.smtp-relay", valid_payload, dry_run=False)
+        self.assertEqual("DELIVERY_DISABLED", result["status"])
+        self.assertEqual("ENABLE_KLYROW_SMTP_RELAY", result["flag"])
 
     def test_non_dry_run_adapter_is_fail_closed_without_delivery_flag(self) -> None:
         old_value = os.environ.pop("ENABLE_ODOO_DELIVERY", None)

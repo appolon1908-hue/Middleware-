@@ -64,7 +64,7 @@ RabbitMQ does not replace Redis or PostgreSQL merely because a branch exists. Br
 
 ## SMTP and email
 
-`integration/klyrow-smtp-relay` submits through authenticated SMTP to the approved mail path. Postal lifecycle callbacks are handled through signed or authenticated delivery events.
+`integration/klyrow-smtp-relay` submits through authenticated SMTP to the approved mail path. Postal lifecycle callbacks are handled through signed or authenticated delivery events. n8n never holds SMTP credentials and never opens SMTP, SMTPS, Postal, Mautic, or Klyrow provider sessions directly. n8n submits only governed Middleware commands such as `email.klyrow.send`, `email.klyrow.smtp-relay`, and `email.klyrow.event`.
 
 Requirements:
 
@@ -74,6 +74,8 @@ Requirements:
 - bounce, complaint, delivery, and deferral normalization;
 - no credentials in Git;
 - no direct website-to-SMTP submission;
+- no direct n8n-to-SMTP or n8n-to-Postal submission;
+- runtime token files only for adapter authorization;
 - reconciliation before repeating a timed-out send.
 
 ## SMS and SMPP

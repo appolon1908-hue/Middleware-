@@ -18,8 +18,17 @@ class Adapter:
     base_url_env: str
     delivery_flag_env: str
     token_file_env: str
+    required_payload_fields: tuple[str, ...] = ()
 
     def execute(self, command_type: str, payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+        missing = [field for field in self.required_payload_fields if not payload.get(field)]
+        if missing:
+            return {
+                "status": "PAYLOAD_INVALID",
+                "adapter": self.name,
+                "domain": self.domain,
+                "missing_fields": missing,
+            }
         if dry_run:
             return {
                 "status": "NO_EFFECT",
@@ -103,6 +112,9 @@ ADAPTERS_BY_PREFIX: dict[str, Adapter] = {
     "support.": Adapter("odoo", "support", "odoo-activity-or-ticket-change", "ODOO_ADAPTER_BASE_URL", "ENABLE_ODOO_DELIVERY", "ODOO_ADAPTER_TOKEN_FILE"),
     "telephony.": Adapter("vicidial", "telephony", "call-or-callback-update", "VICIDIAL_ADAPTER_BASE_URL", "ENABLE_DIALING", "VICIDIAL_ADAPTER_TOKEN_FILE"),
     "sms.": Adapter("telnexa", "messaging.sms", "sms-dispatch", "TELNEXA_ADAPTER_BASE_URL", "ENABLE_SMS_DELIVERY", "TELNEXA_ADAPTER_TOKEN_FILE"),
+    "email.klyrow.smtp-relay": Adapter("klyrow-smtp", "messaging.email.smtp", "smtp-relay-submission", "KLYROW_SMTP_RELAY_BASE_URL", "ENABLE_KLYROW_SMTP_RELAY", "KLYROW_SMTP_RELAY_TOKEN_FILE", ("tenant_id", "domain", "message_id")),
+    "email.klyrow.send": Adapter("klyrow", "messaging.email", "email-submission", "KLYROW_ADAPTER_BASE_URL", "ENABLE_EMAIL_DELIVERY", "KLYROW_ADAPTER_TOKEN_FILE", ("tenant_id", "message_id")),
+    "email.klyrow.event": Adapter("klyrow", "messaging.email.events", "email-lifecycle-event", "KLYROW_ADAPTER_BASE_URL", "ENABLE_EMAIL_EVENTS", "KLYROW_ADAPTER_TOKEN_FILE", ("tenant_id", "message_id", "event_type")),
     "email.": Adapter("klyrow", "messaging.email", "email-or-smtp-dispatch", "KLYROW_ADAPTER_BASE_URL", "ENABLE_EMAIL_DELIVERY", "KLYROW_ADAPTER_TOKEN_FILE"),
     "crawler.": Adapter("kyqra", "crawler.kyqra", "crawler-job-or-result-update", "KYQRA_ADAPTER_BASE_URL", "ENABLE_CRAWLER_EXECUTION", "KYQRA_ADAPTER_TOKEN_FILE"),
     "social.": Adapter("postly", "social.postly", "social-publication", "POSTLY_ADAPTER_BASE_URL", "ENABLE_SOCIAL_PUBLISH", "POSTLY_ADAPTER_TOKEN_FILE"),

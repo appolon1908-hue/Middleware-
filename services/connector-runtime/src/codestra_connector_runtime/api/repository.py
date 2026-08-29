@@ -1068,47 +1068,48 @@ class ConnectorRepository:
         webhook_id = UUID(str(ingress["webhook_id"]))
         inbox_id = uuid4()
         with self.database.session(tenant_id) as session:
-            prior = session.execute(
+            inserted = session.execute(
                 text(
                     """
-                    SELECT body_sha256
-                      FROM connector_sdk.connector_webhook_event_keys
-                     WHERE tenant_id=:tenant_id AND webhook_id=:webhook_id
-                       AND event_id=:event_id
-                     FOR UPDATE
+                    INSERT INTO connector_sdk.connector_webhook_event_keys
+                      (tenant_id, webhook_id, event_id, body_sha256, expires_at)
+                    VALUES (:tenant_id, :webhook_id, :event_id,
+                            :body_sha256, now() + interval '7 days')
+                    ON CONFLICT (webhook_id, event_id) DO NOTHING
+                    RETURNING body_sha256
                     """
                 ),
                 {
                     "tenant_id": tenant_id,
                     "webhook_id": webhook_id,
                     "event_id": event_id,
+                    "body_sha256": body_sha256,
                 },
             ).scalar_one_or_none()
-            duplicate = prior is not None
-            if prior is not None and prior != body_sha256:
-                raise ProblemError(
-                    status=409,
-                    code="WEBHOOK_SEMANTIC_CONFLICT",
-                    title="Webhook semantic conflict",
-                    detail="The provider event ID was reused with a different body.",
-                )
-            if prior is None:
-                session.execute(
+            duplicate = inserted is None
+            accepted_digest = inserted
+            if accepted_digest is None:
+                accepted_digest = session.execute(
                     text(
                         """
-                        INSERT INTO connector_sdk.connector_webhook_event_keys
-                          (tenant_id, webhook_id, event_id, body_sha256,
-                           expires_at)
-                        VALUES (:tenant_id, :webhook_id, :event_id,
-                                :body_sha256, now() + interval '7 days')
+                        SELECT body_sha256
+                          FROM connector_sdk.connector_webhook_event_keys
+                         WHERE tenant_id=:tenant_id AND webhook_id=:webhook_id
+                           AND event_id=:event_id
                         """
                     ),
                     {
                         "tenant_id": tenant_id,
                         "webhook_id": webhook_id,
                         "event_id": event_id,
-                        "body_sha256": body_sha256,
                     },
+                ).scalar_one()
+            if accepted_digest != body_sha256:
+                raise ProblemError(
+                    status=409,
+                    code="WEBHOOK_SEMANTIC_CONFLICT",
+                    title="Webhook semantic conflict",
+                    detail="The provider event ID was reused with a different body.",
                 )
             existing_inbox = session.execute(
                 text(

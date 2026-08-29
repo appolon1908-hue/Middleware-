@@ -7,6 +7,7 @@ import json
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import UUID
 
@@ -215,6 +216,18 @@ def test_connector_connection_and_webhook_lifecycle(client) -> None:
     assert fetched_webhook.json()["data"]["state"] == "DISABLED"
 
 
+def test_management_body_limit_is_enforced_before_json_parsing(client) -> None:
+    test_client, app, _, _ = client
+    app.state.settings.maximum_management_body_bytes = 1024
+    oversized = test_client.post(
+        "/v1/connectors/validate",
+        content=b"{" + (b"x" * 1024) + b"}",
+        headers={"Content-Type": "application/json"},
+    )
+    assert oversized.status_code == 413
+    assert oversized.json()["code"] == "MANAGEMENT_BODY_TOO_LARGE"
+
+
 def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
     test_client, app, tenant_id, tmp_path = client
     manifest = _manifest()
@@ -355,6 +368,29 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
     assert duplicate.json()["data"]["duplicate"] is True
     assert duplicate.json()["data"]["inbox_id"] == inbox_id
 
+    concurrent_event = "evt-api-concurrent-first"
+    concurrent_headers = dict(webhook_headers)
+    concurrent_headers["X-Test-Event-Id"] = concurrent_event
+    concurrent_headers["X-Test-Signature"] = "v1=" + hmac.new(
+        ("s" * 48).encode(),
+        str(now).encode() + b"." + body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    def deliver_once(_index: int):
+        return test_client.post(
+            webhook_path,
+            content=body,
+            headers=concurrent_headers,
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        concurrent = list(executor.map(deliver_once, range(8)))
+    assert {response.status_code for response in concurrent} == {202}
+    concurrent_payloads = [response.json()["data"] for response in concurrent]
+    assert sum(not payload["duplicate"] for payload in concurrent_payloads) == 1
+    assert len({payload["inbox_id"] for payload in concurrent_payloads}) == 1
+
     changed_body = body + b" "
     changed_signature = hmac.new(
         ("s" * 48).encode(),
@@ -370,6 +406,9 @@ def test_signed_webhook_is_durable_before_202_and_replay_safe(client) -> None:
     )
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "WEBHOOK_SEMANTIC_CONFLICT"
+    encrypted_files = list((tmp_path / "bodies").rglob("*.bin"))
+    assert encrypted_path in encrypted_files
+    assert len(encrypted_files) == 2
 
 
 def test_cross_tenant_connection_read_is_denied(client) -> None:

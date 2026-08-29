@@ -38,6 +38,23 @@ class EncryptedBodyStore:
         webhook_id: str,
         event_id: str,
     ) -> str:
+        reference, _ = self.persist_with_status(
+            body,
+            tenant_id=tenant_id,
+            webhook_id=webhook_id,
+            event_id=event_id,
+        )
+        return reference
+
+    def persist_with_status(
+        self,
+        body: bytes,
+        *,
+        tenant_id: str,
+        webhook_id: str,
+        event_id: str,
+    ) -> tuple[str, bool]:
+        """Persist a body and report whether this call created the file."""
         body_digest = hashlib.sha256(body).hexdigest()
         safe_event = hashlib.sha256(event_id.encode("utf-8")).hexdigest()[:24]
         relative = Path(tenant_id) / webhook_id / f"{safe_event}-{body_digest}.bin"
@@ -45,7 +62,7 @@ class EncryptedBodyStore:
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(target.parent, 0o700)
         if target.exists():
-            return "file:" + relative.as_posix()
+            return "file:" + relative.as_posix(), False
 
         nonce = os.urandom(12)
         associated = (
@@ -76,7 +93,7 @@ class EncryptedBodyStore:
         finally:
             if os.path.exists(temporary_path):
                 os.unlink(temporary_path)
-        return "file:" + relative.as_posix()
+        return "file:" + relative.as_posix(), True
 
     def read(
         self,
@@ -104,3 +121,13 @@ class EncryptedBodyStore:
         if hashlib.sha256(body).hexdigest() != body_sha256:
             raise ValueError("encrypted body digest does not match")
         return body
+
+    def remove(self, reference: str) -> None:
+        """Remove a rejected encrypted body without permitting path traversal."""
+        if not reference.startswith("file:"):
+            raise ValueError("unsupported encrypted body reference")
+        relative = Path(reference.removeprefix("file:"))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("invalid encrypted body reference")
+        target = self.root / relative
+        target.unlink(missing_ok=True)

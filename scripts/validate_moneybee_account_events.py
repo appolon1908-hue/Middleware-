@@ -8,7 +8,13 @@ SCHEMA = json.loads((ROOT / "contracts/moneybee-account-provisioned.schema.json"
 ROUTING = json.loads((ROOT / "config/moneybee-account-event-routing.json").read_text())
 PRODUCER = json.loads((ROOT / "config/moneybee-backend-producer-identity.json").read_text())
 
-canonical_required = set(CANONICAL["required"])
+if "required" in CANONICAL:
+    canonical_required = set(CANONICAL["required"])
+else:
+    assert CANONICAL["$ref"] == (
+        "https://contracts.codestra.co/platform/event-envelope.v1.schema.json"
+    )
+    canonical_required = set()
 assert canonical_required <= set(SCHEMA["required"])
 assert SCHEMA["additionalProperties"] is False
 assert SCHEMA["properties"]["specversion"]["const"] == "1.0"

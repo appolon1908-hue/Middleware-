@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MANIFEST_RELATIVE_PATH = Path("config/migration-lineage.v1.json")
 ALEMBIC_VERSION_TABLE = "public.alembic_version"
 REVISION_GLOBS = ("services/**/migrations/versions/*.py",)
 
@@ -22,14 +23,14 @@ class LineageError(RuntimeError):
 
 @dataclass(frozen=True)
 class LineageReport:
-    repository_revisions: tuple[str, ...]
+    authority_revisions: tuple[str, ...]
     database_revisions: tuple[str, ...]
     alembic_table_present: bool
 
     def as_dict(self) -> dict[str, object]:
         return {
             "status": "PASS",
-            "repository_revisions": list(self.repository_revisions),
+            "authority_revisions": list(self.authority_revisions),
             "database_revisions": list(self.database_revisions),
             "alembic_table_present": self.alembic_table_present,
         }
@@ -62,6 +63,34 @@ def _parents(value: Any, path: Path) -> tuple[str, ...]:
     raise LineageError(f"{path}: down_revision must be null, a revision string, or revision sequence")
 
 
+def _validate_graph(graph: dict[str, tuple[str, ...]], label: str) -> None:
+    if not graph:
+        raise LineageError(f"{label} contains no Alembic revisions")
+    missing_parents = sorted(
+        {parent for parents in graph.values() for parent in parents if parent not in graph}
+    )
+    if missing_parents:
+        raise LineageError(
+            f"{label} references missing parent revision(s): " + ", ".join(missing_parents)
+        )
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(revision: str) -> None:
+        if revision in visited:
+            return
+        if revision in visiting:
+            raise LineageError(f"cycle detected in {label} at {revision}")
+        visiting.add(revision)
+        for parent in graph[revision]:
+            visit(parent)
+        visiting.remove(revision)
+        visited.add(revision)
+
+    for revision in graph:
+        visit(revision)
+
+
 def discover_repository_graph(root: Path = ROOT) -> dict[str, tuple[str, ...]]:
     graph: dict[str, tuple[str, ...]] = {}
     paths: list[Path] = []
@@ -79,36 +108,52 @@ def discover_repository_graph(root: Path = ROOT) -> dict[str, tuple[str, ...]]:
         if revision in graph:
             raise LineageError(f"duplicate Alembic revision in repository: {revision}")
         graph[revision] = _parents(_literal_assignment(module, "down_revision", path), path)
-
-    if not graph:
-        raise LineageError("repository contains no Alembic revision sources")
-
-    missing_parents = sorted(
-        {parent for parents in graph.values() for parent in parents if parent not in graph}
-    )
-    if missing_parents:
-        raise LineageError(
-            "repository Alembic graph references missing parent revision(s): "
-            + ", ".join(missing_parents)
-        )
-
-    visiting: set[str] = set()
-    visited: set[str] = set()
-
-    def visit(revision: str) -> None:
-        if revision in visited:
-            return
-        if revision in visiting:
-            raise LineageError(f"cycle detected in Alembic revision graph at {revision}")
-        visiting.add(revision)
-        for parent in graph[revision]:
-            visit(parent)
-        visiting.remove(revision)
-        visited.add(revision)
-
-    for revision in graph:
-        visit(revision)
+    _validate_graph(graph, "repository Alembic graph")
     return graph
+
+
+def load_authority_manifest(root: Path = ROOT) -> dict[str, tuple[str, ...]]:
+    path = root / MANIFEST_RELATIVE_PATH
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LineageError(f"cannot load migration lineage manifest {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise LineageError("migration lineage manifest root must be an object")
+    if value.get("schema_version") != "1.0":
+        raise LineageError("migration lineage manifest schema_version must be 1.0")
+    if value.get("authority") != "reviewed-git-source":
+        raise LineageError("migration lineage manifest authority is invalid")
+    if value.get("alembic_version_table") != ALEMBIC_VERSION_TABLE:
+        raise LineageError("migration lineage manifest version-table authority drifted")
+    rows = value.get("revisions")
+    if not isinstance(rows, list):
+        raise LineageError("migration lineage manifest revisions must be an array")
+    graph: dict[str, tuple[str, ...]] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or set(row) != {"revision", "down_revisions"}:
+            raise LineageError(f"manifest revisions[{index}] shape is invalid")
+        revision = row["revision"]
+        parents = row["down_revisions"]
+        if not isinstance(revision, str) or not revision:
+            raise LineageError(f"manifest revisions[{index}] revision is invalid")
+        if revision in graph:
+            raise LineageError(f"duplicate revision in migration lineage manifest: {revision}")
+        if not isinstance(parents, list) or not all(isinstance(parent, str) and parent for parent in parents):
+            raise LineageError(f"manifest revisions[{index}] down_revisions is invalid")
+        graph[revision] = tuple(parents)
+    _validate_graph(graph, "migration lineage manifest")
+    return graph
+
+
+def authority_graph(root: Path = ROOT) -> dict[str, tuple[str, ...]]:
+    repository = discover_repository_graph(root)
+    manifest = load_authority_manifest(root)
+    if manifest != repository:
+        raise LineageError(
+            "migration lineage manifest does not exactly match reviewed Alembic source; regenerate/review the manifest before release"
+        )
+    return manifest
 
 
 def validate_observed_revisions(
@@ -116,7 +161,7 @@ def validate_observed_revisions(
     *,
     root: Path = ROOT,
 ) -> LineageReport:
-    graph = discover_repository_graph(root)
+    graph = authority_graph(root)
     normalized = tuple(sorted({value.strip() for value in observed if value and value.strip()}))
     if not normalized:
         raise LineageError("Alembic version table exists but contains no revision")
@@ -128,18 +173,18 @@ def validate_observed_revisions(
             + "; restore the exact historical migration source before any stamp, upgrade, or runtime migration"
         )
     return LineageReport(
-        repository_revisions=tuple(sorted(graph)),
+        authority_revisions=tuple(sorted(graph)),
         database_revisions=normalized,
         alembic_table_present=True,
     )
 
 
 async def inspect_database_lineage(conn: Any, *, root: Path = ROOT) -> LineageReport:
-    graph = discover_repository_graph(root)
+    graph = authority_graph(root)
     table = await conn.fetchval("SELECT to_regclass('public.alembic_version')::text")
     if table is None:
         return LineageReport(
-            repository_revisions=tuple(sorted(graph)),
+            authority_revisions=tuple(sorted(graph)),
             database_revisions=(),
             alembic_table_present=False,
         )
@@ -161,7 +206,7 @@ async def _database_report(url: str, root: Path) -> LineageReport:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Fail closed when a database Alembic revision is absent from repository history."
+        description="Fail closed when a database Alembic revision is absent from reviewed migration authority."
     )
     parser.add_argument("--repo-root", type=Path, default=ROOT)
     parser.add_argument(

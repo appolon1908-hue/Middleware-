@@ -135,7 +135,7 @@
         "product.breero",
         "product.larim-a",
         "product.freight",
-        "product.beyvra-nonfinancial",
+        "product.beyvra-platform",
         "product.booked4seasons",
         "product.trading-nonfinancial"
       ],
@@ -351,14 +351,14 @@
     {"prefix": "breero.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.breero"]},
     {"prefix": "larim.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.larim-a"]},
     {"prefix": "freight.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.freight"]},
-    {"prefix": "beyvra.operations.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.beyvra-nonfinancial"]},
+    {"prefix": "beyvra.operations.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.beyvra-platform"]},
     {"prefix": "booked4seasons.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.booked4seasons"]},
     {"prefix": "trading.operations.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.trading-nonfinancial"]},
     {"prefix": "real-wallet.operations.", "scope": "automation.command.product", "client": "n8n-product-automation", "workflow_families": ["product.trading-nonfinancial"]},
     {"prefix": "privacy.", "scope": "automation.command.privacy", "client": "n8n-privacy-automation", "workflow_families": ["privacy"]}
   ],
   "product_boundaries": {
-    "product.beyvra-nonfinancial": {
+    "product.beyvra-platform": {
       "backend_repository": "appolon1908-hue/beyvra-backend",
       "frontend_repository": "appolon1908-hue/beyvra-frontend",
       "frontend_is_automation_client": false,

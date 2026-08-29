@@ -1,4 +1,4 @@
-# Beyvra non-financial automation boundary
+# Beyvra platform automation boundary
 
 The Beyvra integration is split into two repositories:
 
@@ -10,12 +10,12 @@ appolon1908-hue/beyvra-frontend
 The backend is the domain authority and the only Beyvra application that may participate in Middleware automation commands. The frontend is a browser UI and never authenticates as an n8n or Middleware machine client.
 
 ```text
-workflow_family = product.beyvra-nonfinancial
+workflow_family = product.beyvra-platform
 client          = n8n-product-automation
 command_prefix  = beyvra.operations.
 ```
 
-Allowed orchestration is limited to onboarding, compliance reminders, support tasks, internal alerts, report readiness, notification delivery and signed-webhook reconciliation. Trading, orders, wallets, ledgers, deposits, withdrawals, transfers, payments, custody, balances, broker credentials and provider credentials are excluded, including demo-order submission.
+Allowed orchestration is limited to Beyvra platform onboarding, compliance reminders, support tasks, internal alerts, report readiness, notification delivery and signed-webhook reconciliation. Beyvra is separate from the Trading platform lane. Orders, wallets, ledgers, deposits, withdrawals, transfers, payments, custody, balances, broker credentials and provider credentials are excluded, including demo-order submission.
 
 Dependencies:
 

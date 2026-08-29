@@ -121,7 +121,7 @@ ADAPTERS_BY_PREFIX: dict[str, Adapter] = {
     "provisioning.": Adapter("provisioning", "provisioning", "tenant-or-integration-change", "PROVISIONING_ADAPTER_BASE_URL", "ENABLE_PROVISIONING_DELIVERY", "PROVISIONING_ADAPTER_TOKEN_FILE"),
     "identity.": Adapter("identity", "identity", "service-identity-change", "IDENTITY_ADAPTER_BASE_URL", "ENABLE_PROVISIONING_DELIVERY", "IDENTITY_ADAPTER_TOKEN_FILE"),
     "moneybee.": Adapter("moneybee", "product.moneybee", "product-operation", "MONEYBEE_ADAPTER_BASE_URL", "ENABLE_PRODUCT_DELIVERY", "MONEYBEE_ADAPTER_TOKEN_FILE"),
-    "beyvra.operations.": Adapter("beyvra", "product.beyvra-nonfinancial", "nonfinancial-product-operation", "BEYVRA_ADAPTER_BASE_URL", "ENABLE_PRODUCT_DELIVERY", "BEYVRA_ADAPTER_TOKEN_FILE"),
+    "beyvra.operations.": Adapter("beyvra", "product.beyvra-platform", "beyvra-platform-operation", "BEYVRA_ADAPTER_BASE_URL", "ENABLE_PRODUCT_DELIVERY", "BEYVRA_ADAPTER_TOKEN_FILE"),
     "larim.": Adapter("larim-a", "product.larim-a", "booking-or-dispatch-operation", "LARIM_A_ADAPTER_BASE_URL", "ENABLE_PRODUCT_DELIVERY", "LARIM_A_ADAPTER_TOKEN_FILE"),
     "freight.": Adapter("freight", "product.freight", "shipment-or-document-operation", "FREIGHT_ADAPTER_BASE_URL", "ENABLE_PRODUCT_DELIVERY", "FREIGHT_ADAPTER_TOKEN_FILE"),
     "breero.": Adapter("breero", "product.breero", "marketplace-operation", "BREERO_ADAPTER_BASE_URL", "ENABLE_PRODUCT_DELIVERY", "BREERO_ADAPTER_TOKEN_FILE"),

@@ -10,6 +10,7 @@ from .commands import (
     MemoryCommandStore,
     PostgresCommandStore,
 )
+from .communications import CommunicationsService, MemoryCommunicationsStore
 from .config import Settings
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
@@ -35,6 +36,7 @@ class Runtime:
     replay: ReplayGuard
     tokens: TokenVerifier
     commands: CommandService | None = None
+    communications: CommunicationsService | None = None
 
     async def readiness(self) -> ReadinessReport:
         checks: dict[str, Awaitable[bool] | None] = {
@@ -77,14 +79,19 @@ class Runtime:
 async def build_runtime(settings: Settings) -> Runtime:
     tokens = KeycloakJwtVerifier(settings)
     if settings.allow_in_memory_storage:
+        commands = CommandService(
+            store=MemoryCommandStore(),
+            policies=CommandPolicyRegistry.load(),
+        )
         return Runtime(
             settings=settings,
             inbox=MemoryInboxStore(),
             replay=MemoryReplayGuard(),
             tokens=tokens,
-            commands=CommandService(
-                store=MemoryCommandStore(),
-                policies=CommandPolicyRegistry.load(),
+            commands=commands,
+            communications=CommunicationsService(
+                store=MemoryCommunicationsStore(),
+                commands=commands,
             ),
         )
     assert settings.database_url is not None
@@ -109,6 +116,10 @@ async def build_runtime(settings: Settings) -> Runtime:
             store=commands,
             policies=CommandPolicyRegistry.load(),
         ),
+    )
+    runtime.communications = CommunicationsService(
+        store=MemoryCommunicationsStore(),
+        commands=runtime.commands,
     )
     if not await runtime.ready():
         await runtime.close()

@@ -2,35 +2,38 @@
 
 Status snapshot: 2026-08-29
 
-This is the concise operating reference for Middleware source, CI, environment promotion, and the next gated work in the CRM/telephony/messaging mission. It does not authorize deployment and it does not replace repository-specific runtime evidence.
+This is the concise operating reference for Middleware source, CI, environment promotion, and the next gated work in the CRM/telephony/messaging mission. It does not authorize deployment and does not replace repository-specific runtime evidence.
 
-## Branch and environment model
+## Repository and release model
 
-Middleware uses `main` as its release source branch. Staging and production are deployment environments, not Git branches. The same immutable image digest accepted in staging is promoted to production only after the applicable approval and read-back gates.
+Middleware uses `main` as its release source branch. Staging and production are deployment environments, not Git branches. The same immutable Middleware artifact accepted in staging may be promoted only after the applicable approval and read-back gates.
 
-Codestra uses a **decentralized repository release model**. Every owning repository releases independently from an immutable accepted source/artifact identity and couples to other repositories through versioned contracts. No central mutable repository may silently override the accepted release of another service.
+Codestra uses a decentralized source model: **if a component has its own GitHub repository, that repository is its principal source**. Repositories couple through versioned contracts and evidence, not by copying their runtimes into Middleware.
 
-For a cross-repository feature, Middleware owns the combined **evidence note** because it is the cross-system write boundary. That evidence role does not give Middleware authority to merge, deploy or activate another repository.
+The canonical machine-readable mapping is `config/repository-authorities.v1.json`; `scripts/validate_repository_authorities.py` fails CI when this rule is violated.
+
+`appolon1908-hue/codestra-production-platform` is reference-only: historical runtime inventory, deployment provenance, rollback/recovery evidence and migration comparison. It is not central release authority and cannot be principal source for a component that has a dedicated repository.
+
+For a cross-repository feature, Middleware owns the combined evidence note because it is the cross-system write boundary. That evidence role does not give Middleware authority to merge, deploy or activate another repository.
 
 See:
 
+- `docs/REPOSITORY-AUTHORITY-POLICY.md`
 - `docs/STAGE0_GROUND_TRUTH_20260829.md`
 - `docs/CROSS_REPOSITORY_RELEASE_EVIDENCE.md`
 - `docs/releases/RELEASE_EVIDENCE_TEMPLATE.md`
 
 ## CI coverage
 
-| Workflow | Pull requests | Push to `main` | Responsibility |
-|---|---|---|---|
-| `Middleware CI` | Yes | Yes | Repository validators, locked tests, runtime image smoke, PostgreSQL/Redis, NATS, Temporal, synthetic no-effect acceptance and security gates |
-| `Connector SDK v1 validation` | Relevant paths | Relevant paths | Connector manifests, generated artifacts, contracts and SDK regression tests |
-| `Connector storage v1` | Relevant paths | Relevant paths | Alembic migrations, RLS/tenant isolation, concurrency, backup/restore and downgrade/upgrade |
-| `Connector Runtime API validation` | Relevant paths | Relevant paths | Management API, PostgreSQL integration and migration replay |
-| `Signed Middleware Release` | protected release path | accepted `main` source | Build, scan, sign, verify and preserve immutable service release evidence |
+| Workflow | Responsibility |
+|---|---|
+| `Middleware CI` | Repository validators, locked tests, runtime image smoke, PostgreSQL/Redis, NATS, Temporal, synthetic no-effect acceptance and security gates |
+| `Connector SDK v1 validation` | Middleware-consumed connector manifests, generated artifacts, contracts and regression tests |
+| `Connector storage v1` | Alembic migrations, RLS/tenant isolation, concurrency, backup/restore and downgrade/upgrade |
+| `Connector Runtime API validation` | Middleware Connector Runtime management API, PostgreSQL integration and migration replay |
+| `Signed Middleware Release` | Build, scan, sign and verify the Middleware artifact only |
 
-Recommended protected checks include repository validation, runtime image build/smoke, disposable PostgreSQL/Redis, NATS, Temporal critical workflows, synthetic no-effect E2E and all affected connector checks.
-
-Branch protection and GitHub Environment controls are repository settings; workflow YAML alone cannot prove they are active. Confirm the actual settings before merge or promotion.
+Recommended protected checks include repository validation, principal-repository authority validation, runtime image build/smoke, disposable PostgreSQL/Redis, NATS, Temporal critical workflows, synthetic no-effect E2E and all affected connector checks.
 
 ## Promotion model
 
@@ -41,100 +44,82 @@ workstream PR
   -> exact-head CI
   -> protected merge to main
   -> exact-main-SHA CI
-  -> immutable signed Middleware image/artifact
-  -> staging deployment with external effects disabled
+  -> immutable signed Middleware artifact
+  -> staging with external effects disabled
   -> runtime read-back + synthetic acceptance + restore/rollback proof
   -> explicit production approval
-  -> promote the identical accepted digest
+  -> promote the identical accepted artifact
 ```
 
 For a feature spanning repositories:
 
 ```text
 versioned contract
-  -> independently reviewed implementation PRs
-  -> exact accepted SHA/digest per repository
+  -> implementation in each principal repository
+  -> exact accepted SHA/artifact per repository
   -> cross-repository staging acceptance
-  -> Middleware release-evidence note listing every immutable identity
+  -> Middleware evidence note listing every immutable identity
   -> separately approved capability activation
 ```
 
 ## Caddy and gateway ownership
 
-Stage 0 resolved the previous shared-Caddy ownership ambiguity:
+The dedicated repository `appolon1908-hue/Caddy` is now the principal source for shared Codestra Caddy edge configuration. The initial `api.codestra.co` baseline is imported there from the historical `codestra-production-platform:release/production-activation:operations/caddy/api.codestra.co.caddy` reference without claiming runtime convergence.
 
-- `appolon1908-hue/Kong` is the **future shared API-edge Caddy source authority** under `deploy/caddy/`, alongside Kong gateway/security source.
-- `appolon1908-hue/codestra-production-platform` is retained as historical deployment/runtime-reconciliation/rollback evidence, not a central release authority.
-- Middleware `platform/caddy` remains compatibility/review source, not the future production shared-edge source.
-- Product-specific frontend/webserver configuration remains in the product repository unless it is part of the shared `api.codestra.co` edge.
+`appolon1908-hue/Kong` owns Kong services, route/plugin policy, Keycloak OIDC enforcement and gateway reconciliation. Kong does not own Caddy source merely because Caddy forwards to Kong.
 
-No live Caddy configuration has been moved. Source convergence requires read-only runtime inventory, checksums, staging Caddy -> Kong validation, rollback rehearsal, immutable deployment and post-change read-back.
+Middleware `platform/caddy` material is compatibility/review evidence only and must not become a second Caddy runtime source. New shared-edge Caddy source belongs in `appolon1908-hue/Caddy`.
 
-## Canonical provider ownership
+No live Caddy configuration has been changed. Runtime convergence requires read-only inventory, checksum comparison, staging Caddy → Kong/Middleware validation, rollback rehearsal, controlled reload and post-change read-back.
+
+## Principal provider/product ownership
 
 ```text
-Telnexa/Jasmin          = SMS
-Vicidialer-Codestra     = VICIdial/Asterisk voice/contact-center connector
-Klyrow/Postal/Mautic    = email/customer communications
-kyqra-crawler           = canonical crawler runtime
-n8n                     = orchestration only
-Odoo                    = CRM/business state
-Middleware              = sole cross-system command/write authority
-Keycloak                = identity authority
-Kong                    = API/security gateway
+Caddy                   = appolon1908-hue/Caddy
+Kong                    = appolon1908-hue/Kong
+Keycloak                = appolon1908-hue/Keycloak
+N8N                     = appolon1908-hue/N8N
+Odoo                    = appolon1908-hue/Odoo
+Telnexa/Jasmin          = appolon1908-hue/telnexa (SMS only)
+Telnexa website         = appolon1908-hue/Telnexa-web
+Klyrow/Postal/Mautic    = appolon1908-hue/klyrow.com
+Klyrow website          = appolon1908-hue/klyrow-Website-
+Kyqra crawler           = appolon1908-hue/kyqra-crawler
+VICIdial/Asterisk       = appolon1908-hue/Vicidialer-Codestra
+Provisioning            = appolon1908-hue/codestra-provisioning-service
+SDK / connector kit     = appolon1908-hue/SDK-repository
+Social/Postiz           = appolon1908-hue/social.codestra.co
+Middleware              = appolon1908-hue/Middleware-
 ```
 
-The legacy `appolon1908-hue/kyqra` repository is historical only. `scrapper` has active source/hardening work but no repository-backed staging or production deployment evidence and must not become a competing crawler runtime.
+Independent products such as MoneyBee, Beyvra, Breero, LARIM-A and the public Codestra site also remain in their dedicated repositories; Middleware may integrate with them but may not absorb their application source.
+
+## Middleware-only ownership
+
+Middleware continues to own the cross-system command/event boundary, durable command ledger, inbox/outbox/audit state, Middleware Temporal command execution, trusted provider adapters, read-back/reconciliation, idempotency, capability enforcement and the privileged Middleware Connector Runtime.
+
+A Telnexa adapter in Middleware is correct; a Jasmin runtime copy is not. A VICIdial command mapping in Middleware is correct; the Asterisk/VICIdial connector runtime belongs in `Vicidialer-Codestra`. Generated compatibility expectations are allowed; the external runtime remains in its principal repository.
 
 ## Current gated status
 
-### Stage 0 — source ground truth
+### Stage 0
 
-The repository/source-authority audit is implemented in draft PRs across the owning repositories. It resolves Kyqra, Telnexa/Klyrow frontend-backend splits, Scrapper deployment truth, SDK-vs-runtime connector ownership and future shared Caddy ownership.
+Source authority is resolved and now enforced by CI. The dedicated Caddy repository corrects the earlier temporary assumption that Kong should own future Caddy source.
 
-Stage 0 is source-complete only after those PRs receive their normal review/merge treatment. It does not change live runtime.
+### Stage 1
 
-### Stage 1 — identity foundation
+Keycloak/Kong source contracts have green source validation, but the live exit gate still requires a real Client Credentials token to be issued, accepted on the reviewed Kong route, rejected when invalid, and revalidated by Middleware. Do not declare Stage 1 complete from Git configuration alone.
 
-Keycloak and Kong source contracts are substantially implemented and the current Keycloak/Kong OIDC alignment PRs have green source validation. The live exit gate remains mandatory:
+### Stage 2
 
-```text
-real Client Credentials token issued by auth.codestra.co
--> accepted by the reviewed Kong route
--> invalid/expired/wrong-audience token rejected
--> Middleware receives and revalidates the intended service/tenant identity
-```
+Middleware has substantial Phase 4 source and provider adapter work. Remaining provider runtime binding must respect each provider's actual confirmation semantics. Telnexa SMS final delivery truth is asynchronous DLR; VICIdial and crawler operations have direct read-back surfaces. No provider activation should bypass the Stage 1 live identity gate.
 
-Do **not** declare Stage 1 complete from Git configuration alone.
+### Stage 3+
 
-### Stage 2 — Middleware Phase 4
-
-Several tasks from the older mission wording are already present in source or in reviewed open hardening branches:
-
-- Connector Runtime is independently packaged under `services/connector-runtime`.
-- streaming request-size/encrypted-body safety work exists in dedicated Connector Runtime hardening PRs;
-- runtime/quality gates and dependency audit are established;
-- source-aligned Odoo and provider adapters exist in current integration PRs;
-- command ledger and Temporal command execution require provider read-back before completion.
-
-The remaining integration question is **runtime binding of each provider according to its real confirmation semantics**, not creation of another adapter/command ledger. Do not force all providers through the same synchronous pattern: Telnexa SMS final delivery truth is asynchronous DLR, while VICIdial and crawler operations have direct state read-back APIs.
-
-Per the mission stage gate, no new provider runtime activation should proceed until Stage 1 live identity acceptance is proven. All provider/business effect flags remain false.
-
-### Stage 3 — Odoo
-
-Odoo `main` has a real Odoo 19 addon/test baseline; the old claim that `custom-addons/` contains only a README is stale. The broader CRM/contact-center business modules required by the mission are still not accepted on `main`, so the Stage 3 end-to-end lead/consent/restore exit condition remains open.
-
-### Stage 4 — n8n
-
-The canonical N8N source and governance controls exist, but runtime endpoint/credential/editor binding and workflow activation remain intentionally unverified/disabled. The Stage 4 exit still requires a real staging CP workflow through Middleware after Stage 2/3 prerequisites are met.
-
-### Stages 5–9
-
-Provider live command/read-back, Kong/Caddy activation, full staging acceptance and production launch retain their explicit real-runtime gates. Source-ready code is not equivalent to a launched capability.
+Odoo business modules, n8n runtime binding, provider staging acceptance, gateway activation, full staging acceptance and production launch retain their real-runtime/read-back gates.
 
 ## Immediate next gate
 
-Do not skip the dependency order. The next mission gate is **Stage 1 live identity acceptance**. Once that is proven, Stage 2 can safely close the remaining provider-runtime binding and then move to Odoo/n8n/provider staging acceptance.
+Do not skip dependency order. The next runtime gate remains Stage 1 live identity acceptance. Repository ownership cleanup does not activate or deploy anything.
 
-No deployment, GitHub Environment creation, live Caddy reload, provider write, SMS/email delivery, production dialing, unrestricted crawling or production activation is authorized by this document.
+No production deployment, live Caddy reload, provider write, SMS/email delivery, production dialing, unrestricted crawling or production activation is authorized by this document.

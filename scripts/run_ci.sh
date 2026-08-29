@@ -24,6 +24,9 @@ python3 -m compileall -q "${python_dirs[@]}"
 printf '==> Validating repository safety controls\n'
 python3 scripts/validate_repository.py
 
+printf '==> Validating Stage 4 runtime production gate\n'
+python3 scripts/verify_stage4_runtime_gate.py --allow-no-go
+
 printf '==> Validating principal repository ownership\n'
 python3 scripts/validate_repository_authorities.py
 

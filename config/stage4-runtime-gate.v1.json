@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "status": "NO_GO",
+  "target": "stage4-orchestration-to-production",
+  "production_activation": "BLOCKED_UNTIL_ALL_STEPS_PASS",
+  "live_mutation_performed": false,
+  "observed_at": "2026-08-29",
+  "required_order": [
+    "middleware_original_bearer_ci",
+    "staging_migration_lineage",
+    "staging_dns_reachability",
+    "live_authorization_matrix",
+    "cp_odoo_no_effect_runtime_proof",
+    "production_release_approval"
+  ],
+  "steps": [
+    {
+      "id": "middleware_original_bearer_ci",
+      "name": "Middleware original bearer source and exact-head CI",
+      "state": "PASS",
+      "evidence": {
+        "source_branch": "origin/main",
+        "source_head_contains": "5a796bcdfb5847956227e0ca77ada42dd6a67c53",
+        "pr": "https://github.com/appolon1908-hue/Middleware-/pull/45",
+        "ci_run": "https://github.com/appolon1908-hue/Middleware-/actions/runs/33240926318",
+        "notes": "PR #45 closed unmerged, but the exact head is contained in later main history and its check runs completed successfully."
+      },
+      "blocks_production": true
+    },
+    {
+      "id": "staging_migration_lineage",
+      "name": "Staging Middleware Alembic lineage repaired",
+      "state": "BLOCKED",
+      "blocker": "observed revision 0053_callback_worker_grants is absent from reviewed migration lineage",
+      "required_evidence": [
+        "staging database backup identifier",
+        "current staging image digest and source SHA",
+        "current public.alembic_version rows",
+        "recovered historical migration source and parent chain",
+        "successful disposable restore and migration validation"
+      ],
+      "blocks_production": true
+    },
+    {
+      "id": "staging_dns_reachability",
+      "name": "Staging identity and API reachability",
+      "state": "PENDING",
+      "observed": {
+        "auth.codestra.co_dns": "PASS",
+        "api.codestra.co_dns": "PASS",
+        "oidc_discovery": "PASS",
+        "api_ready_route": "PENDING",
+        "api_command_route": "PENDING"
+      },
+      "required_evidence": [
+        "auth.codestra.co DNS resolution",
+        "api.codestra.co DNS resolution",
+        "OIDC discovery HTTP 200",
+        "Middleware /ready HTTP 200 or authenticated runtime safety read-back",
+        "Kong route for /v1/commands returns an auth or method decision instead of 404"
+      ],
+      "blocks_production": true
+    },
+    {
+      "id": "live_authorization_matrix",
+      "name": "Keycloak to Kong to Middleware authorization matrix",
+      "state": "PENDING",
+      "required_evidence": [
+        "Moneybee correct CRM command allowed",
+        "missing bearer returns 401",
+        "malformed bearer returns 401",
+        "wrong product scope returns 403",
+        "social-codestra to CRM returns 403",
+        "Breero to telephony returns 403",
+        "LARIM-A to telephony returns 403",
+        "Transportation to telephony returns 403"
+      ],
+      "blocks_production": true
+    },
+    {
+      "id": "cp_odoo_no_effect_runtime_proof",
+      "name": "CP-ODOO no-effect runtime proof",
+      "state": "PENDING",
+      "required_evidence": [
+        "inactive CP-ODOO workflow imported into staging n8n",
+        "all external delivery flags off",
+        "n8n outbound policy allows Middleware only",
+        "expected Odoo staging state projection or dry-run state change",
+        "unexpected DLQ count is zero"
+      ],
+      "blocks_production": true
+    },
+    {
+      "id": "production_release_approval",
+      "name": "Final production release approval",
+      "state": "PENDING",
+      "required_evidence": [
+        "immutable release manifest",
+        "source SHA and image digest",
+        "workflow export hashes",
+        "backup and restore evidence",
+        "rollback rehearsal evidence",
+        "independent approval"
+      ],
+      "blocks_production": true
+    }
+  ]
+}

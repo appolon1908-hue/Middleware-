@@ -22,6 +22,7 @@ REQUIRED_FILES = (
     Path(".gitignore"),
     Path(".dockerignore"),
     Path("config/preproduction-safety.env.example"),
+    Path("config/stage4-runtime-gate.v1.json"),
 )
 
 FORBIDDEN_TOP_LEVEL_DIRECTORIES = {

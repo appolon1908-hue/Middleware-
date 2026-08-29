@@ -10,9 +10,10 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
 
-from .config import ConfigurationError, Settings
 from .commands import CommandEnvelope, CommandError
+from .config import ConfigurationError, Settings
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
+from .control_plane_auth import authorize_command, caller_for_authorization
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -271,10 +272,17 @@ def create_app(
         active = request.app.state.runtime
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
+        authorization = request.headers.get("Authorization", "")
+        caller = caller_for_authorization(authorization)
         claims = await active.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id="kong-gateway",
-            required_scope="middleware.request.forward",
+            authorization,
+            expected_client_id=caller.client_id,
+            required_scope=caller.command_scope,
+        )
+        authorize_command(
+            caller,
+            command_type=command.command_type,
+            target=command.target,
         )
         from .security import authorize_tenant
 
@@ -319,10 +327,12 @@ def create_app(
         active = request.app.state.runtime
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
+        authorization = request.headers.get("Authorization", "")
+        caller = caller_for_authorization(authorization)
         claims = await active.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id="kong-gateway",
-            required_scope="middleware.status.read",
+            authorization,
+            expected_client_id=caller.client_id,
+            required_scope=caller.status_scope,
         )
         tenant_id = request.headers.get("X-Tenant-ID", "")
         from .security import authorize_tenant

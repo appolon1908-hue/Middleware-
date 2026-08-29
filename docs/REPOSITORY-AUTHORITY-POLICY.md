@@ -45,6 +45,20 @@ Critical control-plane authorities are:
 
 The full reviewed registry also records independent product repositories so Middleware does not accidentally absorb their source.
 
+## Shared API edge
+
+The shared API-edge ownership chain is permanently:
+
+```text
+client -> Caddy -> Kong -> Middleware -> owned downstream runtime
+```
+
+`appolon1908-hue/Caddy` owns the canonical edge contract at `config/caddy-kong-contract.v1.json`, including the outer TLS/host/reverse-proxy handoff. `appolon1908-hue/Kong` owns the gateway route/security implementation. Middleware must not ask Caddy to bypass Kong for a path already represented in Kong source.
+
+Caddy must not create trusted application identity headers. Kong performs token/scope policy and sets authenticated downstream identity; Middleware revalidates the identity/tenant authorization required for privileged commands.
+
+Transitional legacy Caddy upstreams may exist only as migration compatibility for paths without accepted Kong parity. They are not alternate principals and must be removed after equivalent Kong routes pass write-disabled staging acceptance and rollback gates.
+
 ## `codestra-production-platform`
 
 `appolon1908-hue/codestra-production-platform` is reference-only under the current model. It remains useful for:
@@ -69,7 +83,7 @@ Middleware may keep generated or derived integration files for other repositorie
 4. CI can reproduce or validate the derivation where practical;
 5. deployment of the external component still occurs from its principal repository.
 
-Examples: a Telnexa command schema and Telnexa adapter belong in Middleware; the Jasmin runtime belongs in `telnexa`. A VICIdial command mapping belongs in Middleware; the restricted Asterisk/VICIdial connector belongs in `Vicidialer-Codestra`. A generated Kong route expectation may be tested here; Kong route implementation/reconciliation belongs in `Kong`.
+Examples: a Telnexa command schema and Telnexa adapter belong in Middleware; the Jasmin runtime belongs in `telnexa`. A VICIdial command mapping belongs in Middleware; the restricted Asterisk/VICIdial connector belongs in `Vicidialer-Codestra`. A generated Kong route expectation may be tested here; Kong route implementation/reconciliation belongs in `Kong`. Caddy edge source belongs only in `Caddy`.
 
 ## Release rule
 

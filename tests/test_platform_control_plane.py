@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,7 +18,7 @@ from app.odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterEr
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
-from app.temporal_workflows import CommandExecutionRequest
+from app.temporal_workflows import ActivityResult, CommandExecutionRequest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,6 +179,17 @@ def _request(command_type: str = "crm.lead.upsert") -> CommandExecutionRequest:
     )
 
 
+def _adapter() -> OdooProviderAdapter:
+    settings = SimpleNamespace(app_env="test", external_effects={"ODOO_WRITE": True})
+    return OdooProviderAdapter(
+        settings,
+        {
+            "ODOO_INTEGRATION_BASE_URL": "http://odoo.test",
+            "ODOO_INBOUND_HMAC_SECRET": "test-secret-not-production",
+        },
+    )
+
+
 def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
     settings = SimpleNamespace(app_env="test", external_effects={"ODOO_WRITE": False})
     adapter = OdooProviderAdapter(settings, {})
@@ -184,14 +198,7 @@ def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
 
 
 def test_odoo_adapter_maps_only_canonical_crm_upsert() -> None:
-    settings = SimpleNamespace(app_env="test", external_effects={"ODOO_WRITE": True})
-    adapter = OdooProviderAdapter(
-        settings,
-        {
-            "ODOO_INTEGRATION_BASE_URL": "http://odoo.test",
-            "ODOO_INBOUND_HMAC_SECRET": "test-secret-not-production",
-        },
-    )
+    adapter = _adapter()
     method, path, document = adapter._write_request(_request())
     assert method == "POST"
     assert path == "/codestra/middleware/v1/commands/crm.lead.upsert"
@@ -204,6 +211,94 @@ def test_odoo_adapter_maps_only_canonical_crm_upsert() -> None:
 
     with pytest.raises(OdooProviderAdapterError, match="unsupported Odoo command type"):
         adapter._require_active(_request("crm.lead.create.v1"))
+
+
+def test_odoo_adapter_validates_complete_specialized_payload_before_dispatch() -> None:
+    adapter = _adapter()
+    malformed = replace(
+        _request(),
+        payload={"source_record_id": "source-only"},
+    )
+    with pytest.raises(
+        OdooProviderAdapterError,
+        match="canonical Odoo command rejected payload",
+    ):
+        adapter._write_request(malformed)
+
+
+def test_odoo_adapter_accepts_schema_maximum_source_record_id() -> None:
+    adapter = _adapter()
+    maximum = replace(_request(), payload=_payload("x" * 255))
+    _, _, document = adapter._write_request(maximum)
+    assert document["payload"]["source_record_id"] == "x" * 255
+
+    too_long = replace(_request(), payload=_payload("x" * 256))
+    with pytest.raises(OdooProviderAdapterError, match="canonical Odoo command rejected"):
+        adapter._write_request(too_long)
+
+
+def test_odoo_adapter_reconciles_timeout_before_returning(monkeypatch) -> None:
+    adapter = _adapter()
+    reconciled: list[str] = []
+
+    class TimeoutClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def request(self, *args, **kwargs):
+            raise httpx.ReadTimeout("synthetic timeout")
+
+    async def matched(request: CommandExecutionRequest) -> ActivityResult:
+        reconciled.append(request.command_id)
+        return ActivityResult(
+            status="matched",
+            detail="synthetic status match",
+            provider_operation_id=request.command_id,
+        )
+
+    monkeypatch.setattr(
+        "app.odoo_provider_adapter.httpx.AsyncClient",
+        lambda timeout: TimeoutClient(),
+    )
+    monkeypatch.setattr(adapter, "readback", matched)
+
+    result = asyncio.run(adapter.execute(_request()))
+    assert result.status == "accepted"
+    assert reconciled == [_request().command_id]
+    assert "reconciliation confirmed" in result.detail
+
+
+def test_odoo_adapter_keeps_timeout_unknown_when_status_mismatches(monkeypatch) -> None:
+    adapter = _adapter()
+
+    class TimeoutClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def request(self, *args, **kwargs):
+            raise httpx.ReadTimeout("synthetic timeout")
+
+    async def mismatch(request: CommandExecutionRequest) -> ActivityResult:
+        return ActivityResult(
+            status="mismatch",
+            detail="synthetic status mismatch",
+            provider_operation_id=request.command_id,
+        )
+
+    monkeypatch.setattr(
+        "app.odoo_provider_adapter.httpx.AsyncClient",
+        lambda timeout: TimeoutClient(),
+    )
+    monkeypatch.setattr(adapter, "readback", mismatch)
+
+    with pytest.raises(OdooProviderAdapterError, match="remains unknown"):
+        asyncio.run(adapter.execute(_request()))
 
 
 def test_odoo_hmac_matches_cross_repository_golden_vector() -> None:

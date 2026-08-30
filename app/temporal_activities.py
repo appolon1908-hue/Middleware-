@@ -6,7 +6,7 @@ from uuid import UUID
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from .commands import CommandConflict, CommandNotFound, CommandState, PostgresCommandStore
+from .commands import CommandConflict, CommandNotFound, PostgresCommandStore
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .temporal_workflows import (
     ActivityResult,
@@ -92,6 +92,7 @@ class CommandLedgerWorkflowActivities:
                 actor_id=request.actor_id,
                 reason=request.reason,
                 provider_operation_id=request.provider_operation_id,
+                readback_evidence=request.readback_evidence,
             )
         except (ValueError, CommandConflict, CommandNotFound) as exc:
             raise ApplicationError(
@@ -103,6 +104,7 @@ class CommandLedgerWorkflowActivities:
             status=operation.state,
             detail=request.reason,
             provider_operation_id=operation.provider_operation_id,
+            readback_evidence=operation.readback_evidence,
         )
 
     def _odoo(self, request: CommandExecutionRequest) -> OdooProviderAdapter:

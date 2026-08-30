@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.codestra.co/platform/system-integration-registry.v3.schema.json",
+  "title": "Codestra complete system integration registry v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "inventory",
+    "policy",
+    "systems"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "3.0"
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "account",
+        "inventory_date",
+        "repository_count",
+        "authority",
+        "source_branch"
+      ],
+      "properties": {
+        "account": {
+          "const": "appolon1908-hue"
+        },
+        "inventory_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "repository_count": {
+          "const": 54
+        },
+        "authority": {
+          "const": "appolon1908-hue/Middleware-"
+        },
+        "source_branch": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "required": [
+        "middleware_is_only_cross_system_write_authority",
+        "principal_repository_owns_runtime",
+        "sdk_repository_is_contract_authority",
+        "n8n_is_orchestration_only",
+        "provider_callbacks_terminate_at_middleware",
+        "effectful_writes_require_idempotency",
+        "unknown_outcome_requires_readback_before_retry",
+        "external_effects_disabled_by_default"
+      ]
+    },
+    "systems": {
+      "type": "array",
+      "minItems": 54,
+      "maxItems": 54,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "repository",
+          "category",
+          "authority",
+          "lifecycle",
+          "cell",
+          "integration_mode",
+          "middleware_relationship",
+          "source_state",
+          "contract_families",
+          "forbidden",
+          "canonical",
+          "direct_n8n_provider_access",
+          "direct_cross_system_write",
+          "live_effects_enabled"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "repository": {
+            "type": "string",
+            "pattern": "^appolon1908-hue/.+$"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lifecycle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cell": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "integration_mode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "middleware_relationship": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_state": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contract_families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "forbidden": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "canonical": {
+            "type": "boolean"
+          },
+          "direct_n8n_provider_access": {
+            "const": false
+          },
+          "direct_cross_system_write": {
+            "type": "boolean"
+          },
+          "live_effects_enabled": {
+            "const": false
+          }
+        }
+      }
+    }
+  }
+}

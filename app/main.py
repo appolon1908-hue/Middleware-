@@ -249,6 +249,9 @@ def create_app(
         )
         report = await request.app.state.runtime.readiness()
         request.app.state.observability.record_readiness(report.components)
+        await request.app.state.observability.refresh_intake_backlog(
+            request.app.state.runtime.inbox
+        )
         body, media_type = request.app.state.observability.render()
         return Response(content=body, headers={"Content-Type": media_type})
 

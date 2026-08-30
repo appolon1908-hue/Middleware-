@@ -1,0 +1,273 @@
+{
+  "schema_version": "1.0",
+  "default_state": "DISABLED",
+  "policy": {
+    "frontends_hold_machine_credentials": false,
+    "public_sites_use_same_origin_intake": true,
+    "product_backends_use_product_scoped_clients": true,
+    "direct_odoo_n8n_provider_access": false,
+    "live_effects_enabled": false
+  },
+  "products": [
+    {
+      "id": "codestra",
+      "repositories": [
+        "appolon1908-hue/codestra",
+        "appolon1908-hue/codestra-backend",
+        "appolon1908-hue/backend2"
+      ],
+      "caller_id": null,
+      "state": "BLOCKED_CANONICAL_BACKEND_DECISION",
+      "contract_families": [
+        "public-intake",
+        "crm-projection",
+        "communications-request",
+        "status-read"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "beyvra",
+      "repositories": [
+        "appolon1908-hue/beyvra-frontend",
+        "appolon1908-hue/beyvra-backend"
+      ],
+      "caller_id": "beyvra-backend",
+      "state": "PARTIAL",
+      "contract_families": [
+        "crm-projection",
+        "beyvra.operations.",
+        "identity-events",
+        "status-read"
+      ],
+      "allowed_targets": [
+        "odoo-19"
+      ],
+      "allowed_command_prefixes": [
+        "crm."
+      ],
+      "forbidden_command_prefixes": [
+        "trade.",
+        "order.",
+        "wallet.",
+        "ledger.",
+        "payment.",
+        "deposit.",
+        "withdrawal.",
+        "transfer.",
+        "custody.",
+        "broker.",
+        "provider."
+      ]
+    },
+    {
+      "id": "breero",
+      "repositories": [
+        "appolon1908-hue/Breero.com"
+      ],
+      "caller_id": "breero-backend",
+      "state": "PARTIAL",
+      "contract_families": [
+        "crm-projection",
+        "communications-request",
+        "provisioning-request",
+        "status-read"
+      ],
+      "allowed_targets": [
+        "odoo-19"
+      ],
+      "allowed_command_prefixes": [
+        "crm."
+      ]
+    },
+    {
+      "id": "booked4seasons",
+      "repositories": [
+        "appolon1908-hue/booked4seasons"
+      ],
+      "caller_id": null,
+      "state": "PUBLIC_INTAKE_ONLY",
+      "contract_families": [
+        "public-intake",
+        "crm-lead-request"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "moneybee",
+      "repositories": [
+        "appolon1908-hue/Moneybee-frontend-",
+        "appolon1908-hue/Moneybee-Backend"
+      ],
+      "caller_id": "moneybee-backend",
+      "state": "PARTIAL",
+      "contract_families": [
+        "crm-projection",
+        "communications-request",
+        "provisioning-request",
+        "identity-events",
+        "status-read"
+      ],
+      "allowed_targets": [
+        "odoo-19"
+      ],
+      "allowed_command_prefixes": [
+        "crm."
+      ]
+    },
+    {
+      "id": "freight",
+      "repositories": [
+        "appolon1908-hue/transportaion-Frontend",
+        "appolon1908-hue/transportation-backend-"
+      ],
+      "caller_id": "transportation-backend",
+      "state": "PARTIAL",
+      "contract_families": [
+        "crm-projection",
+        "communications-request",
+        "document-events",
+        "provisioning-request",
+        "status-read"
+      ],
+      "allowed_targets": [
+        "odoo-19"
+      ],
+      "allowed_command_prefixes": [
+        "crm."
+      ]
+    },
+    {
+      "id": "larim-a",
+      "repositories": [
+        "appolon1908-hue/LARIM-A-Fornt-end",
+        "appolon1908-hue/LARIM-A-Backend"
+      ],
+      "caller_id": "larim-a-backend",
+      "state": "PARTIAL",
+      "contract_families": [
+        "crm-projection",
+        "communications-request",
+        "provisioning-request",
+        "status-read"
+      ],
+      "allowed_targets": [
+        "odoo-19"
+      ],
+      "allowed_command_prefixes": [
+        "crm."
+      ]
+    },
+    {
+      "id": "restaurant",
+      "repositories": [
+        "appolon1908-hue/Frontend-Resturant-"
+      ],
+      "caller_id": null,
+      "state": "BLOCKED_BACKEND_AUTHORITY_MISSING",
+      "contract_families": [
+        "public-intake",
+        "communications-request",
+        "status-read"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "telnexa-web",
+      "repositories": [
+        "appolon1908-hue/Telnexa-web"
+      ],
+      "caller_id": null,
+      "state": "PUBLIC_INTAKE_ONLY",
+      "contract_families": [
+        "public-intake",
+        "compliance-onboarding",
+        "privacy-request"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "klyrow-web",
+      "repositories": [
+        "appolon1908-hue/klyrow-Website-"
+      ],
+      "caller_id": null,
+      "state": "PUBLIC_INTAKE_ONLY",
+      "contract_families": [
+        "public-intake",
+        "domain-onboarding-request",
+        "privacy-request"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "marketing-control-plane",
+      "repositories": [
+        "appolon1908-hue/Codestra-Marketing-"
+      ],
+      "caller_id": null,
+      "state": "PLANNED_DISABLED",
+      "contract_families": [
+        "marketing.",
+        "crm-projection",
+        "communications-request",
+        "social-request",
+        "analytics-read"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "communications-control-center",
+      "repositories": [
+        "appolon1908-hue/Codestra-Communication-CC"
+      ],
+      "caller_id": null,
+      "state": "PLANNED_DISABLED",
+      "contract_families": [
+        "message-read",
+        "provider-health-read",
+        "usage-read",
+        "reconciliation-request",
+        "controlled-cancel"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "social-control-plane",
+      "repositories": [
+        "appolon1908-hue/Codesrea-Social-"
+      ],
+      "caller_id": null,
+      "state": "PLANNED_NAME_AND_AUTHORITY_REVIEW",
+      "contract_families": [
+        "social-request",
+        "publication-read",
+        "analytics-read"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    },
+    {
+      "id": "ai-control-plane",
+      "repositories": [
+        "appolon1908-hue/Codestra-AI"
+      ],
+      "caller_id": null,
+      "state": "PLANNED_DISABLED",
+      "contract_families": [
+        "ai.",
+        "usage-read",
+        "audit-events"
+      ],
+      "allowed_targets": [],
+      "allowed_command_prefixes": []
+    }
+  ]
+}

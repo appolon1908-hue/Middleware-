@@ -22,6 +22,8 @@ jobs:
         shell: bash
         run: |
           set +e
+          git config user.name "merge-diagnostic"
+          git config user.email "merge-diagnostic@invalid.example"
           git merge --no-commit --no-ff origin/main
           merge_rc=$?
           mkdir -p /tmp/merge-diagnostic/base /tmp/merge-diagnostic/ours /tmp/merge-diagnostic/theirs /tmp/merge-diagnostic/working

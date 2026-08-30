@@ -4,51 +4,24 @@
   "title": "Codestra complete system integration registry v3",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "inventory",
-    "policy",
-    "systems"
-  ],
+  "required": ["schema_version", "inventory", "policy", "columns", "systems"],
   "properties": {
-    "schema_version": {
-      "const": "3.0"
-    },
+    "schema_version": {"const": "3.0"},
     "inventory": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "account",
-        "inventory_date",
-        "repository_count",
-        "authority",
-        "source_branch"
-      ],
+      "required": ["account", "inventory_date", "repository_count", "authority", "source_branch"],
       "properties": {
-        "account": {
-          "const": "appolon1908-hue"
-        },
-        "inventory_date": {
-          "type": "string",
-          "format": "date"
-        },
-        "repository_count": {
-          "const": 54
-        },
-        "authority": {
-          "const": "appolon1908-hue/Middleware-"
-        },
-        "source_branch": {
-          "type": "string",
-          "minLength": 1
-        }
+        "account": {"const": "appolon1908-hue"},
+        "inventory_date": {"type": "string", "format": "date"},
+        "repository_count": {"const": 54},
+        "authority": {"const": "appolon1908-hue/Middleware-"},
+        "source_branch": {"type": "string", "minLength": 1}
       }
     },
     "policy": {
       "type": "object",
-      "additionalProperties": {
-        "type": "boolean"
-      },
+      "additionalProperties": {"type": "boolean"},
       "required": [
         "middleware_is_only_cross_system_write_authority",
         "principal_repository_owns_runtime",
@@ -60,94 +33,40 @@
         "external_effects_disabled_by_default"
       ]
     },
+    "columns": {
+      "const": [
+        "id",
+        "repository",
+        "category",
+        "lifecycle",
+        "cell",
+        "integration_mode",
+        "middleware_relationship",
+        "source_state",
+        "canonical",
+        "adapter_id"
+      ]
+    },
     "systems": {
       "type": "array",
       "minItems": 54,
       "maxItems": 54,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "repository",
-          "category",
-          "authority",
-          "lifecycle",
-          "cell",
-          "integration_mode",
-          "middleware_relationship",
-          "source_state",
-          "contract_families",
-          "forbidden",
-          "canonical",
-          "direct_n8n_provider_access",
-          "direct_cross_system_write",
-          "live_effects_enabled"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
-          },
-          "repository": {
-            "type": "string",
-            "pattern": "^appolon1908-hue/.+$"
-          },
-          "category": {
-            "type": "string",
-            "minLength": 1
-          },
-          "authority": {
-            "type": "string",
-            "minLength": 1
-          },
-          "lifecycle": {
-            "type": "string",
-            "minLength": 1
-          },
-          "cell": {
-            "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
-          },
-          "integration_mode": {
-            "type": "string",
-            "minLength": 1
-          },
-          "middleware_relationship": {
-            "type": "string",
-            "minLength": 1
-          },
-          "source_state": {
-            "type": "string",
-            "minLength": 1
-          },
-          "contract_families": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "uniqueItems": true
-          },
-          "forbidden": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "uniqueItems": true
-          },
-          "canonical": {
-            "type": "boolean"
-          },
-          "direct_n8n_provider_access": {
-            "const": false
-          },
-          "direct_cross_system_write": {
-            "type": "boolean"
-          },
-          "live_effects_enabled": {
-            "const": false
-          }
-        }
+        "type": "array",
+        "minItems": 10,
+        "maxItems": 10,
+        "prefixItems": [
+          {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          {"type": "string", "pattern": "^appolon1908-hue/.+$"},
+          {"type": "string", "minLength": 1},
+          {"type": "string", "minLength": 1},
+          {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          {"type": "string", "minLength": 1},
+          {"type": "string", "minLength": 1},
+          {"type": "string", "minLength": 1},
+          {"type": "boolean"},
+          {"type": ["string", "null"]}
+        ]
       }
     }
   }

@@ -1,6 +1,6 @@
 # Step 3 Email Production Gates
 
-Date: 2026-08-29
+Date: 2026-08-30
 
 Step 3 is implementation-ready but not production-activated.
 
@@ -11,7 +11,8 @@ Step 3 is implementation-ready but not production-activated.
 - Keycloak to Kong to Middleware live auth matrix.
 - Klyrow authenticated staging canary with safe-mode proof.
 - SMTP/DNS/domain readiness evidence from Klyrow.
-- Provider timeout and reconciliation tests.
+- Live Klyrow provider read-back canary; automated uncertain-outcome and
+  duplicate-send prevention tests are now present in Middleware.
 - Backup and restore evidence for communication state.
 - Observability alerts for command failures, provider degradation, bounce/complaint spikes, and reconciliation backlog.
 - Explicit approval to enable production delivery flags.

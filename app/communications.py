@@ -154,11 +154,34 @@ def _provider_status_to_canonical(status: str) -> MessageStatus:
     return "failed"
 
 
+def _provider_event_uuid(tenant_id: str, event_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(event_id)
+    except ValueError:
+        return uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f"codestra:communications:{tenant_id}:{event_id}",
+        )
+
+
+def _command_state_to_canonical(state: str) -> MessageStatus | None:
+    if state in {"persisted", "queued"}:
+        return "queued"
+    if state in {"dispatching", "accepted", "readback_pending", "completed"}:
+        return "dispatched"
+    if state == "reconciliation_required":
+        return "indeterminate"
+    if state in {"failed", "dead_lettered"}:
+        return "failed"
+    return None
+
+
 @dataclass
 class MemoryCommunicationsStore:
     messages: dict[tuple[str, uuid.UUID], CommunicationMessage] = field(default_factory=dict)
     events: dict[tuple[str, uuid.UUID], list[MessageEvent]] = field(default_factory=dict)
     idempotency: dict[tuple[str, str, str], tuple[str, uuid.UUID]] = field(default_factory=dict)
+    provider_event_digests: dict[tuple[str, str], str] = field(default_factory=dict)
     suppressions: set[tuple[str, str]] = field(default_factory=set)
     denied_consent: set[tuple[str, str]] = field(default_factory=set)
     verified_senders: set[tuple[str, str]] = field(default_factory=set)
@@ -319,6 +342,37 @@ class CommunicationsService:
             updatedAt=now,
             metadata={"recipientCount": len(request.to), **request.metadata},
         )
+        command: CommandEnvelope | None = None
+        if status != "suppressed":
+            command = CommandEnvelope(
+                command_id=command_id,
+                command_type="email.message.send.v1",
+                command_version="1.0",
+                target="klyrow-email",
+                tenant_id=tenant_id,
+                requested_by=actor,
+                correlation_id=correlation_id,
+                idempotency_key=idempotency_key,
+                capability="EMAIL_DELIVERY",
+                payload={
+                    "message_id": str(message_id),
+                    "channel": "email",
+                    "from": sender,
+                    "to": [str(item).lower() for item in request.to],
+                    "content": request.content.model_dump(
+                        mode="json",
+                        exclude_none=True,
+                    ),
+                    "scheduled_at": (
+                        request.scheduledAt.isoformat()
+                        if request.scheduledAt
+                        else None
+                    ),
+                    "metadata": request.metadata,
+                },
+            )
+            self.commands.policies.authorize(command)
+
         self.store.messages[(tenant_id, message_id)] = message
         self.store.idempotency[key] = (digest, message_id)
         self.store.add_event(tenant_id, message_id, event_type="accepted", status="accepted", provider="klyrow")
@@ -332,26 +386,7 @@ class CommunicationsService:
             )
             return message, False
 
-        command = CommandEnvelope(
-            command_id=command_id,
-            command_type="email.message.send.v1",
-            command_version="1.0",
-            target="klyrow-email",
-            tenant_id=tenant_id,
-            requested_by=actor,
-            correlation_id=correlation_id,
-            idempotency_key=idempotency_key,
-            capability="EMAIL_DELIVERY",
-            payload={
-                "message_id": str(message_id),
-                "channel": "email",
-                "from": sender,
-                "to": [str(item).lower() for item in request.to],
-                "content": request.content.model_dump(mode="json", exclude_none=True),
-                "scheduled_at": request.scheduledAt.isoformat() if request.scheduledAt else None,
-                "metadata": request.metadata,
-            },
-        )
+        assert command is not None
         await self.commands.submit(command, authenticated_subject=actor)
         message.status = "queued"
         message.updatedAt = datetime.now(UTC)
@@ -377,6 +412,64 @@ class CommunicationsService:
         self.get_message(tenant_id, message_id)
         return sorted(self.store.events.get((tenant_id, message_id), []), key=lambda item: item.occurredAt)
 
+    async def refresh_command_status(
+        self,
+        tenant_id: str,
+        message_id: uuid.UUID,
+    ) -> CommunicationMessage:
+        message = self.get_message(tenant_id, message_id)
+        if message.operationId is None:
+            return message
+        operation = await self.commands.get(tenant_id, message.operationId)
+        target_status = _command_state_to_canonical(operation.state)
+        if target_status is None or target_status == message.status:
+            return message
+        if message.status in {"delivered", "failed", "cancelled", "suppressed", "expired"}:
+            return message
+
+        now = datetime.now(UTC)
+        update: dict[str, Any] = {
+            "status": target_status,
+            "providerReference": (
+                operation.provider_operation_id or message.providerReference
+            ),
+            "updatedAt": now,
+        }
+        if target_status == "indeterminate":
+            update.update(
+                {
+                    "failureCode": "provider_outcome_unknown",
+                    "failureMessage": (
+                        operation.last_error
+                        or "provider outcome requires authoritative read-back"
+                    ),
+                }
+            )
+        elif target_status == "failed":
+            update.update(
+                {
+                    "failureCode": "provider_command_failed",
+                    "failureMessage": operation.last_error,
+                    "completedAt": now,
+                }
+            )
+        updated = message.model_copy(update=update)
+        self.store.messages[(tenant_id, message_id)] = updated
+        self.store.add_event(
+            tenant_id,
+            message_id,
+            event_type=f"command.{operation.state}",
+            status=target_status,
+            provider="klyrow",
+            provider_reference=updated.providerReference,
+            metadata={"commandState": operation.state},
+            event_id=uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"codestra:communications:{tenant_id}:{operation.command_id}:{operation.state}",
+            ),
+        )
+        return updated
+
     def cancel(self, tenant_id: str, message_id: uuid.UUID) -> CommunicationMessage:
         message = self.get_message(tenant_id, message_id)
         if message.status not in {"accepted", "queued"}:
@@ -392,19 +485,29 @@ class CommunicationsService:
         self.store.add_event(tenant_id, message_id, event_type="cancelled", status="cancelled", provider="klyrow")
         return updated
 
-    def record_provider_event(self, envelope: Any) -> None:
+    def record_provider_event(self, envelope: Any) -> bool:
         payload = envelope.payload if hasattr(envelope, "payload") else {}
         tenant_id = envelope.tenant_id
         raw_message_id = payload.get("messageId") or payload.get("message_id")
         if not raw_message_id:
-            return
+            return False
         try:
             message_id = uuid.UUID(str(raw_message_id))
         except ValueError:
-            return
+            return False
         message = self.store.messages.get((tenant_id, message_id))
         if message is None:
-            return
+            return False
+        event_id = str(envelope.event_id)
+        event_digest = _canonical_digest(envelope.model_dump(mode="json"))
+        replay_key = (tenant_id, event_id)
+        existing_digest = self.store.provider_event_digests.get(replay_key)
+        if existing_digest is not None:
+            if existing_digest != event_digest:
+                raise CommunicationsConflict(
+                    "provider event identity was reused with different content"
+                )
+            return False
         raw_status = str(payload.get("status") or payload.get("canonical_status") or envelope.event_type.rsplit(".", 1)[-1])
         status = _provider_status_to_canonical(raw_status)
         provider_reference = payload.get("providerReference") or payload.get("provider_reference") or payload.get("provider_message_id")
@@ -427,4 +530,7 @@ class CommunicationsService:
             provider="klyrow",
             provider_reference=updated.providerReference,
             metadata={"providerEventType": payload.get("providerEventType") or payload.get("provider_event_type")},
+            event_id=_provider_event_uuid(tenant_id, event_id),
         )
+        self.store.provider_event_digests[replay_key] = event_digest
+        return True

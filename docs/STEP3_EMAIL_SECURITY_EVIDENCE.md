@@ -1,6 +1,6 @@
 # Step 3 Email Security Evidence
 
-Date: 2026-08-29
+Date: 2026-08-30
 
 ## Implemented Controls
 
@@ -12,10 +12,16 @@ Date: 2026-08-29
 - Correlation and idempotency headers are required before creating effects.
 - Consent and suppression checks run before provider command submission.
 - Signed Klyrow webhook ingress updates the canonical read model without adding live provider write access.
+- Exact signed callback replays are acknowledged without duplicating timeline
+  effects; a reused event identity with changed signed content returns `409`.
+- Capability denial occurs before a message or command is stored, so the
+  default-disabled `EMAIL_DELIVERY` flag cannot leave a misleading accepted
+  intent.
 
 ## Production Security Gates Still Required
 
 - Live Keycloak issuer, audience, scope, and caller tests through Kong.
 - Secrets from an external secret store.
-- Durable event replay protection for canonical communications events.
+- Durable communications read-model storage colocated with the already durable
+  webhook inbox and replay controls.
 - Live negative auth matrix: no token, invalid token, wrong scope, wrong caller, wrong tenant.

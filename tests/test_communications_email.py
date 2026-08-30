@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
 import time
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import jwt
 from fastapi.testclient import TestClient
 
-from app.commands import CommandPolicy, CommandPolicyRegistry, CommandService, MemoryCommandStore
+from app.commands import (
+    CommandPolicy,
+    CommandPolicyRegistry,
+    CommandService,
+    MemoryCommandStore,
+)
 from app.communications import CommunicationsService, MemoryCommunicationsStore
 from app.main import create_app
 from app.replay import MemoryReplayGuard
@@ -71,7 +77,7 @@ class ProductTokenVerifier:
         return True
 
 
-def _runtime(test_settings) -> Runtime:
+def _runtime(test_settings, *, email_enabled: bool = True) -> Runtime:
     commands = CommandService(
         MemoryCommandStore(),
         CommandPolicyRegistry(
@@ -83,7 +89,7 @@ def _runtime(test_settings) -> Runtime:
                     readback_required=True,
                 ),
             ),
-            {"EMAIL_DELIVERY": True},
+            {"EMAIL_DELIVERY": email_enabled},
         ),
     )
     store = MemoryCommunicationsStore()
@@ -154,7 +160,8 @@ def _sign(event: dict[str, Any], path: str = "/api/v1/klyrow/events") -> dict[st
 
 
 def test_email_message_lifecycle_idempotency_and_timeline(test_settings) -> None:
-    app = create_app(settings=test_settings, runtime=_runtime(test_settings))
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
     with TestClient(app) as client:
         first = client.post(
             "/v1/communications/messages",
@@ -187,6 +194,48 @@ def test_email_message_lifecycle_idempotency_and_timeline(test_settings) -> None
             headers=_headers(scope="klyrow.middleware.status.read"),
         )
         assert [item["status"] for item in timeline.json()["items"]] == ["accepted", "queued"]
+        assert runtime.communications is not None
+        assert len(runtime.communications.store.messages) == 1
+        assert isinstance(runtime.commands.store, MemoryCommandStore)
+        assert len(runtime.commands.store._commands) == 1
+
+
+def test_email_contract_validation_sender_policy_and_kill_switch(test_settings) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        wrong_channel = client.post(
+            "/v1/communications/messages",
+            json=_message(channel="sms"),
+            headers=_headers(key="wrong-channel"),
+        )
+        assert wrong_channel.status_code == 400
+        invalid_recipient = client.post(
+            "/v1/communications/messages",
+            json=_message(to=["not-an-email"]),
+            headers=_headers(key="invalid-recipient"),
+        )
+        assert invalid_recipient.status_code == 400
+        unverified_sender = client.post(
+            "/v1/communications/messages",
+            json=_message(**{"from": "other@codestra.co"}),
+            headers=_headers(key="unverified-sender"),
+        )
+        assert unverified_sender.status_code == 400
+
+    disabled = _runtime(test_settings, email_enabled=False)
+    disabled_app = create_app(settings=test_settings, runtime=disabled)
+    with TestClient(disabled_app) as client:
+        rejected = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="disabled-capability"),
+        )
+        assert rejected.status_code == 403
+    assert disabled.communications is not None
+    assert disabled.communications.store.messages == {}
+    assert isinstance(disabled.commands.store, MemoryCommandStore)
+    assert disabled.commands.store._commands == {}
 
 
 def test_email_suppression_and_consent_stop_before_provider_command(test_settings) -> None:
@@ -277,9 +326,102 @@ def test_klyrow_signed_event_updates_canonical_read_model(test_settings) -> None
             headers=_sign(event),
         )
         assert response.status_code == 202, response.text
+        duplicate = client.post(
+            "/api/v1/klyrow/events",
+            content=json.dumps(event, separators=(",", ":"), sort_keys=True),
+            headers=_sign(event),
+        )
+        assert duplicate.status_code == 200, duplicate.text
+        assert duplicate.json()["duplicate"] is True
         fetched = client.get(
             f"/v1/communications/messages/{created['messageId']}",
             headers=_headers(scope="klyrow.middleware.status.read"),
         )
         assert fetched.json()["status"] == "delivered"
         assert fetched.json()["providerReference"] == "postal-message-1"
+        timeline = client.get(
+            f"/v1/communications/messages/{created['messageId']}/events",
+            headers=_headers(scope="klyrow.middleware.status.read"),
+        )
+        assert [item["status"] for item in timeline.json()["items"]] == [
+            "accepted",
+            "queued",
+            "delivered",
+        ]
+
+        conflicting = json.loads(json.dumps(event))
+        conflicting["payload"]["status"] = "bounced"
+        conflict = client.post(
+            "/api/v1/klyrow/events",
+            content=json.dumps(conflicting, separators=(",", ":"), sort_keys=True),
+            headers=_sign(conflicting),
+        )
+        assert conflict.status_code == 409
+        after_conflict = client.get(
+            f"/v1/communications/messages/{created['messageId']}",
+            headers=_headers(scope="klyrow.middleware.status.read"),
+        )
+        assert after_conflict.json()["status"] == "delivered"
+
+
+def test_email_unknown_command_outcome_is_indeterminate_without_resubmission(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="unknown-outcome"),
+        ).json()
+
+        assert isinstance(runtime.commands.store, MemoryCommandStore)
+        command_id = UUID(created["operationId"])
+
+        async def make_outcome_uncertain() -> None:
+            for state, reason in (
+                ("queued", "workflow accepted durable intent"),
+                ("dispatching", "provider call started"),
+                (
+                    "reconciliation_required",
+                    "provider timed out after possible acceptance",
+                ),
+            ):
+                await runtime.commands.store.transition(
+                    "tenant-1",
+                    command_id,
+                    new_state=state,
+                    actor_id="temporal:test",
+                    reason=reason,
+                )
+
+        asyncio.run(make_outcome_uncertain())
+
+        readback = client.get(
+            f"/v1/communications/messages/{created['messageId']}",
+            headers=_headers(scope="klyrow.middleware.status.read"),
+        )
+        assert readback.status_code == 200
+        assert readback.json()["status"] == "indeterminate"
+        assert readback.json()["failureCode"] == "provider_outcome_unknown"
+
+        replay = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="unknown-outcome"),
+        )
+        assert replay.status_code == 200
+        assert replay.json()["messageId"] == created["messageId"]
+        assert replay.json()["status"] == "indeterminate"
+        assert len(runtime.commands.store._commands) == 1
+
+        timeline = client.get(
+            f"/v1/communications/messages/{created['messageId']}/events",
+            headers=_headers(scope="klyrow.middleware.status.read"),
+        )
+        assert [item["status"] for item in timeline.json()["items"]] == [
+            "accepted",
+            "queued",
+            "indeterminate",
+        ]

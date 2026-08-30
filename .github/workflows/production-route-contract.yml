@@ -39,10 +39,10 @@ jobs:
       - name: Start exact signed image in an isolated network
         run: |
           set -Eeuo pipefail
+          docker pull python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
           docker network create --internal middleware-route-certification
           docker run -d --name middleware-route-certification \
             --network middleware-route-certification \
-            --publish 127.0.0.1:18080:8080 \
             --read-only --tmpfs /tmp \
             --env APP_ENV=development \
             --env ALLOW_IN_MEMORY_STORAGE=true \
@@ -64,7 +64,13 @@ jobs:
           exit 1
 
       - name: Certify routes and unauthenticated denial
-        run: python3 scripts/certify_production_route_contract.py --base-url http://127.0.0.1:18080
+        run: |
+          docker run --rm \
+            --network middleware-route-certification \
+            --volume "$PWD/scripts:/certification:ro" \
+            python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1 \
+            python /certification/certify_production_route_contract.py \
+              --base-url http://middleware-route-certification:8080
 
       - name: Prove every provider effect remains disabled
         run: |

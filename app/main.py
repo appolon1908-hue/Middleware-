@@ -20,6 +20,7 @@ from .lead_intake import (
     LeadSubmission,
     accept_lead_submission,
 )
+from .n8n_control_plane import router as n8n_control_plane_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -127,6 +128,7 @@ def create_app(
     )
     telemetry = MiddlewareObservability(resolved)
     app.state.observability = telemetry
+    app.include_router(n8n_control_plane_router)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):

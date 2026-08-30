@@ -1,5 +1,8 @@
 # Step 4 — Communications API v1 SMS Runtime
 
+Implementation status: provider-neutral API and command mapping implemented on
+this branch on 2026-08-30. Production provider activation remains gated.
+
 ## Authority
 
 Repository: `appolon1908-hue/Middleware-`
@@ -68,3 +71,12 @@ Do not enable carrier routes, live external SMS, production credentials, product
 ## Exit gate
 
 Step 4 runtime work passes only after the paired Telnexa provider branch passes, exact SHAs are recorded, SDK compatibility is green, reconciliation is proven duplicate-safe, and live delivery remains disabled until Step 8.
+
+## Current boundary
+
+Middleware now owns the canonical SMS API, command intent, readback model,
+signed Telnexa event ingestion, and duplicate-safe reconciliation behavior.
+Telnexa remains the authority for billing reservations, approved sender and
+route decisions, Jasmin credentials, carrier submission, DLR correlation, and
+local STOP/HELP compliance. Middleware contains no Jasmin credential or direct
+Jasmin transport.

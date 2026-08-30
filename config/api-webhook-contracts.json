@@ -93,9 +93,11 @@
       "path": "/api/v1/telnexa/events",
       "eventTypes": [
         "codestra.events.sms_received",
+        "codestra.sms.help_requested",
         "codestra.sms.inbound.received",
         "codestra.sms.message.delivered",
-        "codestra.sms.message.failed"
+        "codestra.sms.message.failed",
+        "codestra.sms.recipient.opted_out"
       ],
       "delivery": "at_least_once"
     },

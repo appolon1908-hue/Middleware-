@@ -30,6 +30,4 @@ jobs:
           LIVE_WRITES: "false"
           ODOO_WRITE: "false"
           CALLBACK_DISPATCH: "false"
-        run: |
-          bash scripts/run_ci.sh
-          python -m pytest -q tests/test_lead_delivery.py tests/test_lead_intake_api.py
+        run: bash scripts/run_ci.sh

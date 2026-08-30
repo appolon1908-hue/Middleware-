@@ -154,6 +154,7 @@ def create_app(
                 status_code=status_code,
                 correlation_id=request.state.correlation_id,
                 traceparent=request.state.traceparent,
+                intake_context=getattr(request.state, "intake_metrics", None),
             )
 
     @app.exception_handler(SecurityError)
@@ -312,6 +313,10 @@ def create_app(
             raise RequestValidationError(
                 "body does not match the canonical lead intake contract"
             ) from exc
+        request.state.intake_metrics = {
+            "channel": submission.source,
+            "form_kind": "configured" if submission.formId else "generic",
+        }
         if submission.tenantId != tenant_id:
             raise RequestValidationError("X-Tenant-ID does not match submission tenantId")
 

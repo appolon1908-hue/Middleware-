@@ -83,8 +83,8 @@ def _runtime_profiles() -> dict[str, dict[str, object]]:
     if value.get("schema_version") != "1.0":
         raise ConfigurationError("runtime profile registry version is unsupported")
     raw_profiles = value.get("profiles")
-    if not isinstance(raw_profiles, list) or len(raw_profiles) != 2:
-        raise ConfigurationError("runtime profile registry must declare two profiles")
+    if not isinstance(raw_profiles, list) or len(raw_profiles) < 2:
+        raise ConfigurationError("runtime profile registry must declare at least two profiles")
     profiles: dict[str, dict[str, object]] = {}
     for raw in raw_profiles:
         if not isinstance(raw, dict):
@@ -526,12 +526,11 @@ class Settings:
                 )
             return
         profiles = _runtime_profiles()
-        expected_id = f"codestra-middleware-{self.app_env}-v1"
-        if self.runtime_profile_id != expected_id:
+        profile = profiles.get(self.runtime_profile_id or "")
+        if profile is None:
             raise ConfigurationError(
-                f"RUNTIME_PROFILE_ID must be {expected_id}"
+                "RUNTIME_PROFILE_ID must select a registered runtime profile"
             )
-        profile = profiles.get(expected_id)
         if profile is None or profile.get("environment") != self.app_env:
             raise ConfigurationError("runtime profile does not match APP_ENV")
         self._validate_database_profile(profile["database"])
@@ -622,7 +621,11 @@ class Settings:
         try:
             parsed = urlparse(self.database_url or "")
             port = parsed.port
-            query = parse_qs(parsed.query, strict_parsing=True)
+            query = (
+                parse_qs(parsed.query, strict_parsing=True)
+                if parsed.query
+                else {}
+            )
         except ValueError as exc:
             raise ConfigurationError("DATABASE_URL is malformed") from exc
         if (
@@ -632,7 +635,11 @@ class Settings:
             or unquote(parsed.path.lstrip("/")) != raw_profile["name"]
             or unquote(parsed.username or "") != raw_profile["username"]
             or not parsed.password
-            or query != {"sslmode": [raw_profile["sslmode"]]}
+            or query != (
+                {"sslmode": [raw_profile["sslmode"]]}
+                if raw_profile.get("sslmode")
+                else {}
+            )
             or parsed.params
             or parsed.fragment
         ):

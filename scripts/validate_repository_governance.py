@@ -19,7 +19,22 @@ SKIP_REGISTER_PATH = ROOT / "config" / "test-skip-register.v1.json"
 CODEOWNERS_PATH = ROOT / ".github" / "CODEOWNERS"
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
+RULESET_NAME = "middleware-main-production-authority"
 
+EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
+    {
+        "Validate middleware source head",
+        "Validate middleware merge result",
+        "docker-runtime-build",
+        "docker-test-build",
+        "connector-runtime-build",
+        "container-security",
+        "Disposable PostgreSQL Redis integration",
+        "Disposable NATS JetStream integration",
+        "Temporal critical workflow integration",
+        "Synthetic no-effect acceptance E2E",
+    }
+)
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 USES = re.compile(r"^\s*uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 SKIP_TOKEN = re.compile(
@@ -44,6 +59,29 @@ def load_json(path: Path) -> dict[str, Any]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise GovernanceError(message)
+
+
+def require_exact_strings(
+    observed: Any,
+    expected: frozenset[str],
+    *,
+    label: str,
+) -> None:
+    require(
+        isinstance(observed, list) and all(isinstance(item, str) for item in observed),
+        f"{label} must be a list of strings",
+    )
+    observed_set = set(observed)
+    missing = expected - observed_set
+    unexpected = observed_set - expected
+    duplicates = len(observed) != len(observed_set)
+    require(
+        not missing and not unexpected and not duplicates,
+        (
+            f"{label} drift: missing={sorted(missing)} "
+            f"unexpected={sorted(unexpected)} duplicates={duplicates}"
+        ),
+    )
 
 
 def validate_source_policy() -> dict[str, Any]:
@@ -97,12 +135,11 @@ def validate_source_policy() -> dict[str, Any]:
         rules.get("required_approvals") == 0,
         "single-owner source gate must not self-deadlock",
     )
-    checks = rules.get("required_status_checks")
-    require(
-        isinstance(checks, list) and len(checks) >= 10,
-        "required status-check set is incomplete",
+    require_exact_strings(
+        rules.get("required_status_checks"),
+        EXPECTED_REQUIRED_STATUS_CHECKS,
+        label="required status checks",
     )
-    require(len(checks) == len(set(checks)), "required status checks contain duplicates")
 
     codeowners = CODEOWNERS_PATH.read_text(encoding="utf-8")
     require(
@@ -203,6 +240,114 @@ def api_get(url: str, token: str) -> Any:
         raise GovernanceError(f"GitHub API unavailable for {url}") from exc
 
 
+def rules_by_type(ruleset: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rules = ruleset.get("rules")
+    require(isinstance(rules, list), "live ruleset rules are unavailable")
+    result: dict[str, dict[str, Any]] = {}
+    for item in rules:
+        require(isinstance(item, dict), "live ruleset contains an invalid rule")
+        rule_type = item.get("type")
+        require(isinstance(rule_type, str) and rule_type, "live ruleset rule type is invalid")
+        require(rule_type not in result, f"live ruleset has duplicate rule type: {rule_type}")
+        result[rule_type] = item
+    return result
+
+
+def validate_live_ruleset(
+    ruleset: dict[str, Any],
+    encoded: dict[str, Any],
+) -> None:
+    require(ruleset.get("name") == RULESET_NAME, "live ruleset name drift")
+    require(ruleset.get("target") == "branch", "live ruleset does not target branches")
+    require(ruleset.get("source_type") == "Repository", "live ruleset is not repository-owned")
+    require(
+        ruleset.get("source") == "appolon1908-hue/Middleware-",
+        "live ruleset source drift",
+    )
+    require(
+        ruleset.get("enforcement") == encoded.get("enforcement") == "active",
+        "live ruleset is not actively enforced",
+    )
+
+    require("bypass_actors" in ruleset, "admin token cannot inspect live ruleset bypass actors")
+    require(ruleset.get("bypass_actors") == [], "live ruleset permits bypass actors")
+
+    conditions = ruleset.get("conditions")
+    require(isinstance(conditions, dict), "live ruleset conditions are unavailable")
+    ref_name = conditions.get("ref_name")
+    require(isinstance(ref_name, dict), "live ruleset ref-name condition is unavailable")
+    includes = ref_name.get("include")
+    excludes = ref_name.get("exclude")
+    require(isinstance(includes, list), "live ruleset include condition is invalid")
+    require(isinstance(excludes, list), "live ruleset exclude condition is invalid")
+    allowed_targets = {"~DEFAULT_BRANCH", "refs/heads/main"}
+    include_set = set(includes)
+    require(
+        bool(include_set) and include_set <= allowed_targets,
+        "live ruleset targets refs other than main",
+    )
+    require(excludes == [], "live ruleset excludes protected refs")
+
+    observed_rules = rules_by_type(ruleset)
+    required_rule_types = {
+        "deletion",
+        "non_fast_forward",
+        "required_linear_history",
+        "pull_request",
+        "required_status_checks",
+    }
+    missing_rule_types = required_rule_types - set(observed_rules)
+    require(
+        not missing_rule_types,
+        "live ruleset missing controls: " + ", ".join(sorted(missing_rule_types)),
+    )
+
+    pull_request_parameters = observed_rules["pull_request"].get("parameters")
+    require(
+        isinstance(pull_request_parameters, dict),
+        "live pull-request rule parameters are unavailable",
+    )
+    require(
+        pull_request_parameters.get("required_approving_review_count")
+        == encoded.get("required_approvals"),
+        "live required approval count drift",
+    )
+    require(
+        pull_request_parameters.get("dismiss_stale_reviews_on_push")
+        is encoded.get("dismiss_stale_reviews"),
+        "live stale-review dismissal drift",
+    )
+    require(
+        pull_request_parameters.get("required_review_thread_resolution")
+        is encoded.get("require_review_thread_resolution"),
+        "live review-thread resolution drift",
+    )
+
+    status_parameters = observed_rules["required_status_checks"].get("parameters")
+    require(
+        isinstance(status_parameters, dict),
+        "live status-check rule parameters are unavailable",
+    )
+    require(
+        status_parameters.get("strict_required_status_checks_policy")
+        is encoded.get("require_branch_up_to_date"),
+        "live branch-up-to-date requirement drift",
+    )
+    required_checks = status_parameters.get("required_status_checks")
+    require(isinstance(required_checks, list), "live required status checks are unavailable")
+    contexts: list[str] = []
+    for item in required_checks:
+        require(isinstance(item, dict), "live required status check is invalid")
+        context = item.get("context")
+        require(isinstance(context, str) and context, "live status-check context is invalid")
+        contexts.append(context)
+    require_exact_strings(
+        contexts,
+        EXPECTED_REQUIRED_STATUS_CHECKS,
+        label="live required status checks",
+    )
+
+
 def validate_live(policy: dict[str, Any]) -> None:
     token = os.environ.get("CODESTRA_REPOSITORY_ADMIN_TOKEN", "")
     require(bool(token), "CODESTRA_REPOSITORY_ADMIN_TOKEN is required for --live")
@@ -215,13 +360,22 @@ def validate_live(policy: dict[str, Any]) -> None:
     branch = api_get(f"{base}/branches/main", token)
     require(branch.get("protected") is True, "live main branch is not protected")
 
-    rulesets = api_get(f"{base}/rulesets", token)
+    rulesets = api_get(f"{base}/rulesets?per_page=100", token)
     require(isinstance(rulesets, list) and rulesets, "live repository has no ruleset")
-    names = {item.get("name") for item in rulesets if isinstance(item, dict)}
-    require(
-        "middleware-main-production-authority" in names,
-        "required live ruleset middleware-main-production-authority is missing",
+    matching = [
+        item
+        for item in rulesets
+        if isinstance(item, dict) and item.get("name") == RULESET_NAME
+    ]
+    require(len(matching) == 1, f"expected exactly one live ruleset named {RULESET_NAME}")
+    ruleset_id = matching[0].get("id")
+    require(isinstance(ruleset_id, int), "live ruleset ID is unavailable")
+    detailed = api_get(
+        f"{base}/rulesets/{ruleset_id}?includes_parents=false",
+        token,
     )
+    require(isinstance(detailed, dict), "live ruleset detail is unavailable")
+    validate_live_ruleset(detailed, policy["default_branch_ruleset"])
 
 
 def main() -> int:

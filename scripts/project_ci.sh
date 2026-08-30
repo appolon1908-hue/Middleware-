@@ -12,7 +12,8 @@ python -m pip install --disable-pip-version-check --no-input --quiet --upgrade p
 python -m pip install --disable-pip-version-check --no-input --quiet \
   --require-hashes -r requirements-test.txt
 
-python -m compileall -q app workers tests
+python -m compileall -q app workers tests scripts/validate_platform_control_plane.py
+python scripts/validate_platform_control_plane.py
 pytest -q tests
 
 python - <<'PY'

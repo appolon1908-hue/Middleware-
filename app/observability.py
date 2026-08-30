@@ -12,6 +12,7 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, gene
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 
 from .config import Settings
+from .intake_observability import IntakeMetrics, collect_intake_backlog
 
 
 SERVICE = "middleware-api"
@@ -138,6 +139,7 @@ class MiddlewareObservability:
             (*labels, "release_sha"),
             registry=self.registry,
         )
+        self.intake = IntakeMetrics(self.registry, settings.app_env)
         self.release.labels(
             *self._base,
             settings.source_sha,
@@ -161,6 +163,7 @@ class MiddlewareObservability:
         status_code: int,
         correlation_id: str,
         traceparent: str | None,
+        intake_context: dict[str, str] | None = None,
     ) -> None:
         elapsed = max(time.perf_counter() - started, 0.0)
         normalized_method = method.upper() if method.upper() in {
@@ -174,6 +177,12 @@ class MiddlewareObservability:
             str(status_code),
         ).inc()
         self.duration.labels(*self._base, operation, normalized_method).observe(elapsed)
+        self.intake.record_http_outcome(
+            operation,
+            status_code,
+            elapsed,
+            intake_context,
+        )
         self.logger.info(
             "http_request_completed",
             extra={
@@ -202,6 +211,14 @@ class MiddlewareObservability:
             self.readiness.labels(*self._base, dependency).set(
                 1 if status == "ready" else 0
             )
+
+    async def refresh_intake_backlog(self, inbox: object) -> None:
+        try:
+            snapshot = await collect_intake_backlog(inbox)
+        except Exception:
+            self.intake.record_backlog_failure()
+            raise
+        self.intake.set_backlog(snapshot)
 
     def render(self) -> tuple[bytes, str]:
         return generate_latest(self.registry), CONTENT_TYPE_LATEST

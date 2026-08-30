@@ -10,6 +10,7 @@ on:
       - "scripts/generate_connector_artifacts.py"
       - "scripts/scaffold_connector.py"
       - "scripts/validate_connector_sdk.py"
+      - "scripts/validate_connector_contracts.py"
       - "tests/test_connector_sdk*.py"
       - ".github/workflows/connector-sdk-ci.yml"
   push:
@@ -23,6 +24,7 @@ on:
       - "scripts/generate_connector_artifacts.py"
       - "scripts/scaffold_connector.py"
       - "scripts/validate_connector_sdk.py"
+      - "scripts/validate_connector_contracts.py"
       - "tests/test_connector_sdk*.py"
       - ".github/workflows/connector-sdk-ci.yml"
 
@@ -64,5 +66,7 @@ jobs:
         run: |
           python3 scripts/generate_connector_artifacts.py --check
           python3 scripts/validate_connector_sdk.py
+      - name: Validate isolated connector contracts
+        run: python3 scripts/validate_connector_contracts.py
       - name: Run Connector SDK regression and review tests
         run: python3 -m unittest discover -v -s tests -p 'test_connector_sdk*.py'

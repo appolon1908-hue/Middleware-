@@ -76,6 +76,24 @@ def _runtime(test_settings) -> Runtime:
                 readback_required=True,
             ),
             CommandPolicy(
+                prefix="crawler.",
+                target="kyqra-crawler",
+                capability="CRAWLER_EXECUTION",
+                readback_required=True,
+            ),
+            CommandPolicy(
+                prefix="email.",
+                target="klyrow-email",
+                capability="EMAIL_DELIVERY",
+                readback_required=True,
+            ),
+            CommandPolicy(
+                prefix="sms.",
+                target="telnexa-sms",
+                capability="SMS_DELIVERY",
+                readback_required=True,
+            ),
+            CommandPolicy(
                 prefix="social.",
                 target="postly-social",
                 capability="SOCIAL_PUBLISH",
@@ -90,6 +108,9 @@ def _runtime(test_settings) -> Runtime:
         ),
         {
             "ODOO_WRITE": True,
+            "CRAWLER_EXECUTION": True,
+            "EMAIL_DELIVERY": True,
+            "SMS_DELIVERY": True,
             "SOCIAL_PUBLISH": True,
             "PRODUCTION_DIALING": True,
         },
@@ -161,6 +182,62 @@ def test_social_token_cannot_submit_crm_command(test_settings) -> None:
     with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
         response = client.post("/v1/commands", json=body, headers=_headers(body, token))
     assert response.status_code == 403
+
+
+def test_kyqra_can_submit_crawler_and_sms_commands(test_settings) -> None:
+    token = _token("kyqra", ["kyqra.middleware.command.write"])
+    for command_type, target, capability in (
+        ("crawler.job.submit.v1", "kyqra-crawler", "CRAWLER_EXECUTION"),
+        ("sms.message.submit.v1", "telnexa-sms", "SMS_DELIVERY"),
+    ):
+        body = _command(command_type=command_type, target=target, capability=capability)
+        with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+            response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+        assert response.status_code == 202, (command_type, response.text)
+
+
+def test_klyrow_can_submit_email_commands(test_settings) -> None:
+    body = _command(
+        command_type="email.message.submit.v1",
+        target="klyrow-email",
+        capability="EMAIL_DELIVERY",
+    )
+    token = _token("klyrow", ["klyrow.middleware.command.write"])
+    with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+        response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+    assert response.status_code == 202, response.text
+
+
+def test_products_cannot_cross_control_plane_boundaries(test_settings) -> None:
+    cases = (
+        (
+            "kyqra",
+            "kyqra.middleware.command.write",
+            "email.message.submit.v1",
+            "klyrow-email",
+            "EMAIL_DELIVERY",
+        ),
+        (
+            "klyrow",
+            "klyrow.middleware.command.write",
+            "sms.message.submit.v1",
+            "telnexa-sms",
+            "SMS_DELIVERY",
+        ),
+        (
+            "social-codestra",
+            "social.middleware.command.write",
+            "email.message.submit.v1",
+            "klyrow-email",
+            "EMAIL_DELIVERY",
+        ),
+    )
+    for client_id, scope, command_type, target, capability in cases:
+        body = _command(command_type=command_type, target=target, capability=capability)
+        token = _token(client_id, [scope])
+        with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
+            response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+        assert response.status_code == 403, (client_id, command_type, response.text)
 
 
 def test_business_products_cannot_submit_telephony_commands(test_settings) -> None:

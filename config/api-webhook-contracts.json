@@ -77,6 +77,7 @@
       "requiredScope": "telephony.events.publish",
       "path": "/api/v1/vicidial/events",
       "eventTypes": [
+        "codestra.events.call_disposition_updated",
         "codestra.vicidial.call.completed",
         "codestra.vicidial.call.started",
         "codestra.vicidial.callback.requested"
@@ -91,6 +92,7 @@
       "requiredScope": "sms.events.publish",
       "path": "/api/v1/telnexa/events",
       "eventTypes": [
+        "codestra.events.sms_received",
         "codestra.sms.inbound.received",
         "codestra.sms.message.delivered",
         "codestra.sms.message.failed"

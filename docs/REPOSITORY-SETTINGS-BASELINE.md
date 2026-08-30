@@ -3,7 +3,9 @@
 This document is the exact target state for
 `https://github.com/appolon1908-hue/Middleware-/settings`.
 
-## Current verified state on 2026-08-30
+## Current verified drift on 2026-08-30
+
+Before the live application gate:
 
 - Default branch: `main`
 - `main` is not protected.
@@ -21,14 +23,13 @@ Set the repository description to:
 
 > Codestra durable integration and automation control plane
 
-Recommended topics:
+Required topics:
 
 `middleware`, `fastapi`, `postgresql`, `keycloak`, `kong`, `n8n`,
 `integration-platform`, `outbox`, `idempotency`, `gitops`
 
 Keep Issues enabled. Disable Wiki unless it becomes an explicitly maintained
-authority. The repository remains public only while secret scanning and push
-protection are enabled and no runtime secrets are committed.
+authority. Do not change repository visibility as part of this gate.
 
 ## Pull request merge settings
 
@@ -45,6 +46,8 @@ Disable:
 - Allow merge commits
 - Allow rebase merging
 
+Use the pull request title and body for the squash commit.
+
 ## Actions
 
 - Default workflow permissions: **Read repository contents and packages**
@@ -54,7 +57,8 @@ Disable:
 
 ## Active ruleset for `main`
 
-Create an active branch ruleset named `middleware-main-production-authority`.
+Create one active branch ruleset named
+`middleware-main-production-authority`.
 
 Require:
 
@@ -76,6 +80,7 @@ Require:
 - Block force pushes
 - Block branch deletion
 - Apply to administrators
+- No bypass actors
 
 Set required approvals to zero for now because the repository has one owner and
 GitHub does not allow an author to approve their own pull request. Production
@@ -85,22 +90,62 @@ second trusted reviewer is added.
 ## Security and analysis
 
 Enable dependency graph, Dependabot alerts and security updates, secret scanning,
-push protection, private vulnerability reporting, and code scanning as a
-production-release gate.
+push protection, and private vulnerability reporting. Code scanning remains a
+required production-release gate.
 
 ## Environments
 
-Create `staging` and `production` environments.
+Create `staging` and `production`. Both accept only the `main` branch.
 
-`staging` uses `main`, immutable digests, and no live-write secret set true.
+`staging` uses immutable digests and contains no live-write secret set true.
 
-`production` requires an independent reviewer, prevents self-review, accepts only
-`main`, forbids mutable tags, and keeps every live-write switch false until a
-separately approved activation identifies the exact digest and rollback artifact.
+`production` is deliberately fail-closed. Until a second trusted reviewer is
+added, the repository owner is the required reviewer and self-review is
+prevented. This blocks an owner-initiated deployment rather than weakening the
+independent-approval rule. Mutable tags and live-write defaults remain forbidden.
+
+No environment setting in this gate deploys code, restarts a service, changes
+DNS/TLS, creates provider credentials, or enables Odoo, SMS, email, PSTN,
+financial, crawler, or other external effects.
+
+## Audited application path
+
+The connector cannot call GitHub's administrative write endpoints directly.
+The repository therefore contains an idempotent, owner-only applier:
+
+- source: `scripts/apply_repository_governance.py`
+- trigger: `.github/workflows/repository-governance-apply.yml`
+- authority issue: `#68`
+- exact command:
+  `/apply-repository-governance w0-live-v1`
+
+The workflow runs only when GitHub reports all of the following:
+
+- repository is exactly `appolon1908-hue/Middleware-`;
+- issue number is exactly `68` and is not a pull request;
+- comment author login and numeric ID are the repository owner;
+- author association is `OWNER`;
+- comment body exactly matches the command above.
+
+It checks out the exact default-branch event SHA, validates the encoded policy,
+applies repository settings through the GitHub REST API, then runs both live
+verifiers. It has only `contents: read` through `GITHUB_TOKEN`.
+
+The one-time apply requires `CODESTRA_REPOSITORY_ADMIN_TOKEN` as a repository
+secret with repository **Administration: write** permission. The token must not
+have access to unrelated repositories. After a green apply, rotate or remove the
+write-capable token; a read-capable replacement may be used for later drift
+audits.
 
 ## Verification
 
-After applying the settings, run the `Repository governance audit` workflow with
-an admin read token stored as `CODESTRA_REPOSITORY_ADMIN_TOKEN`. The workflow
-does not mutate settings; it compares live state to
-`config/repository-governance.v1.json` and fails closed on drift.
+After application:
+
+1. `scripts/apply_repository_governance.py --verify-live` must pass.
+2. `scripts/validate_repository_governance.py --live` must pass.
+3. The workflow run URL and exact `main` SHA must be attached to issue `#68`.
+4. `docs/evidence/W0/GATE.md` may be updated and tag `w0-complete` created only
+   after live verification is green.
+
+The applier is idempotent. Re-running it converges to the same encoded state and
+does not mutate runtime or deployment configuration.

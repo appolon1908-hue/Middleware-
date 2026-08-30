@@ -5,17 +5,51 @@ import hmac
 import json
 import os
 import time
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import quote, urlsplit
 
 import httpx
+from jsonschema import Draft202012Validator, FormatChecker
 
 from .config import ConfigurationError, Settings
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 
+ROOT = Path(__file__).resolve().parents[1]
+ODOO_LEAD_COMMAND_SCHEMA = ROOT / "contracts" / "odoo-lead-command.schema.json"
+
+
 class OdooProviderAdapterError(RuntimeError):
     pass
+
+
+@lru_cache(maxsize=1)
+def _odoo_lead_command_validator() -> Draft202012Validator:
+    """Load the local Odoo specialization without resolving its remote base ref.
+
+    ``CommandExecutionRequest`` already validates the platform envelope. This
+    validator enforces the Odoo-specific constants, nested payload, formats,
+    and conditional review safety rules from the canonical schema.
+    """
+
+    try:
+        source = json.loads(ODOO_LEAD_COMMAND_SCHEMA.read_text(encoding="utf-8"))
+        specialization = source["allOf"][1]
+        local_schema = {
+            **specialization,
+            "$defs": source.get("$defs", {}),
+        }
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, IndexError) as exc:
+        raise OdooProviderAdapterError(
+            "canonical Odoo lead command schema cannot be loaded"
+        ) from exc
+    Draft202012Validator.check_schema(local_schema)
+    return Draft202012Validator(
+        local_schema,
+        format_checker=FormatChecker(),
+    )
 
 
 class OdooProviderAdapter:
@@ -24,8 +58,8 @@ class OdooProviderAdapter:
     The adapter owns exactly one reviewed CRM command. It signs the command and
     every status read with the byte-exact contract implemented by
     ``codestra_middleware_bridge``. A write timeout is an unknown outcome: the
-    Temporal workflow records ``reconciliation_required`` and never submits the
-    command a second time. Reconciliation uses the command-status route.
+    adapter queries Odoo's command-status route before returning control and
+    never submits the command a second time.
     """
 
     UPSERT_LEAD = "crm.lead.upsert"
@@ -80,9 +114,14 @@ class OdooProviderAdapter:
     @staticmethod
     def _source_record_id(request: CommandExecutionRequest) -> str:
         value = request.payload.get("source_record_id")
-        if not isinstance(value, str) or not value.strip() or len(value) > 180:
+        if not isinstance(value, str) or not value.strip():
             raise OdooProviderAdapterError("payload.source_record_id is required")
-        return value.strip()
+        value = value.strip()
+        if len(value) > 255:
+            raise OdooProviderAdapterError(
+                "payload.source_record_id must contain at most 255 characters"
+            )
+        return value
 
     @staticmethod
     def _canonical_body(payload: dict[str, Any]) -> bytes:
@@ -107,6 +146,26 @@ class OdooProviderAdapter:
             "capability": request.capability,
             "payload": request.payload,
         }
+
+    @staticmethod
+    def _validate_command_document(document: dict[str, Any]) -> None:
+        error = next(
+            iter(
+                sorted(
+                    _odoo_lead_command_validator().iter_errors(document),
+                    key=lambda item: tuple(
+                        str(part) for part in item.absolute_path
+                    ),
+                )
+            ),
+            None,
+        )
+        if error is None:
+            return
+        location = ".".join(str(part) for part in error.absolute_path) or "<root>"
+        raise OdooProviderAdapterError(
+            f"canonical Odoo command rejected {location}: {error.message}"
+        )
 
     def _headers(
         self,
@@ -149,8 +208,36 @@ class OdooProviderAdapter:
         self,
         request: CommandExecutionRequest,
     ) -> tuple[str, str, dict[str, Any]]:
+        document = self._command_document(request)
+        self._validate_command_document(document)
         self._source_record_id(request)
-        return "POST", self.COMMAND_PATH, self._command_document(request)
+        return "POST", self.COMMAND_PATH, document
+
+    async def _reconcile_unknown_write(
+        self,
+        request: CommandExecutionRequest,
+        original_error: BaseException,
+    ) -> ActivityResult:
+        """Query command status before returning any unknown write outcome."""
+
+        try:
+            reconciliation = await self.readback(request)
+        except OdooProviderAdapterError as reconciliation_error:
+            raise OdooProviderAdapterError(
+                "Odoo command outcome remains unknown after command-status reconciliation failed"
+            ) from reconciliation_error
+        if reconciliation.status == "matched":
+            return ActivityResult(
+                status="accepted",
+                detail=(
+                    "Odoo command response was interrupted; command-status "
+                    "reconciliation confirmed the committed CRM upsert"
+                ),
+                provider_operation_id=request.command_id,
+            )
+        raise OdooProviderAdapterError(
+            "Odoo command outcome remains unknown after command-status mismatch"
+        ) from original_error
 
     async def execute(self, request: CommandExecutionRequest) -> ActivityResult:
         self._require_active(request)
@@ -172,9 +259,7 @@ class OdooProviderAdapter:
                 response.raise_for_status()
                 data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
-            raise OdooProviderAdapterError(
-                "Odoo command outcome is unknown; reconcile by command status"
-            ) from exc
+            return await self._reconcile_unknown_write(request, exc)
         source_record_id = self._source_record_id(request)
         if (
             not isinstance(data, dict)

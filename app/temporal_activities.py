@@ -7,6 +7,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from .commands import CommandConflict, CommandNotFound, CommandState, PostgresCommandStore
+from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .temporal_workflows import (
     ActivityResult,
     CommandExecutionRequest,
@@ -70,8 +71,13 @@ class FailClosedWorkflowActivities:
 
 
 class CommandLedgerWorkflowActivities:
-    def __init__(self, store: PostgresCommandStore) -> None:
+    def __init__(
+        self,
+        store: PostgresCommandStore,
+        odoo: OdooProviderAdapter | None = None,
+    ) -> None:
         self.store = store
+        self.odoo = odoo
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -99,27 +105,42 @@ class CommandLedgerWorkflowActivities:
             provider_operation_id=operation.provider_operation_id,
         )
 
+    def _odoo(self, request: CommandExecutionRequest) -> OdooProviderAdapter:
+        if request.target != "odoo-19" or self.odoo is None:
+            raise ApplicationError(
+                "no production provider adapter is activated for this command",
+                non_retryable=True,
+                type="CapabilityDisabled",
+            )
+        return self.odoo
+
     @activity.defn(name="execute_command")
     async def execute_command(
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
-        raise ApplicationError(
-            "no production provider adapter is activated for this command",
-            non_retryable=True,
-            type="CapabilityDisabled",
-        )
+        adapter = self._odoo(request)
+        try:
+            return await adapter.execute(request)
+        except OdooProviderAdapterError as exc:
+            raise ApplicationError(
+                str(exc),
+                type="ProviderAdapterError",
+            ) from exc
 
     @activity.defn(name="readback_command")
     async def readback_command(
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
-        raise ApplicationError(
-            "no provider read-back adapter is activated for this command",
-            non_retryable=True,
-            type="CapabilityDisabled",
-        )
+        adapter = self._odoo(request)
+        try:
+            return await adapter.readback(request)
+        except OdooProviderAdapterError as exc:
+            raise ApplicationError(
+                str(exc),
+                type="ProviderReadbackError",
+            ) from exc
 
     def registered(self) -> tuple[Any, ...]:
         return (

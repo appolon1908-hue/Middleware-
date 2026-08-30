@@ -45,6 +45,9 @@ python3 scripts/validate_site_workstreams.py
 printf '==> Validating server routes and Odoo lead intake\n'
 python3 scripts/validate_site_routes_and_leads.py
 
+printf '==> Validating unified-intake observability and pending activation gates\n'
+python3 scripts/validate_intake_observability.py
+
 if [[ -x scripts/project_ci.sh ]]; then
   printf '==> Running project-specific locked dependency and test pipeline\n'
   scripts/project_ci.sh

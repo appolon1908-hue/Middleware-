@@ -48,6 +48,9 @@ class DeterministicActivities:
         self.replays: list[str] = []
         self.command_transitions: list[str] = []
         self.readback_status = "matched"
+        self.execute_attempts = 0
+        self.readback_attempts = 0
+        self.execute_outcome_unknown = False
 
     @activity.defn(name="reconcile_operation")
     async def reconcile_operation(
@@ -129,6 +132,13 @@ class DeterministicActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
+        self.execute_attempts += 1
+        if self.execute_outcome_unknown:
+            raise ApplicationError(
+                "provider timed out after possible acceptance",
+                non_retryable=True,
+                type="UncertainProviderOutcome",
+            )
         return ActivityResult("accepted", "provider accepted", "provider-op-1")
 
     @activity.defn(name="readback_command")
@@ -136,6 +146,7 @@ class DeterministicActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
+        self.readback_attempts += 1
         return ActivityResult(self.readback_status, "provider state observed")
 
     def registered(self) -> list[Any]:
@@ -264,3 +275,33 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
             assert mismatch.status == "reconciliation_required"
             assert activities.command_transitions[-1] == "reconciliation_required"
             assert "completed" not in activities.command_transitions
+
+            activities.command_transitions.clear()
+            activities.execute_outcome_unknown = True
+            execute_attempts_before = activities.execute_attempts
+            readback_attempts_before = activities.readback_attempts
+            uncertain_email = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id="00000000-0000-4000-8000-000000000002",
+                    command_type="email.message.send.v1",
+                    command_version="1.0",
+                    target="klyrow-email",
+                    tenant_id="tenant-test",
+                    requested_by="user-1",
+                    correlation_id="email-correlation-1",
+                    idempotency_key="email-idempotency-1",
+                    capability="EMAIL_DELIVERY",
+                    payload={"message_id": "message-1"},
+                ),
+                id="test-email-command-unknown-outcome",
+                task_queue=TASK_QUEUE,
+            )
+            assert uncertain_email.status == "reconciliation_required"
+            assert activities.command_transitions == [
+                "queued",
+                "dispatching",
+                "reconciliation_required",
+            ]
+            assert activities.execute_attempts == execute_attempts_before + 1
+            assert activities.readback_attempts == readback_attempts_before

@@ -329,6 +329,73 @@ def test_runtime_profile_identity_is_mandatory_and_not_allowed_in_tests() -> Non
         )
 
 
+def test_production_compose_profile_is_locked_and_effects_disabled() -> None:
+    env = {
+        "APP_ENV": "production",
+        "RUNTIME_PROFILE_ID": "codestra-middleware-production-compose-v1",
+        "DATABASE_URL": (
+            "postgresql://appolon_middleware_api:secret@codestra-postgres-1:5432/"
+            "codestra_middleware_appolon"
+        ),
+        "REDIS_URL": "redis://middleware-service:secret@redis:6379/0",
+        "NATS_STREAM": "CODESTRA_EVENTS",
+        "NATS_SUBJECT_PREFIX": "codestra.events",
+        "NATS_DISPATCH_MODE": "disabled",
+        "TEMPORAL_NAMESPACE": "codestra-production",
+        "TEMPORAL_TASK_QUEUE": "codestra-production-critical",
+        "TEMPORAL_WORKER_MODE": "disabled",
+        "APP_SOURCE_SHA": "a" * 40,
+        "IMAGE_DIGEST": "sha256:" + "b" * 64,
+        "BUILD_TIME": "2026-08-30T12:00:00Z",
+    }
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+
+    settings = Settings.from_env(env)
+
+    assert settings.runtime_profile_id == "codestra-middleware-production-compose-v1"
+    assert settings.production_activation_id is None
+    assert settings.outbox_dispatch_enabled is False
+    assert not any(settings.external_effects.values())
+
+
+def test_production_compose_profile_rejects_legacy_sqlalchemy_url_and_activation() -> None:
+    env = {
+        "APP_ENV": "production",
+        "RUNTIME_PROFILE_ID": "codestra-middleware-production-compose-v1",
+        "DATABASE_URL": (
+            "postgresql+asyncpg://appolon_middleware_api:secret@"
+            "codestra-postgres-1:5432/codestra_middleware_appolon"
+        ),
+        "REDIS_URL": "redis://middleware-service:secret@redis:6379/0",
+        "APP_SOURCE_SHA": "a" * 40,
+        "IMAGE_DIGEST": "sha256:" + "b" * 64,
+        "BUILD_TIME": "2026-08-30T12:00:00Z",
+    }
+    for producer in WEBHOOK_PRODUCERS:
+        env[
+            "WEBHOOK_SECRET_"
+            + producer.upper().replace("-", "_").replace(".", "_")
+        ] = "x" * 32
+
+    with pytest.raises(ConfigurationError, match="DATABASE_URL"):
+        Settings.from_env(env)
+    with pytest.raises(ConfigurationError, match="PRODUCTION_ACTIVATION_ID"):
+        Settings.from_env(
+            {
+                **env,
+                "DATABASE_URL": (
+                    "postgresql://appolon_middleware_api:secret@"
+                    "codestra-postgres-1:5432/codestra_middleware_appolon"
+                ),
+                "PRODUCTION_ACTIVATION_ID": "not-authorized",
+            }
+        )
+
+
 def test_staging_temporal_is_bound_to_staging_identity_and_credentials() -> None:
     env = staging_env()
     env.update(

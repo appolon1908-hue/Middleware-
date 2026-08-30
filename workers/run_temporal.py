@@ -8,6 +8,7 @@ from temporalio.worker import Worker
 
 from app.config import ConfigurationError, Settings
 from app.commands import PostgresCommandStore
+from app.odoo_provider_adapter import OdooProviderAdapter
 from app.temporal_activities import (
     CommandLedgerWorkflowActivities,
     FailClosedWorkflowActivities,
@@ -28,7 +29,10 @@ async def main() -> None:
     command_store = await PostgresCommandStore.connect(settings.database_url)
     try:
         safe_activities = FailClosedWorkflowActivities()
-        command_activities = CommandLedgerWorkflowActivities(command_store)
+        command_activities = CommandLedgerWorkflowActivities(
+            command_store,
+            OdooProviderAdapter(settings),
+        )
         worker = Worker(
             client,
             task_queue=settings.temporal_task_queue,

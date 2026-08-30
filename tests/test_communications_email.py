@@ -281,13 +281,13 @@ def test_email_scope_tenant_and_cancellation_guards(test_settings) -> None:
         assert wrong_tenant.status_code == 404
         cancelled = client.post(
             f"/v1/communications/messages/{created['messageId']}/cancel",
-            headers=_headers(scope="klyrow.middleware.status.read", key="cancel-key-2"),
+            headers=_headers(key="cancel-key-2"),
         )
         assert cancelled.status_code == 202
         assert cancelled.json()["status"] == "cancelled"
         again = client.post(
             f"/v1/communications/messages/{created['messageId']}/cancel",
-            headers=_headers(scope="klyrow.middleware.status.read", key="cancel-key-3"),
+            headers=_headers(key="cancel-key-3"),
         )
         assert again.status_code == 409
 

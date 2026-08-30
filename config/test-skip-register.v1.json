@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "baseline": {
+    "commit": "382683958feefce73458ee56a1589092bad632b3",
+    "passed": 158,
+    "skipped": 23
+  },
+  "registered_files": [
+    {
+      "path": "tests/integration/test_postgres_redis.py",
+      "gate": "RUNTIME_INTEGRATION_TESTS",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_outbox_dispatch_lease.py",
+      "gate": "RUNTIME_INTEGRATION_TESTS",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_synthetic_acceptance.py",
+      "gate": "RUNTIME_INTEGRATION_TESTS",
+      "required_job": "Synthetic no-effect acceptance E2E"
+    },
+    {
+      "path": "tests/integration/test_nats_jetstream.py",
+      "gate": "NATS_INTEGRATION_TESTS",
+      "required_job": "Disposable NATS JetStream integration"
+    },
+    {
+      "path": "tests/integration/test_temporal_workflows.py",
+      "gate": "TEMPORAL_INTEGRATION_TESTS",
+      "required_job": "Temporal critical workflow integration"
+    },
+    {
+      "path": "tests/integration/test_email_unknown_outcome_reconciliation.py",
+      "gate": "TEMPORAL_INTEGRATION_TESTS",
+      "required_job": "Temporal critical workflow integration"
+    },
+    {
+      "path": "services/connector-runtime/tests/test_storage_contract.py",
+      "gate": "ADMIN_DATABASE_URL+APP_DATABASE_URL",
+      "required_job": "Connector storage v1"
+    }
+  ],
+  "policy": {
+    "unregistered_skip_allowed": false,
+    "permanent_skip_allowed": false,
+    "xfail_requires_work_code_owner_and_expiry": true,
+    "shared_staging_or_production_dependency_allowed": false
+  }
+}

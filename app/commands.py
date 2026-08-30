@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Mapping, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 import asyncpg
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .canonical_contracts import validate_contract
-
+from .provider_canary import provider_evidence_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPORAL_COMMAND_DESTINATION = "temporal-command"
@@ -114,10 +115,43 @@ class CommandOperation(BaseModel):
     capability: str
     state: CommandState
     provider_operation_id: str | None = None
+    readback_evidence: dict[str, Any] | None = None
+    readback_evidence_sha256: str | None = None
     last_error: str | None = None
     created_at: datetime
     updated_at: datetime
     duplicate: bool = False
+
+
+def decode_readback_evidence(value: object) -> dict[str, Any] | None:
+    """Normalize asyncpg's default jsonb text codec into a JSON object."""
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError as exc:
+            raise RuntimeError("persisted read-back evidence is invalid JSON") from exc
+    if not isinstance(value, Mapping):
+        raise RuntimeError("persisted read-back evidence must be a JSON object")
+    return dict(value)
+
+
+def verify_readback_evidence_digest(
+    value: object,
+    persisted_digest: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    evidence = decode_readback_evidence(value)
+    if evidence is None:
+        if persisted_digest is not None:
+            raise RuntimeError("read-back evidence digest has no evidence payload")
+        return None, None
+    if persisted_digest is None:
+        return evidence, None
+    if provider_evidence_digest(evidence) != persisted_digest:
+        raise RuntimeError("persisted read-back evidence digest does not match payload")
+    return evidence, persisted_digest
 
 
 @dataclass(frozen=True)
@@ -221,6 +255,7 @@ class CommandStore(Protocol):
         actor_id: str,
         reason: str,
         provider_operation_id: str | None = None,
+        readback_evidence: Mapping[str, Any] | None = None,
     ) -> CommandOperation:
         ...
 
@@ -285,7 +320,10 @@ class MemoryCommandStore:
         actor_id: str,
         reason: str,
         provider_operation_id: str | None = None,
+        readback_evidence: Mapping[str, Any] | None = None,
     ) -> CommandOperation:
+        if readback_evidence is not None and new_state != "completed":
+            raise CommandConflict("read-back evidence may be persisted only on completion")
         key = (tenant_id, command_id)
         entry = self._commands.get(key)
         if entry is None:
@@ -301,6 +339,16 @@ class MemoryCommandStore:
                 "state": new_state,
                 "provider_operation_id": (
                     provider_operation_id or operation.provider_operation_id
+                ),
+                "readback_evidence": (
+                    dict(readback_evidence)
+                    if readback_evidence is not None
+                    else operation.readback_evidence
+                ),
+                "readback_evidence_sha256": (
+                    provider_evidence_digest(readback_evidence)
+                    if readback_evidence is not None
+                    else operation.readback_evidence_sha256
                 ),
                 "last_error": reason if new_state in {"failed", "reconciliation_required"} else None,
                 "updated_at": now,
@@ -401,7 +449,17 @@ class PostgresCommandStore:
         return store
 
     @staticmethod
-    def _operation(row: asyncpg.Record, *, duplicate: bool = False) -> CommandOperation:
+    def _operation(
+        row: asyncpg.Record,
+        *,
+        duplicate: bool = False,
+        readback_evidence: object = None,
+        readback_evidence_sha256: str | None = None,
+    ) -> CommandOperation:
+        normalized_evidence, persisted_digest = verify_readback_evidence_digest(
+            readback_evidence,
+            readback_evidence_sha256,
+        )
         return CommandOperation(
             command_id=row["command_id"],
             tenant_id=row["tenant_id"],
@@ -414,6 +472,8 @@ class PostgresCommandStore:
             capability=row["capability"],
             state=row["state"],
             provider_operation_id=row["provider_operation_id"],
+            readback_evidence=normalized_evidence,
+            readback_evidence_sha256=persisted_digest,
             last_error=row["last_error"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -505,9 +565,33 @@ class PostgresCommandStore:
                 tenant_id,
                 str(command_id),
             )
+            persisted = await conn.fetchrow(
+                """
+                SELECT
+                    (
+                        SELECT result_payload FROM middleware_command_attempts
+                        WHERE tenant_id=$1 AND command_id=$2
+                        ORDER BY attempt_number DESC LIMIT 1
+                    ) AS result_payload,
+                    (
+                        SELECT metadata->>'readback_evidence_sha256'
+                        FROM middleware_command_audit
+                        WHERE tenant_id=$1 AND command_id=$2
+                          AND new_state='completed'
+                        ORDER BY id DESC LIMIT 1
+                    ) AS readback_evidence_sha256
+                """,
+                tenant_id,
+                str(command_id),
+            )
         if row is None:
             raise CommandNotFound("command operation was not found")
-        return self._operation(row)
+        assert persisted is not None
+        return self._operation(
+            row,
+            readback_evidence=persisted["result_payload"],
+            readback_evidence_sha256=persisted["readback_evidence_sha256"],
+        )
 
     async def transition(
         self,
@@ -518,8 +602,19 @@ class PostgresCommandStore:
         actor_id: str,
         reason: str,
         provider_operation_id: str | None = None,
+        readback_evidence: Mapping[str, Any] | None = None,
     ) -> CommandOperation:
+        if readback_evidence is not None and new_state != "completed":
+            raise CommandConflict("read-back evidence may be persisted only on completion")
         safe_reason = reason[:2048]
+        safe_readback = (
+            dict(readback_evidence) if readback_evidence is not None else None
+        )
+        safe_readback_digest = (
+            provider_evidence_digest(safe_readback)
+            if safe_readback is not None
+            else None
+        )
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 current = await conn.fetchrow(
@@ -575,7 +670,10 @@ class PostgresCommandStore:
                     actor_id,
                     safe_reason,
                     json.dumps(
-                        {"provider_operation_id": provider_operation_id},
+                        {
+                            "provider_operation_id": provider_operation_id,
+                            "readback_evidence_sha256": safe_readback_digest,
+                        },
                         separators=(",", ":"),
                         sort_keys=True,
                     ),
@@ -612,6 +710,7 @@ class PostgresCommandStore:
                         UPDATE middleware_command_attempts
                         SET state=$3,
                             provider_operation_id=COALESCE($4, provider_operation_id),
+                            result_payload=COALESCE($6::jsonb, result_payload),
                             error_detail=CASE
                                 WHEN $3 IN ('failed','reconciliation_required') THEN $5
                                 ELSE error_detail
@@ -631,9 +730,46 @@ class PostgresCommandStore:
                         new_state,
                         provider_operation_id,
                         safe_reason,
+                        (
+                            json.dumps(
+                                safe_readback,
+                                separators=(",", ":"),
+                                sort_keys=True,
+                            )
+                            if safe_readback is not None
+                            else None
+                        ),
                     )
         assert row is not None
-        return self._operation(row)
+        if safe_readback is None:
+            async with self.pool.acquire() as conn:
+                persisted = await conn.fetchrow(
+                    """
+                    SELECT
+                        (
+                            SELECT result_payload FROM middleware_command_attempts
+                            WHERE tenant_id=$1 AND command_id=$2
+                            ORDER BY attempt_number DESC LIMIT 1
+                        ) AS result_payload,
+                        (
+                            SELECT metadata->>'readback_evidence_sha256'
+                            FROM middleware_command_audit
+                            WHERE tenant_id=$1 AND command_id=$2
+                              AND new_state='completed'
+                            ORDER BY id DESC LIMIT 1
+                        ) AS readback_evidence_sha256
+                    """,
+                    tenant_id,
+                    str(command_id),
+                )
+            assert persisted is not None
+            safe_readback = persisted["result_payload"]
+            safe_readback_digest = persisted["readback_evidence_sha256"]
+        return self._operation(
+            row,
+            readback_evidence=safe_readback,
+            readback_evidence_sha256=safe_readback_digest,
+        )
 
     async def ready(self) -> bool:
         try:

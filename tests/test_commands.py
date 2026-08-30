@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -14,8 +15,11 @@ from app.commands import (
     CommandPolicyRegistry,
     CommandService,
     MemoryCommandStore,
+    decode_readback_evidence,
+    verify_readback_evidence_digest,
 )
 from app.main import create_app
+from app.provider_canary import provider_evidence_digest
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
@@ -82,6 +86,60 @@ async def test_memory_command_ledger_is_idempotent_and_state_guarded() -> None:
             actor_id="temporal:test",
             reason="completion cannot skip read-back",
         )
+
+
+@pytest.mark.asyncio
+async def test_memory_command_ledger_persists_redacted_readback_evidence() -> None:
+    store = MemoryCommandStore()
+    command = CommandEnvelope.model_validate(command_payload())
+    await store.submit(command)
+    with pytest.raises(CommandConflict, match="only on completion"):
+        await store.transition(
+            command.tenant_id,
+            command.command_id,
+            new_state="queued",
+            actor_id="temporal:test",
+            reason="invalid early proof",
+            readback_evidence={"status": "delivered"},
+        )
+    for state in ("queued", "dispatching", "accepted", "readback_pending"):
+        await store.transition(
+            command.tenant_id,
+            command.command_id,
+            new_state=state,
+            actor_id="temporal:test",
+            reason=f"transition to {state}",
+        )
+    evidence = {"provider_reference": "provider-operation-1", "status": "matched"}
+    completed = await store.transition(
+        command.tenant_id,
+        command.command_id,
+        new_state="completed",
+        actor_id="temporal:test",
+        reason="provider read-back matched",
+        provider_operation_id="provider-operation-1",
+        readback_evidence=evidence,
+    )
+    assert completed.readback_evidence == evidence
+    assert completed.readback_evidence_sha256 == provider_evidence_digest(evidence)
+    fetched = await store.get(command.tenant_id, command.command_id)
+    assert fetched.readback_evidence_sha256 == completed.readback_evidence_sha256
+
+
+def test_postgres_jsonb_readback_text_is_decoded_before_api_serialization() -> None:
+    evidence = {"provider_reference": "provider-operation-1", "status": "matched"}
+    assert decode_readback_evidence(json.dumps(evidence)) == evidence
+    digest = provider_evidence_digest(evidence)
+    assert verify_readback_evidence_digest(json.dumps(evidence), digest) == (
+        evidence,
+        digest,
+    )
+    with pytest.raises(RuntimeError, match="invalid JSON"):
+        decode_readback_evidence("not-json")
+    with pytest.raises(RuntimeError, match="JSON object"):
+        decode_readback_evidence("[]")
+    with pytest.raises(RuntimeError, match="does not match"):
+        verify_readback_evidence_digest(evidence, "sha256:" + "0" * 64)
 
 
 @pytest.mark.asyncio

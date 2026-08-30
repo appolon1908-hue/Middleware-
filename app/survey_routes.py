@@ -70,6 +70,11 @@ def register_survey_routes(app: FastAPI) -> None:
             raise RequestValidationError(
                 "body does not match the canonical survey response contract"
             ) from exc
+        request.state.intake_metrics = {
+            "channel": submission.source,
+            "survey_kind": submission.surveyCategory,
+            "anonymous": "true" if submission.anonymous else "false",
+        }
         if submission.tenantId != tenant_id:
             raise RequestValidationError("X-Tenant-ID does not match submission tenantId")
 

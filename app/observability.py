@@ -163,6 +163,7 @@ class MiddlewareObservability:
         status_code: int,
         correlation_id: str,
         traceparent: str | None,
+        intake_context: dict[str, str] | None = None,
     ) -> None:
         elapsed = max(time.perf_counter() - started, 0.0)
         normalized_method = method.upper() if method.upper() in {
@@ -176,7 +177,12 @@ class MiddlewareObservability:
             str(status_code),
         ).inc()
         self.duration.labels(*self._base, operation, normalized_method).observe(elapsed)
-        self.intake.record_http_outcome(operation, status_code, elapsed)
+        self.intake.record_http_outcome(
+            operation,
+            status_code,
+            elapsed,
+            intake_context,
+        )
         self.logger.info(
             "http_request_completed",
             extra={

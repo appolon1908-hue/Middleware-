@@ -7,10 +7,12 @@
     "middlewareBranch": "feat/communications-api-v1-sms-runtime",
     "middlewareBaseSha": "d9735422796cb2aa18a39339aad3cc87bdf67ba9",
     "telnexaRepository": "appolon1908-hue/telnexa",
-    "telnexaBranch": "feat/communications-api-v1-sms-provider",
+    "telnexaSourceBranch": "feat/communications-api-v1-sms-provider",
+    "telnexaProtectedBranch": "main",
     "telnexaPullRequest": 22,
     "telnexaSourceSha": "ee4cea8e6d15a5ba24c1f37d0ede60df67eaa151",
-    "telnexaSyntheticMergeSha": "b3e3e09597b5113ba44cef56686025aa1bd0cbbd"
+    "telnexaSyntheticMergeSha": "b3e3e09597b5113ba44cef56686025aa1bd0cbbd",
+    "telnexaMergedMainSha": "e68c81f1173d6c0b491b66d353445c397461746e"
   },
   "certification": {
     "exactHeadWorkflow": {
@@ -24,7 +26,9 @@
       "conclusion": "success"
     },
     "reviewThreadsResolved": 4,
-    "independentApprovalPending": true
+    "independentApprovalPending": false,
+    "independentApprovalBy": "kazan555",
+    "sourcePromotionMerged": true
   },
   "contracts": {
     "commandType": "sms.message.submit.v1",

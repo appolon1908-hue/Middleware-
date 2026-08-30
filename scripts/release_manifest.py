@@ -108,6 +108,7 @@ def _runtime_profile_ids(root: Path) -> list[str]:
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ReleaseManifestError("runtime profile identities cannot be loaded") from exc
     expected = [
+        "codestra-middleware-production-compose-v1",
         "codestra-middleware-production-v1",
         "codestra-middleware-staging-v1",
     ]
@@ -317,7 +318,11 @@ def validate_manifest(
         raise ReleaseManifestError("runtime migration head is invalid")
     _expect_constant(
         runtime["runtime_profile_ids"],
-        ["codestra-middleware-production-v1", "codestra-middleware-staging-v1"],
+        [
+            "codestra-middleware-production-compose-v1",
+            "codestra-middleware-production-v1",
+            "codestra-middleware-staging-v1",
+        ],
         "runtime.runtime_profile_ids",
     )
     _expect_constant(

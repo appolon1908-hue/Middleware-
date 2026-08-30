@@ -64,6 +64,38 @@
       },
       "secret_path_prefix": "/run/secrets/middleware-production-",
       "production_activation_allowed": true
+    },
+    {
+      "profile_id": "codestra-middleware-production-compose-v1",
+      "environment": "production",
+      "database": {
+        "scheme": "postgresql",
+        "host": "codestra-postgres-1",
+        "port": 5432,
+        "name": "codestra_middleware",
+        "username": "mw_integration_api",
+        "sslmode": null
+      },
+      "redis": {
+        "scheme": "redis",
+        "host": "redis",
+        "port": 6379,
+        "database": 0,
+        "username": "middleware-service"
+      },
+      "nats": {
+        "host": "nats",
+        "port": 4222,
+        "stream": "CODESTRA_EVENTS",
+        "subject_prefix": "codestra.events"
+      },
+      "temporal": {
+        "address": "temporal:7233",
+        "namespace": "codestra-production",
+        "task_queue": "codestra-production-critical"
+      },
+      "secret_path_prefix": "/run/secrets/middleware-production-compose-",
+      "production_activation_allowed": false
     }
   ]
 }

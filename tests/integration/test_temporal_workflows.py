@@ -333,3 +333,33 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
             assert activities.reconciliation_requests.count(email_command_id) == 3
             assert activities.execute_attempts == provider_execution_attempts
             assert activities.readback_attempts == readback_attempts_before
+
+
+            activities.command_transitions.clear()
+            execute_attempts_before = activities.execute_attempts
+            readback_attempts_before = activities.readback_attempts
+            uncertain_sms = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id="00000000-0000-4000-8000-000000000003",
+                    command_type="sms.message.submit.v1",
+                    command_version="1.0",
+                    target="telnexa-sms",
+                    tenant_id="tenant-test",
+                    requested_by="user-1",
+                    correlation_id="sms-correlation-1",
+                    idempotency_key="sms-idempotency-1",
+                    capability="SMS_DELIVERY",
+                    payload={"message_id": "message-2"},
+                ),
+                id="test-sms-command-unknown-outcome",
+                task_queue=TASK_QUEUE,
+            )
+            assert uncertain_sms.status == "reconciliation_required"
+            assert activities.command_transitions == [
+                "queued",
+                "dispatching",
+                "reconciliation_required",
+            ]
+            assert activities.execute_attempts == execute_attempts_before + 1
+            assert activities.readback_attempts == readback_attempts_before

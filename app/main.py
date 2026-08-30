@@ -350,6 +350,12 @@ def create_app(
             raise RequestValidationError(
                 "X-Correlation-ID and Idempotency-Key are required"
             )
+        if len(correlation_id) > 180 or not 8 <= len(idempotency_key) <= 180:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "X-Correlation-ID or Idempotency-Key is outside contract bounds"
+            )
         actor = request.headers.get("X-Codestra-Actor", "")
         if not actor:
             authorization = request.headers.get("Authorization", "")
@@ -360,7 +366,7 @@ def create_app(
                 required_scope=caller.command_scope,
             )
             actor = str(claims.get("sub") or "")
-        message, duplicate = await communications_service(request).submit_email(
+        message, duplicate = await communications_service(request).submit_message(
             body,
             tenant_id=tenant_id,
             correlation_id=correlation_id,
@@ -427,12 +433,34 @@ def create_app(
     @app.post("/v1/communications/messages/{messageId}/cancel")
     async def cancel_communication_message(messageId: UUID, request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        idempotency_key = request.headers.get("Idempotency-Key", "")
+        if not 8 <= len(idempotency_key) <= 180:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "Idempotency-Key must contain 8-180 characters"
+            )
+        authorization = request.headers.get("Authorization", "")
+        caller = caller_for_authorization(authorization)
+        claims = await request.app.state.runtime.tokens.verify(
+            authorization,
+            expected_client_id=caller.client_id,
+            required_scope=caller.command_scope,
+        )
+        actor = request.headers.get("X-Codestra-Actor", "") or str(
+            claims.get("sub") or ""
+        )
+        message, duplicate = await communications_service(request).cancel(
+            tenant_id,
+            messageId,
+            idempotency_key=idempotency_key,
+            actor=actor,
+            authorization=authorization,
+            token_verifier=request.app.state.runtime.tokens,
+        )
         return JSONResponse(
-            status_code=202,
-            content=communications_service(request)
-            .cancel(tenant_id, messageId)
-            .model_dump(mode="json"),
+            status_code=200 if duplicate else 202,
+            content=message.model_dump(mode="json"),
         )
 
     @app.get("/v1/communications/provider-health")
@@ -454,7 +482,11 @@ def create_app(
     async def get_communication_usage(request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
-        messages = communications_service(request).list_messages(tenant_id)
+        messages = [
+            item
+            for item in communications_service(request).list_messages(tenant_id)
+            if item.direction == "outbound"
+        ]
         return JSONResponse(
             status_code=200,
             content={
@@ -462,12 +494,35 @@ def create_app(
                 "to": request.query_params.get("to") or datetime.now(UTC).isoformat(),
                 "totals": [
                     {
-                        "channel": "email",
-                        "accepted": len(messages),
-                        "delivered": len([item for item in messages if item.status == "delivered"]),
-                        "failed": len([item for item in messages if item.status == "failed"]),
-                        "suppressed": len([item for item in messages if item.status == "suppressed"]),
+                        "channel": channel,
+                        "accepted": len(
+                            [item for item in messages if item.channel == channel]
+                        ),
+                        "delivered": len(
+                            [
+                                item
+                                for item in messages
+                                if item.channel == channel
+                                and item.status == "delivered"
+                            ]
+                        ),
+                        "failed": len(
+                            [
+                                item
+                                for item in messages
+                                if item.channel == channel and item.status == "failed"
+                            ]
+                        ),
+                        "suppressed": len(
+                            [
+                                item
+                                for item in messages
+                                if item.channel == channel
+                                and item.status == "suppressed"
+                            ]
+                        ),
                     }
+                    for channel in ("email", "sms")
                 ],
             },
         )
@@ -632,7 +687,8 @@ def create_app(
                 headers=headers,
             )
             if (
-                route.producer_client_id == "klyrow-gateway"
+                route.producer_client_id
+                in {"klyrow-gateway", "telnexa-gateway"}
                 and request.app.state.runtime.communications is not None
             ):
                 from .models import EventEnvelope

@@ -7,14 +7,31 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
+from .canonical_contracts import validate_specialized_contract
 from .commands import CommandEnvelope, CommandService
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
+from .sms import compliance_keyword, normalize_e164, normalize_sms_sender, sms_segments
 
 
 CommunicationChannel = Literal["email", "sms", "voice"]
+SUPPORTED_MESSAGE_CHANNELS = frozenset({"email", "sms"})
+EMAIL_ADDRESS = TypeAdapter(EmailStr)
+CHANNEL_COMMAND = {
+    "email": ("email.message.send.v1", "klyrow-email", "EMAIL_DELIVERY", "klyrow"),
+    "sms": ("sms.message.submit.v1", "telnexa-sms", "SMS_DELIVERY", "telnexa"),
+}
 MessageStatus = Literal[
     "accepted",
     "queued",
@@ -58,7 +75,7 @@ class MessageContent(BaseModel):
     @model_validator(mode="after")
     def require_content(self) -> "MessageContent":
         if not any((self.text, self.html, self.templateId)):
-            raise ValueError("email content requires text, html, or templateId")
+            raise ValueError("message content requires text, html, or templateId")
         return self
 
 
@@ -66,8 +83,8 @@ class CreateMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     channel: CommunicationChannel
-    from_: EmailStr | None = Field(default=None, alias="from")
-    to: list[EmailStr] = Field(min_length=1, max_length=1000)
+    from_: str | None = Field(default=None, alias="from", min_length=1, max_length=300)
+    to: list[str] = Field(min_length=1, max_length=1000)
     senderIdentityId: uuid.UUID | None = None
     domainId: uuid.UUID | None = None
     content: MessageContent
@@ -82,11 +99,53 @@ class CreateMessageRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def email_only_for_step3(self) -> "CreateMessageRequest":
-        if self.channel != "email":
-            raise ValueError("Step 3 implements only channel=email")
+    def validate_channel_contract(self) -> "CreateMessageRequest":
+        if self.channel not in SUPPORTED_MESSAGE_CHANNELS:
+            raise ValueError("implemented channels are email and sms")
         if self.from_ is None and self.senderIdentityId is None:
-            raise ValueError("email requires from or senderIdentityId")
+            raise ValueError("message requires from or senderIdentityId")
+        if self.channel == "email":
+            try:
+                sender = (
+                    str(EMAIL_ADDRESS.validate_python(self.from_)).lower()
+                    if self.from_ is not None
+                    else None
+                )
+                recipients = [
+                    str(EMAIL_ADDRESS.validate_python(value)).lower()
+                    for value in self.to
+                ]
+            except ValidationError as exc:
+                raise ValueError("email sender and recipients must be valid addresses") from exc
+            object.__setattr__(self, "from_", sender)
+            object.__setattr__(self, "to", recipients)
+            return self
+
+        if len(self.to) != 1:
+            raise ValueError("SMS submission requires exactly one recipient")
+        if self.domainId is not None:
+            raise ValueError("SMS does not accept domainId")
+        if self.content.text is None:
+            raise ValueError("SMS content.text is required")
+        if any(
+            (
+                self.content.subject,
+                self.content.html,
+                self.content.templateId,
+                self.content.templateVersion,
+                self.content.variables,
+                self.content.mediaUrls,
+            )
+        ):
+            raise ValueError("SMS API currently accepts text content only")
+        try:
+            sender = normalize_sms_sender(self.from_) if self.from_ is not None else None
+            recipients = [normalize_e164(self.to[0])]
+            sms_segments(self.content.text)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        object.__setattr__(self, "from_", sender)
+        object.__setattr__(self, "to", recipients)
         return self
 
 
@@ -137,11 +196,18 @@ def _canonical_digest(value: Any) -> str:
 
 def _provider_status_to_canonical(status: str) -> MessageStatus:
     normalized = status.lower()
-    if normalized in {"delivered", "sent"}:
+    if normalized in {"delivered", "delivrd"}:
         return "delivered"
     if normalized in {"queued", "created"}:
         return "queued"
-    if normalized in {"processing", "submitted", "provider_accepted"}:
+    if normalized in {
+        "processing",
+        "submitted",
+        "provider_accepted",
+        "sent",
+        "acceptd",
+        "enroute",
+    }:
         return "dispatched"
     if normalized in {"suppressed"}:
         return "suppressed"
@@ -182,10 +248,14 @@ class MemoryCommunicationsStore:
     events: dict[tuple[str, uuid.UUID], list[MessageEvent]] = field(default_factory=dict)
     idempotency: dict[tuple[str, str, str], tuple[str, uuid.UUID]] = field(default_factory=dict)
     provider_event_digests: dict[tuple[str, str], str] = field(default_factory=dict)
-    suppressions: set[tuple[str, str]] = field(default_factory=set)
+    suppressions: set[tuple[str, str] | tuple[str, str, str]] = field(
+        default_factory=set
+    )
     denied_consent: set[tuple[str, str]] = field(default_factory=set)
     verified_senders: set[tuple[str, str]] = field(default_factory=set)
     verified_domains: set[tuple[str, str]] = field(default_factory=set)
+    sender_identities: dict[tuple[str, uuid.UUID], str] = field(default_factory=dict)
+    cancellations: set[tuple[str, uuid.UUID, str]] = field(default_factory=set)
 
     async def ready(self) -> bool:
         return True
@@ -201,13 +271,14 @@ class MemoryCommunicationsStore:
         provider_reference: str | None = None,
         metadata: dict[str, Any] | None = None,
         event_id: uuid.UUID | None = None,
+        occurred_at: datetime | None = None,
     ) -> MessageEvent:
         event = MessageEvent(
             eventId=event_id or uuid.uuid4(),
             messageId=message_id,
             type=event_type,
             status=status,
-            occurredAt=datetime.now(UTC),
+            occurredAt=occurred_at or datetime.now(UTC),
             provider=provider,
             providerReference=provider_reference,
             metadata=metadata or {},
@@ -219,10 +290,7 @@ class MemoryCommunicationsStore:
         return event
 
 
-class KlyrowEmailAdapter(Protocol):
-    async def submit(self, message: CommunicationMessage, request: CreateMessageRequest) -> dict[str, Any]:
-        ...
-
+class CommunicationsProviderReadAdapter(Protocol):
     async def health(self, tenant_id: str) -> dict[str, Any]:
         ...
 
@@ -230,10 +298,7 @@ class KlyrowEmailAdapter(Protocol):
         ...
 
 
-class DisabledKlyrowEmailAdapter:
-    async def submit(self, message: CommunicationMessage, request: CreateMessageRequest) -> dict[str, Any]:
-        raise RuntimeError("email_delivery_kill_switch_disabled")
-
+class DisabledCommunicationsProviderReadAdapter:
     async def health(self, tenant_id: str) -> dict[str, Any]:
         return {
             "status": "disabled",
@@ -244,7 +309,13 @@ class DisabledKlyrowEmailAdapter:
                     "channel": "email",
                     "status": "disabled",
                     "reason": "EMAIL_DELIVERY_ENABLED is false",
-                }
+                },
+                {
+                    "provider": "telnexa",
+                    "channel": "sms",
+                    "status": "disabled",
+                    "reason": "SMS_DELIVERY_ENABLED is false",
+                },
             ],
         }
 
@@ -259,7 +330,13 @@ class DisabledKlyrowEmailAdapter:
                     "channel": "email",
                     "status": "watch",
                     "queueDepth": 0,
-                }
+                },
+                {
+                    "provider": "telnexa",
+                    "channel": "sms",
+                    "status": "watch",
+                    "queueDepth": 0,
+                },
             ],
         }
 
@@ -268,9 +345,11 @@ class DisabledKlyrowEmailAdapter:
 class CommunicationsService:
     store: MemoryCommunicationsStore
     commands: CommandService
-    adapter: KlyrowEmailAdapter = field(default_factory=DisabledKlyrowEmailAdapter)
+    adapter: CommunicationsProviderReadAdapter = field(
+        default_factory=DisabledCommunicationsProviderReadAdapter
+    )
 
-    async def submit_email(
+    async def submit_message(
         self,
         request: CreateMessageRequest,
         *,
@@ -281,13 +360,14 @@ class CommunicationsService:
         authorization: str,
         token_verifier: Any,
     ) -> tuple[CommunicationMessage, bool]:
+        command_type, target, capability, provider = CHANNEL_COMMAND[request.channel]
         caller = caller_for_authorization(authorization)
         claims = await token_verifier.verify(
             authorization,
             expected_client_id=caller.client_id,
             required_scope=caller.command_scope,
         )
-        authorize_command(caller, command_type="email.message.send.v1", target="klyrow-email")
+        authorize_command(caller, command_type=command_type, target=target)
         authorize_tenant(claims, tenant_id)
         subject = claims.get("sub")
         if subject != actor:
@@ -302,87 +382,175 @@ class CommunicationsService:
                 raise CommunicationsConflict("Idempotency-Key was reused with different content")
             return self.store.messages[(tenant_id, existing_message_id)].model_copy(), True
 
-        recipient = str(request.to[0]).lower()
-        sender = str(request.from_).lower() if request.from_ is not None else ""
+        if request.from_ is not None:
+            sender = request.from_
+        elif request.senderIdentityId is not None:
+            try:
+                sender = self.store.sender_identities[
+                    (tenant_id, request.senderIdentityId)
+                ]
+            except KeyError as exc:
+                raise RequestValidationError(
+                    "sender identity is not active for tenant"
+                ) from exc
+        else:
+            raise RequestValidationError("sender identity is required")
+        if request.channel == "email":
+            try:
+                sender = str(EMAIL_ADDRESS.validate_python(sender)).lower()
+            except ValidationError as exc:
+                raise RequestValidationError("sender identity is not a valid email") from exc
+        else:
+            try:
+                sender = normalize_sms_sender(sender)
+            except ValueError as exc:
+                raise RequestValidationError(str(exc)) from exc
+        if (tenant_id, sender) not in self.store.verified_senders:
+            raise RequestValidationError("sender identity is not verified for tenant")
+
+        recipients = list(request.to)
+        recipient = recipients[0]
         sender_domain = sender.rsplit("@", 1)[1] if "@" in sender else ""
+        if (
+            request.channel == "email"
+            and (tenant_id, sender_domain) not in self.store.verified_domains
+        ):
+            raise RequestValidationError("sender domain is not verified for tenant")
+
+        category = str(request.metadata.get("category") or "transactional").lower()
+        if request.channel == "sms" and category not in {
+            "transactional",
+            "service",
+            "marketing",
+        }:
+            raise RequestValidationError("SMS category is not supported")
         status: MessageStatus = "accepted"
         failure_code: str | None = None
         failure_message: str | None = None
-        if (tenant_id, recipient) in self.store.suppressions:
+        if (
+            (tenant_id, recipient) in self.store.suppressions
+            or (tenant_id, request.channel, recipient) in self.store.suppressions
+        ):
             status = "suppressed"
             failure_code = "recipient_suppressed"
             failure_message = "recipient is suppressed before provider submission"
-        elif (tenant_id, recipient) in self.store.denied_consent or request.metadata.get("consent") == "denied":
+        elif (
+            (tenant_id, recipient) in self.store.denied_consent
+            or request.metadata.get("consent") == "denied"
+            or (
+                category == "marketing"
+                and request.metadata.get("consent") != "granted"
+            )
+        ):
             status = "suppressed"
             failure_code = "consent_required"
             failure_message = "recipient does not have required consent"
-        elif sender and self.store.verified_senders and (tenant_id, sender) not in self.store.verified_senders:
-            raise RequestValidationError("sender identity is not verified for tenant")
-        elif sender_domain and self.store.verified_domains and (tenant_id, sender_domain) not in self.store.verified_domains:
-            raise RequestValidationError("sender domain is not verified for tenant")
 
         now = datetime.now(UTC)
         message_id = uuid.uuid4()
         command_id = uuid.uuid4()
+        message_metadata = {
+            **request.metadata,
+            "recipientCount": len(recipients),
+        }
+        command_payload: dict[str, Any]
+        if request.channel == "sms":
+            assert request.content.text is not None
+            segment_info = sms_segments(request.content.text)
+            message_metadata.update(
+                {
+                    "encoding": segment_info.encoding,
+                    "characters": segment_info.characters,
+                    "segments": segment_info.segments,
+                }
+            )
+            command_payload = {
+                "message_id": str(message_id),
+                "channel": "sms",
+                "destination": recipient,
+                "sender": sender,
+                "content": request.content.text,
+                "encoding": segment_info.encoding,
+                "characters": segment_info.characters,
+                "segments": segment_info.segments,
+                "category": category,
+                "client_reference": str(message_id),
+                "scheduled_at": (
+                    request.scheduledAt.isoformat() if request.scheduledAt else None
+                ),
+                "billing_account_id": request.metadata.get("billingAccountId"),
+                "campaign_id": request.metadata.get("campaignId"),
+            }
+        else:
+            command_payload = {
+                "message_id": str(message_id),
+                "channel": "email",
+                "from": sender,
+                "to": recipients,
+                "content": request.content.model_dump(
+                    mode="json",
+                    exclude_none=True,
+                ),
+                "scheduled_at": (
+                    request.scheduledAt.isoformat() if request.scheduledAt else None
+                ),
+                "metadata": request.metadata,
+            }
         message = CommunicationMessage(
             messageId=message_id,
             tenantId=tenant_id,
-            channel="email",
+            channel=request.channel,
             direction="outbound",
             status=status,
             correlationId=correlation_id,
             idempotencyKey=idempotency_key,
-            operationId=command_id,
-            provider="klyrow",
+            operationId=command_id if status != "suppressed" else None,
+            provider=provider,
             failureCode=failure_code,
             failureMessage=failure_message,
             createdAt=now,
             acceptedAt=now,
             completedAt=now if status == "suppressed" else None,
             updatedAt=now,
-            metadata={"recipientCount": len(request.to), **request.metadata},
+            metadata=message_metadata,
         )
         command: CommandEnvelope | None = None
         if status != "suppressed":
             command = CommandEnvelope(
                 command_id=command_id,
-                command_type="email.message.send.v1",
+                command_type=command_type,
                 command_version="1.0",
-                target="klyrow-email",
+                target=target,
                 tenant_id=tenant_id,
                 requested_by=actor,
                 correlation_id=correlation_id,
                 idempotency_key=idempotency_key,
-                capability="EMAIL_DELIVERY",
-                payload={
-                    "message_id": str(message_id),
-                    "channel": "email",
-                    "from": sender,
-                    "to": [str(item).lower() for item in request.to],
-                    "content": request.content.model_dump(
-                        mode="json",
-                        exclude_none=True,
-                    ),
-                    "scheduled_at": (
-                        request.scheduledAt.isoformat()
-                        if request.scheduledAt
-                        else None
-                    ),
-                    "metadata": request.metadata,
-                },
+                capability=capability,
+                payload=command_payload,
             )
+            if request.channel == "sms":
+                validate_specialized_contract(
+                    "telnexa_sms_command",
+                    command.model_dump(mode="json"),
+                )
             self.commands.policies.authorize(command)
 
         self.store.messages[(tenant_id, message_id)] = message
         self.store.idempotency[key] = (digest, message_id)
-        self.store.add_event(tenant_id, message_id, event_type="accepted", status="accepted", provider="klyrow")
+        self.store.add_event(
+            tenant_id,
+            message_id,
+            event_type="accepted",
+            status="accepted",
+            provider=provider,
+        )
         if status == "suppressed":
             self.store.add_event(
                 tenant_id,
                 message_id,
                 event_type=failure_code or "suppressed",
                 status="suppressed",
-                provider="klyrow",
+                provider=provider,
             )
             return message, False
 
@@ -391,7 +559,13 @@ class CommunicationsService:
         message.status = "queued"
         message.updatedAt = datetime.now(UTC)
         self.store.messages[(tenant_id, message_id)] = message
-        self.store.add_event(tenant_id, message_id, event_type="queued", status="queued", provider="klyrow")
+        self.store.add_event(
+            tenant_id,
+            message_id,
+            event_type="queued",
+            status="queued",
+            provider=provider,
+        )
         return message, False
 
     def list_messages(self, tenant_id: str, *, channel: str | None = None, status: str | None = None) -> list[CommunicationMessage]:
@@ -460,7 +634,7 @@ class CommunicationsService:
             message_id,
             event_type=f"command.{operation.state}",
             status=target_status,
-            provider="klyrow",
+            provider=message.provider,
             provider_reference=updated.providerReference,
             metadata={"commandState": operation.state},
             event_id=uuid.uuid5(
@@ -470,10 +644,58 @@ class CommunicationsService:
         )
         return updated
 
-    def cancel(self, tenant_id: str, message_id: uuid.UUID) -> CommunicationMessage:
+    async def cancel(
+        self,
+        tenant_id: str,
+        message_id: uuid.UUID,
+        *,
+        idempotency_key: str,
+        actor: str,
+        authorization: str,
+        token_verifier: Any,
+    ) -> tuple[CommunicationMessage, bool]:
         message = self.get_message(tenant_id, message_id)
+        replay_key = (tenant_id, message_id, idempotency_key)
+        if replay_key in self.store.cancellations:
+            return message.model_copy(), True
         if message.status not in {"accepted", "queued"}:
             raise CommunicationsConflict("message cannot be cancelled in its current state")
+        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
+        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
+        caller = caller_for_authorization(authorization)
+        claims = await token_verifier.verify(
+            authorization,
+            expected_client_id=caller.client_id,
+            required_scope=caller.command_scope,
+        )
+        authorize_command(
+            caller,
+            command_type=cancel_command_type,
+            target=target,
+        )
+        authorize_tenant(claims, tenant_id)
+        if claims.get("sub") != actor:
+            raise AuthorizationError("requested actor must equal token subject")
+        if message.operationId is None:
+            raise CommunicationsConflict("message does not own a cancellable command")
+        operation = await self.commands.get(tenant_id, message.operationId)
+        if operation.state == "persisted":
+            operation = await self.commands.store.transition(
+                tenant_id,
+                message.operationId,
+                new_state="queued",
+                actor_id=actor,
+                reason="cancellation claimed persisted command",
+            )
+        if operation.state != "queued":
+            raise CommunicationsConflict("message command is already being dispatched")
+        await self.commands.store.transition(
+            tenant_id,
+            message.operationId,
+            new_state="dead_lettered",
+            actor_id=actor,
+            reason="cancelled before provider dispatch",
+        )
         updated = message.model_copy(
             update={
                 "status": "cancelled",
@@ -482,22 +704,137 @@ class CommunicationsService:
             }
         )
         self.store.messages[(tenant_id, message_id)] = updated
-        self.store.add_event(tenant_id, message_id, event_type="cancelled", status="cancelled", provider="klyrow")
-        return updated
+        self.store.cancellations.add(replay_key)
+        self.store.add_event(
+            tenant_id,
+            message_id,
+            event_type="cancelled",
+            status="cancelled",
+            provider=message.provider,
+        )
+        return updated, False
+
+    def _record_inbound_sms(self, envelope: Any, payload: dict[str, Any]) -> bool:
+        tenant_id = envelope.tenant_id
+        event_id = str(envelope.event_id)
+        sender_value = (
+            payload.get("from")
+            or payload.get("sender")
+            or payload.get("from_number")
+        )
+        destination_value = (
+            payload.get("to")
+            or payload.get("destination")
+            or payload.get("to_number")
+        )
+        if not isinstance(sender_value, str) or not isinstance(destination_value, str):
+            raise RequestValidationError(
+                "SMS inbound event requires sender and destination"
+            )
+        try:
+            sender = normalize_e164(sender_value)
+            destination = normalize_e164(destination_value)
+        except ValueError as exc:
+            raise RequestValidationError(str(exc)) from exc
+        content = str(
+            payload.get("content")
+            or payload.get("text")
+            or payload.get("body_preview")
+            or ""
+        )
+        action = compliance_keyword(content)
+        if envelope.event_type == "codestra.sms.recipient.opted_out":
+            action = "stop"
+        elif envelope.event_type == "codestra.sms.help_requested":
+            action = "help"
+        provider_reference = (
+            payload.get("inboundMessageId")
+            or payload.get("inbound_message_id")
+            or payload.get("telnexa_message_id")
+            or payload.get("provider_message_id")
+            or event_id
+        )
+        message_id = _provider_event_uuid(tenant_id, event_id)
+        now = datetime.now(UTC)
+        metadata: dict[str, Any] = {
+            "sender": sender,
+            "destination": destination,
+            "bodyPreview": content[:120],
+            "complianceAction": action,
+        }
+        if content:
+            segment_info = sms_segments(content)
+            metadata.update(
+                {
+                    "encoding": segment_info.encoding,
+                    "characters": segment_info.characters,
+                    "segments": segment_info.segments,
+                }
+            )
+        message = CommunicationMessage(
+            messageId=message_id,
+            tenantId=tenant_id,
+            channel="sms",
+            direction="inbound",
+            status="delivered",
+            correlationId=envelope.correlation_id,
+            idempotencyKey=envelope.idempotency_key,
+            provider="telnexa",
+            providerReference=str(provider_reference),
+            createdAt=envelope.occurred_at,
+            acceptedAt=now,
+            completedAt=now,
+            updatedAt=now,
+            metadata=metadata,
+        )
+        self.store.messages[(tenant_id, message_id)] = message
+        self.store.add_event(
+            tenant_id,
+            message_id,
+            event_type=envelope.event_type,
+            status="delivered",
+            provider="telnexa",
+            provider_reference=message.providerReference,
+            metadata={"complianceAction": action},
+            event_id=_provider_event_uuid(tenant_id, event_id),
+            occurred_at=envelope.occurred_at,
+        )
+        if action == "stop":
+            self.store.suppressions.add((tenant_id, "sms", sender))
+            self.store.add_event(
+                tenant_id,
+                message_id,
+                event_type="codestra.sms.recipient.opted_out",
+                status="suppressed",
+                provider="telnexa",
+                provider_reference=message.providerReference,
+                metadata={"subject": sender, "source": "inbound_sms"},
+                event_id=uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"codestra:communications:{tenant_id}:{event_id}:stop",
+                ),
+                occurred_at=envelope.occurred_at,
+            )
+        elif action == "help":
+            self.store.add_event(
+                tenant_id,
+                message_id,
+                event_type="codestra.sms.help_requested",
+                status="delivered",
+                provider="telnexa",
+                provider_reference=message.providerReference,
+                metadata={"subject": sender},
+                event_id=uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"codestra:communications:{tenant_id}:{event_id}:help",
+                ),
+                occurred_at=envelope.occurred_at,
+            )
+        return True
 
     def record_provider_event(self, envelope: Any) -> bool:
         payload = envelope.payload if hasattr(envelope, "payload") else {}
         tenant_id = envelope.tenant_id
-        raw_message_id = payload.get("messageId") or payload.get("message_id")
-        if not raw_message_id:
-            return False
-        try:
-            message_id = uuid.UUID(str(raw_message_id))
-        except ValueError:
-            return False
-        message = self.store.messages.get((tenant_id, message_id))
-        if message is None:
-            return False
         event_id = str(envelope.event_id)
         event_digest = _canonical_digest(envelope.model_dump(mode="json"))
         replay_key = (tenant_id, event_id)
@@ -508,17 +845,84 @@ class CommunicationsService:
                     "provider event identity was reused with different content"
                 )
             return False
-        raw_status = str(payload.get("status") or payload.get("canonical_status") or envelope.event_type.rsplit(".", 1)[-1])
+
+        if envelope.event_type in {
+            "codestra.events.sms_received",
+            "codestra.sms.inbound.received",
+            "codestra.sms.help_requested",
+            "codestra.sms.recipient.opted_out",
+        }:
+            recorded = self._record_inbound_sms(envelope, payload)
+            self.store.provider_event_digests[replay_key] = event_digest
+            return recorded
+
+        raw_message_id = (
+            payload.get("messageId")
+            or payload.get("message_id")
+            or payload.get("middleware_message_id")
+        )
+        if not raw_message_id:
+            return False
+        try:
+            message_id = uuid.UUID(str(raw_message_id))
+        except ValueError:
+            return False
+        message = self.store.messages.get((tenant_id, message_id))
+        if message is None:
+            return False
+        event_channel = (
+            "sms"
+            if envelope.source == "telnexa-gateway"
+            or ".sms." in envelope.event_type
+            else "email"
+        )
+        if message.channel != event_channel:
+            raise CommunicationsConflict(
+                "provider event channel does not match communication message"
+            )
+        raw_status = str(
+            payload.get("status")
+            or payload.get("canonical_status")
+            or payload.get("provider_status")
+            or envelope.event_type.rsplit(".", 1)[-1]
+        )
         status = _provider_status_to_canonical(raw_status)
-        provider_reference = payload.get("providerReference") or payload.get("provider_reference") or payload.get("provider_message_id")
+        provider_reference = (
+            payload.get("providerReference")
+            or payload.get("provider_reference")
+            or payload.get("provider_message_id")
+        )
+        ignored_transition = message.status == "delivered" and status != "delivered"
+        effective_status = message.status if ignored_transition else status
+        now = datetime.now(UTC)
         updated = message.model_copy(
             update={
-                "status": status,
-                "providerReference": str(provider_reference) if provider_reference else message.providerReference,
-                "failureCode": payload.get("failureCode") or payload.get("failure_code") or message.failureCode,
-                "failureMessage": payload.get("failureMessage") or payload.get("failure_message") or message.failureMessage,
-                "completedAt": datetime.now(UTC) if status in {"delivered", "failed", "cancelled", "suppressed", "expired"} else message.completedAt,
-                "updatedAt": datetime.now(UTC),
+                "status": effective_status,
+                "providerReference": (
+                    str(provider_reference)
+                    if provider_reference
+                    else message.providerReference
+                ),
+                "failureCode": (
+                    payload.get("failureCode")
+                    or payload.get("failure_code")
+                    or message.failureCode
+                ),
+                "failureMessage": (
+                    payload.get("failureMessage")
+                    or payload.get("failure_message")
+                    or message.failureMessage
+                ),
+                "dispatchedAt": (
+                    now if effective_status == "dispatched" else message.dispatchedAt
+                ),
+                "completedAt": (
+                    now
+                    if effective_status
+                    in {"delivered", "failed", "cancelled", "suppressed", "expired"}
+                    else message.completedAt
+                ),
+                "updatedAt": now,
             }
         )
         self.store.messages[(tenant_id, message_id)] = updated
@@ -526,10 +930,16 @@ class CommunicationsService:
             tenant_id,
             message_id,
             event_type=envelope.event_type,
-            status=status,
-            provider="klyrow",
+            status=effective_status,
+            provider=message.provider,
             provider_reference=updated.providerReference,
-            metadata={"providerEventType": payload.get("providerEventType") or payload.get("provider_event_type")},
+            metadata={
+                "providerEventType": payload.get("providerEventType")
+                or payload.get("provider_event_type"),
+                "providerStatus": raw_status,
+                "providerOccurredAt": envelope.occurred_at.isoformat(),
+                "ignoredTransition": ignored_transition,
+            },
             event_id=_provider_event_uuid(tenant_id, event_id),
         )
         self.store.provider_event_digests[replay_key] = event_digest

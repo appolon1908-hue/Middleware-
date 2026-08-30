@@ -32,6 +32,11 @@
       "required_job": "Temporal critical workflow integration"
     },
     {
+      "path": "tests/integration/test_email_unknown_outcome_reconciliation.py",
+      "gate": "TEMPORAL_INTEGRATION_TESTS",
+      "required_job": "Temporal critical workflow integration"
+    },
+    {
       "path": "services/connector-runtime/tests/test_storage_contract.py",
       "gate": "ADMIN_DATABASE_URL+APP_DATABASE_URL",
       "required_job": "Connector storage v1"

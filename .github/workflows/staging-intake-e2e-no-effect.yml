@@ -1,0 +1,82 @@
+name: Staging intake E2E no-effect certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Staging Caddy public API base URL
+        required: true
+        type: string
+      tenant_id:
+        description: Synthetic staging tenant identifier
+        required: true
+        type: string
+      runtime_readback:
+        description: Type ALL_EXTERNAL_EFFECTS_DISABLED after independent staging read-back
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  LIVE_WRITES: "false"
+  ODOO_WRITE: "false"
+  N8N_DELIVERY_ENABLED: "false"
+  LIVE_SMS_DELIVERY: "false"
+  LIVE_EMAIL_DELIVERY: "false"
+  LIVE_PSTN_DIALING: "false"
+
+jobs:
+  certify-no-effect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: intake-staging-certification
+    timeout-minutes: 10
+    steps:
+      - name: Fail closed unless staging runtime was independently read back
+        env:
+          CONFIRMATION: ${{ inputs.runtime_readback }}
+        run: test "$CONFIRMATION" = "ALL_EXTERNAL_EFFECTS_DISABLED"
+
+      - name: Validate staging URL boundary
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          value = os.environ['BASE_URL']
+          parsed = urlparse(value)
+          if parsed.scheme != 'https' or not parsed.netloc:
+              raise SystemExit('base_url must be an HTTPS staging Caddy endpoint')
+          if parsed.username or parsed.password or parsed.query or parsed.fragment:
+              raise SystemExit('base_url must not contain credentials/query/fragment')
+          print('STAGING_URL_BOUNDARY=PASS')
+          PY
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove exact main SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      - name: Run no-effect intake certification
+        env:
+          STAGING_SDK_INTAKE_TOKEN: ${{ secrets.STAGING_SDK_INTAKE_TOKEN }}
+          BASE_URL: ${{ inputs.base_url }}
+          TENANT_ID: ${{ inputs.tenant_id }}
+        run: |
+          python3 scripts/staging-intake-e2e-no-effect.py \
+            --base-url "$BASE_URL" \
+            --tenant "$TENANT_ID"
+
+      - name: Record non-authorization boundary
+        if: always()
+        run: |
+          echo 'PRODUCTION_DEPLOYMENT_AUTHORIZED=NO'
+          echo 'PRODUCTION_ODOO_WRITES_AUTHORIZED=NO'
+          echo 'PRODUCTION_PSTN_AUTHORIZED=NO'

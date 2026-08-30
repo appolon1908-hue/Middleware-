@@ -21,15 +21,17 @@ class OdooProviderAdapterError(RuntimeError):
 class OdooProviderAdapter:
     """Fail-closed transport from the durable command plane to Odoo 19.
 
-    The adapter implements only the explicitly reviewed CRM command subset. It
-    signs every request using the HMAC contract already enforced by
-    codestra_middleware_bridge and performs a mandatory read-back before a
-    Temporal workflow can mark a command completed.
+    The adapter owns exactly one reviewed CRM command. It signs the command and
+    every status read with the byte-exact contract implemented by
+    ``codestra_middleware_bridge``. A write timeout is an unknown outcome: the
+    Temporal workflow records ``reconciliation_required`` and never submits the
+    command a second time. Reconciliation uses the command-status route.
     """
 
-    CREATE_LEAD = "crm.lead.create.v1"
-    UPDATE_LEAD = "crm.lead.update.v1"
-    SUPPORTED = {CREATE_LEAD, UPDATE_LEAD}
+    UPSERT_LEAD = "crm.lead.upsert"
+    SUPPORTED = {UPSERT_LEAD}
+    COMMAND_PATH = "/codestra/middleware/v1/commands/crm.lead.upsert"
+    STATUS_PATH = "/codestra/middleware/v1/commands/{command_id}/status"
 
     def __init__(
         self,
@@ -51,7 +53,9 @@ class OdooProviderAdapter:
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ConfigurationError("ODOO_INTEGRATION_BASE_URL must be an HTTP(S) origin")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ConfigurationError("ODOO_INTEGRATION_BASE_URL must not contain credentials, query, or fragment")
+            raise ConfigurationError(
+                "ODOO_INTEGRATION_BASE_URL must not contain credentials, query, or fragment"
+            )
         if self.settings.app_env == "production" and parsed.scheme != "https":
             raise ConfigurationError("production Odoo integration requires HTTPS")
         return value
@@ -70,12 +74,14 @@ class OdooProviderAdapter:
             raise OdooProviderAdapterError(
                 f"unsupported Odoo command type: {request.command_type}"
             )
+        if request.command_version != "1.0":
+            raise OdooProviderAdapterError("Odoo command version must be 1.0")
 
     @staticmethod
-    def _external_id(request: CommandExecutionRequest) -> str:
-        value = request.payload.get("external_id")
+    def _source_record_id(request: CommandExecutionRequest) -> str:
+        value = request.payload.get("source_record_id")
         if not isinstance(value, str) or not value.strip() or len(value) > 180:
-            raise OdooProviderAdapterError("payload.external_id is required")
+            raise OdooProviderAdapterError("payload.source_record_id is required")
         return value.strip()
 
     @staticmethod
@@ -87,6 +93,21 @@ class OdooProviderAdapter:
             sort_keys=True,
         ).encode("utf-8")
 
+    @staticmethod
+    def _command_document(request: CommandExecutionRequest) -> dict[str, Any]:
+        return {
+            "command_id": request.command_id,
+            "command_type": request.command_type,
+            "command_version": request.command_version,
+            "target": request.target,
+            "tenant_id": request.tenant_id,
+            "requested_by": request.requested_by,
+            "correlation_id": request.correlation_id,
+            "idempotency_key": request.idempotency_key,
+            "capability": request.capability,
+            "payload": request.payload,
+        }
+
     def _headers(
         self,
         *,
@@ -95,16 +116,20 @@ class OdooProviderAdapter:
         body: bytes,
         request: CommandExecutionRequest,
         suffix: str = "",
+        timestamp: str | None = None,
     ) -> dict[str, str]:
-        timestamp = str(int(time.time()))
+        signed_timestamp = timestamp or str(int(time.time()))
         event_id = f"{request.command_id}{suffix}"
         idempotency_key = f"{request.idempotency_key}{suffix}"
         canonical = b"\n".join(
             (
-                timestamp.encode("utf-8"),
+                signed_timestamp.encode("utf-8"),
                 event_id.encode("utf-8"),
                 method.upper().encode("utf-8"),
                 path.encode("utf-8"),
+                request.tenant_id.encode("utf-8"),
+                request.correlation_id.encode("utf-8"),
+                idempotency_key.encode("utf-8"),
                 body,
             )
         )
@@ -112,7 +137,7 @@ class OdooProviderAdapter:
         return {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "X-Codestra-Timestamp": timestamp,
+            "X-Codestra-Timestamp": signed_timestamp,
             "X-Codestra-Event-ID": event_id,
             "X-Codestra-Signature": f"sha256={signature}",
             "X-Tenant-ID": request.tenant_id,
@@ -120,23 +145,12 @@ class OdooProviderAdapter:
             "Idempotency-Key": idempotency_key,
         }
 
-    def _write_request(self, request: CommandExecutionRequest) -> tuple[str, str, dict[str, Any]]:
-        external_id = self._external_id(request)
-        if request.command_type == self.CREATE_LEAD:
-            payload = dict(request.payload)
-            middleware_id = payload.get("middleware_id")
-            if not isinstance(middleware_id, str) or not middleware_id.strip():
-                raise OdooProviderAdapterError("payload.middleware_id is required for lead creation")
-            return "POST", "/codestra/middleware/v1/crm/leads", payload
-        payload = dict(request.payload)
-        payload.pop("external_id", None)
-        if not payload:
-            raise OdooProviderAdapterError("lead update requires at least one mutable field")
-        return (
-            "PATCH",
-            f"/codestra/middleware/v1/crm/leads/{quote(external_id, safe='')}",
-            payload,
-        )
+    def _write_request(
+        self,
+        request: CommandExecutionRequest,
+    ) -> tuple[str, str, dict[str, Any]]:
+        self._source_record_id(request)
+        return "POST", self.COMMAND_PATH, self._command_document(request)
 
     async def execute(self, request: CommandExecutionRequest) -> ActivityResult:
         self._require_active(request)
@@ -158,20 +172,31 @@ class OdooProviderAdapter:
                 response.raise_for_status()
                 data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
-            raise OdooProviderAdapterError("Odoo command transport failed") from exc
-        external_id = self._external_id(request)
-        if not isinstance(data, dict) or data.get("external_id") != external_id:
-            raise OdooProviderAdapterError("Odoo response did not confirm the external identity")
+            raise OdooProviderAdapterError(
+                "Odoo command outcome is unknown; reconcile by command status"
+            ) from exc
+        source_record_id = self._source_record_id(request)
+        if (
+            not isinstance(data, dict)
+            or data.get("command_id") != request.command_id
+            or data.get("external_id") != source_record_id
+            or data.get("outcome") not in {"created", "updated"}
+        ):
+            raise OdooProviderAdapterError(
+                "Odoo response did not confirm the canonical command identity"
+            )
         return ActivityResult(
             status="accepted",
-            detail="Odoo accepted the durable CRM command",
-            provider_operation_id=external_id,
+            detail="Odoo accepted the canonical CRM upsert command",
+            provider_operation_id=request.command_id,
         )
 
     async def readback(self, request: CommandExecutionRequest) -> ActivityResult:
+        """Read the recorded command outcome without replaying the write."""
         self._require_active(request)
-        external_id = self._external_id(request)
-        path = f"/codestra/middleware/v1/crm/leads/{quote(external_id, safe='')}"
+        path = self.STATUS_PATH.format(
+            command_id=quote(request.command_id, safe="")
+        )
         body = b""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -182,39 +207,34 @@ class OdooProviderAdapter:
                         path=path,
                         body=body,
                         request=request,
-                        suffix=":readback",
+                        suffix=":status",
                     ),
                 )
                 response.raise_for_status()
                 data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
-            raise OdooProviderAdapterError("Odoo read-back transport failed") from exc
-        if not isinstance(data, dict) or data.get("external_id") != external_id:
+            raise OdooProviderAdapterError(
+                "Odoo command-status reconciliation failed"
+            ) from exc
+
+        source_record_id = self._source_record_id(request)
+        result = data.get("result") if isinstance(data, dict) else None
+        if (
+            not isinstance(data, dict)
+            or data.get("command_id") != request.command_id
+            or data.get("operation") != self.UPSERT_LEAD
+            or not isinstance(result, dict)
+            or result.get("command_id") != request.command_id
+            or result.get("external_id") != source_record_id
+            or result.get("outcome") not in {"created", "updated"}
+        ):
             return ActivityResult(
                 status="mismatch",
-                detail="Odoo read-back did not match the external identity",
-                provider_operation_id=external_id,
+                detail="Odoo command status did not match durable command intent",
+                provider_operation_id=request.command_id,
             )
-        comparable = {
-            "name",
-            "contact_name",
-            "email",
-            "phone",
-            "company_name",
-            "description",
-            "source",
-            "campaign",
-            "middleware_id",
-        }
-        for key in comparable & request.payload.keys():
-            if data.get(key) != request.payload.get(key):
-                return ActivityResult(
-                    status="mismatch",
-                    detail=f"Odoo read-back mismatch for {key}",
-                    provider_operation_id=external_id,
-                )
         return ActivityResult(
             status="matched",
-            detail="Odoo read-back matched durable command intent",
-            provider_operation_id=external_id,
+            detail="Odoo command status matched durable command intent",
+            provider_operation_id=request.command_id,
         )

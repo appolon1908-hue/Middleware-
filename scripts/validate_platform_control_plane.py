@@ -131,15 +131,19 @@ def main() -> int:
         fail("Odoo HMAC canonical field order drifted")
 
     required_odoo_markers = (
+        'ODOO_LEAD_COMMAND_SCHEMA = ROOT / "contracts" / "odoo-lead-command.schema.json"',
         'UPSERT_LEAD = "crm.lead.upsert"',
         'SUPPORTED = {UPSERT_LEAD}',
         'COMMAND_PATH = "/codestra/middleware/v1/commands/crm.lead.upsert"',
         'STATUS_PATH = "/codestra/middleware/v1/commands/{command_id}/status"',
         'self.settings.external_effects.get("ODOO_WRITE") is not True',
+        'len(value) > 255',
+        '_odoo_lead_command_validator().iter_errors(document)',
         'request.tenant_id.encode("utf-8")',
         'request.correlation_id.encode("utf-8")',
         'idempotency_key.encode("utf-8")',
-        '"Odoo command outcome is unknown; reconcile by command status"',
+        'return await self._reconcile_unknown_write(request, exc)',
+        'reconciliation = await self.readback(request)',
         'data.get("operation") != self.UPSERT_LEAD',
         'ODOO_INBOUND_HMAC_SECRET',
     )
@@ -177,6 +181,9 @@ def main() -> int:
         fail("published Odoo HMAC test vector is invalid")
     if vector.get("secret") != "test-secret-not-production":
         fail("HMAC vector must remain synthetic")
+    document = json.loads(vector["body_utf8"])
+    if vector.get("event_id") != document.get("command_id"):
+        fail("HMAC vector event ID does not match command ID")
 
     if capabilities.get("ODOO_WRITE") is not False:
         fail("ODOO_WRITE must remain false in the source capability registry")

@@ -1,20 +1,20 @@
 name: SMS main merge diagnostic
 
 on:
-  pull_request:
+  push:
+    branches:
+      - feat/communications-api-v1-sms-runtime
 
 permissions:
   contents: read
 
 jobs:
   diagnose:
-    if: github.event.pull_request.head.ref == 'feat/communications-api-v1-sms-runtime'
     runs-on: ubuntu-latest
     steps:
       - name: Check out SMS branch
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Fetch current main
         run: git fetch origin main

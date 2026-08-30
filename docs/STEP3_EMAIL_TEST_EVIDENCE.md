@@ -33,7 +33,7 @@ PROJECT_SPECIFIC_CI=PASS
 
 All repository, workstream, connectivity, identity, n8n, site, intake, and project-specific source validators passed.
 
-## Temporal uncertain-outcome evidence
+## Temporal uncertain-outcome and reconciliation evidence
 
 Executed against the pinned Temporal test-server environment:
 
@@ -41,12 +41,16 @@ Executed against the pinned Temporal test-server environment:
 bash scripts/temporal_integration_ci.sh
 1 passed
 TEMPORAL_EMAIL_UNKNOWN_OUTCOME_NO_RETRY=PASS
+TEMPORAL_EMAIL_RECONCILIATION_READBACK=PASS
+TEMPORAL_EMAIL_RECONCILIATION_NO_RESUBMIT=PASS
 ```
 
-The workflow test injects a possible-after-acceptance provider timeout, records `reconciliation_required`, and proves there is exactly one provider execution attempt. It does not retry or mark the command completed while the outcome is uncertain.
+The workflow test injects a possible-after-acceptance provider timeout, records `reconciliation_required`, and proves there is exactly one provider execution attempt. It then runs a separate reconciliation workflow for the same email operation. Two transient read-back failures are retried within the bounded reconciliation policy, the third authoritative read-back matches, and the provider execution-attempt count remains unchanged. No second email command or provider submission is created.
 
-## Remaining CI evidence boundary
+## Exact-head and merge-result evidence
 
-The PostgreSQL/Redis, NATS JetStream, synthetic no-effect, runtime Docker, and test-target Docker validations require disposable services or pinned images. Their authoritative results are the exact-head and merge-result checks on PR #52. A local Docker registry authentication failure prevented pulling the pinned NATS image; no weaker image or simulated pass was substituted.
+GitHub Actions is authoritative for disposable PostgreSQL/Redis, NATS JetStream, Temporal, synthetic no-effect, runtime Docker, test-target Docker, container security, exact source-head, and exact merge-result validation.
 
-Step 3 is complete only when every required GitHub check is green at the pushed head and merge result.
+Before the reconciliation-evidence update, exact head `3ebff01ee426d6ee5307f864d07dac83ebd5291f` passed Middleware CI run `33317448335` and Production route contract run `33317448302`, including source-head and merge-result validation. The final reconciliation-evidence head must repeat every required gate successfully; the final exact SHA and run IDs are recorded in PR #52 after GitHub completes the new checks.
+
+Step 3 is complete only when every required GitHub check is green at the unchanged final head and merge result.

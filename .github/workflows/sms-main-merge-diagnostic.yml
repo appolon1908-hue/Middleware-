@@ -1,0 +1,48 @@
+name: SMS main merge diagnostic
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.event.pull_request.head.ref == 'feat/communications-api-v1-sms-runtime'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out SMS branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Fetch current main
+        run: git fetch origin main
+      - name: Produce merge diagnostic
+        shell: bash
+        run: |
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_rc=$?
+          mkdir -p /tmp/merge-diagnostic/base /tmp/merge-diagnostic/ours /tmp/merge-diagnostic/theirs /tmp/merge-diagnostic/working
+          git diff --name-only --diff-filter=U | tee /tmp/merge-diagnostic/conflicts.txt
+          while IFS= read -r path; do
+            test -n "$path" || continue
+            mkdir -p "/tmp/merge-diagnostic/base/$(dirname "$path")" "/tmp/merge-diagnostic/ours/$(dirname "$path")" "/tmp/merge-diagnostic/theirs/$(dirname "$path")" "/tmp/merge-diagnostic/working/$(dirname "$path")"
+            git show ":1:$path" > "/tmp/merge-diagnostic/base/$path" 2>/dev/null || true
+            git show ":2:$path" > "/tmp/merge-diagnostic/ours/$path" 2>/dev/null || true
+            git show ":3:$path" > "/tmp/merge-diagnostic/theirs/$path" 2>/dev/null || true
+            cp "$path" "/tmp/merge-diagnostic/working/$path" 2>/dev/null || true
+          done < /tmp/merge-diagnostic/conflicts.txt
+          git status --short > /tmp/merge-diagnostic/status.txt
+          printf '%s\n' "$merge_rc" > /tmp/merge-diagnostic/merge-exit-code.txt
+          git rev-parse HEAD > /tmp/merge-diagnostic/head-sha.txt
+          git rev-parse origin/main > /tmp/merge-diagnostic/main-sha.txt
+          exit 0
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: middleware-sms-main-merge-diagnostic
+          retention-days: 1
+          if-no-files-found: error
+          path: /tmp/merge-diagnostic

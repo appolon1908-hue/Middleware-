@@ -49,7 +49,10 @@ def _sample_value(
         for sample in family.samples:
             if sample.name != name:
                 continue
-            if all(sample.labels.get(key) == value for key, value in required_labels.items()):
+            if all(
+                sample.labels.get(key) == value
+                for key, value in required_labels.items()
+            ):
                 return float(sample.value)
     raise AssertionError(f"missing sample {name} with labels {required_labels}")
 
@@ -115,7 +118,9 @@ def _headers(token: str, scope: str, key: str) -> dict[str, str]:
     }
 
 
-def test_metrics_report_real_intake_outcomes_and_aggregate_backlog(test_settings) -> None:
+def test_metrics_report_real_intake_outcomes_and_aggregate_backlog(
+    test_settings,
+) -> None:
     app = create_app(settings=test_settings, runtime=_runtime(test_settings))
     lead_headers = _headers("intake-lead-token", "lead", "lead-metrics-key-001")
     survey_headers = _headers(
@@ -172,20 +177,27 @@ def test_metrics_report_real_intake_outcomes_and_aggregate_backlog(test_settings
         "service": "middleware-api",
         "environment": "test",
     }
+    lead = {**base, "channel": "landing_page", "form_kind": "configured"}
+    survey = {
+        **base,
+        "channel": "form",
+        "survey_kind": "nps",
+        "anonymous": "true",
+    }
     assert _sample_value(
         metrics.text,
         "lead_submissions_total",
-        {**base, "channel": "unknown", "form_kind": "unknown", "result": "accepted"},
+        {**lead, "result": "accepted"},
     ) == 1
     assert _sample_value(
         metrics.text,
         "lead_submissions_total",
-        {**base, "channel": "unknown", "form_kind": "unknown", "result": "duplicate"},
+        {**lead, "result": "duplicate"},
     ) == 1
     assert _sample_value(
         metrics.text,
         "lead_duplicates_total",
-        {**base, "channel": "unknown", "form_kind": "unknown"},
+        lead,
     ) == 1
     assert _sample_value(
         metrics.text,
@@ -200,24 +212,12 @@ def test_metrics_report_real_intake_outcomes_and_aggregate_backlog(test_settings
     assert _sample_value(
         metrics.text,
         "survey_responses_total",
-        {
-            **base,
-            "channel": "unknown",
-            "survey_kind": "unknown",
-            "result": "accepted",
-            "anonymous": "unknown",
-        },
+        {**survey, "result": "accepted"},
     ) == 1
     assert _sample_value(
         metrics.text,
         "survey_responses_total",
-        {
-            **base,
-            "channel": "unknown",
-            "survey_kind": "unknown",
-            "result": "duplicate",
-            "anonymous": "unknown",
-        },
+        {**survey, "result": "duplicate"},
     ) == 1
     assert _sample_value(metrics.text, "intake_inbox_backlog", base) == 2
     assert _sample_value(
@@ -225,7 +225,11 @@ def test_metrics_report_real_intake_outcomes_and_aggregate_backlog(test_settings
         "intake_outbox_backlog",
         {**base, "delivery_target": "nats-jetstream"},
     ) == 2
-    assert _sample_value(metrics.text, "intake_backlog_collection_success", base) == 1
+    assert _sample_value(
+        metrics.text,
+        "intake_backlog_collection_success",
+        base,
+    ) == 1
 
     forbidden_values = (
         "tenant-1",

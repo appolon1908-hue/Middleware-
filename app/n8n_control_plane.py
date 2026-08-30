@@ -11,6 +11,19 @@ from .storage import StorageError
 
 router = APIRouter(prefix="/v1/integrations/n8n", tags=["n8n-control-plane"])
 
+_LEGACY_SUNSET = "Wed, 30 Jun 2027 23:59:59 GMT"
+_LEGACY_WARNING = '299 - "Deprecated n8n v1 compatibility route; migrate to /v2/automation"'
+_COMMAND_SUCCESSOR = '</v2/automation/commands>; rel="successor-version"'
+
+
+def _legacy_headers(*, successor: str) -> dict[str, str]:
+    return {
+        "Deprecation": "true",
+        "Sunset": _LEGACY_SUNSET,
+        "Warning": _LEGACY_WARNING,
+        "Link": successor,
+    }
+
 
 def _require_forwarding_headers(request: Request, command: CommandEnvelope) -> None:
     if request.headers.get("X-Tenant-ID") != command.tenant_id:
@@ -25,13 +38,13 @@ def _require_forwarding_headers(request: Request, command: CommandEnvelope) -> N
         )
 
 
-@router.post("/commands")
+@router.post("/commands", deprecated=True)
 async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSONResponse:
-    """Accept a durable command from the n8n service identity through Kong.
+    """Accept a durable command through the legacy n8n v1 compatibility route.
 
     Kong remains the network/API gateway. Middleware independently validates the
     original Keycloak token so a gateway routing mistake cannot grant write
-    authority. Provider capabilities remain fail-closed in the command policy.
+    authority. The canonical successor is the lease-bound v2 automation API.
     """
     active = request.app.state.runtime
     if active.commands is None:
@@ -51,19 +64,21 @@ async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSON
         authenticated_subject=subject,
     )
     status_code = 200 if operation.duplicate else 202
+    headers = {
+        "Location": f"/v1/integrations/n8n/operations/{operation.command_id}",
+        "X-Correlation-ID": operation.correlation_id,
+        **_legacy_headers(successor=_COMMAND_SUCCESSOR),
+    }
     return JSONResponse(
         status_code=status_code,
         content=operation.model_dump(mode="json"),
-        headers={
-            "Location": f"/v1/integrations/n8n/operations/{operation.command_id}",
-            "X-Correlation-ID": operation.correlation_id,
-        },
+        headers=headers,
     )
 
 
-@router.get("/operations/{command_id}")
+@router.get("/operations/{command_id}", deprecated=True)
 async def get_n8n_operation(command_id: UUID, request: Request) -> JSONResponse:
-    """Return durable command state to the originating n8n tenant."""
+    """Return durable command state through the legacy n8n v1 compatibility route."""
     active = request.app.state.runtime
     if active.commands is None:
         raise StorageError("command ledger is unavailable")
@@ -78,5 +93,10 @@ async def get_n8n_operation(command_id: UUID, request: Request) -> JSONResponse:
     return JSONResponse(
         status_code=200,
         content=operation.model_dump(mode="json"),
-        headers={"X-Correlation-ID": operation.correlation_id},
+        headers={
+            "X-Correlation-ID": operation.correlation_id,
+            **_legacy_headers(
+                successor=f'</v2/automation/commands/{command_id}>; rel="successor-version"'
+            ),
+        },
     )

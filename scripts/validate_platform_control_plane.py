@@ -13,6 +13,7 @@ N8N_PATH = ROOT / "app" / "n8n_control_plane.py"
 ODOO_PATH = ROOT / "app" / "odoo_provider_adapter.py"
 WORKER_PATH = ROOT / "workers" / "run_temporal.py"
 CAPABILITIES_PATH = ROOT / "config" / "capabilities.v2.json"
+ROUTE_AUTHORITY_PATH = ROOT / "config" / "route-authority.v1.json"
 
 
 def fail(message: str) -> None:
@@ -22,6 +23,7 @@ def fail(message: str) -> None:
 def main() -> int:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     capabilities = json.loads(CAPABILITIES_PATH.read_text(encoding="utf-8"))["capabilities"]
+    route_authority = json.loads(ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8"))
     main_source = MAIN_PATH.read_text(encoding="utf-8")
     n8n_source = N8N_PATH.read_text(encoding="utf-8")
     odoo_source = ODOO_PATH.read_text(encoding="utf-8")
@@ -45,21 +47,47 @@ def main() -> int:
     if edge.get("direct_provider_access") is not False:
         fail("n8n direct-provider access must remain false")
 
+    automation_authority = route_authority.get("automation", {})
+    if route_authority.get("decision") != "middleware_adopts_automation_v2":
+        fail("automation v2 authority decision drifted")
+    if automation_authority.get("canonical_command_submit") != "POST /v2/automation/commands":
+        fail("canonical automation command submit route drifted")
+    if automation_authority.get("canonical_command_read") != "GET /v2/automation/commands/{command_id}":
+        fail("canonical automation command read route drifted")
+
     required_n8n_markers = (
         'router = APIRouter(prefix="/v1/integrations/n8n"',
-        '@router.post("/commands")',
-        '@router.get("/operations/{command_id}")',
+        '@router.post("/commands", deprecated=True)',
+        '@router.get("/operations/{command_id}", deprecated=True)',
         'expected_client_id="n8n-automation"',
         'required_scope="middleware.request.forward"',
         'required_scope="middleware.status.read"',
         'authorize_tenant(claims, command.tenant_id)',
         'request.headers.get("Idempotency-Key") != command.idempotency_key',
+        '"Deprecation": "true"',
+        '"Sunset": _LEGACY_SUNSET',
+        'rel="successor-version"',
     )
     missing = [marker for marker in required_n8n_markers if marker not in n8n_source]
     if missing:
         fail("n8n control-plane implementation drifted: " + ", ".join(missing))
     if "app.include_router(n8n_control_plane_router)" not in main_source:
         fail("n8n control-plane router is not mounted")
+
+    aliases = automation_authority.get("compatibility_aliases")
+    if not isinstance(aliases, list) or len(aliases) != 2:
+        fail("exactly two n8n v1 compatibility aliases must be declared")
+    expected_aliases = {
+        "POST /v1/integrations/n8n/commands",
+        "GET /v1/integrations/n8n/operations/{command_id}",
+    }
+    observed_aliases = {
+        item.get("route")
+        for item in aliases
+        if isinstance(item, dict) and item.get("status") == "deprecated"
+    }
+    if observed_aliases != expected_aliases:
+        fail("n8n v1 compatibility alias declaration drifted")
 
     boundary = contract.get("middleware_to_odoo", {})
     if boundary.get("target") != "odoo-19" or boundary.get("capability") != "ODOO_WRITE":

@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Validate repository-owned pieces of the platform control-plane v1 contract."""
+"""Validate repository-owned pieces of the platform control-plane contract."""
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "contracts" / "platform-control-plane.v1.json"
+HMAC_VECTOR_PATH = ROOT / "contracts" / "odoo-hmac-test-vector.v1.json"
 MAIN_PATH = ROOT / "app" / "main.py"
 N8N_PATH = ROOT / "app" / "n8n_control_plane.py"
 ODOO_PATH = ROOT / "app" / "odoo_provider_adapter.py"
 WORKER_PATH = ROOT / "workers" / "run_temporal.py"
+WORKFLOW_PATH = ROOT / "app" / "temporal_workflows.py"
 CAPABILITIES_PATH = ROOT / "config" / "capabilities.v2.json"
 ROUTE_AUTHORITY_PATH = ROOT / "config" / "route-authority.v1.json"
 
@@ -22,30 +26,38 @@ def fail(message: str) -> None:
 
 def main() -> int:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    vector = json.loads(HMAC_VECTOR_PATH.read_text(encoding="utf-8"))
     capabilities = json.loads(CAPABILITIES_PATH.read_text(encoding="utf-8"))["capabilities"]
     route_authority = json.loads(ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8"))
     main_source = MAIN_PATH.read_text(encoding="utf-8")
     n8n_source = N8N_PATH.read_text(encoding="utf-8")
     odoo_source = ODOO_PATH.read_text(encoding="utf-8")
     worker_source = WORKER_PATH.read_text(encoding="utf-8")
+    workflow_source = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     if contract.get("status") != "PREPARED_DISABLED":
         fail("source integration must remain PREPARED_DISABLED")
+    if contract.get("decision") != "middleware_adopts_automation_v2":
+        fail("automation v2 authority decision drifted")
     repositories = contract.get("repositories", {})
     if repositories.get("write_authority") != "appolon1908-hue/Middleware-":
         fail("Middleware repository is not declared write authority")
 
     edge = contract.get("n8n_to_middleware", {})
-    if edge.get("client_id") != "n8n-automation":
-        fail("n8n client identity drifted")
-    if edge.get("audience") != "middleware-api":
-        fail("middleware audience drifted")
-    if edge.get("submit_scope") != "middleware.request.forward":
-        fail("n8n submit scope drifted")
-    if edge.get("read_scope") != "middleware.status.read":
-        fail("n8n read scope drifted")
-    if edge.get("direct_provider_access") is not False:
-        fail("n8n direct-provider access must remain false")
+    expected_edge = {
+        "canonical_submit_path": "/v2/automation/commands",
+        "canonical_read_path": "/v2/automation/commands/{command_id}",
+        "client_id": "n8n-crm-automation",
+        "audience": "middleware-api",
+        "submit_scope": "automation.command.crm",
+        "read_scope": "automation.command.read",
+        "tenant_authority": "verified_token_and_durable_job",
+        "header_body_agreement_required": True,
+        "direct_provider_access": False,
+    }
+    for key, value in expected_edge.items():
+        if edge.get(key) != value:
+            fail(f"n8n edge field {key} drifted")
 
     automation_authority = route_authority.get("automation", {})
     if route_authority.get("decision") != "middleware_adopts_automation_v2":
@@ -70,9 +82,9 @@ def main() -> int:
     )
     missing = [marker for marker in required_n8n_markers if marker not in n8n_source]
     if missing:
-        fail("n8n control-plane implementation drifted: " + ", ".join(missing))
+        fail("legacy n8n compatibility route drifted: " + ", ".join(missing))
     if "app.include_router(n8n_control_plane_router)" not in main_source:
-        fail("n8n control-plane router is not mounted")
+        fail("legacy n8n compatibility router is not mounted")
 
     aliases = automation_authority.get("compatibility_aliases")
     if not isinstance(aliases, list) or len(aliases) != 2:
@@ -90,24 +102,81 @@ def main() -> int:
         fail("n8n v1 compatibility alias declaration drifted")
 
     boundary = contract.get("middleware_to_odoo", {})
-    if boundary.get("target") != "odoo-19" or boundary.get("capability") != "ODOO_WRITE":
-        fail("Odoo command ownership drifted")
-    if boundary.get("readback_required") is not True:
-        fail("Odoo read-back must remain mandatory")
+    expected_boundary = {
+        "target": "odoo-19",
+        "capability": "ODOO_WRITE",
+        "bridge_module": "codestra_middleware_bridge",
+        "canonical_command_type": "crm.lead.upsert",
+        "canonical_command_version": "1.0",
+        "canonical_command_path": "/codestra/middleware/v1/commands/crm.lead.upsert",
+        "canonical_status_path": "/codestra/middleware/v1/commands/{command_id}/status",
+        "readback_required": True,
+        "unknown_outcome_policy": "query_command_status_before_any_retry",
+        "blind_resubmission_allowed": False,
+    }
+    for key, value in expected_boundary.items():
+        if boundary.get(key) != value:
+            fail(f"Odoo boundary field {key} drifted")
+    expected_hmac_fields = [
+        "X-Codestra-Timestamp",
+        "X-Codestra-Event-ID",
+        "HTTP_METHOD_UPPERCASE",
+        "REQUEST_PATH",
+        "X-Tenant-ID",
+        "X-Correlation-ID",
+        "Idempotency-Key",
+        "RAW_REQUEST_BODY",
+    ]
+    if boundary.get("hmac_canonical_fields_in_order") != expected_hmac_fields:
+        fail("Odoo HMAC canonical field order drifted")
+
     required_odoo_markers = (
-        'CREATE_LEAD = "crm.lead.create.v1"',
-        'UPDATE_LEAD = "crm.lead.update.v1"',
+        'UPSERT_LEAD = "crm.lead.upsert"',
+        'SUPPORTED = {UPSERT_LEAD}',
+        'COMMAND_PATH = "/codestra/middleware/v1/commands/crm.lead.upsert"',
+        'STATUS_PATH = "/codestra/middleware/v1/commands/{command_id}/status"',
         'self.settings.external_effects.get("ODOO_WRITE") is not True',
-        '"/codestra/middleware/v1/crm/leads"',
-        '"/codestra/middleware/v1/crm/leads/{quote(external_id, safe=\'\')}"',
-        'return ActivityResult(\n            status="matched"',
+        'request.tenant_id.encode("utf-8")',
+        'request.correlation_id.encode("utf-8")',
+        'idempotency_key.encode("utf-8")',
+        '"Odoo command outcome is unknown; reconcile by command status"',
+        'data.get("operation") != self.UPSERT_LEAD',
         'ODOO_INBOUND_HMAC_SECRET',
     )
     missing = [marker for marker in required_odoo_markers if marker not in odoo_source]
     if missing:
         fail("Odoo adapter implementation drifted: " + ", ".join(missing))
+    for forbidden in (
+        'CREATE_LEAD = "crm.lead.create.v1"',
+        'UPDATE_LEAD = "crm.lead.update.v1"',
+        'return "POST", "/codestra/middleware/v1/crm/leads"',
+    ):
+        if forbidden in odoo_source:
+            fail(f"obsolete Odoo adapter contract remains: {forbidden}")
     if "OdooProviderAdapter(settings)" not in worker_source:
         fail("Temporal worker does not register Odoo adapter")
+    if "retry_policy=RetryPolicy(maximum_attempts=1)" not in workflow_source:
+        fail("command adapter execution may be retried after an unknown outcome")
+
+    canonical = "\n".join(
+        (
+            vector["timestamp"],
+            vector["event_id"],
+            vector["method"],
+            vector["path"],
+            vector["tenant_id"],
+            vector["correlation_id"],
+            vector["idempotency_key"],
+            vector["body_utf8"],
+        )
+    ).encode("utf-8")
+    digest = hmac.new(
+        vector["secret"].encode("utf-8"), canonical, hashlib.sha256
+    ).hexdigest()
+    if digest != vector.get("expected_hmac_sha256_hex"):
+        fail("published Odoo HMAC test vector is invalid")
+    if vector.get("secret") != "test-secret-not-production":
+        fail("HMAC vector must remain synthetic")
 
     if capabilities.get("ODOO_WRITE") is not False:
         fail("ODOO_WRITE must remain false in the source capability registry")
@@ -115,7 +184,10 @@ def main() -> int:
         if capabilities.get(flag) is not False:
             fail(f"{flag} unexpectedly enabled")
 
-    serialized = CONTRACT_PATH.read_text(encoding="utf-8").lower()
+    serialized = (
+        CONTRACT_PATH.read_text(encoding="utf-8")
+        + HMAC_VECTOR_PATH.read_text(encoding="utf-8")
+    ).lower()
     for forbidden in ("client_secret", "password", "access_token", "private_key"):
         if forbidden in serialized:
             fail(f"shared contract contains forbidden secret-bearing field: {forbidden}")

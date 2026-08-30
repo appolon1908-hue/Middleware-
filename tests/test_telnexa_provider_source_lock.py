@@ -12,7 +12,7 @@ def _lock() -> dict:
     return json.loads(LOCK_PATH.read_text(encoding="utf-8"))
 
 
-def test_source_authorities_are_exact_and_reviewed() -> None:
+def test_source_authorities_are_exact_reviewed_and_merged() -> None:
     lock = _lock()
     authority = lock["authority"]
     certification = lock["certification"]
@@ -22,15 +22,20 @@ def test_source_authorities_are_exact_and_reviewed() -> None:
         "middlewareBaseSha",
         "telnexaSourceSha",
         "telnexaSyntheticMergeSha",
+        "telnexaMergedMainSha",
     ):
         assert FULL_SHA.fullmatch(authority[field]), field
 
     assert authority["sdkRepository"] == "appolon1908-hue/SDK-repository"
     assert authority["middlewareRepository"] == "appolon1908-hue/Middleware-"
     assert authority["telnexaRepository"] == "appolon1908-hue/telnexa"
+    assert authority["telnexaSourceBranch"] == "feat/communications-api-v1-sms-provider"
+    assert authority["telnexaProtectedBranch"] == "main"
     assert authority["telnexaPullRequest"] == 22
     assert certification["reviewThreadsResolved"] == 4
-    assert certification["independentApprovalPending"] is True
+    assert certification["independentApprovalPending"] is False
+    assert certification["independentApprovalBy"] == "kazan555"
+    assert certification["sourcePromotionMerged"] is True
 
 
 def test_recorded_provider_workflows_pass_on_the_locked_source() -> None:

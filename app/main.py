@@ -35,6 +35,7 @@ from .service import (
     accept_webhook,
 )
 from .storage import ReplayConflict, StorageError
+from .survey_routes import register_survey_routes
 
 
 def _correlation_id(request: Request) -> str:
@@ -326,6 +327,8 @@ def create_app(
             content=result.model_dump(mode="json"),
             headers={"X-Correlation-ID": result.correlation_id},
         )
+
+    register_survey_routes(app)
 
     @app.post("/v1/commands")
     async def submit_command(

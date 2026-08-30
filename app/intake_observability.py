@@ -15,6 +15,31 @@ INTAKE_EVENT_TYPES: Final = (
     "codestra.events.lead_submitted",
     "codestra.events.survey_response_submitted",
 )
+ALLOWED_CHANNELS: Final = {
+    "form",
+    "landing_page",
+    "chat",
+    "voice",
+    "api",
+    "other",
+}
+ALLOWED_SURVEY_KINDS: Final = {
+    "csat",
+    "nps",
+    "post_call",
+    "post_service",
+    "qualification",
+    "nonprofit_impact",
+    "other",
+}
+SURVEY_KIND_ALIASES: Final = {
+    "customer_satisfaction": "csat",
+    "customer_satisfaction_score": "csat",
+    "net_promoter_score": "nps",
+    "postcall": "post_call",
+    "postservice": "post_service",
+    "non_profit_impact": "nonprofit_impact",
+}
 ALLOWED_DESTINATIONS: Final = {
     "nats-jetstream",
     "odoo-19",
@@ -28,6 +53,24 @@ class IntakeBacklogSnapshot:
     inbox_backlog: int
     outbox_backlog: dict[str, int]
     oldest_pending_seconds: dict[str, float]
+
+
+def _bounded_channel(value: str) -> str:
+    return value if value in ALLOWED_CHANNELS else "unknown"
+
+
+def _bounded_form_kind(value: str) -> str:
+    return value if value in {"configured", "generic"} else "unknown"
+
+
+def _bounded_survey_kind(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    normalized = SURVEY_KIND_ALIASES.get(normalized, normalized)
+    return normalized if normalized in ALLOWED_SURVEY_KINDS else "other"
+
+
+def _bounded_anonymous(value: str) -> str:
+    return value if value in {"true", "false"} else "unknown"
 
 
 def _bounded_destination(value: str) -> str:
@@ -219,7 +262,9 @@ class IntakeMetrics:
         self.inbox_backlog.labels(*self._base).set(0)
         self.oldest_pending.labels(*self._base, "inbox").set(0)
         self.backlog_collection_success.labels(*self._base).set(0)
-        self.lead_submissions.labels(*self._base, "unknown", "unknown", "accepted").inc(0)
+        self.lead_submissions.labels(
+            *self._base, "unknown", "unknown", "accepted"
+        ).inc(0)
         self.lead_duplicates.labels(*self._base, "unknown", "unknown").inc(0)
         self.lead_validation_failures.labels(
             *self._base, "unknown", "unknown", "invalid_contract"
@@ -237,10 +282,19 @@ class IntakeMetrics:
         self.rate_limit_rejections.labels(*self._base, "unknown").inc(0)
         self.spam_rejections.labels(*self._base, "unknown", "unknown").inc(0)
 
-    def record_http_outcome(self, operation: str, status_code: int, elapsed: float) -> None:
+    def record_http_outcome(
+        self,
+        operation: str,
+        status_code: int,
+        elapsed: float,
+        context: dict[str, str] | None = None,
+    ) -> None:
+        safe_context = context or {}
         if operation == "/v1/intake/leads":
-            channel = "unknown"
-            form_kind = "unknown"
+            channel = _bounded_channel(safe_context.get("channel", "unknown"))
+            form_kind = _bounded_form_kind(
+                safe_context.get("form_kind", "unknown")
+            )
             self.lead_processing_duration.labels(
                 *self._base, channel, form_kind
             ).observe(max(elapsed, 0.0))
@@ -258,7 +312,9 @@ class IntakeMetrics:
                     *self._base, channel, form_kind, "conflict"
                 ).inc()
             elif status_code in {400, 413}:
-                reason = "payload_too_large" if status_code == 413 else "invalid_contract"
+                reason = (
+                    "payload_too_large" if status_code == 413 else "invalid_contract"
+                )
                 self.lead_validation_failures.labels(
                     *self._base, channel, form_kind, reason
                 ).inc()
@@ -271,9 +327,13 @@ class IntakeMetrics:
             return
 
         if operation == "/v1/intake/surveys/responses":
-            channel = "unknown"
-            survey_kind = "unknown"
-            anonymous = "unknown"
+            channel = _bounded_channel(safe_context.get("channel", "unknown"))
+            survey_kind = _bounded_survey_kind(
+                safe_context.get("survey_kind", "unknown")
+            )
+            anonymous = _bounded_anonymous(
+                safe_context.get("anonymous", "unknown")
+            )
             self.survey_processing_duration.labels(
                 *self._base, channel, survey_kind
             ).observe(max(elapsed, 0.0))
@@ -284,7 +344,9 @@ class IntakeMetrics:
             elif status_code == 409:
                 result = "conflict"
             elif status_code in {400, 413}:
-                reason = "payload_too_large" if status_code == 413 else "invalid_contract"
+                reason = (
+                    "payload_too_large" if status_code == 413 else "invalid_contract"
+                )
                 self.survey_validation_failures.labels(
                     *self._base, channel, survey_kind, reason
                 ).inc()
@@ -317,11 +379,13 @@ class IntakeMetrics:
             ).inc()
 
     def record_spam_rejection(self, *, channel: str, reason: str) -> None:
-        bounded_channel = channel if channel in {
-            "form", "landing_page", "chat", "voice", "api", "other"
-        } else "unknown"
+        bounded_channel = _bounded_channel(channel)
         bounded_reason = reason if reason in {
-            "captcha", "velocity", "reputation", "content", "policy"
+            "captcha",
+            "velocity",
+            "reputation",
+            "content",
+            "policy",
         } else "unknown"
         self.spam_rejections.labels(
             *self._base, bounded_channel, bounded_reason
@@ -329,7 +393,9 @@ class IntakeMetrics:
 
     def set_backlog(self, snapshot: IntakeBacklogSnapshot) -> None:
         self.inbox_backlog.labels(*self._base).set(max(snapshot.inbox_backlog, 0))
-        current_targets = {_bounded_destination(item) for item in snapshot.outbox_backlog}
+        current_targets = {
+            _bounded_destination(item) for item in snapshot.outbox_backlog
+        }
         for target in self._outbox_targets - current_targets:
             self.outbox_backlog.labels(*self._base, target).set(0)
         for target, value in snapshot.outbox_backlog.items():
@@ -341,8 +407,14 @@ class IntakeMetrics:
         for queue in self._queues - current_queues:
             self.oldest_pending.labels(*self._base, queue).set(0)
         for queue, value in snapshot.oldest_pending_seconds.items():
-            bounded_queue = queue if queue == "inbox" or queue.startswith("outbox:") else "other"
-            self.oldest_pending.labels(*self._base, bounded_queue).set(max(value, 0.0))
+            bounded_queue = (
+                queue
+                if queue == "inbox" or queue.startswith("outbox:")
+                else "other"
+            )
+            self.oldest_pending.labels(*self._base, bounded_queue).set(
+                max(value, 0.0)
+            )
         self._queues |= current_queues
         self.backlog_collection_success.labels(*self._base).set(1)
 

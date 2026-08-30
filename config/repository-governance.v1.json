@@ -1,6 +1,23 @@
 {
   "schema_version": "1.0",
   "repository": "appolon1908-hue/Middleware-",
+  "repository_profile": {
+    "description": "Codestra durable integration and automation control plane",
+    "topics": [
+      "middleware",
+      "fastapi",
+      "postgresql",
+      "keycloak",
+      "kong",
+      "n8n",
+      "integration-platform",
+      "outbox",
+      "idempotency",
+      "gitops"
+    ],
+    "has_issues": true,
+    "has_wiki": false
+  },
   "authority": {
     "default_branch": "main",
     "source_of_truth": "GitHub",
@@ -59,6 +76,46 @@
     "secret_scanning_push_protection": true,
     "private_vulnerability_reporting": true,
     "code_scanning_required_before_production": true
+  },
+  "environments": {
+    "staging": {
+      "wait_timer": 0,
+      "prevent_self_review": false,
+      "reviewers": [],
+      "deployment_branch_policy": {
+        "protected_branches": false,
+        "custom_branch_policies": true
+      },
+      "allowed_branches": [
+        {
+          "name": "main",
+          "type": "branch"
+        }
+      ],
+      "live_write_secrets_allowed": false
+    },
+    "production": {
+      "wait_timer": 0,
+      "prevent_self_review": true,
+      "reviewers": [
+        {
+          "type": "User",
+          "id": 275410064,
+          "login": "appolon1908-hue"
+        }
+      ],
+      "deployment_branch_policy": {
+        "protected_branches": false,
+        "custom_branch_policies": true
+      },
+      "allowed_branches": [
+        {
+          "name": "main",
+          "type": "branch"
+        }
+      ],
+      "live_write_secrets_allowed": false
+    }
   },
   "release_policy": {
     "live_writes_default": false,

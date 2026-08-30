@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "workstream": "complete-system-integration-authority-v3",
+  "repository": "appolon1908-hue/Middleware-",
+  "branch": "integration/complete-system-registry-v3-20260830",
+  "base": "main",
+  "scope": [
+    "54-repository integration registry",
+    "repository authority reconciliation",
+    "isolation cells",
+    "product caller boundaries",
+    "effectful adapter cross-validation",
+    "integration status and roadmap",
+    "route/event/command catalog",
+    "cross-repository test plan"
+  ],
+  "non_scope": [
+    "provider runtime implementation",
+    "product application source",
+    "Kong/Keycloak/Caddy live apply",
+    "n8n workflow activation",
+    "database migration",
+    "server deployment",
+    "capability activation"
+  ],
+  "safety": {
+    "source_only": true,
+    "live_effects_enabled": false,
+    "deployment_authorized": false,
+    "production_authorized": false
+  }
+}

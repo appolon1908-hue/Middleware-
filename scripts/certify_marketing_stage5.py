@@ -14,7 +14,6 @@ required_envelope_fields = {
     "event_id",
     "tenant_id",
     "event_type",
-    "idempotency_key",
     "correlation_id",
     "payload",
 }
@@ -22,6 +21,13 @@ required = set(schema.get("required", []))
 missing = sorted(required_envelope_fields - required)
 if missing:
     raise SystemExit(f"marketing envelope missing required fields: {missing}")
+
+properties = schema.get("properties", {})
+if "idempotency_key" not in properties:
+    raise SystemExit("marketing envelope must expose idempotency_key for commands/replay-safe intake")
+idempotency_type = properties["idempotency_key"].get("type")
+if idempotency_type not in (["string", "null"], ["null", "string"]):
+    raise SystemExit("raw marketing envelope idempotency_key must remain nullable until intake normalization")
 
 sql_assertions = {
     "middleware_inbox": "create table if not exists middleware_inbox",

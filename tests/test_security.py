@@ -334,8 +334,8 @@ def test_production_compose_profile_is_locked_and_effects_disabled() -> None:
         "APP_ENV": "production",
         "RUNTIME_PROFILE_ID": "codestra-middleware-production-compose-v1",
         "DATABASE_URL": (
-            "postgresql://mw_integration_api:secret@codestra-postgres-1:5432/"
-            "codestra_middleware"
+            "postgresql://appolon_middleware_api:secret@codestra-postgres-1:5432/"
+            "codestra_middleware_appolon"
         ),
         "REDIS_URL": "redis://middleware-service:secret@redis:6379/0",
         "NATS_STREAM": "CODESTRA_EVENTS",
@@ -367,8 +367,8 @@ def test_production_compose_profile_rejects_legacy_sqlalchemy_url_and_activation
         "APP_ENV": "production",
         "RUNTIME_PROFILE_ID": "codestra-middleware-production-compose-v1",
         "DATABASE_URL": (
-            "postgresql+asyncpg://mw_integration_api:secret@"
-            "codestra-postgres-1:5432/codestra_middleware"
+            "postgresql+asyncpg://appolon_middleware_api:secret@"
+            "codestra-postgres-1:5432/codestra_middleware_appolon"
         ),
         "REDIS_URL": "redis://middleware-service:secret@redis:6379/0",
         "APP_SOURCE_SHA": "a" * 40,
@@ -388,8 +388,8 @@ def test_production_compose_profile_rejects_legacy_sqlalchemy_url_and_activation
             {
                 **env,
                 "DATABASE_URL": (
-                    "postgresql://mw_integration_api:secret@"
-                    "codestra-postgres-1:5432/codestra_middleware"
+                    "postgresql://appolon_middleware_api:secret@"
+                    "codestra-postgres-1:5432/codestra_middleware_appolon"
                 ),
                 "PRODUCTION_ACTIVATION_ID": "not-authorized",
             }

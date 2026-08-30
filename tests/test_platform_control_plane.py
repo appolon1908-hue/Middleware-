@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -14,6 +16,14 @@ from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
 from app.temporal_workflows import CommandExecutionRequest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HMAC_VECTOR = json.loads(
+    (ROOT / "contracts" / "odoo-hmac-test-vector.v1.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 class N8nTokenVerifier:
@@ -55,10 +65,50 @@ def _policy() -> CommandPolicyRegistry:
     )
 
 
+def _payload(source_record_id: str = "lead-platform-control-plane") -> dict[str, Any]:
+    return {
+        "lead_source": "synthetic-form",
+        "source_record_id": source_record_id,
+        "initial_stage": "review_pending",
+        "review_required": True,
+        "allow_external_contact": False,
+        "provenance": {
+            "method": "submitted_by_person",
+            "captured_by": "test-suite",
+            "source_reference": "synthetic://platform-control-plane",
+            "legal_basis": "unknown_review_required",
+            "content_digest": "a" * 64,
+        },
+        "consent": {
+            "status": "unknown",
+            "captured_at": "2026-08-30T16:00:00+00:00",
+            "policy_version": "test-v1",
+            "channels": {"email": False, "sms": False, "phone": False},
+        },
+        "lead": {
+            "name": "CODESTRA-INTEGRATION-TEST-Lead",
+            "description": "Synthetic integration test only.",
+            "contact": {
+                "name": "Synthetic Contact",
+                "email": "synthetic@example.invalid",
+                "phone": "+18095550199",
+                "preferred_language": "en",
+            },
+            "company": {
+                "name": "Synthetic Company",
+                "domain": "example.invalid",
+                "industry": "Testing",
+            },
+            "campaign_code": None,
+            "tags": [],
+        },
+    }
+
+
 def _body() -> dict[str, Any]:
     return {
         "command_id": str(uuid4()),
-        "command_type": "crm.lead.create.v1",
+        "command_type": "crm.lead.upsert",
         "command_version": "1.0",
         "target": "odoo-19",
         "tenant_id": "tenant-1",
@@ -66,15 +116,13 @@ def _body() -> dict[str, Any]:
         "correlation_id": "corr-platform-control-plane",
         "idempotency_key": "idem-platform-control-plane",
         "capability": "ODOO_WRITE",
-        "payload": {
-            "name": "CODESTRA-INTEGRATION-TEST-Lead",
-            "external_id": "lead-platform-control-plane",
-            "middleware_id": "mw-platform-control-plane",
-        },
+        "payload": _payload(),
     }
 
 
-def test_n8n_control_plane_submit_and_status_are_tenant_scoped(test_settings) -> None:
+def test_legacy_n8n_control_plane_submit_and_status_remain_tenant_scoped(
+    test_settings,
+) -> None:
     runtime = Runtime(
         settings=test_settings,
         inbox=MemoryInboxStore(),
@@ -96,9 +144,11 @@ def test_n8n_control_plane_submit_and_status_are_tenant_scoped(test_settings) ->
             },
         )
         assert submitted.status_code == 202, submitted.text
+        assert submitted.headers["deprecation"] == "true"
         assert submitted.headers["location"] == (
             f"/v1/integrations/n8n/operations/{body['command_id']}"
         )
+        assert "/v2/automation/commands" in submitted.headers["link"]
         status = client.get(
             f"/v1/integrations/n8n/operations/{body['command_id']}",
             headers={
@@ -108,9 +158,10 @@ def test_n8n_control_plane_submit_and_status_are_tenant_scoped(test_settings) ->
         )
         assert status.status_code == 200, status.text
         assert status.json()["state"] == "persisted"
+        assert status.headers["deprecation"] == "true"
 
 
-def _request(command_type: str = "crm.lead.create.v1") -> CommandExecutionRequest:
+def _request(command_type: str = "crm.lead.upsert") -> CommandExecutionRequest:
     return CommandExecutionRequest(
         command_id="00000000-0000-4000-8000-000000000001",
         command_type=command_type,
@@ -121,11 +172,7 @@ def _request(command_type: str = "crm.lead.create.v1") -> CommandExecutionReques
         correlation_id="corr-platform-control-plane",
         idempotency_key="idem-platform-control-plane",
         capability="ODOO_WRITE",
-        payload={
-            "name": "CODESTRA-INTEGRATION-TEST-Lead",
-            "external_id": "lead-platform-control-plane",
-            "middleware_id": "mw-platform-control-plane",
-        },
+        payload=_payload(),
     )
 
 
@@ -136,19 +183,63 @@ def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
         adapter._require_active(_request())
 
 
-def test_odoo_adapter_maps_only_reviewed_crm_commands() -> None:
+def test_odoo_adapter_maps_only_canonical_crm_upsert() -> None:
     settings = SimpleNamespace(app_env="test", external_effects={"ODOO_WRITE": True})
     adapter = OdooProviderAdapter(
         settings,
         {
             "ODOO_INTEGRATION_BASE_URL": "http://odoo.test",
-            "ODOO_INBOUND_HMAC_SECRET": "test-secret",
+            "ODOO_INBOUND_HMAC_SECRET": "test-secret-not-production",
         },
     )
-    method, path, payload = adapter._write_request(_request())
+    method, path, document = adapter._write_request(_request())
     assert method == "POST"
-    assert path == "/codestra/middleware/v1/crm/leads"
-    assert payload["external_id"] == "lead-platform-control-plane"
+    assert path == "/codestra/middleware/v1/commands/crm.lead.upsert"
+    assert document["command_type"] == "crm.lead.upsert"
+    assert document["command_version"] == "1.0"
+    assert document["payload"]["source_record_id"] == "lead-platform-control-plane"
+    assert adapter.STATUS_PATH.format(command_id="command-id") == (
+        "/codestra/middleware/v1/commands/command-id/status"
+    )
 
     with pytest.raises(OdooProviderAdapterError, match="unsupported Odoo command type"):
-        adapter._require_active(_request("crm.contact.create.v1"))
+        adapter._require_active(_request("crm.lead.create.v1"))
+
+
+def test_odoo_hmac_matches_cross_repository_golden_vector() -> None:
+    document = json.loads(HMAC_VECTOR["body_utf8"])
+    settings = SimpleNamespace(app_env="test", external_effects={"ODOO_WRITE": True})
+    adapter = OdooProviderAdapter(
+        settings,
+        {
+            "ODOO_INTEGRATION_BASE_URL": "http://odoo.test",
+            "ODOO_INBOUND_HMAC_SECRET": HMAC_VECTOR["secret"],
+        },
+    )
+    request = CommandExecutionRequest(
+        command_id=document["command_id"],
+        command_type=document["command_type"],
+        command_version=document["command_version"],
+        target=document["target"],
+        tenant_id=document["tenant_id"],
+        requested_by=document["requested_by"],
+        correlation_id=document["correlation_id"],
+        idempotency_key=document["idempotency_key"],
+        capability=document["capability"],
+        payload=document["payload"],
+    )
+    body = adapter._canonical_body(document)
+    assert body.decode("utf-8") == HMAC_VECTOR["body_utf8"]
+    headers = adapter._headers(
+        method=HMAC_VECTOR["method"],
+        path=HMAC_VECTOR["path"],
+        body=body,
+        request=request,
+        timestamp=HMAC_VECTOR["timestamp"],
+    )
+    assert headers["X-Codestra-Signature"] == (
+        "sha256=" + HMAC_VECTOR["expected_hmac_sha256_hex"]
+    )
+    assert headers["X-Tenant-ID"] == document["tenant_id"]
+    assert headers["X-Correlation-ID"] == document["correlation_id"]
+    assert headers["Idempotency-Key"] == document["idempotency_key"]

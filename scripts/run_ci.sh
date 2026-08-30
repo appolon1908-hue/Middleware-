@@ -24,6 +24,12 @@ python3 -m compileall -q "${python_dirs[@]}"
 printf '==> Validating repository safety controls\n'
 python3 scripts/validate_repository.py
 
+printf '==> Validating repository authority boundaries\n'
+python3 scripts/validate_repository_authorities.py
+
+printf '==> Validating complete 54-repository integration authority\n'
+python3 scripts/validate_complete_system_integrations.py
+
 printf '==> Validating integration workstream manifest\n'
 python3 scripts/validate_workstream_manifest.py
 

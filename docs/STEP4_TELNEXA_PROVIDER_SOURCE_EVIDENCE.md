@@ -7,6 +7,7 @@ SDK_CONTRACT_SHA=63c793e88cca5daecfb5c8a688b8674ab288c522
 MIDDLEWARE_BASE_SHA=d9735422796cb2aa18a39339aad3cc87bdf67ba9
 TELNEXA_SOURCE_SHA=ee4cea8e6d15a5ba24c1f37d0ede60df67eaa151
 TELNEXA_SYNTHETIC_MERGE_SHA=b3e3e09597b5113ba44cef56686025aa1bd0cbbd
+TELNEXA_MERGED_MAIN_SHA=e68c81f1173d6c0b491b66d353445c397461746e
 TELNEXA_PROMOTION_PR=22
 ```
 
@@ -14,7 +15,7 @@ Middleware owns cross-system identity, authorization, tenancy, consent, suppress
 
 ## Provider certification
 
-Telnexa exact head `ee4cea8e6d15a5ba24c1f37d0ede60df67eaa151` passed:
+Telnexa exact source head `ee4cea8e6d15a5ba24c1f37d0ede60df67eaa151` passed:
 
 - exact-head CI run `33338423307`;
 - Step 4 provider certification run `33338423309`;
@@ -29,11 +30,13 @@ Telnexa exact head `ee4cea8e6d15a5ba24c1f37d0ede60df67eaa151` passed:
 - durable provider-reference requirement before billing commitment;
 - all live-effect flags disabled.
 
-All four review findings were addressed and their threads were resolved on the exact certified source head. Protected Telnexa promotion remains subject to independent approval and is not treated as deployment authorization.
+All four review findings were addressed and their threads were resolved. Independent reviewer `kazan555` approved the final source, and Telnexa PR #22 merged to protected `main` as `e68c81f1173d6c0b491b66d353445c397461746e`.
+
+The merge accepts source only. It does not authorize production deployment, carrier credentials, SMPP binding, billing activation, or external SMS delivery.
 
 ## Cross-repository lock
 
-`config/telnexa-sms-provider-source-lock.v1.json` is the machine-readable authority consumed by Middleware tests. Any change to the SDK contract, Middleware command mapping, Telnexa source head, reconciliation policy, or live-effect flags requires a new review and complete rerun.
+`config/telnexa-sms-provider-source-lock.v1.json` is the machine-readable authority consumed by Middleware tests. Any change to the SDK contract, Middleware command mapping, Telnexa source or merged-main SHA, reconciliation policy, or live-effect flags requires a new review and complete rerun.
 
 ## Safety
 

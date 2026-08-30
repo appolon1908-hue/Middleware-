@@ -24,8 +24,14 @@ python3 -m compileall -q "${python_dirs[@]}"
 printf '==> Validating encoded GitHub repository governance\n'
 python3 scripts/validate_repository_governance.py
 
+printf '==> Validating live-governance applier source plan\n'
+python3 scripts/apply_repository_governance.py
+
 printf '==> Validating strict automation v2 route conformance\n'
 python3 scripts/validate_automation_contract_conformance.py
+
+printf '==> Validating automation v2 authorization invariants\n'
+python3 scripts/validate_automation_operation_policy.py
 
 printf '==> Validating repository safety controls\n'
 python3 scripts/validate_repository.py

@@ -8,12 +8,18 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 
+from .provider_canary import (
+    TARGET_CHANNELS,
+    validate_provider_canary_evidence,
+)
+
 
 @dataclass(frozen=True)
 class ActivityResult:
     status: str
     detail: str
     provider_operation_id: str | None = None
+    readback_evidence: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +106,7 @@ class CommandTransitionRequest:
     actor_id: str
     reason: str
     provider_operation_id: str | None = None
+    readback_evidence: dict[str, Any] | None = None
 
 
 ACTIVITY_RETRY_POLICY = RetryPolicy(
@@ -389,6 +396,46 @@ class CommandExecutionWorkflow:
                 status="reconciliation_required",
                 detail=readback.detail,
             )
+
+        canary = request.payload.get("canary")
+        if request.target in TARGET_CHANNELS and isinstance(canary, dict):
+            try:
+                if canary.get("schema_version") != "1.0":
+                    raise ValueError("canary schema_version must be 1.0")
+                destination_fingerprint = str(canary["destination_fingerprint"])
+                payload_fingerprint = str(canary["payload_fingerprint"])
+                validated = validate_provider_canary_evidence(
+                    readback.readback_evidence,
+                    target=request.target,
+                    destination_fingerprint=destination_fingerprint,
+                    payload_fingerprint=payload_fingerprint,
+                    require_success=True,
+                )
+                readback_evidence = validated.model_dump(mode="json")
+            except (KeyError, TypeError, ValueError) as exc:
+                await _command_transition(
+                    CommandTransitionRequest(
+                        request.command_id,
+                        request.tenant_id,
+                        "reconciliation_required",
+                        actor,
+                        "provider canary read-back evidence was missing or invalid: "
+                        f"{exc}",
+                        executed.provider_operation_id,
+                    )
+                )
+                return WorkflowOutcome(
+                    operation_id=request.command_id,
+                    workflow_type="command_execution",
+                    status="reconciliation_required",
+                    detail="provider canary evidence did not satisfy the channel contract",
+                )
+        else:
+            # Only the locked provider-canary contract is safe to persist here.
+            # Other adapter results may contain provider payload fields that have
+            # not passed the redaction and shape checks above.
+            readback_evidence = None
+
         await _command_transition(
             CommandTransitionRequest(
                 request.command_id,
@@ -397,6 +444,7 @@ class CommandExecutionWorkflow:
                 actor,
                 "provider read-back matched durable command intent",
                 executed.provider_operation_id,
+                readback_evidence,
             )
         )
         return WorkflowOutcome(

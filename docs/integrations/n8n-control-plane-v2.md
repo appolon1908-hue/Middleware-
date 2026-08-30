@@ -1,170 +1,175 @@
 # Middleware ↔ n8n automation control plane v2
 
-## Decision
+## Accepted decision
 
-Middleware is the only cross-system write boundary. n8n is an orchestration client of Middleware and does not connect directly to Odoo, Keycloak administration, VICIdial, Asterisk, Telnexa/Jasmin, Klyrow/Postal/Mautic, Postly/Postiz or social providers, Kyqra/Crawlee, product databases or provider APIs.
+Middleware adopts the governed `/v2/automation/*` contract. n8n remains an
+orchestration client and Middleware remains the only cross-system write
+authority.
 
 ```text
 Provider/application event
   -> Middleware authenticated inbox
   -> canonical event + automation job + dispatch outbox
   -> private n8n wake
-  -> n8n atomic claim
-  -> governed Middleware commands
-  -> destination adapter and read-back
+  -> POST /v2/automation/jobs/claim
+  -> n8n leased orchestration
+  -> POST /v2/automation/commands
+  -> Middleware durable command + Temporal
+  -> destination adapter and destination read-back
   -> Middleware reconciliation
-  -> terminal automation result
+  -> GET /v2/automation/commands/{command_id}
+  -> n8n terminal job result
 ```
 
-## Evidence language
+The existing `/v1/integrations/n8n/commands` and
+`/v1/integrations/n8n/operations/{command_id}` endpoints remain deprecated
+compatibility aliases only. They are not canonical for new workflows.
 
-This pull request defines a source-only design contract. The following are requirements, not completed implementation evidence:
+## Current source truth
+
+The durable v1 integration core already exists: command ledger, idempotency,
+inbox/outbox primitives, dead letters, replay controls, leases and
+reconciliation support. The automation-v2 authorization policy, exact client
+and prefix rules, and security invariant tests also exist in current source.
+
+The complete thirteen-route automation-v2 runtime is not yet certified. The
+conformance waiver register remains authoritative for routes not mounted in the
+FastAPI runtime. A waived route is a tracked source gap, not a production-ready
+endpoint.
 
 ```text
-DESIGN_CONTRACT=PRESENT
-IMPLEMENTATION=NOT_IMPLEMENTED
-DATABASE_MIGRATIONS=PENDING
-RUNTIME_API=PENDING
-AUTHORIZATION_TESTS=PENDING
-IDEMPOTENCY_AND_CONCURRENCY_TESTS=PENDING
-STAGING_NO_EFFECT_EVIDENCE=PENDING
-BACKUP_RESTORE_AND_ROLLBACK=PENDING
+AUTOMATION_V2_DECISION=ACCEPTED
+V1_COMPATIBILITY_ALIASES=DEPRECATED
+V2_POLICY_AND_CONTRACTS=PRESENT
+V2_RUNTIME_ALL_13_ROUTES=CERTIFICATION_PENDING
+WORKFLOWS_ACTIVE=NO
+EXTERNAL_EFFECTS_ENABLED=NO
 ```
 
-Do not report durable inbox, transactional outbox, tenant isolation, replay, lease recovery, retries, dead letters or reconciliation as `PASS` until the corresponding code and runtime tests exist on the exact reviewed SHA.
+## Authorization invariants
 
-## Middleware responsibilities
-
-- authenticate the exact n8n machine client;
-- resolve the authoritative tenant, actor and workflow family from the durable job;
-- enforce the client-to-workflow-family allowlist;
-- enforce the command-prefix-to-scope/client allowlist;
-- persist normalized events before dispatch;
-- create automation jobs and attempts;
-- grant and expire execution leases;
-- require the active lease for step, command, completion and failure operations;
-- enforce idempotency and semantic conflict detection;
-- evaluate capabilities, integration pauses, consent and suppression;
-- own provider and application credentials;
-- translate commands into destination-specific adapters;
-- reconcile unknown outcomes before retry;
-- persist approvals, retries, dead letters and controlled replay;
-- preserve correlation, causation and trace context;
-- redact customer content and credentials from logs.
-
-## Canonical authorization contract
-
-`contracts/automation/operation-policy.v2.json` is the machine-readable source of truth for:
-
-- granular OAuth scopes;
-- allowed machine clients;
-- workflow families assigned to each client;
-- command prefixes assigned to each client;
-- fields and lease context required by each endpoint;
-- replay concurrency/fingerprint controls;
-- authoritative tenant and actor derivation.
+Middleware must independently validate the original Keycloak token even when
+Kong has authenticated the request. The verified token and durable automation
+job are authoritative for tenant, actor, workflow family and allowed scope.
+Headers and body fields are assertions that must agree with those authorities.
 
 Generic `automation.execute` and `automation.command` scopes are prohibited.
+Client scopes are exact, with no implicit union. A client cannot claim another
+workflow family or issue another family's command prefix.
 
-## Dedicated social/Postly boundary
-
-```text
-workflow_family = social.postly
-client          = n8n-social-automation
-command_scope   = automation.command.social
-command_prefix  = social.
-repository      = appolon1908-hue/social.codestra.co
-```
-
-Postly retains provider OAuth tokens, social account truth, content/approval state and publication truth. n8n receives no provider tokens and cannot call Postly or social providers directly.
-
-## Durable models
+CRM automation uses:
 
 ```text
-automation_jobs
-automation_job_attempts
-automation_job_steps
-automation_job_leases
-automation_approvals
-automation_commands
-automation_command_attempts
-automation_dead_letters
-automation_reconciliation_runs
-automation_dispatch_outbox
+client_id     = n8n-crm-automation
+audience      = middleware-api
+submit_scope  = automation.command.crm
+read_scope    = automation.command.read
+command_path  = POST /v2/automation/commands
+status_path   = GET /v2/automation/commands/{command_id}
 ```
 
-Every tenant-owned row includes `tenant_id`. Externally effective commands use a stable idempotency key and semantic request fingerprint. Exact replays return the original result. Conflicting replays are rejected without mutating the original record.
+## Canonical Odoo command
 
-## Claim and lease rules
-
-A wake-bound claim requires `job_id`, a one-use `delivery_token`, `workflow_key`, `workflow_version` and `execution_id`. Middleware grants the lease atomically only when the client is allowed to claim the job's workflow family.
-
-A current lease token and execution ID are mandatory for heartbeat, step evidence, command requests, completion and failure. A stale execution cannot record a step, issue a command or finish a job after losing its lease.
-
-## Command context
-
-A governed command carries the job, lease, execution, workflow and step identity. It does not choose an authoritative tenant or actor. Middleware derives both from the job and token mapping.
-
-A command may be:
+Middleware exposes one canonical Odoo CRM mutation through the reviewed Odoo
+bridge:
 
 ```text
-ACCEPTED
-BLOCKED
-SUBMITTED
-UNKNOWN
-COMPLETED
-FAILED
-CANCELLED
+command_type    = crm.lead.upsert
+command_version = "1.0"
+target          = odoo-19
+capability      = ODOO_WRITE
+
+POST /codestra/middleware/v1/commands/crm.lead.upsert
+GET  /codestra/middleware/v1/commands/{command_id}/status
 ```
 
-A timeout or interrupted response produces `UNKNOWN`. Middleware checks the destination before retrying an externally effective command.
+The direct Odoo CRM CRUD routes remain deprecated compatibility surfaces. New
+CRM automations must use the canonical upsert command.
 
-## Human approvals
+The Odoo payload requires a stable `source_record_id`, provenance, consent,
+review/contact controls and the lead subject. Middleware derives target and
+capability from policy. n8n never receives Odoo credentials or the Odoo HMAC
+secret.
 
-Approval state is authoritative in Middleware and the approved operations surface. Long waits are persisted as `WAITING_APPROVAL`; n8n exits and receives a new resume job after approval. The requester cannot satisfy its own protected approval.
+## Odoo message authentication
 
-## Dead-letter replay
-
-A replay request requires:
+Middleware and Odoo share one byte-exact HMAC-SHA256 contract. Join the
+following byte sequences with one newline in this order:
 
 ```text
-protected approval ID
-idempotency key
-expected dead-letter version
-original-effect fingerprint
-safe-replay classification
-replay reason
+X-Codestra-Timestamp
+X-Codestra-Event-ID
+HTTP method in uppercase
+request path
+X-Tenant-ID
+X-Correlation-ID
+Idempotency-Key
+raw request body
 ```
 
-Middleware preserves the original tenant and refuses unsafe or stale replay requests. `automation.operations.replay.request` authorizes only the request; the effect also requires the capability, approval and record checks.
+The repository contains a synthetic golden vector in
+`contracts/odoo-hmac-test-vector.v1.json`. It contains no runtime secret or
+customer data. CI must compute the published digest from the vector.
 
-## Capability policy
+## Unknown outcomes
 
-All effectful capabilities remain disabled until separately approved staging and production canaries. Workflow activation does not enable a capability.
-
-## Cross-repository dependencies
+A destination timeout is an unknown outcome, not a failed command. The Temporal
+adapter execution has one attempt. Middleware then reconciles the Odoo command
+status before any retry decision.
 
 ```text
-N8N PR #1 governance baseline
-N8N PR #9 automation contract
-Keycloak PR #10 scoped machine identities
-social.codestra.co PR #1 Postly domain contract
-core/integration-contracts
-platform/postgresql
-platform/redis
-integration/keycloak
-core/event-ledger-outbox
-core/webhook-inbox-replay
-core/workers-scheduler
-integration/n8n
+blind resubmission after unknown outcome = prohibited
+Odoo command-status read-back            = required
+n8n automatic retry on timeout            = prohibited
 ```
 
-## Acceptance gates
+If Odoo recorded the command, Middleware returns the recorded result. If Odoo
+did not record it, the command remains unresolved until the reviewed policy
+permits a retry with the same semantic identity.
 
-```text
-DESIGN_REVIEWED=PENDING_INDEPENDENT_APPROVAL
-IMPLEMENTATION_COMPLETE=NO
-RUNTIME_TEST_EVIDENCE=NO
-EXTERNAL_EFFECTS_ENABLED=NO
-PRODUCTION_CHANGED=NO
-```
+## Durable job and command rules
+
+The automation-v2 surface contains exactly thirteen operations:
+
+1. claim a job;
+2. read a job;
+3. heartbeat;
+4. record a step;
+5. complete;
+6. fail;
+7. submit a command;
+8. read a command;
+9. request approval;
+10. read approval;
+11. request protected dead-letter replay;
+12. reconcile jobs;
+13. read effective capability state.
+
+A current lease token and execution ID are mandatory for steps, commands,
+completion and failure. Exact replays return the original result; semantic
+conflicts are rejected without altering the original record.
+
+## Human approvals and replay
+
+Middleware owns approval state. n8n requests and reads approval but cannot
+self-approve. Protected dead-letter replay requires the approval ID,
+idempotency key, expected version, original-effect fingerprint, safe-replay
+classification and replay reason. Replay authority is separate from effect
+capability authority.
+
+## Release posture
+
+This branch changes source contracts, the Odoo adapter, validation and tests.
+It does not mount the missing automation-v2 routes, migrate a live database,
+activate n8n, provision Keycloak clients, deploy Middleware, enable
+`ODOO_WRITE`, enable external delivery or mutate production.
+
+Before runtime promotion:
+
+- all thirteen route waivers must be removed only as their implementations land;
+- exact-head and merge-result CI must pass;
+- authorization and concurrency tests must pass;
+- timeout-after-Odoo-commit must reconcile with zero duplicate writes;
+- a write-disabled staging canary must prove zero downstream effects;
+- backup, restore and rollback must be rehearsed;
+- every capability and kill switch must remain false until separately approved.

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .commands import CommandEnvelope
+from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .storage import StorageError
 
@@ -38,6 +39,19 @@ def _require_forwarding_headers(request: Request, command: CommandEnvelope) -> N
         )
 
 
+def _validate_destination_contract(command: CommandEnvelope) -> None:
+    """Reject destination-specific deterministic errors before ledger acceptance."""
+
+    if command.target != "odoo-19":
+        return
+    try:
+        OdooProviderAdapter._validate_command_document(
+            command.model_dump(mode="json")
+        )
+    except OdooProviderAdapterError as exc:
+        raise RequestValidationError(str(exc)) from exc
+
+
 @router.post("/commands", deprecated=True)
 async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSONResponse:
     """Accept a durable command through the legacy n8n v1 compatibility route.
@@ -59,6 +73,7 @@ async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSON
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
         raise AuthorizationError("token subject is required for commands")
+    _validate_destination_contract(command)
     operation = await active.commands.submit(
         command,
         authenticated_subject=subject,

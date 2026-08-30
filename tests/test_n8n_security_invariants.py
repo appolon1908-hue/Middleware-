@@ -64,9 +64,10 @@ def _policy() -> CommandPolicyRegistry:
 
 
 def _body() -> dict[str, Any]:
+    command_id = str(uuid4())
     return {
-        "command_id": str(uuid4()),
-        "command_type": "crm.lead.create.v1",
+        "command_id": command_id,
+        "command_type": "crm.lead.upsert",
         "command_version": "1.0",
         "target": "odoo-19",
         "tenant_id": "tenant-1",
@@ -75,9 +76,41 @@ def _body() -> dict[str, Any]:
         "idempotency_key": "idem-security-invariants",
         "capability": "ODOO_WRITE",
         "payload": {
-            "name": "CODESTRA-INTEGRATION-TEST-Lead",
-            "external_id": "lead-security-invariants",
-            "middleware_id": "mw-security-invariants",
+            "lead_source": "synthetic-form",
+            "source_record_id": f"source-{command_id}",
+            "initial_stage": "review_pending",
+            "review_required": True,
+            "allow_external_contact": False,
+            "provenance": {
+                "method": "submitted_by_person",
+                "captured_by": "security-test",
+                "source_reference": "synthetic://security-test",
+                "legal_basis": "unknown_review_required",
+                "content_digest": "a" * 64,
+            },
+            "consent": {
+                "status": "unknown",
+                "captured_at": "2026-08-30T16:00:00+00:00",
+                "policy_version": "test-v1",
+                "channels": {"email": False, "sms": False, "phone": False},
+            },
+            "lead": {
+                "name": "CODESTRA-INTEGRATION-TEST-Lead",
+                "description": "Synthetic test only.",
+                "contact": {
+                    "name": "Synthetic Contact",
+                    "email": "synthetic@example.invalid",
+                    "phone": "+18095550199",
+                    "preferred_language": "en",
+                },
+                "company": {
+                    "name": "Synthetic Company",
+                    "domain": "example.invalid",
+                    "industry": "Testing",
+                },
+                "campaign_code": None,
+                "tags": [],
+            },
         },
     }
 

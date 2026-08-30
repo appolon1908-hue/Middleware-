@@ -97,8 +97,8 @@ def main() -> int:
         "scheme": "postgresql",
         "host": "codestra-postgres-1",
         "port": 5432,
-        "name": "codestra_middleware",
-        "username": "mw_integration_api",
+        "name": "codestra_middleware_appolon",
+        "username": "appolon_middleware_api",
         "sslmode": None,
     }
     assert compose["redis"] == {

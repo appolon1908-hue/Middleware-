@@ -115,6 +115,24 @@ class MiddlewareObservability:
             (*labels, "operation", "result"),
             registry=self.registry,
         )
+        self.operations_dashboard_auth_failures = Counter(
+            "codestra_operations_dashboard_auth_failures_total",
+            "Authentication and authorization denials for read-only operations dashboard endpoints.",
+            (*labels, "reason"),
+            registry=self.registry,
+        )
+        self.operations_dashboard_release_gate_state = Gauge(
+            "codestra_operations_dashboard_release_gate_state",
+            "Read-only operations dashboard release-gate state (1 when current).",
+            (*labels, "gate", "state"),
+            registry=self.registry,
+        )
+        self.operations_dashboard_canary_state = Gauge(
+            "codestra_operations_dashboard_canary_state",
+            "Read-only operations dashboard provider canary state (1 when current).",
+            (*labels, "provider", "channel", "state"),
+            registry=self.registry,
+        )
         self.readiness = Gauge(
             "codestra_readiness",
             "Readiness of mandatory runtime components (1 ready, 0 not ready).",
@@ -203,6 +221,28 @@ class MiddlewareObservability:
 
     def record_auth_denial(self, operation: str, result: str) -> None:
         self.auth_denials.labels(*self._base, operation, result).inc()
+        if operation.startswith("/v1/operations-dashboard/"):
+            self.operations_dashboard_auth_failures.labels(*self._base, result).inc()
+
+    def record_operations_dashboard_release_gates(self, gates: dict[str, bool]) -> None:
+        for gate, passed in gates.items():
+            self.operations_dashboard_release_gate_state.labels(
+                *self._base,
+                gate,
+                "passed" if passed else "blocked",
+            ).set(1)
+
+    def record_operations_dashboard_canaries(
+        self,
+        canaries: list[dict[str, str]],
+    ) -> None:
+        for canary in canaries:
+            self.operations_dashboard_canary_state.labels(
+                *self._base,
+                canary.get("id", "unknown"),
+                canary.get("channel", "unknown"),
+                canary.get("status", "unknown"),
+            ).set(1)
 
     def record_readiness(self, components: dict[str, str]) -> None:
         for dependency, status in components.items():

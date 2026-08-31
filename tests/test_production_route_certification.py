@@ -3,11 +3,30 @@ from pathlib import Path
 
 
 def test_certification_uses_parameterized_operation_and_exact_provider_route():
-    assert certification.COMMAND_PATH == "/v1/integrations/n8n/commands"
-    assert certification.OPERATION_TEMPLATE == "/v1/integrations/n8n/operations/{command_id}"
+    assert certification.COMMAND_PATH == "/v1/commands"
+    assert certification.OPERATION_TEMPLATE == "/v1/operations/{command_id}"
     assert certification.OPERATION_PROBE.endswith("00000000-0000-0000-0000-000000000000")
     assert certification.VICIDIAL_PATH == "/api/v1/vicidial/events"
-    assert certification.OPERATION_PROBE != "/v1/integrations/n8n/operations"
+    assert certification.OPERATION_PROBE != "/v1/operations"
+    assert "/v1/operations-dashboard/overview" in certification.OPERATIONS_DASHBOARD_PATHS
+    assert "/v1/operations-dashboard/tenants/{tenant_id}" in certification.OPERATIONS_DASHBOARD_PATHS
+
+
+def test_certification_rejects_unregistered_or_open_responses():
+    certification.assert_fail_closed(
+        401,
+        {"error": {"code": "authentication_failed"}},
+    )
+    certification.assert_fail_closed(
+        403,
+        {"error": {"code": "authorization_denied"}},
+    )
+
+
+def test_dashboard_route_certification_is_explicit_for_the_new_image():
+    assert certification.certify.__kwdefaults__ == {
+        "expect_operations_dashboard": False,
+    }
 
 
 def test_middleware_independently_enforces_complete_machine_identity_contract():

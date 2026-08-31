@@ -36,6 +36,7 @@ from .observability import (
     safe_correlation_id,
     safe_traceparent,
 )
+from .operations_dashboard import router as operations_dashboard_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import runtime_safety_readback
 from .security import SecurityError
@@ -139,6 +140,7 @@ def create_app(
     telemetry = MiddlewareObservability(resolved)
     app.state.observability = telemetry
     app.include_router(n8n_control_plane_router)
+    app.include_router(operations_dashboard_router)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):

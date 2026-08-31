@@ -104,6 +104,17 @@ class OdooProviderAdapter:
             raise OdooProviderAdapterError("Odoo command capability must be ODOO_WRITE")
         if self.settings.external_effects.get("ODOO_WRITE") is not True:
             raise OdooProviderAdapterError("ODOO_WRITE is disabled")
+        provenance = request.payload.get("provenance")
+        provenance_method = (
+            provenance.get("method") if isinstance(provenance, dict) else None
+        )
+        if (
+            not isinstance(provenance_method, str)
+            or not self.settings.odoo_source_delivery_enabled(provenance_method)
+        ):
+            raise OdooProviderAdapterError(
+                "Odoo source-scoped delivery is disabled for this provenance"
+            )
         if request.command_type not in self.SUPPORTED:
             raise OdooProviderAdapterError(
                 f"unsupported Odoo command type: {request.command_type}"

@@ -186,8 +186,9 @@ class OdooCommandDispatcher:
 
     async def dispatch(self, record: OutboxRecord) -> None:
         command = self._validate(record)
-        lead_source = command.payload.get("lead_source")
-        if not isinstance(lead_source, str) or not self.source_delivery_enabled(lead_source):
+        provenance = command.payload.get("provenance")
+        provenance_method = provenance.get("method") if isinstance(provenance, dict) else None
+        if not isinstance(provenance_method, str) or not self.source_delivery_enabled(provenance_method):
             raise OdooConfigurationError(
                 "Odoo source-scoped delivery is disabled for this lead source"
             )

@@ -558,15 +558,13 @@ class Settings:
             tenant_id, self.odoo_default_hmac_secret
         )
 
-    def odoo_source_delivery_enabled(self, lead_source: str) -> bool:
-        normalized = lead_source.strip().lower()
-        if "scrapp" in normalized or "scrap" in normalized:
-            gate = "SCRAPPER_ODOO_DELIVERY_ENABLED"
-        elif "crawl" in normalized:
-            gate = "CRAWLER_ODOO_DELIVERY_ENABLED"
-        elif "form" in normalized:
-            gate = "FORM_ODOO_DELIVERY_ENABLED"
-        else:
+    def odoo_source_delivery_enabled(self, provenance_method: str) -> bool:
+        gate = {
+            "submitted_by_person": "FORM_ODOO_DELIVERY_ENABLED",
+            "crawler_discovery": "CRAWLER_ODOO_DELIVERY_ENABLED",
+            "scraper_import": "SCRAPPER_ODOO_DELIVERY_ENABLED",
+        }.get(provenance_method)
+        if gate is None:
             return False
         return self.odoo_delivery_enabled and bool(self.external_effects.get(gate))
 

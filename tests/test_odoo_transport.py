@@ -102,7 +102,7 @@ def dispatcher_for(handler, *, secrets: dict[str, bytes] | None = None):
         client=client,
         base_url=BASE_URL,
         secrets=secrets or {},
-        source_delivery_enabled=lambda source: source == "synthetic-form",
+        source_delivery_enabled=lambda method: method == "submitted_by_person",
         default_secret=SECRET,
     )
 
@@ -366,7 +366,8 @@ async def test_disabled_source_scope_is_never_sent() -> None:
         raise AssertionError("no request may be sent for a disabled source")
 
     payload = command_payload()
-    payload["payload"]["lead_source"] = "kyqra-crawler"
+    payload["payload"]["lead_source"] = "platform-form"
+    payload["payload"]["provenance"]["method"] = "crawler_discovery"
     with pytest.raises(OdooConfigurationError):
         await dispatcher_for(handler).dispatch(outbox_record(payload))
 
@@ -456,8 +457,8 @@ def test_fully_configured_odoo_delivery_validates() -> None:
         ODOO_19_HMAC_SECRET=LONG_SECRET,
     )
     assert settings.odoo_delivery_enabled is True
-    assert settings.odoo_source_delivery_enabled("synthetic-form") is True
-    assert settings.odoo_source_delivery_enabled("kyqra-crawler") is False
+    assert settings.odoo_source_delivery_enabled("submitted_by_person") is True
+    assert settings.odoo_source_delivery_enabled("crawler_discovery") is False
     assert settings.odoo_secret_for("any-tenant") == LONG_SECRET.encode("utf-8")
 
 
@@ -468,8 +469,8 @@ def test_source_scoped_delivery_requires_the_matching_gate() -> None:
         ODOO_19_BASE_URL=BASE_URL,
         ODOO_19_HMAC_SECRET=LONG_SECRET,
     )
-    assert settings.odoo_source_delivery_enabled("kyqra-crawler") is True
-    assert settings.odoo_source_delivery_enabled("synthetic-form") is False
+    assert settings.odoo_source_delivery_enabled("crawler_discovery") is True
+    assert settings.odoo_source_delivery_enabled("submitted_by_person") is False
     assert settings.odoo_source_delivery_enabled("unknown-source") is False
 
 

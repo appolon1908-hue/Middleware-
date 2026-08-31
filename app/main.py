@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import AsyncIterator
@@ -13,6 +14,15 @@ from pydantic import ValidationError
 
 from .commands import CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
+from .communications import (
+    CommunicationsConflict,
+    CommunicationsError,
+    CommunicationsNotFound,
+    CommunicationsService,
+    CreateMessageRequest,
+    MemoryCommunicationsStore,
+    Paged,
+)
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .lead_intake import (
@@ -203,6 +213,19 @@ def create_app(
             retryable=exc.retryable,
         )
 
+    @app.exception_handler(CommunicationsError)
+    async def communications_error(
+        request: Request,
+        exc: CommunicationsError,
+    ) -> JSONResponse:
+        return _error_response(
+            request,
+            status_code=exc.status_code,
+            code=exc.code,
+            message=str(exc),
+            retryable=exc.retryable,
+        )
+
     @app.exception_handler(FastApiValidationError)
     async def validation_error(
         request: Request,
@@ -282,6 +305,227 @@ def create_app(
         )
         return runtime_safety_readback(request.app.state.runtime.settings)
 
+    def communications_service(request: Request) -> CommunicationsService:
+        active = request.app.state.runtime
+        if active.commands is None:
+            raise StorageError("command ledger is unavailable")
+        if active.communications is None:
+            active.communications = CommunicationsService(
+                store=MemoryCommunicationsStore(),
+                commands=active.commands,
+            )
+        return active.communications
+
+    def _tenant_from_header(request: Request) -> str:
+        tenant_id = request.headers.get("X-Tenant-ID", "")
+        if not tenant_id:
+            from .security import RequestValidationError
+
+            raise RequestValidationError("X-Tenant-ID is required")
+        return tenant_id
+
+    async def _authorize_read(request: Request, tenant_id: str) -> None:
+        authorization = request.headers.get("Authorization", "")
+        caller = caller_for_authorization(authorization)
+        claims = await request.app.state.runtime.tokens.verify(
+            authorization,
+            expected_client_id=caller.client_id,
+            required_scope=caller.status_scope,
+        )
+        from .security import authorize_tenant
+
+        authorize_tenant(claims, tenant_id)
+
+    @app.post("/v1/communications/messages")
+    async def create_communication_message(
+        body: CreateMessageRequest,
+        request: Request,
+    ) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        correlation_id = request.headers.get("X-Correlation-ID", "")
+        idempotency_key = request.headers.get("Idempotency-Key", "")
+        if not correlation_id or not idempotency_key:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "X-Correlation-ID and Idempotency-Key are required"
+            )
+        if len(correlation_id) > 180 or not 8 <= len(idempotency_key) <= 180:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "X-Correlation-ID or Idempotency-Key is outside contract bounds"
+            )
+        actor = request.headers.get("X-Codestra-Actor", "")
+        if not actor:
+            authorization = request.headers.get("Authorization", "")
+            caller = caller_for_authorization(authorization)
+            claims = await request.app.state.runtime.tokens.verify(
+                authorization,
+                expected_client_id=caller.client_id,
+                required_scope=caller.command_scope,
+            )
+            actor = str(claims.get("sub") or "")
+        message, duplicate = await communications_service(request).submit_message(
+            body,
+            tenant_id=tenant_id,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+            actor=actor,
+            authorization=request.headers.get("Authorization", ""),
+            token_verifier=request.app.state.runtime.tokens,
+        )
+        return JSONResponse(
+            status_code=200 if duplicate else 202,
+            content=message.model_dump(mode="json"),
+            headers={"X-Correlation-ID": message.correlationId},
+        )
+
+    @app.get("/v1/communications/messages")
+    async def list_communication_messages(request: Request) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        await _authorize_read(request, tenant_id)
+        service = communications_service(request)
+        return JSONResponse(
+            status_code=200,
+            content=Paged(
+                items=[
+                    item.model_dump(mode="json")
+                    for item in service.list_messages(
+                        tenant_id,
+                        channel=request.query_params.get("channel"),
+                        status=request.query_params.get("status"),
+                    )
+                ]
+            ).model_dump(mode="json"),
+        )
+
+    @app.get("/v1/communications/messages/{messageId}")
+    async def get_communication_message(messageId: UUID, request: Request) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        await _authorize_read(request, tenant_id)
+        service = communications_service(request)
+        message = await service.refresh_command_status(tenant_id, messageId)
+        return JSONResponse(
+            status_code=200,
+            content=message.model_dump(mode="json"),
+        )
+
+    @app.get("/v1/communications/messages/{messageId}/events")
+    async def list_communication_message_events(
+        messageId: UUID,
+        request: Request,
+    ) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        await _authorize_read(request, tenant_id)
+        service = communications_service(request)
+        await service.refresh_command_status(tenant_id, messageId)
+        return JSONResponse(
+            status_code=200,
+            content=Paged(
+                items=[
+                    item.model_dump(mode="json")
+                    for item in service.message_events(tenant_id, messageId)
+                ]
+            ).model_dump(mode="json"),
+        )
+
+    @app.post("/v1/communications/messages/{messageId}/cancel")
+    async def cancel_communication_message(messageId: UUID, request: Request) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        idempotency_key = request.headers.get("Idempotency-Key", "")
+        if not 8 <= len(idempotency_key) <= 180:
+            from .security import RequestValidationError
+
+            raise RequestValidationError(
+                "Idempotency-Key must contain 8-180 characters"
+            )
+        authorization = request.headers.get("Authorization", "")
+        caller = caller_for_authorization(authorization)
+        claims = await request.app.state.runtime.tokens.verify(
+            authorization,
+            expected_client_id=caller.client_id,
+            required_scope=caller.command_scope,
+        )
+        actor = request.headers.get("X-Codestra-Actor", "") or str(
+            claims.get("sub") or ""
+        )
+        message, duplicate = await communications_service(request).cancel(
+            tenant_id,
+            messageId,
+            idempotency_key=idempotency_key,
+            actor=actor,
+            authorization=authorization,
+            token_verifier=request.app.state.runtime.tokens,
+        )
+        return JSONResponse(
+            status_code=200 if duplicate else 202,
+            content=message.model_dump(mode="json"),
+        )
+
+    @app.get("/v1/communications/provider-health")
+    @app.get("/v1/communications/providers/health")
+    async def get_communication_provider_health(request: Request) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        await _authorize_read(request, tenant_id)
+        service = communications_service(request)
+        return JSONResponse(status_code=200, content=await service.adapter.health(tenant_id))
+
+    @app.get("/v1/communications/reputation")
+    async def get_communication_reputation(request: Request) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        await _authorize_read(request, tenant_id)
+        service = communications_service(request)
+        return JSONResponse(status_code=200, content=await service.adapter.reputation(tenant_id))
+
+    @app.get("/v1/communications/usage")
+    async def get_communication_usage(request: Request) -> JSONResponse:
+        tenant_id = _tenant_from_header(request)
+        await _authorize_read(request, tenant_id)
+        messages = [
+            item
+            for item in communications_service(request).list_messages(tenant_id)
+            if item.direction == "outbound"
+        ]
+        return JSONResponse(
+            status_code=200,
+            content={
+                "from": request.query_params.get("from") or datetime.now(UTC).isoformat(),
+                "to": request.query_params.get("to") or datetime.now(UTC).isoformat(),
+                "totals": [
+                    {
+                        "channel": channel,
+                        "accepted": len(
+                            [item for item in messages if item.channel == channel]
+                        ),
+                        "delivered": len(
+                            [
+                                item
+                                for item in messages
+                                if item.channel == channel
+                                and item.status == "delivered"
+                            ]
+                        ),
+                        "failed": len(
+                            [
+                                item
+                                for item in messages
+                                if item.channel == channel and item.status == "failed"
+                            ]
+                        ),
+                        "suppressed": len(
+                            [
+                                item
+                                for item in messages
+                                if item.channel == channel
+                                and item.status == "suppressed"
+                            ]
+                        ),
+                    }
+                    for channel in ("email", "sms")
+                ],
+            },
+        )
     @app.post("/v1/intake/leads")
     async def submit_lead(request: Request) -> JSONResponse:
         from .security import RequestValidationError, authorize_tenant
@@ -442,6 +686,15 @@ def create_app(
                 raw_body=raw,
                 headers=headers,
             )
+            if (
+                route.producer_client_id
+                in {"klyrow-gateway", "telnexa-gateway"}
+                and request.app.state.runtime.communications is not None
+            ):
+                from .models import EventEnvelope
+
+                envelope = EventEnvelope.model_validate(json.loads(raw))
+                request.app.state.runtime.communications.record_provider_event(envelope)
             return JSONResponse(
                 status_code=status_code,
                 content=result.model_dump(mode="json"),

@@ -50,7 +50,7 @@ def test_each_command_family_accepts_only_its_exact_owner_and_scope() -> None:
         workflow_family = sorted(family.workflow_families)[0]
         authorized = policy.authorize_command(
             _claims(family.client_id, family.scope),
-            command_type=f"{family.prefix}contract-test.v1",
+            command_type=f"{family.prefix}contract-test",
             workflow_family=workflow_family,
         )
         assert authorized == family
@@ -64,7 +64,7 @@ def test_each_command_family_accepts_only_its_exact_owner_and_scope() -> None:
         with pytest.raises(AutomationAuthorizationError):
             policy.authorize_command(
                 _claims(other_client, next(iter(policy.clients[other_client].scopes))),
-                command_type=f"{family.prefix}contract-test.v1",
+                command_type=f"{family.prefix}contract-test",
                 workflow_family=workflow_family,
             )
 
@@ -133,7 +133,7 @@ def test_operations_and_platform_clients_have_no_command_authority() -> None:
         with pytest.raises(AutomationAuthorizationError):
             policy.authorize_command(
                 _claims(client_id, "automation.job.claim"),
-                command_type="crm.lead.create.v1",
+                command_type="crm.lead.upsert",
                 workflow_family="crm",
             )
 

@@ -41,21 +41,30 @@ pytestmark = pytest.mark.skipif(
 
 class DeterministicActivities:
     def __init__(self) -> None:
-        self.reconciliation_attempts = 0
+        self.reconciliation_attempts_by_operation: dict[str, int] = {}
+        self.reconciliation_requests: list[str] = []
         self.callbacks: list[str] = []
         self.provisioned: list[str] = []
         self.compensations: list[str] = []
         self.replays: list[str] = []
         self.command_transitions: list[str] = []
         self.readback_status = "matched"
+        self.execute_attempts = 0
+        self.readback_attempts = 0
+        self.execute_outcome_unknown = False
 
     @activity.defn(name="reconcile_operation")
     async def reconcile_operation(
         self,
         request: ReconciliationRequest,
     ) -> ActivityResult:
-        self.reconciliation_attempts += 1
-        if self.reconciliation_attempts < 3:
+        attempts = self.reconciliation_attempts_by_operation.get(
+            request.operation_id,
+            0,
+        ) + 1
+        self.reconciliation_attempts_by_operation[request.operation_id] = attempts
+        self.reconciliation_requests.append(request.operation_id)
+        if attempts < 3:
             raise ApplicationError("transient read-back failure")
         return ActivityResult("completed", "provider read-back matched")
 
@@ -129,6 +138,13 @@ class DeterministicActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
+        self.execute_attempts += 1
+        if self.execute_outcome_unknown:
+            raise ApplicationError(
+                "provider timed out after possible acceptance",
+                non_retryable=True,
+                type="UncertainProviderOutcome",
+            )
         return ActivityResult("accepted", "provider accepted", "provider-op-1")
 
     @activity.defn(name="readback_command")
@@ -136,6 +152,7 @@ class DeterministicActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
+        self.readback_attempts += 1
         return ActivityResult(self.readback_status, "provider state observed")
 
     def registered(self) -> list[Any]:
@@ -170,7 +187,7 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                 task_queue=TASK_QUEUE,
             )
             assert reconciliation.status == "completed"
-            assert activities.reconciliation_attempts == 3
+            assert activities.reconciliation_attempts_by_operation["op-reconcile"] == 3
 
             callback = await environment.client.execute_workflow(
                 DelayedCallbackWorkflow.run,
@@ -264,3 +281,85 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
             assert mismatch.status == "reconciliation_required"
             assert activities.command_transitions[-1] == "reconciliation_required"
             assert "completed" not in activities.command_transitions
+
+            activities.command_transitions.clear()
+            activities.execute_outcome_unknown = True
+            execute_attempts_before = activities.execute_attempts
+            readback_attempts_before = activities.readback_attempts
+            email_command_id = "00000000-0000-4000-8000-000000000002"
+            uncertain_email = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id=email_command_id,
+                    command_type="email.message.send.v1",
+                    command_version="1.0",
+                    target="klyrow-email",
+                    tenant_id="tenant-test",
+                    requested_by="user-1",
+                    correlation_id="email-correlation-1",
+                    idempotency_key="email-idempotency-1",
+                    capability="EMAIL_DELIVERY",
+                    payload={"message_id": "message-1"},
+                ),
+                id="test-email-command-unknown-outcome",
+                task_queue=TASK_QUEUE,
+            )
+            assert uncertain_email.status == "reconciliation_required"
+            assert activities.command_transitions == [
+                "queued",
+                "dispatching",
+                "reconciliation_required",
+            ]
+            assert activities.execute_attempts == execute_attempts_before + 1
+            assert activities.readback_attempts == readback_attempts_before
+
+            provider_execution_attempts = activities.execute_attempts
+            reconciled_email = await environment.client.execute_workflow(
+                ReconciliationWorkflow.run,
+                ReconciliationRequest(
+                    email_command_id,
+                    "tenant-test",
+                    "provider timeout after possible acceptance",
+                ),
+                id="test-email-command-unknown-outcome-reconciliation",
+                task_queue=TASK_QUEUE,
+            )
+            assert reconciled_email.status == "completed"
+            assert reconciled_email.detail == "provider read-back matched"
+            assert (
+                activities.reconciliation_attempts_by_operation[email_command_id]
+                == 3
+            )
+            assert activities.reconciliation_requests.count(email_command_id) == 3
+            assert activities.execute_attempts == provider_execution_attempts
+            assert activities.readback_attempts == readback_attempts_before
+
+
+            activities.command_transitions.clear()
+            execute_attempts_before = activities.execute_attempts
+            readback_attempts_before = activities.readback_attempts
+            uncertain_sms = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id="00000000-0000-4000-8000-000000000003",
+                    command_type="sms.message.submit.v1",
+                    command_version="1.0",
+                    target="telnexa-sms",
+                    tenant_id="tenant-test",
+                    requested_by="user-1",
+                    correlation_id="sms-correlation-1",
+                    idempotency_key="sms-idempotency-1",
+                    capability="SMS_DELIVERY",
+                    payload={"message_id": "message-2"},
+                ),
+                id="test-sms-command-unknown-outcome",
+                task_queue=TASK_QUEUE,
+            )
+            assert uncertain_sms.status == "reconciliation_required"
+            assert activities.command_transitions == [
+                "queued",
+                "dispatching",
+                "reconciliation_required",
+            ]
+            assert activities.execute_attempts == execute_attempts_before + 1
+            assert activities.readback_attempts == readback_attempts_before

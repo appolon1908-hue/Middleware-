@@ -16,7 +16,7 @@ import sys
 import time
 import uuid
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -65,7 +65,7 @@ class CanaryConfigurationError(RuntimeError):
 
 
 def _utc_now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 def _iso(value: datetime) -> str:

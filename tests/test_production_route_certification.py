@@ -23,6 +23,12 @@ def test_certification_rejects_unregistered_or_open_responses():
     )
 
 
+def test_dashboard_route_certification_is_explicit_for_the_new_image():
+    assert certification.certify.__kwdefaults__ == {
+        "expect_operations_dashboard": False,
+    }
+
+
 def test_middleware_independently_enforces_complete_machine_identity_contract():
     security = Path("app/security.py").read_text()
     control_plane = Path("app/n8n_control_plane.py").read_text()

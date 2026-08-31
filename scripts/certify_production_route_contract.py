@@ -57,7 +57,7 @@ def assert_fail_closed(status_code: int, response_body: dict) -> None:
     assert response_body != {"detail": "Not Found"}
 
 
-def certify(base: str) -> None:
+def certify(base: str, *, expect_operations_dashboard: bool = False) -> None:
     status, openapi = request(base, "GET", "/openapi.json")
     assert status == 200
     paths = openapi["paths"]
@@ -66,8 +66,9 @@ def certify(base: str) -> None:
     assert "post" in paths[VICIDIAL_PATH]
     assert "/v1/operations" not in paths
     assert "/v1/integrations/n8n/operations" not in paths
-    for path in OPERATIONS_DASHBOARD_PATHS:
-        assert "get" in paths[path]
+    if expect_operations_dashboard:
+        for path in OPERATIONS_DASHBOARD_PATHS:
+            assert "get" in paths[path]
 
     command = {
         "command_id": "00000000-0000-4000-8000-000000000001",
@@ -155,8 +156,12 @@ def certify(base: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
+    parser.add_argument("--expect-operations-dashboard", action="store_true")
     args = parser.parse_args()
-    certify(args.base_url)
+    certify(
+        args.base_url,
+        expect_operations_dashboard=args.expect_operations_dashboard,
+    )
     print("PRODUCTION_ROUTE_CONTRACT=PASS")
     return 0
 

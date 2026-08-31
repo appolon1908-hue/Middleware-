@@ -220,6 +220,16 @@ def test_odoo_adapter_enforces_canonical_source_gate_on_legacy_temporal_rows() -
         adapter._require_active(crawler)
 
 
+def test_odoo_readback_identity_validation_does_not_require_write_gate() -> None:
+    settings = SimpleNamespace(
+        app_env="test",
+        external_effects={"ODOO_WRITE": False},
+        odoo_source_delivery_enabled=lambda method: False,
+    )
+    adapter = OdooProviderAdapter(settings, {})
+    adapter._validate_identity(_request())
+
+
 def test_odoo_adapter_maps_only_canonical_crm_upsert() -> None:
     adapter = _adapter()
     method, path, document = adapter._write_request(_request())

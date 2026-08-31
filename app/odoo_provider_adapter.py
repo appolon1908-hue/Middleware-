@@ -97,11 +97,20 @@ class OdooProviderAdapter:
     def _secret(self) -> bytes:
         return self._required("ODOO_INBOUND_HMAC_SECRET").encode("utf-8")
 
-    def _require_active(self, request: CommandExecutionRequest) -> None:
+    def _validate_identity(self, request: CommandExecutionRequest) -> None:
         if request.target != "odoo-19":
             raise OdooProviderAdapterError("Odoo adapter does not own this command target")
         if request.capability != "ODOO_WRITE":
             raise OdooProviderAdapterError("Odoo command capability must be ODOO_WRITE")
+        if request.command_type not in self.SUPPORTED:
+            raise OdooProviderAdapterError(
+                f"unsupported Odoo command type: {request.command_type}"
+            )
+        if request.command_version != "1.0":
+            raise OdooProviderAdapterError("Odoo command version must be 1.0")
+
+    def _require_active(self, request: CommandExecutionRequest) -> None:
+        self._validate_identity(request)
         if self.settings.external_effects.get("ODOO_WRITE") is not True:
             raise OdooProviderAdapterError("ODOO_WRITE is disabled")
         provenance = request.payload.get("provenance")
@@ -115,12 +124,6 @@ class OdooProviderAdapter:
             raise OdooProviderAdapterError(
                 "Odoo source-scoped delivery is disabled for this provenance"
             )
-        if request.command_type not in self.SUPPORTED:
-            raise OdooProviderAdapterError(
-                f"unsupported Odoo command type: {request.command_type}"
-            )
-        if request.command_version != "1.0":
-            raise OdooProviderAdapterError("Odoo command version must be 1.0")
 
     @staticmethod
     def _source_record_id(request: CommandExecutionRequest) -> str:
@@ -289,7 +292,7 @@ class OdooProviderAdapter:
 
     async def readback(self, request: CommandExecutionRequest) -> ActivityResult:
         """Read the recorded command outcome without replaying the write."""
-        self._require_active(request)
+        self._validate_identity(request)
         path = self.STATUS_PATH.format(
             command_id=quote(request.command_id, safe="")
         )

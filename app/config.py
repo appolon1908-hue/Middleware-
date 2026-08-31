@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 from urllib.parse import parse_qs, unquote, urlparse
@@ -40,6 +40,19 @@ def _bool(env: Mapping[str, str], name: str, default: bool = False) -> bool:
     if value in FALSE_VALUES:
         return False
     raise ConfigurationError(f"{name} must be an explicit boolean")
+
+
+# Effects this runtime actually implements. Anything else must stay off, so a
+# capability cannot be switched on before its handler exists.
+SUPPORTED_EXTERNAL_EFFECTS = frozenset(
+    {
+        "SEND_EVENTS",
+        "ODOO_WRITE",
+        "FORM_ODOO_DELIVERY_ENABLED",
+        "CRAWLER_ODOO_DELIVERY_ENABLED",
+        "SCRAPPER_ODOO_DELIVERY_ENABLED",
+    }
+)
 
 
 def _int(
@@ -136,6 +149,10 @@ class Settings:
     webhook_secrets: dict[str, bytes]
     outbox_dispatch_enabled: bool
     external_effects: dict[str, bool]
+    odoo_base_url: str | None = None
+    odoo_default_hmac_secret: bytes = b""
+    odoo_tenant_hmac_secrets: dict[str, bytes] = field(default_factory=dict)
+    odoo_timeout_seconds: int = 20
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -177,6 +194,25 @@ class Settings:
                 "UNRESTRICTED_CRAWLING",
             )
         }
+        odoo_tenant_secrets_raw = source.get("ODOO_19_TENANT_HMAC_SECRETS", "").strip()
+        odoo_tenant_secrets: dict[str, bytes] = {}
+        if odoo_tenant_secrets_raw:
+            try:
+                decoded = json.loads(odoo_tenant_secrets_raw)
+            except ValueError as exc:
+                raise ConfigurationError(
+                    "ODOO_19_TENANT_HMAC_SECRETS must be a JSON object"
+                ) from exc
+            if not isinstance(decoded, dict) or not all(
+                isinstance(key, str) and isinstance(value, str) and key and value
+                for key, value in decoded.items()
+            ):
+                raise ConfigurationError(
+                    "ODOO_19_TENANT_HMAC_SECRETS must map tenant IDs to secrets"
+                )
+            odoo_tenant_secrets = {
+                key: value.encode("utf-8") for key, value in decoded.items()
+            }
         webhook_secrets = {
             producer: source.get(_secret_env_name(producer), "").encode("utf-8")
             for producer in WEBHOOK_PRODUCERS
@@ -301,6 +337,18 @@ class Settings:
             webhook_secrets=webhook_secrets,
             outbox_dispatch_enabled=_bool(source, "OUTBOX_DISPATCH_ENABLED", False),
             external_effects=effects,
+            odoo_base_url=(source.get("ODOO_19_BASE_URL", "").strip() or None),
+            odoo_default_hmac_secret=source.get(
+                "ODOO_19_HMAC_SECRET", ""
+            ).encode("utf-8"),
+            odoo_tenant_hmac_secrets=odoo_tenant_secrets,
+            odoo_timeout_seconds=_int(
+                source,
+                "ODOO_19_TIMEOUT_SECONDS",
+                20,
+                minimum=1,
+                maximum=120,
+            ),
         )
         settings.validate()
         return settings
@@ -318,12 +366,13 @@ class Settings:
         enabled = {
             name for name, value in self.external_effects.items() if value
         }
-        unsupported_enabled = sorted(enabled - {"SEND_EVENTS"})
+        unsupported_enabled = sorted(enabled - SUPPORTED_EXTERNAL_EFFECTS)
         if unsupported_enabled:
             raise ConfigurationError(
                 "provider and business effects are not implemented by this runtime: "
                 + ", ".join(unsupported_enabled)
             )
+        self._validate_odoo_transport(enabled)
         if self.production_dialing != "DISABLED":
             raise ConfigurationError(
                 "PRODUCTION_DIALING must remain DISABLED"
@@ -499,6 +548,41 @@ class Settings:
             if self.build_time in {"", "unknown"}:
                 raise ConfigurationError("BUILD_TIME is required in staging/production")
             self.validate_all_webhook_secrets()
+
+    @property
+    def odoo_delivery_enabled(self) -> bool:
+        return bool(self.external_effects.get("ODOO_WRITE"))
+
+    def odoo_secret_for(self, tenant_id: str) -> bytes:
+        return self.odoo_tenant_hmac_secrets.get(
+            tenant_id, self.odoo_default_hmac_secret
+        )
+
+    def _validate_odoo_transport(self, enabled: set[str]) -> None:
+        source_scoped = {
+            name for name in enabled if name.endswith("_ODOO_DELIVERY_ENABLED")
+        }
+        if source_scoped and "ODOO_WRITE" not in enabled:
+            raise ConfigurationError(
+                "source-scoped Odoo delivery requires ODOO_WRITE: "
+                + ", ".join(sorted(source_scoped))
+            )
+        if "ODOO_WRITE" not in enabled:
+            return
+        if not self.odoo_base_url:
+            raise ConfigurationError("ODOO_19_BASE_URL is required to write to Odoo")
+        if not self.odoo_base_url.startswith("https://"):
+            raise ConfigurationError("ODOO_19_BASE_URL must be an HTTPS endpoint")
+        secrets = [self.odoo_default_hmac_secret, *self.odoo_tenant_hmac_secrets.values()]
+        if not any(secrets):
+            raise ConfigurationError(
+                "ODOO_19_HMAC_SECRET or ODOO_19_TENANT_HMAC_SECRETS is required "
+                "to write to Odoo"
+            )
+        if any(secret and len(secret) < 32 for secret in secrets):
+            raise ConfigurationError(
+                "Odoo signing secrets must be at least 32 bytes"
+            )
 
     def validate_all_webhook_secrets(self) -> None:
         for producer in WEBHOOK_PRODUCERS:

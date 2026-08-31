@@ -8,6 +8,8 @@ import re
 import sys
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 ROOT = Path(__file__).resolve().parents[1]
 CONNECTORS = ROOT / "config" / "connectors"
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -17,6 +19,9 @@ ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 def main() -> int:
     errors: list[str] = []
+    schema = json.loads((ROOT / "contracts" / "connector.schema.json").read_text())
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
     ids: set[str] = set()
     clients: set[str] = set()
     files = sorted(CONNECTORS.glob("*.json")) if CONNECTORS.exists() else []
@@ -26,6 +31,9 @@ def main() -> int:
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(f"{path.relative_to(ROOT)}: {exc}")
             continue
+        for error in sorted(validator.iter_errors(item), key=lambda value: list(value.path)):
+            location = ".".join(str(part) for part in error.path) or "<root>"
+            errors.append(f"{path.name}: schema {location}: {error.message}")
         connector_id = item.get("id")
         client_id = item.get("authentication", {}).get("keycloak_client_id")
         if item.get("version") != 1:

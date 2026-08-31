@@ -529,7 +529,13 @@ class PostgresCommandStore:
                         ) VALUES ($1,$2,$3,$4::jsonb,$5)
                         """,
                         command.tenant_id,
-                        TEMPORAL_COMMAND_DESTINATION,
+                        (
+                            ODOO_COMMAND_DESTINATION
+                            if command.target == "odoo-19"
+                            and command.command_type == "crm.lead.upsert"
+                            and command.capability == "ODOO_WRITE"
+                            else TEMPORAL_COMMAND_DESTINATION
+                        ),
                         command.command_type,
                         json.dumps(payload, separators=(",", ":"), sort_keys=True),
                         command.idempotency_key,

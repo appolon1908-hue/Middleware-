@@ -8,20 +8,21 @@ import re
 import sys
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
-
 ROOT = Path(__file__).resolve().parents[1]
 CONNECTORS = ROOT / "config" / "connectors"
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 WORKSTREAM_RE = re.compile(r"^(integration|platform|site)/[a-z0-9][a-z0-9-]*$")
 ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+ROOT_KEYS = {"version", "id", "workstream", "repository", "role", "transport", "authentication", "runtime", "deployment_evidence"}
+TRANSPORT_KEYS = {"protocol", "base_url_env", "health_path"}
+AUTH_KEYS = {"method", "keycloak_client_id", "secret_env"}
+RUNTIME_KEYS = {"enabled_by_default", "external_effects_enabled", "status"}
+EVIDENCE_KEYS = {"deployed", "verified_commit", "verified_at", "notes"}
+ROLES = {"frontend", "backend", "identity", "gateway", "erp", "social-site", "social-adapter"}
 
 
 def main() -> int:
     errors: list[str] = []
-    schema = json.loads((ROOT / "contracts" / "connector.schema.json").read_text())
-    Draft202012Validator.check_schema(schema)
-    validator = Draft202012Validator(schema)
     ids: set[str] = set()
     clients: set[str] = set()
     files = sorted(CONNECTORS.glob("*.json")) if CONNECTORS.exists() else []
@@ -31,9 +32,10 @@ def main() -> int:
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(f"{path.relative_to(ROOT)}: {exc}")
             continue
-        for error in sorted(validator.iter_errors(item), key=lambda value: list(value.path)):
-            location = ".".join(str(part) for part in error.path) or "<root>"
-            errors.append(f"{path.name}: schema {location}: {error.message}")
+        if set(item) != ROOT_KEYS:
+            errors.append(f"{path.name}: root fields must exactly match the schema")
+        if item.get("role") not in ROLES:
+            errors.append(f"{path.name}: invalid role")
         connector_id = item.get("id")
         client_id = item.get("authentication", {}).get("keycloak_client_id")
         if item.get("version") != 1:
@@ -52,6 +54,9 @@ def main() -> int:
         if not isinstance(repository, str) or not repository.startswith("appolon1908-hue/"):
             errors.append(f"{path.name}: explicit appolon1908-hue repository required")
         transport = item.get("transport", {})
+        if not isinstance(transport, dict) or set(transport) != TRANSPORT_KEYS:
+            errors.append(f"{path.name}: transport fields must exactly match the schema")
+            transport = {} if not isinstance(transport, dict) else transport
         if transport.get("protocol") not in {"https", "oidc", "internal_https"}:
             errors.append(f"{path.name}: invalid transport protocol")
         base_url_env = transport.get("base_url_env")
@@ -60,6 +65,9 @@ def main() -> int:
         if not str(transport.get("health_path", "")).startswith("/"):
             errors.append(f"{path.name}: health_path must be absolute")
         auth = item.get("authentication", {})
+        if not isinstance(auth, dict) or set(auth) != AUTH_KEYS:
+            errors.append(f"{path.name}: authentication fields must exactly match the schema")
+            auth = {} if not isinstance(auth, dict) else auth
         if auth.get("method") not in {"oidc_client_credentials", "oidc_authorization_code", "oidc_jwks"}:
             errors.append(f"{path.name}: invalid authentication method")
         if not isinstance(client_id, str) or not client_id.startswith("middleware-"):
@@ -72,11 +80,19 @@ def main() -> int:
         if secret_env is not None and (not isinstance(secret_env, str) or not ENV_RE.fullmatch(secret_env) or not secret_env.endswith("_CLIENT_SECRET")):
             errors.append(f"{path.name}: secret must be an environment-variable reference")
         runtime = item.get("runtime", {})
+        if not isinstance(runtime, dict) or set(runtime) != RUNTIME_KEYS:
+            errors.append(f"{path.name}: runtime fields must exactly match the schema")
+            runtime = {} if not isinstance(runtime, dict) else runtime
         if runtime != {"enabled_by_default": False, "external_effects_enabled": False, "status": "runtime_unconfirmed"}:
             errors.append(f"{path.name}: runtime must remain fail closed and unconfirmed")
         evidence = item.get("deployment_evidence", {})
+        if not isinstance(evidence, dict) or set(evidence) != EVIDENCE_KEYS:
+            errors.append(f"{path.name}: deployment evidence fields must exactly match the schema")
+            evidence = {} if not isinstance(evidence, dict) else evidence
         if evidence.get("deployed") is not False or evidence.get("verified_commit") is not None or evidence.get("verified_at") is not None:
             errors.append(f"{path.name}: deployment evidence must not claim an unperformed deployment")
+        if evidence.get("notes") != "Configuration contract only; no live deployment performed.":
+            errors.append(f"{path.name}: deployment evidence notes must match the schema")
     if errors:
         print("Connector contract validation failed:", file=sys.stderr)
         for error in errors:

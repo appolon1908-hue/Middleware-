@@ -558,6 +558,16 @@ class Settings:
             tenant_id, self.odoo_default_hmac_secret
         )
 
+    def odoo_source_delivery_enabled(self, provenance_method: str) -> bool:
+        gate = {
+            "submitted_by_person": "FORM_ODOO_DELIVERY_ENABLED",
+            "crawler_discovery": "CRAWLER_ODOO_DELIVERY_ENABLED",
+            "scraper_import": "SCRAPPER_ODOO_DELIVERY_ENABLED",
+        }.get(provenance_method)
+        if gate is None:
+            return False
+        return self.odoo_delivery_enabled and bool(self.external_effects.get(gate))
+
     def _validate_odoo_transport(self, enabled: set[str]) -> None:
         source_scoped = {
             name for name in enabled if name.endswith("_ODOO_DELIVERY_ENABLED")

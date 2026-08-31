@@ -58,6 +58,7 @@ async def main() -> None:
                 client=odoo_client,
                 base_url=settings.odoo_base_url or "",
                 secrets=dict(settings.odoo_tenant_hmac_secrets),
+                source_delivery_enabled=settings.odoo_source_delivery_enabled,
                 default_secret=settings.odoo_default_hmac_secret or None,
             ).dispatch
         worker = OutboxWorker(

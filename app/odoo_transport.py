@@ -26,6 +26,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Callable
 
 import httpx
 
@@ -100,6 +101,7 @@ class OdooCommandDispatcher:
     client: httpx.AsyncClient
     base_url: str
     secrets: dict[str, bytes]
+    source_delivery_enabled: Callable[[str], bool]
     default_secret: bytes | None = None
 
     def __post_init__(self) -> None:
@@ -184,6 +186,12 @@ class OdooCommandDispatcher:
 
     async def dispatch(self, record: OutboxRecord) -> None:
         command = self._validate(record)
+        provenance = command.payload.get("provenance")
+        provenance_method = provenance.get("method") if isinstance(provenance, dict) else None
+        if not isinstance(provenance_method, str) or not self.source_delivery_enabled(provenance_method):
+            raise OdooConfigurationError(
+                "Odoo source-scoped delivery is disabled for this lead source"
+            )
         body = serialize_command(command)
         headers = self._headers(
             method="POST",

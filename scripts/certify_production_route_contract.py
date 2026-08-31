@@ -12,6 +12,9 @@ import urllib.request
 COMMAND_PATH = "/v1/commands"
 OPERATION_TEMPLATE = "/v1/operations/{command_id}"
 OPERATION_PROBE = "/v1/operations/00000000-0000-0000-0000-000000000000"
+LEGACY_COMMAND_PATH = "/v1/integrations/n8n/commands"
+LEGACY_OPERATION_TEMPLATE = "/v1/integrations/n8n/operations/{command_id}"
+LEGACY_OPERATION_PROBE = "/v1/integrations/n8n/operations/00000000-0000-0000-0000-000000000000"
 VICIDIAL_PATH = "/api/v1/vicidial/events"
 OPERATIONS_DASHBOARD_PATHS = (
     "/v1/operations-dashboard/overview",
@@ -58,11 +61,14 @@ def assert_fail_closed(status_code: int, response_body: dict) -> None:
 
 
 def certify(base: str, *, expect_operations_dashboard: bool = False) -> None:
+    command_path = COMMAND_PATH if expect_operations_dashboard else LEGACY_COMMAND_PATH
+    operation_template = OPERATION_TEMPLATE if expect_operations_dashboard else LEGACY_OPERATION_TEMPLATE
+    operation_probe = OPERATION_PROBE if expect_operations_dashboard else LEGACY_OPERATION_PROBE
     status, openapi = request(base, "GET", "/openapi.json")
     assert status == 200
     paths = openapi["paths"]
-    assert "post" in paths[COMMAND_PATH]
-    assert "get" in paths[OPERATION_TEMPLATE]
+    assert "post" in paths[command_path]
+    assert "get" in paths[operation_template]
     assert "post" in paths[VICIDIAL_PATH]
     assert "/v1/operations" not in paths
     assert "/v1/integrations/n8n/operations" not in paths
@@ -126,30 +132,33 @@ def certify(base: str, *, expect_operations_dashboard: bool = False) -> None:
     submit_status, submit_body = request(
         base,
         "POST",
-        COMMAND_PATH,
+        command_path,
         command,
         command_headers,
     )
     read_status, read_body = request(
         base,
         "GET",
-        OPERATION_PROBE,
+        operation_probe,
         headers={"X-Tenant-ID": command["tenant_id"]},
     )
-    dashboard_status, dashboard_body = request(
-        base,
-        "GET",
-        "/v1/operations-dashboard/overview",
-        headers={
-            "X-Tenant-ID": command["tenant_id"],
-            "X-Correlation-ID": command["correlation_id"],
-        },
-    )
-    for status_code, response_body in (
+    responses = [
         (submit_status, submit_body),
         (read_status, read_body),
-        (dashboard_status, dashboard_body),
-    ):
+    ]
+    if expect_operations_dashboard:
+        responses.append(
+            request(
+                base,
+                "GET",
+                "/v1/operations-dashboard/overview",
+                headers={
+                    "X-Tenant-ID": command["tenant_id"],
+                    "X-Correlation-ID": command["correlation_id"],
+                },
+            )
+        )
+    for status_code, response_body in responses:
         assert_fail_closed(status_code, response_body)
 
 

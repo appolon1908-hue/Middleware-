@@ -8,8 +8,11 @@ import re
 import sys
 from pathlib import Path
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 ROOT = Path(__file__).resolve().parents[1]
 CONNECTORS = ROOT / "config" / "connectors"
+SCHEMA_PATH = ROOT / "contracts" / "connector.schema.json"
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 WORKSTREAM_RE = re.compile(r"^(integration|platform|site)/[a-z0-9][a-z0-9-]*$")
 ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -23,6 +26,13 @@ ROLES = {"frontend", "backend", "identity", "gateway", "erp", "social-site", "so
 
 def main() -> int:
     errors: list[str] = []
+    try:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+    except (OSError, json.JSONDecodeError, Exception) as exc:
+        print(f"Connector schema validation failed: {exc}", file=sys.stderr)
+        return 1
+    schema_validator = Draft202012Validator(schema, format_checker=FormatChecker())
     ids: set[str] = set()
     clients: set[str] = set()
     files = sorted(CONNECTORS.glob("*.json")) if CONNECTORS.exists() else []
@@ -32,6 +42,9 @@ def main() -> int:
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(f"{path.relative_to(ROOT)}: {exc}")
             continue
+        for violation in sorted(schema_validator.iter_errors(item), key=lambda e: list(e.path)):
+            location = ".".join(str(part) for part in violation.path) or "<root>"
+            errors.append(f"{path.name}: schema {location}: {violation.message}")
         if set(item) != ROOT_KEYS:
             errors.append(f"{path.name}: root fields must exactly match the schema")
         if item.get("role") not in ROLES:

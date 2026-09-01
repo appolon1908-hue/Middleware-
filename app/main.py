@@ -277,7 +277,7 @@ def create_app(
             content={
                 "service": "middleware-api",
                 "environment": resolved.app_env,
-                "components": report.components,
+                "dependencies": report.components,
             },
         )
 

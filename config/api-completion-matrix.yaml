@@ -8,11 +8,11 @@ operations:
   - {domain: platform, method: GET, path: /capabilities, canonical_operation_id: platform_capabilities, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
   - {domain: commands, method: POST, path: /v1/commands, canonical_operation_id: command_submit, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
   - {domain: operations, method: GET, path: /v1/operations, canonical_operation_id: operations_list, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
-  - {domain: operations, method: GET, path: /v1/operations/{command_id}, canonical_operation_id: operation_get, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
-  - {domain: operations, method: GET, path: /v1/operations/{command_id}/events, canonical_operation_id: operation_events_list, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
-  - {domain: operations, method: GET, path: /v1/operations/{command_id}/attempts, canonical_operation_id: operation_attempts_list, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
-  - {domain: operations, method: POST, path: /v1/operations/{command_id}/cancel, canonical_operation_id: operation_cancel, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
-  - {domain: operations, method: POST, path: /v1/operations/{command_id}/reconcile, canonical_operation_id: operation_reconcile, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: GET, path: "/v1/operations/{command_id}", canonical_operation_id: operation_get, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: GET, path: "/v1/operations/{command_id}/events", canonical_operation_id: operation_events_list, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: GET, path: "/v1/operations/{command_id}/attempts", canonical_operation_id: operation_attempts_list, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: POST, path: "/v1/operations/{command_id}/cancel", canonical_operation_id: operation_cancel, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: POST, path: "/v1/operations/{command_id}/reconcile", canonical_operation_id: operation_reconcile, implementation_file: app/operations.py, runtime_state: IMPLEMENTED}
   - {domain: communications, method: POST, path: /v1/communications/messages, canonical_operation_id: communication_submit, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
   - {domain: intake, method: POST, path: /v1/intake/leads, canonical_operation_id: lead_intake, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
   - {domain: operations, method: GET, path: /api/v1/operations, canonical_operation_id: legacy_operations_list, implementation_file: null, runtime_state: MISSING}
@@ -30,4 +30,4 @@ operations:
   - {domain: marketing, method: POST, path: /api/v1/control/marketing/campaigns, canonical_operation_id: marketing_campaign, implementation_file: null, runtime_state: MISSING}
   - {domain: ai, method: POST, path: /api/v1/control/ai/inference-requests, canonical_operation_id: ai_inference, implementation_file: null, runtime_state: MISSING}
   - {domain: telephony, method: POST, path: /v1/telephony/calls, canonical_operation_id: telephony_call, implementation_file: null, runtime_state: MISSING}
-  - {domain: webhooks, method: POST, path: /v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}, canonical_operation_id: webhook_ingress, implementation_file: null, runtime_state: MISSING}
+  - {domain: webhooks, method: POST, path: "/v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}", canonical_operation_id: webhook_ingress, implementation_file: null, runtime_state: MISSING}

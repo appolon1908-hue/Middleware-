@@ -108,6 +108,73 @@ paths:
         '200': {$ref: '#/components/responses/CommandOperation'}
         '403': {description: Tenant access denied}
         '404': {description: Command operation not found}
+  /v1/operations:
+    get:
+      operationId: listCommandOperations
+      description: Tenant-scoped durable operations. Runtime enforces each configured caller's status_scope for the middleware-api audience.
+      security: [{oauth2: [middleware.status.read]}]
+      parameters:
+        - {$ref: '#/components/parameters/HeaderTenantId'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {name: state, in: query, schema: {type: string}}
+        - {name: command_type, in: query, schema: {type: string, maxLength: 180}}
+      responses:
+        '200': {$ref: '#/components/responses/OperationPage'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {description: Bearer token missing or invalid}
+        '403': {description: Configured status scope or tenant access denied}
+        '422': {description: Request entity cannot be processed}
+        '429': {description: Rate limit exceeded}
+        '503': {description: Durable command store unavailable}
+  /v1/operations/{command_id}/events:
+    get:
+      operationId: listCommandOperationEvents
+      security: [{oauth2: [middleware.status.read]}]
+      parameters: [{$ref: '#/components/parameters/CommandId'}, {$ref: '#/components/parameters/HeaderTenantId'}, {$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Ordered redacted audit events, content: {application/json: {schema: {$ref: '#/components/schemas/OperationEventPage'}}}}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {description: Bearer token missing or invalid}
+        '403': {description: Configured status scope or tenant access denied}
+        '404': {description: Operation not found}
+        '422': {description: Request entity cannot be processed}
+        '429': {description: Rate limit exceeded}
+        '503': {description: Durable command store unavailable}
+  /v1/operations/{command_id}/attempts:
+    get:
+      operationId: listCommandOperationAttempts
+      security: [{oauth2: [middleware.status.read]}]
+      parameters: [{$ref: '#/components/parameters/CommandId'}, {$ref: '#/components/parameters/HeaderTenantId'}, {$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Ordered safe attempt summaries, content: {application/json: {schema: {$ref: '#/components/schemas/OperationAttemptPage'}}}}
+        '404': {description: Operation not found}
+        '503': {description: Durable command store unavailable}
+  /v1/operations/{command_id}/cancel:
+    post:
+      operationId: cancelCommandOperation
+      description: Versioned durable cancellation request. Runtime enforces the configured caller command_scope and never invokes a provider.
+      security: [{oauth2: [middleware.request.forward]}]
+      parameters: [{$ref: '#/components/parameters/CommandId'}, {$ref: '#/components/parameters/HeaderTenantId'}, {$ref: '#/components/parameters/CorrelationId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OperationMutationRequest'}}}}
+      responses: &operationMutationResponses
+        '200': {$ref: '#/components/responses/CommandOperation'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {description: Bearer token missing or invalid}
+        '403': {description: Configured command scope or tenant access denied}
+        '404': {description: Operation not found}
+        '409': {description: Version, state, or idempotency conflict}
+        '422': {description: Request entity cannot be processed}
+        '429': {description: Rate limit exceeded}
+        '503': {description: Durable command store unavailable}
+  /v1/operations/{command_id}/reconcile:
+    post:
+      operationId: requestCommandOperationReconciliation
+      description: Requests durable reconciliation work without provider invocation or command resubmission.
+      security: [{oauth2: [middleware.request.forward]}]
+      parameters: [{$ref: '#/components/parameters/CommandId'}, {$ref: '#/components/parameters/HeaderTenantId'}, {$ref: '#/components/parameters/CorrelationId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OperationMutationRequest'}}}}
+      responses: *operationMutationResponses
   /v1/dead-letters/{dead_letter_id}/replay:
     post:
       operationId: requestDeadLetterReplay
@@ -168,6 +235,19 @@ components:
             automation.job.complete: Report successful orchestration
             automation.job.fail: Report failed orchestration
   parameters:
+    CommandId:
+      name: command_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Cursor:
+      name: cursor
+      in: query
+      schema: {type: string, description: Opaque pagination position}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
     TenantId:
       name: tenant_id
       in: path
@@ -194,6 +274,11 @@ components:
       required: true
       schema: {type: string, minLength: 1, maxLength: 128}
   responses:
+    InvalidRequest:
+      description: Canonical validation error
+    OperationPage:
+      description: Bounded tenant operation page
+      content: {application/json: {schema: {$ref: '#/components/schemas/OperationPage'}}}
     CommandOperation:
       description: Current durable command operation
       headers:
@@ -242,6 +327,7 @@ components:
         - state
         - created_at
         - updated_at
+        - resource_version
         - duplicate
       properties:
         command_id: {type: string, format: uuid}
@@ -256,17 +342,42 @@ components:
         state:
           type: string
           enum:
-            - persisted
-            - queued
-            - dispatching
-            - accepted
-            - readback_pending
-            - completed
-            - failed
-            - reconciliation_required
-            - dead_lettered
+            - RECEIVED
+            - QUEUED
+            - SUBMITTED
+            - ACCEPTED
+            - UNKNOWN
+            - COMPLETED
+            - FAILED
+            - RECONCILIATION_REQUIRED
+            - DEAD_LETTERED
+            - CANCELLED
         provider_operation_id: {type: [string, 'null']}
         last_error: {type: [string, 'null']}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+        resource_version: {type: integer, minimum: 1}
+        cancelled_at: {type: [string, 'null'], format: date-time}
+        cancellation_reason: {type: [string, 'null']}
+        reconciliation_requested_at: {type: [string, 'null'], format: date-time}
+        reconciliation_reason: {type: [string, 'null']}
         duplicate: {type: boolean}
+    OperationMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version, reason]
+      properties:
+        expected_version: {type: integer, minimum: 1}
+        reason: {type: string, minLength: 1, maxLength: 500}
+    OperationPage:
+      type: object
+      required: [items, next_cursor]
+      properties: {items: {type: array, items: {$ref: '#/components/schemas/CommandOperation'}}, next_cursor: {type: [string, 'null']}}
+    OperationEventPage:
+      type: object
+      required: [items, next_cursor]
+      properties: {items: {type: array, items: {type: object, required: [event_id, operation_id, new_state, actor_id, reason, safe_metadata, created_at]}}, next_cursor: {type: [string, 'null']}}
+    OperationAttemptPage:
+      type: object
+      required: [items, next_cursor]
+      properties: {items: {type: array, items: {type: object, required: [attempt_id, operation_id, attempt_number, state, started_at]}}, next_cursor: {type: [string, 'null']}}

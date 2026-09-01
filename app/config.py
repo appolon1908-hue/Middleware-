@@ -153,6 +153,8 @@ class Settings:
     odoo_default_hmac_secret: bytes = b""
     odoo_tenant_hmac_secrets: dict[str, bytes] = field(default_factory=dict)
     odoo_timeout_seconds: int = 20
+    release_id: str = "unknown"
+    configuration_checksum: str = "unknown"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -230,6 +232,11 @@ class Settings:
                 "0003_immutable_event_ledger",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
+            release_id=source.get("RELEASE_ID", "unknown").strip(),
+            configuration_checksum=source.get(
+                "CONFIGURATION_CHECKSUM",
+                "unknown",
+            ).strip(),
             issuer=issuer,
             jwks_uri=jwks,
             jwks_timeout_seconds=_int(

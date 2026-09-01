@@ -326,11 +326,21 @@ def test_health_ready_version(test_settings, runtime) -> None:
             "command_store": "not_configured",
         }
         assert "checked_at" in readiness.json()
+        assert client.get("/readiness").json()["components"] == readiness.json()["components"]
+        dependencies = client.get("/dependencies")
+        assert dependencies.status_code == 200
+        assert dependencies.json()["dependencies"] == readiness.json()["components"]
         version = client.get("/version").json()
         assert version["service"] == "middleware-api"
         assert version["environment"] == "test"
         assert version["runtime_profile_id"] == "local-unlocked"
         assert version["schema_head"] == "0003_immutable_event_ledger"
+        assert version["git_sha"] == version["source_sha"]
+        assert version["schema_version"] == version["schema_head"]
+        assert {"release_id", "image_digest", "build_timestamp", "configuration_checksum"} <= set(version)
+        capabilities = client.get("/capabilities")
+        assert capabilities.status_code == 200
+        assert capabilities.json()["capabilities"]["PRODUCTION_DIALING"] is False
 
 
 def test_runtime_safety_readback_is_authenticated_and_schema_valid(

@@ -251,6 +251,7 @@ def create_app(
             "component": "api",
         }
 
+    @app.get("/readiness")
     @app.get("/ready")
     @app.get("/readiness")
     async def ready(request: Request) -> JSONResponse:
@@ -314,14 +315,42 @@ def create_app(
         return {
             "service": "middleware-api",
             "version": resolved.app_version,
+            "release_id": resolved.release_id,
             "environment": resolved.app_env,
             "runtime_profile_id": (
                 resolved.runtime_profile_id or "local-unlocked"
             ),
             "source_sha": resolved.source_sha,
+            "git_sha": resolved.source_sha,
             "image_digest": resolved.image_digest,
             "schema_head": resolved.schema_head,
+            "schema_version": resolved.schema_head,
             "build_time": resolved.build_time,
+            "build_timestamp": resolved.build_time,
+            "configuration_checksum": resolved.configuration_checksum,
+        }
+
+    @app.get("/dependencies")
+    async def dependencies(request: Request) -> JSONResponse:
+        report = await request.app.state.runtime.readiness()
+        return JSONResponse(
+            status_code=200 if report.ready else 503,
+            content={
+                "status": "ready" if report.ready else "not_ready",
+                "dependencies": report.components,
+                "checked_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+    @app.get("/capabilities")
+    async def capabilities() -> dict[str, object]:
+        return {
+            "service": "middleware-api",
+            "environment": resolved.app_env,
+            "capabilities": {
+                **dict(sorted(resolved.external_effects.items())),
+                "PRODUCTION_DIALING": resolved.production_dialing == "ENABLED",
+            },
         }
 
     @app.get("/v1/runtime/safety")

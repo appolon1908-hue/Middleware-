@@ -9,12 +9,14 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
-from .commands import API_OPERATION_STATES, CommandState, OperationMutationRequest
+from .commands import API_OPERATION_STATES, OperationMutationRequest
 from .control_plane_auth import caller_for_authorization
 from .security import RequestValidationError, authorize_tenant
 from .storage import StorageError
 
 router = APIRouter(prefix="/v1/operations", tags=["operations"])
+OperationApiState = Literal["RECEIVED", "QUEUED", "SUBMITTED", "ACCEPTED", "UNKNOWN", "COMPLETED", "FAILED", "RECONCILIATION_REQUIRED", "DEAD_LETTERED", "CANCELLED"]
+_PERSISTED_BY_API_STATE = {value: key for key, value in API_OPERATION_STATES.items()}
 
 
 def _operation_json(operation) -> dict[str, Any]:
@@ -70,12 +72,12 @@ async def _mutation_context(request: Request):
 
 
 @router.get("")
-async def list_operations(request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None, state: CommandState | None = None, command_type: str | None = Query(None, min_length=1, max_length=180)) -> JSONResponse:
+async def list_operations(request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None, state: OperationApiState | None = None, command_type: str | None = Query(None, min_length=1, max_length=180)) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "operations")
     try: position = (datetime.fromisoformat(decoded[0]), UUID(decoded[1])) if decoded else None
     except (ValueError, TypeError) as exc: raise RequestValidationError("cursor is malformed") from exc
-    rows = await service.list_operations(tenant_id, limit=limit + 1, position=position, state=state, command_type=command_type)
+    rows = await service.list_operations(tenant_id, limit=limit + 1, position=position, state=_PERSISTED_BY_API_STATE[state] if state else None, command_type=command_type)
     more = len(rows) > limit
     items = rows[:limit]
     next_cursor = _encode_cursor("operations", [items[-1].created_at.isoformat(), str(items[-1].command_id)]) if more else None
@@ -98,7 +100,13 @@ async def list_events(command_id: UUID, request: Request, limit: int = Query(50,
     rows = await service.list_events(tenant_id, command_id, limit=limit + 1, position=position)
     items, more = rows[:limit], len(rows) > limit
     next_cursor = _encode_cursor("events", [items[-1].created_at.isoformat(), items[-1].event_id]) if more else None
-    return JSONResponse(content={"items": [item.model_dump(mode="json") for item in items], "next_cursor": next_cursor})
+    payload = []
+    for item in items:
+        row = item.model_dump(mode="json")
+        row["previous_state"] = API_OPERATION_STATES.get(item.previous_state, item.previous_state.upper() if item.previous_state else None)
+        row["new_state"] = API_OPERATION_STATES.get(item.new_state, item.new_state.upper())
+        payload.append(row)
+    return JSONResponse(content={"items": payload, "next_cursor": next_cursor})
 
 
 @router.get("/{command_id}/attempts")
@@ -110,7 +118,12 @@ async def list_attempts(command_id: UUID, request: Request, limit: int = Query(5
     rows = await service.list_attempts(tenant_id, command_id, limit=limit + 1, position=position)
     items, more = rows[:limit], len(rows) > limit
     next_cursor = _encode_cursor("attempts", [items[-1].attempt_number, items[-1].attempt_id]) if more else None
-    return JSONResponse(content={"items": [item.model_dump(mode="json") for item in items], "next_cursor": next_cursor})
+    payload = []
+    for item in items:
+        row = item.model_dump(mode="json")
+        row["state"] = API_OPERATION_STATES.get(item.state, item.state.upper())
+        payload.append(row)
+    return JSONResponse(content={"items": payload, "next_cursor": next_cursor})
 
 
 @router.post("/{command_id}/cancel")

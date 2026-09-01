@@ -42,12 +42,12 @@ def test_operation_reads_are_tenant_scoped_paginated_and_redacted(test_settings)
         assert client.get("/v1/operations?cursor=bad", headers=_headers()).status_code == 400
         assert client.get("/v1/operations?limit=101", headers=_headers()).status_code == 400
         assert client.get("/v1/operations?state=fictional", headers=_headers()).status_code == 400
-        filtered = client.get("/v1/operations?state=dispatching&command_type=crm.contact.create.v1", headers=_headers())
+        filtered = client.get("/v1/operations?state=SUBMITTED&command_type=crm.contact.create.v1", headers=_headers())
         assert [row["command_id"] for row in filtered.json()["items"]] == [str(commands[0].command_id)]
         events = client.get(f"/v1/operations/{commands[0].command_id}/events?limit=1", headers=_headers())
         assert events.json()["next_cursor"]
         events2 = client.get(f"/v1/operations/{commands[0].command_id}/events", params={"cursor": events.json()["next_cursor"]}, headers=_headers())
-        assert events2.json()["items"][0]["new_state"] == "queued"
+        assert events2.json()["items"][0]["new_state"] == "QUEUED"
         all_events = client.get(f"/v1/operations/{commands[0].command_id}/events", headers=_headers()).json()["items"]
         assert all_events[-1]["safe_metadata"]["access_token"] == "[REDACTED]"
         attempts = client.get(f"/v1/operations/{commands[0].command_id}/attempts", headers=_headers()).json()["items"]

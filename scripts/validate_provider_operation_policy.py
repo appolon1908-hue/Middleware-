@@ -25,8 +25,8 @@ EXPECTED_OPERATIONS = {
     "social.publish.request": ("codestra-social", "social.publish.request", "/api/v1/control/social/publications", True, "transactional_outbox", "social"),
 }
 EXPECTED_ADAPTERS = {
-    "advertising": ("marketing-provider-adapter", "marketing.provider.dispatch", ()),
-    "ai": ("ai-provider-adapter", "ai.provider.dispatch", ()),
+    "advertising": ("marketing-provider-adapter", "marketing.provider.dispatch", ("marketing.provider.status.read",)),
+    "ai": ("ai-provider-adapter", "ai.provider.dispatch", ("ai.provider.status.read",)),
     "email": ("klyrow-gateway", "email.send", ("email.status.read",)),
     "sms": ("telnexa-gateway", "sms.send", ("sms.status.read",)),
     "social": ("postly-adapter", "social.publish", ("social.status.read",)),

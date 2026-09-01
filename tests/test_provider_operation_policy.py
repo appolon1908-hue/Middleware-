@@ -124,6 +124,26 @@ class ProviderOperationPolicyTests(unittest.TestCase):
         grant["scopes"].remove("social.status.read")
         self.assert_rejected(identity=identity)
 
+    def test_missing_ai_readback_scope_is_rejected(self) -> None:
+        identity = copy.deepcopy(self.identity)
+        grant = next(
+            item for item in identity["grants"]
+            if item["callerClientId"] == "middleware-worker"
+            and item["targetClientId"] == "ai-provider-adapter"
+        )
+        grant["scopes"].remove("ai.provider.status.read")
+        self.assert_rejected(identity=identity)
+
+    def test_missing_marketing_readback_scope_is_rejected(self) -> None:
+        identity = copy.deepcopy(self.identity)
+        grant = next(
+            item for item in identity["grants"]
+            if item["callerClientId"] == "middleware-worker"
+            and item["targetClientId"] == "marketing-provider-adapter"
+        )
+        grant["scopes"].remove("marketing.provider.status.read")
+        self.assert_rejected(identity=identity)
+
     def test_non_effect_operation_durability_drift_is_rejected(self) -> None:
         policy = copy.deepcopy(self.policy)
         operation = next(

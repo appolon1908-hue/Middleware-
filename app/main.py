@@ -250,6 +250,7 @@ def create_app(
         }
 
     @app.get("/ready")
+    @app.get("/readiness")
     async def ready(request: Request) -> JSONResponse:
         report = await request.app.state.runtime.readiness()
         request.app.state.observability.record_readiness(report.components)
@@ -266,6 +267,27 @@ def create_app(
                 "checked_at": datetime.now(UTC).isoformat(),
                 "components": report.components,
             },
+        )
+
+    @app.get("/dependencies")
+    async def dependencies(request: Request) -> JSONResponse:
+        report = await request.app.state.runtime.readiness()
+        return JSONResponse(
+            status_code=200 if report.ready else 503,
+            content={
+                "service": "middleware-api",
+                "environment": resolved.app_env,
+                "components": report.components,
+            },
+        )
+
+    @app.get("/capabilities")
+    async def capabilities(request: Request) -> JSONResponse:
+        safety = runtime_safety_readback(request.app.state.runtime.settings)
+        return JSONResponse(
+            status_code=200,
+            content={"service": "middleware-api", "environment": resolved.app_env,
+                     "capabilities": safety["external_effects"]},
         )
 
     @app.get("/metrics")

@@ -37,6 +37,7 @@ from .observability import (
     safe_traceparent,
 )
 from .operations_dashboard import router as operations_dashboard_router
+from .operations import router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import runtime_safety_readback
 from .security import SecurityError
@@ -141,6 +142,7 @@ def create_app(
     app.state.observability = telemetry
     app.include_router(n8n_control_plane_router)
     app.include_router(operations_dashboard_router)
+    app.include_router(operations_router)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):
@@ -666,29 +668,6 @@ def create_app(
                 "Location": f"/v1/operations/{operation.command_id}",
                 "X-Correlation-ID": operation.correlation_id,
             },
-        )
-
-    @app.get("/v1/operations/{command_id}")
-    async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
-        active = request.app.state.runtime
-        if active.commands is None:
-            raise StorageError("command ledger is unavailable")
-        authorization = request.headers.get("Authorization", "")
-        caller = caller_for_authorization(authorization)
-        claims = await active.tokens.verify(
-            authorization,
-            expected_client_id=caller.client_id,
-            required_scope=caller.status_scope,
-        )
-        tenant_id = request.headers.get("X-Tenant-ID", "")
-        from .security import authorize_tenant
-
-        authorize_tenant(claims, tenant_id)
-        operation = await active.commands.get(tenant_id, command_id)
-        return JSONResponse(
-            status_code=200,
-            content=operation.model_dump(mode="json"),
-            headers={"X-Correlation-ID": operation.correlation_id},
         )
 
     def register(route: WebhookRoute) -> None:

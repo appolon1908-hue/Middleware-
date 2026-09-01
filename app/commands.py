@@ -29,6 +29,28 @@ CommandState = Literal[
     "reconciliation_required",
     "dead_lettered",
 ]
+
+
+class OperationEvent(BaseModel):
+    event_id: int
+    operation_id: UUID
+    previous_state: str | None
+    new_state: str
+    actor_id: str
+    reason: str
+    safe_metadata: dict[str, Any]
+    created_at: datetime
+
+
+class OperationAttempt(BaseModel):
+    attempt_id: int
+    operation_id: UUID
+    attempt_number: int
+    state: str
+    provider_operation_id: str | None = None
+    safe_error_code: str | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
 ALLOWED_COMMAND_TRANSITIONS: dict[str, set[str]] = {
     "persisted": {"queued"},
     "queued": {"dispatching", "dead_lettered"},
@@ -237,12 +259,32 @@ def command_digest(command: CommandEnvelope) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+_SENSITIVE_METADATA_PARTS = ("authorization", "token", "password", "secret", "credential", "private_key", "api_key", "access_token", "refresh_token")
+
+
+def redact_metadata(value: object) -> dict[str, Any]:
+    if isinstance(value, str):
+        try: value = json.loads(value)
+        except ValueError: return {}
+    if not isinstance(value, Mapping): return {}
+    def clean(item: object) -> object:
+        if isinstance(item, Mapping):
+            return {str(key): "[REDACTED]" if any(part in str(key).lower() for part in _SENSITIVE_METADATA_PARTS) else clean(child) for key, child in item.items()}
+        if isinstance(item, list): return [clean(child) for child in item]
+        return item
+    return dict(clean(value))
+
+
 class CommandStore(Protocol):
     async def submit(self, command: CommandEnvelope) -> CommandOperation:
         ...
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
         ...
+
+    async def list_operations(self, tenant_id: str, *, limit: int, position: tuple[datetime, UUID] | None = None, state: str | None = None, command_type: str | None = None) -> list[CommandOperation]: ...
+    async def list_events(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[datetime, int] | None = None) -> list[OperationEvent]: ...
+    async def list_attempts(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[int, int] | None = None) -> list[OperationAttempt]: ...
 
     async def ready(self) -> bool:
         ...
@@ -268,6 +310,8 @@ class MemoryCommandStore:
     def __init__(self) -> None:
         self._commands: dict[tuple[str, UUID], tuple[str, CommandOperation]] = {}
         self._idempotency: dict[tuple[str, str], tuple[str, CommandOperation]] = {}
+        self._events: dict[tuple[str, UUID], list[OperationEvent]] = {}
+        self._attempts: dict[tuple[str, UUID], list[OperationAttempt]] = {}
 
     async def submit(self, command: CommandEnvelope) -> CommandOperation:
         digest = command_digest(command)
@@ -301,6 +345,8 @@ class MemoryCommandStore:
         entry = (digest, operation)
         self._commands[command_key] = entry
         self._idempotency[idempotency_key] = entry
+        self._events[command_key] = [OperationEvent(event_id=1, operation_id=command.command_id, previous_state=None, new_state="persisted", actor_id=command.requested_by, reason="validated command and persisted delivery intent", safe_metadata={}, created_at=now)]
+        self._attempts[command_key] = []
         return operation
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
@@ -308,6 +354,26 @@ class MemoryCommandStore:
         if entry is None:
             raise CommandNotFound("command operation was not found")
         return entry[1]
+
+    async def list_operations(self, tenant_id: str, *, limit: int, position: tuple[datetime, UUID] | None = None, state: str | None = None, command_type: str | None = None) -> list[CommandOperation]:
+        rows = [entry[1] for (row_tenant, _), entry in self._commands.items() if row_tenant == tenant_id]
+        if state is not None: rows = [row for row in rows if row.state == state]
+        if command_type is not None: rows = [row for row in rows if row.command_type == command_type]
+        rows.sort(key=lambda row: (row.created_at, row.command_id.int), reverse=True)
+        if position is not None: rows = [row for row in rows if (row.created_at, row.command_id.int) < (position[0], position[1].int)]
+        return rows[:limit]
+
+    async def list_events(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[datetime, int] | None = None) -> list[OperationEvent]:
+        await self.get(tenant_id, command_id)
+        rows = list(self._events.get((tenant_id, command_id), []))
+        if position is not None: rows = [row for row in rows if (row.created_at, row.event_id) > position]
+        return [row.model_copy(update={"safe_metadata": redact_metadata(row.safe_metadata)}) for row in rows[:limit]]
+
+    async def list_attempts(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[int, int] | None = None) -> list[OperationAttempt]:
+        await self.get(tenant_id, command_id)
+        rows = list(self._attempts.get((tenant_id, command_id), []))
+        if position is not None: rows = [row for row in rows if (row.attempt_number, row.attempt_id) > position]
+        return rows[:limit]
 
     async def ready(self) -> bool:
         return True
@@ -357,6 +423,13 @@ class MemoryCommandStore:
         )
         self._commands[key] = (digest, updated)
         self._idempotency[(tenant_id, updated.idempotency_key)] = (digest, updated)
+        events = self._events[key]
+        events.append(OperationEvent(event_id=len(events) + 1, operation_id=command_id, previous_state=operation.state, new_state=new_state, actor_id=actor_id, reason=reason[:2048], safe_metadata={"provider_operation_id": provider_operation_id}, created_at=now))
+        attempts = self._attempts[key]
+        if new_state == "dispatching":
+            attempts.append(OperationAttempt(attempt_id=len(attempts) + 1, operation_id=command_id, attempt_number=len(attempts) + 1, state=new_state, provider_operation_id=provider_operation_id, started_at=now))
+        elif attempts:
+            attempts[-1] = attempts[-1].model_copy(update={"state": new_state, "provider_operation_id": provider_operation_id or attempts[-1].provider_operation_id, "safe_error_code": "operation_failed" if new_state in {"failed", "reconciliation_required"} else None, "finished_at": now if new_state in {"completed", "failed", "reconciliation_required"} else None})
         return updated
 
     async def close(self) -> None:
@@ -593,6 +666,43 @@ class PostgresCommandStore:
             readback_evidence=persisted["result_payload"],
             readback_evidence_sha256=persisted["readback_evidence_sha256"],
         )
+
+    async def list_operations(self, tenant_id: str, *, limit: int, position: tuple[datetime, UUID] | None = None, state: str | None = None, command_type: str | None = None) -> list[CommandOperation]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT * FROM middleware_commands WHERE tenant_id=$1
+                   AND ($2::text IS NULL OR state=$2)
+                   AND ($3::text IS NULL OR command_type=$3)
+                   AND ($4::timestamptz IS NULL OR (created_at, command_id) < ($4, $5))
+                   ORDER BY created_at DESC, command_id DESC LIMIT $6""",
+                tenant_id, state, command_type, position[0] if position else None,
+                str(position[1]) if position else None, limit,
+            )
+        return [self._operation(row) for row in rows]
+
+    async def list_events(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[datetime, int] | None = None) -> list[OperationEvent]:
+        await self.get(tenant_id, command_id)
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, command_id, previous_state, new_state, actor_id, reason, metadata, created_at
+                   FROM middleware_command_audit WHERE tenant_id=$1 AND command_id=$2
+                     AND ($3::timestamptz IS NULL OR (created_at, id) > ($3, $4))
+                   ORDER BY created_at ASC, id ASC LIMIT $5""",
+                tenant_id, str(command_id), position[0] if position else None, position[1] if position else None, limit,
+            )
+        return [OperationEvent(event_id=row["id"], operation_id=row["command_id"], previous_state=row["previous_state"], new_state=row["new_state"], actor_id=row["actor_id"], reason=row["reason"], safe_metadata=redact_metadata(row["metadata"]), created_at=row["created_at"]) for row in rows]
+
+    async def list_attempts(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[int, int] | None = None) -> list[OperationAttempt]:
+        await self.get(tenant_id, command_id)
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, command_id, attempt_number, state, provider_operation_id, error_code, started_at, finished_at
+                   FROM middleware_command_attempts WHERE tenant_id=$1 AND command_id=$2
+                     AND ($3::integer IS NULL OR (attempt_number, id) > ($3, $4))
+                   ORDER BY attempt_number ASC, id ASC LIMIT $5""",
+                tenant_id, str(command_id), position[0] if position else None, position[1] if position else None, limit,
+            )
+        return [OperationAttempt(attempt_id=row["id"], operation_id=row["command_id"], attempt_number=row["attempt_number"], state=row["state"], provider_operation_id=row["provider_operation_id"], safe_error_code=row["error_code"], started_at=row["started_at"], finished_at=row["finished_at"]) for row in rows]
 
     async def transition(
         self,
@@ -867,3 +977,7 @@ class CommandService:
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
         return await self.store.get(tenant_id, command_id)
+
+    async def list_operations(self, *args: Any, **kwargs: Any) -> list[CommandOperation]: return await self.store.list_operations(*args, **kwargs)
+    async def list_events(self, *args: Any, **kwargs: Any) -> list[OperationEvent]: return await self.store.list_events(*args, **kwargs)
+    async def list_attempts(self, *args: Any, **kwargs: Any) -> list[OperationAttempt]: return await self.store.list_attempts(*args, **kwargs)

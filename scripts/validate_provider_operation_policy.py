@@ -15,6 +15,15 @@ SCOPE = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$")
 ROUTE = re.compile(r"^/api/v1/[a-z0-9][a-z0-9/_-]*$")
 EXPECTED_CALLERS = {"codestra-ai", "codestra-communication", "codestra-marketing", "codestra-social", "n8n-automation", "odoo-integration"}
 EXPECTED_PROVIDER_FLAGS = {"advertising": "LIVE_ADVERTISING_ENABLED", "ai": "EXTERNAL_MODEL_CALLS_ENABLED", "email": "LIVE_EMAIL_DELIVERY", "sms": "LIVE_SMS_DELIVERY", "social": "SOCIAL_PUBLISHING_ENABLED"}
+EXPECTED_OPERATION_PROVIDER_CLASSES = {
+    "ai.inference.request": "ai",
+    "communication.email.request": "email",
+    "communication.sms.request": "sms",
+    "marketing.campaign.request": "advertising",
+    "n8n.automation.request": "none",
+    "odoo.event.publish": "none",
+    "social.publish.request": "social",
+}
 
 
 def fail(message: str) -> None:
@@ -27,7 +36,7 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
     if value.get("architecture") != ["application_or_n8n", "kong", "middleware_api", "durable_outbox", "approved_provider_adapter"]:
         fail("canonical architecture changed")
     authority = value.get("authority", {})
-    for key, expected in {"audience": "middleware-api", "grantType": "client_credentials", "fullScopeAllowed": False, "wildcardScopesAllowed": False, "directProviderCallsAllowed": False, "sharedProviderKeysAllowed": False}.items():
+    for key, expected in {"issuer": "https://auth.codestra.co/realms/codestra", "audience": "middleware-api", "grantType": "client_credentials", "fullScopeAllowed": False, "wildcardScopesAllowed": False, "directProviderCallsAllowed": False, "sharedProviderKeysAllowed": False}.items():
         if authority.get(key) != expected:
             fail(f"authority.{key} must be {expected!r}")
     operations = value.get("operations")
@@ -44,6 +53,8 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
             fail(f"route invalid or duplicate: {route}")
         if not SCOPE.fullmatch(operation["scope"]):
             fail(f"scope invalid: {operation['scope']}")
+        if operation["providerClass"] != EXPECTED_OPERATION_PROVIDER_CLASSES.get(identifier):
+            fail(f"operation provider class mismatch: {identifier}")
         identifiers.add(identifier); routes.add(route); callers.add(operation["caller"])
         if operation["externalEffect"]:
             if operation["durability"] != "transactional_outbox":
@@ -54,6 +65,8 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
             fail(f"non-effectful operation names provider: {identifier}")
     if callers != EXPECTED_CALLERS:
         fail("caller coverage mismatch")
+    if identifiers != set(EXPECTED_OPERATION_PROVIDER_CLASSES):
+        fail("operation coverage mismatch")
     services = {
         service.get("clientId"): service
         for service in identity.get("services", [])

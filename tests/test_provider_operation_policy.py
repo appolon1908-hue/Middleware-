@@ -29,10 +29,10 @@ class ProviderOperationPolicyTests(unittest.TestCase):
             for name, value in [line.split("=", 1)]
         }
 
-    def assert_rejected(self, identity=None, safety=None) -> None:
+    def assert_rejected(self, policy=None, identity=None, safety=None) -> None:
         with self.assertRaises(SystemExit):
             VALIDATOR.validate(
-                copy.deepcopy(self.policy),
+                copy.deepcopy(policy if policy is not None else self.policy),
                 copy.deepcopy(identity if identity is not None else self.identity),
                 copy.deepcopy(safety if safety is not None else self.safety),
             )
@@ -73,6 +73,20 @@ class ProviderOperationPolicyTests(unittest.TestCase):
         self.assert_rejected(safety=safety)
         safety.pop("LIVE_EMAIL_DELIVERY")
         self.assert_rejected(safety=safety)
+
+    def test_noncanonical_issuer_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        policy["authority"]["issuer"] = "https://auth.example.invalid/realms/codestra"
+        self.assert_rejected(policy=policy)
+
+    def test_operation_provider_class_drift_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        operation = next(
+            item for item in policy["operations"]
+            if item["id"] == "communication.sms.request"
+        )
+        operation["providerClass"] = "email"
+        self.assert_rejected(policy=policy)
 
 
 if __name__ == "__main__":

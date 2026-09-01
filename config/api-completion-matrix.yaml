@@ -1,5 +1,5 @@
 schema_version: "1.0"
-source_sha: "42add9b7523546f91f318cb336293fbcdc9b26af"
+inventory_base_sha: "42add9b7523546f91f318cb336293fbcdc9b26af"
 operations:
   - {domain: platform, method: GET, path: /health, canonical_operation_id: platform_health, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
   - {domain: platform, method: GET, path: /readiness, canonical_operation_id: platform_readiness, implementation_file: app/main.py, runtime_state: IMPLEMENTED}

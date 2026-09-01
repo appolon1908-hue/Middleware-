@@ -10,7 +10,7 @@ from typing import Any, Literal, Protocol
 from uuid import UUID
 
 import asyncpg
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 from .canonical_contracts import validate_contract
 from .provider_canary import provider_evidence_digest
@@ -28,7 +28,14 @@ CommandState = Literal[
     "failed",
     "reconciliation_required",
     "dead_lettered",
+    "cancelled",
 ]
+API_OPERATION_STATES = {
+    "persisted": "RECEIVED", "queued": "QUEUED", "dispatching": "SUBMITTED",
+    "accepted": "ACCEPTED", "readback_pending": "UNKNOWN", "completed": "COMPLETED",
+    "failed": "FAILED", "reconciliation_required": "RECONCILIATION_REQUIRED",
+    "dead_lettered": "DEAD_LETTERED", "cancelled": "CANCELLED",
+}
 
 
 class OperationEvent(BaseModel):
@@ -52,8 +59,8 @@ class OperationAttempt(BaseModel):
     started_at: datetime
     finished_at: datetime | None = None
 ALLOWED_COMMAND_TRANSITIONS: dict[str, set[str]] = {
-    "persisted": {"queued"},
-    "queued": {"dispatching", "dead_lettered"},
+    "persisted": {"queued", "cancelled"},
+    "queued": {"dispatching", "dead_lettered", "cancelled"},
     "dispatching": {"accepted", "failed", "reconciliation_required"},
     "accepted": {"readback_pending", "reconciliation_required"},
     "readback_pending": {"completed", "failed", "reconciliation_required"},
@@ -61,6 +68,7 @@ ALLOWED_COMMAND_TRANSITIONS: dict[str, set[str]] = {
     "failed": {"queued", "dead_lettered"},
     "completed": set(),
     "dead_lettered": set(),
+    "cancelled": set(),
 }
 
 
@@ -143,7 +151,22 @@ class CommandOperation(BaseModel):
     last_error: str | None = None
     created_at: datetime
     updated_at: datetime
+    resource_version: int = 1
+    cancelled_at: datetime | None = None
+    cancellation_reason: str | None = None
+    reconciliation_requested_at: datetime | None = None
+    reconciliation_reason: str | None = None
     duplicate: bool = False
+
+    @field_serializer("state")
+    def serialize_state(self, value: CommandState) -> str:
+        return API_OPERATION_STATES[value]
+
+
+class OperationMutationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=500, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.: -]*$")
 
 
 def decode_readback_evidence(value: object) -> dict[str, Any] | None:
@@ -285,6 +308,7 @@ class CommandStore(Protocol):
     async def list_operations(self, tenant_id: str, *, limit: int, position: tuple[datetime, UUID] | None = None, state: str | None = None, command_type: str | None = None) -> list[CommandOperation]: ...
     async def list_events(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[datetime, int] | None = None) -> list[OperationEvent]: ...
     async def list_attempts(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[int, int] | None = None) -> list[OperationAttempt]: ...
+    async def mutate_operation(self, tenant_id: str, command_id: UUID, *, action: Literal["cancel", "reconcile"], actor_id: str, idempotency_key: str, expected_version: int, reason: str) -> CommandOperation: ...
 
     async def ready(self) -> bool:
         ...
@@ -312,6 +336,7 @@ class MemoryCommandStore:
         self._idempotency: dict[tuple[str, str], tuple[str, CommandOperation]] = {}
         self._events: dict[tuple[str, UUID], list[OperationEvent]] = {}
         self._attempts: dict[tuple[str, UUID], list[OperationAttempt]] = {}
+        self._mutations: dict[tuple[str, UUID, str, str, str], tuple[str, CommandOperation]] = {}
 
     async def submit(self, command: CommandEnvelope) -> CommandOperation:
         digest = command_digest(command)
@@ -374,6 +399,33 @@ class MemoryCommandStore:
         rows = list(self._attempts.get((tenant_id, command_id), []))
         if position is not None: rows = [row for row in rows if (row.attempt_number, row.attempt_id) > position]
         return rows[:limit]
+
+    async def mutate_operation(self, tenant_id: str, command_id: UUID, *, action: Literal["cancel", "reconcile"], actor_id: str, idempotency_key: str, expected_version: int, reason: str) -> CommandOperation:
+        key = (tenant_id, command_id)
+        entry = self._commands.get(key)
+        if entry is None: raise CommandNotFound("command operation was not found")
+        request_digest = hashlib.sha256(json.dumps({"expected_version": expected_version, "reason": reason}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        mutation_key = (tenant_id, command_id, action, actor_id, idempotency_key)
+        replay = self._mutations.get(mutation_key)
+        if replay:
+            if replay[0] != request_digest: raise CommandConflict("idempotency key was reused with different mutation content")
+            return replay[1].model_copy(update={"duplicate": True})
+        digest, operation = entry
+        if operation.resource_version != expected_version: raise CommandConflict("expected_version is stale")
+        if action == "cancel":
+            if operation.state in {"completed", "failed", "reconciliation_required", "dead_lettered"}: raise CommandConflict("operation is not cancellable")
+            state = "cancelled" if operation.state in {"persisted", "queued"} else "reconciliation_required"
+            updates = {"state": state, "cancelled_at": datetime.now().astimezone() if state == "cancelled" else None, "cancellation_reason": reason}
+        else:
+            if operation.state not in {"dispatching", "accepted", "readback_pending", "reconciliation_required"}: raise CommandConflict("operation is not reconcilable")
+            updates = {"state": "reconciliation_required", "reconciliation_requested_at": datetime.now().astimezone(), "reconciliation_reason": reason}
+        now = datetime.now().astimezone()
+        updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
+        self._commands[key] = (digest, updated)
+        events = self._events[key]
+        events.append(OperationEvent(event_id=len(events) + 1, operation_id=command_id, previous_state=operation.state, new_state=updated.state, actor_id=actor_id, reason=reason, safe_metadata={"action": action, "resource_version": updated.resource_version}, created_at=now))
+        self._mutations[mutation_key] = (request_digest, updated)
+        return updated
 
     async def ready(self) -> bool:
         return True
@@ -459,6 +511,8 @@ class PostgresCommandStore:
             "accepted_at",
             "completed_at",
             "failed_at",
+            "resource_version", "cancelled_at", "cancellation_reason",
+            "reconciliation_requested_at", "reconciliation_reason",
         },
         "middleware_command_attempts": {
             "id",
@@ -484,6 +538,7 @@ class PostgresCommandStore:
             "metadata",
             "created_at",
         },
+        "middleware_operation_mutations": {"id", "tenant_id", "command_id", "action", "actor_id", "idempotency_key", "request_sha256", "response_status", "response_payload", "created_at"},
     }
     REQUIRED_KEYS = {
         ("middleware_commands", "PRIMARY KEY", ("tenant_id", "command_id")),
@@ -499,8 +554,10 @@ class PostgresCommandStore:
             ("tenant_id", "command_id", "attempt_number"),
         ),
         ("middleware_command_audit", "PRIMARY KEY", ("id",)),
+        ("middleware_operation_mutations", "PRIMARY KEY", ("id",)),
+        ("middleware_operation_mutations", "UNIQUE", ("tenant_id", "command_id", "action", "actor_id", "idempotency_key")),
     }
-    REQUIRED_TRIGGERS = {"middleware_command_audit_immutable"}
+    REQUIRED_TRIGGERS = {"middleware_command_audit_immutable", "middleware_operation_mutations_immutable"}
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self.pool = pool
@@ -551,6 +608,11 @@ class PostgresCommandStore:
             last_error=row["last_error"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            resource_version=row["resource_version"],
+            cancelled_at=row["cancelled_at"],
+            cancellation_reason=row["cancellation_reason"],
+            reconciliation_requested_at=row["reconciliation_requested_at"],
+            reconciliation_reason=row["reconciliation_reason"],
             duplicate=duplicate,
         )
 
@@ -597,11 +659,12 @@ class PostgresCommandStore:
                     await conn.execute(
                         """
                         INSERT INTO middleware_outbox (
-                            tenant_id, destination, event_type, payload,
+                            tenant_id, command_id, destination, event_type, payload,
                             idempotency_key
-                        ) VALUES ($1,$2,$3,$4::jsonb,$5)
+                        ) VALUES ($1,$2,$3,$4,$5::jsonb,$6)
                         """,
                         command.tenant_id,
+                        str(command.command_id),
                         TEMPORAL_COMMAND_DESTINATION,
                         command.command_type,
                         json.dumps(payload, separators=(",", ":"), sort_keys=True),
@@ -703,6 +766,52 @@ class PostgresCommandStore:
                 tenant_id, str(command_id), position[0] if position else None, position[1] if position else None, limit,
             )
         return [OperationAttempt(attempt_id=row["id"], operation_id=row["command_id"], attempt_number=row["attempt_number"], state=row["state"], provider_operation_id=row["provider_operation_id"], safe_error_code=row["error_code"], started_at=row["started_at"], finished_at=row["finished_at"]) for row in rows]
+
+    async def mutate_operation(self, tenant_id: str, command_id: UUID, *, action: Literal["cancel", "reconcile"], actor_id: str, idempotency_key: str, expected_version: int, reason: str) -> CommandOperation:
+        request_digest = hashlib.sha256(json.dumps({"expected_version": expected_version, "reason": reason}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                current = await conn.fetchrow("SELECT * FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2 FOR UPDATE", tenant_id, str(command_id))
+                if current is None: raise CommandNotFound("command operation was not found")
+                replay = await conn.fetchrow("""SELECT request_sha256, response_payload FROM middleware_operation_mutations
+                    WHERE tenant_id=$1 AND command_id=$2 AND action=$3 AND actor_id=$4 AND idempotency_key=$5""", tenant_id, str(command_id), action, actor_id, idempotency_key)
+                if replay:
+                    if replay["request_sha256"] != request_digest: raise CommandConflict("idempotency key was reused with different mutation content")
+                    payload = json.loads(replay["response_payload"]) if isinstance(replay["response_payload"], str) else dict(replay["response_payload"])
+                    return CommandOperation.model_validate(payload).model_copy(update={"duplicate": True})
+                if current["resource_version"] != expected_version: raise CommandConflict("expected_version is stale")
+                previous = current["state"]
+                new_state = previous
+                if action == "cancel":
+                    if previous in {"completed", "failed", "reconciliation_required", "dead_lettered", "cancelled"}: raise CommandConflict("operation is not cancellable")
+                    if previous in {"persisted", "queued"}:
+                        active_lease = await conn.fetchval("""SELECT EXISTS(SELECT 1 FROM middleware_outbox WHERE tenant_id=$1 AND command_id=$2 AND lease_owner IS NOT NULL AND lease_until > now() AND completed_at IS NULL)""", tenant_id, str(command_id))
+                        new_state = "reconciliation_required" if active_lease else "cancelled"
+                    else: new_state = "reconciliation_required"
+                    row = await conn.fetchrow("""UPDATE middleware_commands SET state=$3, resource_version=resource_version+1,
+                        cancelled_at=CASE WHEN $3='cancelled' THEN now() ELSE cancelled_at END,
+                        cancellation_reason=$4, updated_at=now() WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id), new_state, reason)
+                    if new_state == "cancelled":
+                        await conn.execute("""UPDATE middleware_outbox SET cancelled_at=now(), lease_owner=NULL, lease_until=NULL
+                            WHERE tenant_id=$1 AND command_id=$2 AND completed_at IS NULL AND lease_owner IS NULL""", tenant_id, str(command_id))
+                else:
+                    if previous not in {"dispatching", "accepted", "readback_pending", "reconciliation_required"}: raise CommandConflict("operation is not reconcilable")
+                    new_state = "reconciliation_required"
+                    row = await conn.fetchrow("""UPDATE middleware_commands SET state=$3, resource_version=resource_version+1,
+                        reconciliation_requested_at=now(), reconciliation_reason=$4, updated_at=now()
+                        WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id), new_state, reason)
+                    work_key = "operation-reconcile:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
+                    await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
+                        VALUES ($1,$2,$3,'operation.reconcile.v1',$4::jsonb,$5) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, json.dumps({"command_id": str(command_id), "action": "reconcile", "reason": reason}), work_key)
+                assert row is not None
+                await conn.execute("""INSERT INTO middleware_command_audit (tenant_id, command_id, previous_state, new_state, actor_id, reason, metadata)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)""", tenant_id, str(command_id), previous, new_state, actor_id, reason, json.dumps({"action": action, "resource_version": row["resource_version"]}))
+                operation = self._operation(row)
+                payload = operation.model_dump(mode="json")
+                payload["state"] = operation.state
+                await conn.execute("""INSERT INTO middleware_operation_mutations (tenant_id, command_id, action, actor_id, idempotency_key, request_sha256, response_status, response_payload)
+                    VALUES ($1,$2,$3,$4,$5,$6,200,$7::jsonb)""", tenant_id, str(command_id), action, actor_id, idempotency_key, request_digest, json.dumps(payload, separators=(",", ":"), sort_keys=True))
+                return operation
 
     async def transition(
         self,
@@ -981,3 +1090,4 @@ class CommandService:
     async def list_operations(self, *args: Any, **kwargs: Any) -> list[CommandOperation]: return await self.store.list_operations(*args, **kwargs)
     async def list_events(self, *args: Any, **kwargs: Any) -> list[OperationEvent]: return await self.store.list_events(*args, **kwargs)
     async def list_attempts(self, *args: Any, **kwargs: Any) -> list[OperationAttempt]: return await self.store.list_attempts(*args, **kwargs)
+    async def mutate_operation(self, *args: Any, **kwargs: Any) -> CommandOperation: return await self.store.mutate_operation(*args, **kwargs)

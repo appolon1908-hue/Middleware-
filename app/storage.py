@@ -11,7 +11,7 @@ import asyncpg
 from .models import EventEnvelope, IngressResult
 
 
-RUNTIME_SCHEMA_VERSION = 3
+RUNTIME_SCHEMA_VERSION = 4
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
@@ -258,6 +258,8 @@ class PostgresInboxStore:
             "dead_lettered_at",
             "reconciliation_required_at",
             "last_error",
+            "command_id",
+            "cancelled_at",
         },
         "middleware_reconciliation_audit": {
             "id",
@@ -286,6 +288,7 @@ class PostgresInboxStore:
             "payload",
             "recorded_at",
         },
+        "middleware_operation_mutations": {"id", "tenant_id", "command_id", "action", "actor_id", "idempotency_key", "request_sha256", "response_status", "response_payload", "created_at"},
     }
     REQUIRED_UDT_TYPES = {
         ("middleware_schema_migrations", "version"): "int4",
@@ -319,6 +322,8 @@ class PostgresInboxStore:
         ("middleware_outbox", "dead_lettered_at"): "timestamptz",
         ("middleware_outbox", "reconciliation_required_at"): "timestamptz",
         ("middleware_outbox", "last_error"): "text",
+        ("middleware_outbox", "command_id"): "text",
+        ("middleware_outbox", "cancelled_at"): "timestamptz",
         ("middleware_reconciliation_audit", "id"): "int8",
         ("middleware_reconciliation_audit", "outbox_id"): "int8",
         ("middleware_reconciliation_audit", "tenant_id"): "text",
@@ -342,6 +347,16 @@ class PostgresInboxStore:
         ("middleware_event_ledger", "entry_hash"): "bpchar",
         ("middleware_event_ledger", "payload"): "jsonb",
         ("middleware_event_ledger", "recorded_at"): "timestamptz",
+        ("middleware_operation_mutations", "id"): "int8",
+        ("middleware_operation_mutations", "tenant_id"): "text",
+        ("middleware_operation_mutations", "command_id"): "text",
+        ("middleware_operation_mutations", "action"): "text",
+        ("middleware_operation_mutations", "actor_id"): "text",
+        ("middleware_operation_mutations", "idempotency_key"): "text",
+        ("middleware_operation_mutations", "request_sha256"): "bpchar",
+        ("middleware_operation_mutations", "response_status"): "int4",
+        ("middleware_operation_mutations", "response_payload"): "jsonb",
+        ("middleware_operation_mutations", "created_at"): "timestamptz",
     }
     REQUIRED_KEYS = {
         ("middleware_schema_migrations", "PRIMARY KEY", ("version",)),
@@ -366,11 +381,14 @@ class PostgresInboxStore:
             "UNIQUE",
             ("tenant_id", "idempotency_key"),
         ),
+        ("middleware_operation_mutations", "PRIMARY KEY", ("id",)),
+        ("middleware_operation_mutations", "UNIQUE", ("tenant_id", "command_id", "action", "actor_id", "idempotency_key")),
     }
     REQUIRED_TRIGGERS = {
         "middleware_event_ledger_immutable",
         "middleware_command_audit_immutable",
         "middleware_reconciliation_audit_immutable",
+        "middleware_operation_mutations_immutable",
     }
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -722,6 +740,7 @@ class PostgresOutboxStore:
                             'maximum attempts exhausted after worker lease expiry'
                         )
                     WHERE completed_at IS NULL
+                      AND cancelled_at IS NULL
                       AND dead_lettered_at IS NULL
                       AND reconciliation_required_at IS NULL
                       AND attempt_count >= $1
@@ -735,6 +754,7 @@ class PostgresOutboxStore:
                         SELECT id
                         FROM middleware_outbox
                         WHERE completed_at IS NULL
+                          AND cancelled_at IS NULL
                           AND dead_lettered_at IS NULL
                           AND reconciliation_required_at IS NULL
                           AND attempt_count < $3

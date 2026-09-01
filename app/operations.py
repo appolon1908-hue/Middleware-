@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
-from .commands import CommandState
+from .commands import CommandState, OperationMutationRequest
 from .control_plane_auth import caller_for_authorization
 from .security import RequestValidationError, authorize_tenant
 from .storage import StorageError
@@ -44,6 +44,23 @@ async def _context(request: Request):
     claims = await active.tokens.verify(authorization, expected_client_id=caller.client_id, required_scope=caller.status_scope)
     authorize_tenant(claims, tenant_id)
     return active.commands, tenant_id
+
+
+async def _mutation_context(request: Request):
+    active = request.app.state.runtime
+    if active.commands is None: raise StorageError("command ledger is unavailable")
+    tenant_id = request.headers.get("X-Tenant-ID", "")
+    correlation_id = request.headers.get("X-Correlation-ID", "")
+    idempotency_key = request.headers.get("Idempotency-Key", "")
+    if not tenant_id or not correlation_id or not 8 <= len(idempotency_key) <= 180:
+        raise RequestValidationError("X-Tenant-ID, X-Correlation-ID, and a bounded Idempotency-Key are required")
+    authorization = request.headers.get("Authorization", "")
+    caller = caller_for_authorization(authorization)
+    claims = await active.tokens.verify(authorization, expected_client_id=caller.client_id, required_scope=caller.command_scope)
+    authorize_tenant(claims, tenant_id)
+    actor_id = claims.get("sub")
+    if not isinstance(actor_id, str) or not actor_id: raise RequestValidationError("token subject is required")
+    return active.commands, tenant_id, actor_id, idempotency_key
 
 
 @router.get("")
@@ -88,3 +105,17 @@ async def list_attempts(command_id: UUID, request: Request, limit: int = Query(5
     items, more = rows[:limit], len(rows) > limit
     next_cursor = _encode_cursor("attempts", [items[-1].attempt_number, items[-1].attempt_id]) if more else None
     return JSONResponse(content={"items": [item.model_dump(mode="json") for item in items], "next_cursor": next_cursor})
+
+
+@router.post("/{command_id}/cancel")
+async def cancel_operation(command_id: UUID, body: OperationMutationRequest, request: Request) -> JSONResponse:
+    service, tenant_id, actor_id, idempotency_key = await _mutation_context(request)
+    operation = await service.mutate_operation(tenant_id, command_id, action="cancel", actor_id=actor_id, idempotency_key=idempotency_key, expected_version=body.expected_version, reason=body.reason)
+    return JSONResponse(content=operation.model_dump(mode="json"))
+
+
+@router.post("/{command_id}/reconcile")
+async def reconcile_operation(command_id: UUID, body: OperationMutationRequest, request: Request) -> JSONResponse:
+    service, tenant_id, actor_id, idempotency_key = await _mutation_context(request)
+    operation = await service.mutate_operation(tenant_id, command_id, action="reconcile", actor_id=actor_id, idempotency_key=idempotency_key, expected_version=body.expected_version, reason=body.reason)
+    return JSONResponse(content=operation.model_dump(mode="json"))

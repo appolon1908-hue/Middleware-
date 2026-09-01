@@ -227,7 +227,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0003_immutable_event_ledger",
+                "0004_operation_control",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             issuer=issuer,
@@ -536,9 +536,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0003_immutable_event_ledger":
+        if self.schema_head != "0004_operation_control":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0003_immutable_event_ledger"
+                "SCHEMA_HEAD must be 0004_operation_control"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):

@@ -61,3 +61,28 @@ def test_operation_list_empty_and_cross_tenant_is_non_disclosing(test_settings) 
         assert client.get("/v1/operations", headers=_headers()).json() == {"items": [], "next_cursor": None}
         missing = client.get(f"/v1/operations/{uuid4()}", headers=_headers())
         assert missing.status_code == 404
+
+
+def test_versioned_cancel_and_reconcile_are_idempotent_and_provider_free(test_settings) -> None:
+    import asyncio
+    store = MemoryCommandStore()
+    cancel_command = CommandEnvelope.model_validate(command_payload(command_id=str(uuid4()), idempotency_key="cancel-command-key"))
+    reconcile_command = CommandEnvelope.model_validate(command_payload(command_id=str(uuid4()), idempotency_key="reconcile-command-key"))
+    asyncio.run(store.submit(cancel_command))
+    asyncio.run(store.submit(reconcile_command))
+    for state in ("queued", "dispatching", "accepted", "readback_pending"):
+        asyncio.run(store.transition("tenant-1", reconcile_command.command_id, new_state=state, actor_id="worker", reason=state))
+    mutation_headers = {**_headers(), "X-Correlation-ID": "mutation-correlation", "Idempotency-Key": "mutation-idempotency"}
+    with _client(test_settings, store) as client:
+        cancelled = client.post(f"/v1/operations/{cancel_command.command_id}/cancel", json={"expected_version": 1, "reason": "operator_requested"}, headers=mutation_headers)
+        assert cancelled.status_code == 200
+        assert cancelled.json()["state"] == "CANCELLED"
+        assert cancelled.json()["resource_version"] == 2
+        replay = client.post(f"/v1/operations/{cancel_command.command_id}/cancel", json={"expected_version": 1, "reason": "operator_requested"}, headers=mutation_headers)
+        assert replay.status_code == 200 and replay.json()["duplicate"] is True
+        changed = client.post(f"/v1/operations/{cancel_command.command_id}/cancel", json={"expected_version": 1, "reason": "changed_reason"}, headers=mutation_headers)
+        assert changed.status_code == 409
+        reconciled = client.post(f"/v1/operations/{reconcile_command.command_id}/reconcile", json={"expected_version": 1, "reason": "ambiguous_provider_result"}, headers={**mutation_headers, "Idempotency-Key": "reconcile-mutation"})
+        assert reconciled.status_code == 200
+        assert reconciled.json()["state"] == "RECONCILIATION_REQUIRED"
+        assert reconciled.json()["resource_version"] == 2

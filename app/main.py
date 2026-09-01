@@ -284,10 +284,12 @@ def create_app(
     @app.get("/capabilities")
     async def capabilities(request: Request) -> JSONResponse:
         safety = runtime_safety_readback(request.app.state.runtime.settings)
+        effective = dict(safety["external_effects"])
+        effective["PRODUCTION_DIALING"] = safety["production_dialing"] == "ENABLED"
         return JSONResponse(
             status_code=200,
             content={"service": "middleware-api", "environment": resolved.app_env,
-                     "capabilities": safety["external_effects"]},
+                     "capabilities": effective},
         )
 
     @app.get("/metrics")

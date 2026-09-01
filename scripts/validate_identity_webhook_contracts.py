@@ -130,6 +130,7 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
     },
     ("middleware-worker", "postly-adapter"): {
         "social.publish",
+        "social.status.read",
     },
     ("middleware-worker", "ai-provider-adapter"): {
         "ai.provider.dispatch",

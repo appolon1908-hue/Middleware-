@@ -29,7 +29,7 @@ EXPECTED_ADAPTERS = {
     "ai": ("ai-provider-adapter", "ai.provider.dispatch", ()),
     "email": ("klyrow-gateway", "email.send", ("email.status.read",)),
     "sms": ("telnexa-gateway", "sms.send", ("sms.status.read",)),
-    "social": ("postly-adapter", "social.publish", ()),
+    "social": ("postly-adapter", "social.publish", ("social.status.read",)),
 }
 
 

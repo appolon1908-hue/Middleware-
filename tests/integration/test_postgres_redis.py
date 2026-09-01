@@ -396,6 +396,31 @@ async def test_command_intent_outbox_and_audit_are_one_durable_transaction(
     assert attempts == 1
 
 
+@pytest.mark.asyncio
+async def test_postgres_operation_reads_and_cancel_are_tenant_isolated_and_atomic(pool: asyncpg.Pool) -> None:
+    store = PostgresCommandStore(pool)
+    command = CommandEnvelope.model_validate({
+        "command_id": "00000000-0000-4000-8000-000000000002",
+        "command_type": "crm.contact.create.v1", "command_version": "1.0",
+        "target": "odoo-19", "tenant_id": "tenant-operation", "requested_by": "user-1",
+        "correlation_id": "correlation-operation-2", "idempotency_key": "idempotency-operation-2",
+        "capability": "ODOO_WRITE", "payload": {"contact_id": "contact-2"},
+    })
+    await store.submit(command)
+    assert len(await store.list_operations("tenant-operation", limit=2)) == 1
+    assert await store.list_operations("another-tenant", limit=2) == []
+    events = await store.list_events("tenant-operation", command.command_id, limit=2)
+    assert [event.new_state for event in events] == ["persisted"]
+    cancelled = await store.mutate_operation("tenant-operation", command.command_id, action="cancel", actor_id="user-1", idempotency_key="cancel-mutation-2", expected_version=1, reason="operator_requested")
+    assert cancelled.state == "cancelled" and cancelled.resource_version == 2
+    replay = await store.mutate_operation("tenant-operation", command.command_id, action="cancel", actor_id="user-1", idempotency_key="cancel-mutation-2", expected_version=1, reason="operator_requested")
+    assert replay.duplicate is True
+    async with pool.acquire() as conn:
+        assert await conn.fetchval("SELECT cancelled_at IS NOT NULL FROM middleware_outbox WHERE tenant_id=$1 AND command_id=$2", "tenant-operation", str(command.command_id)) is True
+        with pytest.raises(asyncpg.PostgresError):
+            await conn.execute("DELETE FROM middleware_operation_mutations WHERE tenant_id=$1", "tenant-operation")
+
+
 async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:
     async with pool.acquire() as conn:
         return await conn.fetchval(

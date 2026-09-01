@@ -22,6 +22,7 @@ REQUIRED_FILES = (
     Path(".gitignore"),
     Path(".dockerignore"),
     Path("config/preproduction-safety.env.example"),
+    Path("config/provider-operation-policy.json"),
 )
 
 FORBIDDEN_TOP_LEVEL_DIRECTORIES = {

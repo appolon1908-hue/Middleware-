@@ -10,7 +10,7 @@ from typing import Any, Literal, Protocol
 from uuid import UUID
 
 import asyncpg
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .canonical_contracts import validate_contract
 from .provider_canary import provider_evidence_digest
@@ -157,11 +157,6 @@ class CommandOperation(BaseModel):
     reconciliation_requested_at: datetime | None = None
     reconciliation_reason: str | None = None
     duplicate: bool = False
-
-    @field_serializer("state")
-    def serialize_state(self, value: CommandState) -> str:
-        return API_OPERATION_STATES[value]
-
 
 class OperationMutationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

@@ -72,7 +72,7 @@ def test_versioned_cancel_and_reconcile_are_idempotent_and_provider_free(test_se
     asyncio.run(store.submit(reconcile_command))
     for state in ("queued", "dispatching", "accepted", "readback_pending"):
         asyncio.run(store.transition("tenant-1", reconcile_command.command_id, new_state=state, actor_id="worker", reason=state))
-    mutation_headers = {**_headers(), "X-Correlation-ID": "mutation-correlation", "Idempotency-Key": "mutation-idempotency"}
+    mutation_headers = {**_headers(), "Authorization": "Bearer legacy-command-token", "X-Correlation-ID": "mutation-correlation", "Idempotency-Key": "mutation-idempotency"}
     with _client(test_settings, store) as client:
         cancelled = client.post(f"/v1/operations/{cancel_command.command_id}/cancel", json={"expected_version": 1, "reason": "operator_requested"}, headers=mutation_headers)
         assert cancelled.status_code == 200

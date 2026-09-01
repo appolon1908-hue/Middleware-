@@ -9,12 +9,18 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
-from .commands import CommandState, OperationMutationRequest
+from .commands import API_OPERATION_STATES, CommandState, OperationMutationRequest
 from .control_plane_auth import caller_for_authorization
 from .security import RequestValidationError, authorize_tenant
 from .storage import StorageError
 
 router = APIRouter(prefix="/v1/operations", tags=["operations"])
+
+
+def _operation_json(operation) -> dict[str, Any]:
+    payload = operation.model_dump(mode="json")
+    payload["state"] = API_OPERATION_STATES[operation.state]
+    return payload
 
 
 def _encode_cursor(kind: str, values: list[Any]) -> str:
@@ -73,14 +79,14 @@ async def list_operations(request: Request, limit: int = Query(50, ge=1, le=100)
     more = len(rows) > limit
     items = rows[:limit]
     next_cursor = _encode_cursor("operations", [items[-1].created_at.isoformat(), str(items[-1].command_id)]) if more else None
-    return JSONResponse(content={"items": [item.model_dump(mode="json") for item in items], "next_cursor": next_cursor})
+    return JSONResponse(content={"items": [_operation_json(item) for item in items], "next_cursor": next_cursor})
 
 
 @router.get("/{command_id}")
 async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
     service, tenant_id = await _context(request)
     operation = await service.get(tenant_id, command_id)
-    return JSONResponse(content=operation.model_dump(mode="json"), headers={"X-Correlation-ID": operation.correlation_id})
+    return JSONResponse(content=_operation_json(operation), headers={"X-Correlation-ID": operation.correlation_id})
 
 
 @router.get("/{command_id}/events")
@@ -111,11 +117,11 @@ async def list_attempts(command_id: UUID, request: Request, limit: int = Query(5
 async def cancel_operation(command_id: UUID, body: OperationMutationRequest, request: Request) -> JSONResponse:
     service, tenant_id, actor_id, idempotency_key = await _mutation_context(request)
     operation = await service.mutate_operation(tenant_id, command_id, action="cancel", actor_id=actor_id, idempotency_key=idempotency_key, expected_version=body.expected_version, reason=body.reason)
-    return JSONResponse(content=operation.model_dump(mode="json"))
+    return JSONResponse(content=_operation_json(operation))
 
 
 @router.post("/{command_id}/reconcile")
 async def reconcile_operation(command_id: UUID, body: OperationMutationRequest, request: Request) -> JSONResponse:
     service, tenant_id, actor_id, idempotency_key = await _mutation_context(request)
     operation = await service.mutate_operation(tenant_id, command_id, action="reconcile", actor_id=actor_id, idempotency_key=idempotency_key, expected_version=body.expected_version, reason=body.reason)
-    return JSONResponse(content=operation.model_dump(mode="json"))
+    return JSONResponse(content=_operation_json(operation))

@@ -91,7 +91,8 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
         "workflow.trigger",
     },
     ("n8n-automation", "middleware-api"): {
-        "automation.command.request",
+        "middleware.request.forward",
+        "middleware.status.read",
         "workflow.result.publish",
     },
     ("vicidial-adapter", "middleware-api"): {
@@ -367,6 +368,8 @@ def validate_access(access: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], 
             "klyrow-gateway",
             "kyqra-gateway",
             "postly-adapter",
+            "ai-provider-adapter",
+            "marketing-provider-adapter",
         ]
     }
     if access.get("prohibitedDirectTargets") != expected_prohibited:

@@ -13,14 +13,13 @@ IDENTITY = ROOT / "config" / "identity-access-map.json"
 SAFETY_BASELINE = ROOT / "config" / "preproduction-safety.env.example"
 SCOPE = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$")
 ROUTE = re.compile(r"^/api/v1/[a-z0-9][a-z0-9/_-]*$")
-EXPECTED_CALLERS = {"codestra-ai", "codestra-communication", "codestra-marketing", "codestra-social", "n8n-automation", "odoo-integration"}
+EXPECTED_CALLERS = {"codestra-ai", "codestra-communication", "codestra-marketing", "codestra-social", "odoo-integration"}
 EXPECTED_PROVIDER_FLAGS = {"advertising": "LIVE_ADVERTISING_ENABLED", "ai": "EXTERNAL_MODEL_CALLS_ENABLED", "email": "LIVE_EMAIL_DELIVERY", "sms": "LIVE_SMS_DELIVERY", "social": "SOCIAL_PUBLISHING_ENABLED"}
 EXPECTED_OPERATIONS = {
     "ai.inference.request": ("codestra-ai", "ai.inference.request", "/api/v1/control/ai/inference-requests", True, "transactional_outbox", "ai"),
     "communication.email.request": ("codestra-communication", "communication.email.request", "/api/v1/control/communications/email", True, "transactional_outbox", "email"),
     "communication.sms.request": ("codestra-communication", "communication.sms.request", "/api/v1/control/communications/sms", True, "transactional_outbox", "sms"),
     "marketing.campaign.request": ("codestra-marketing", "marketing.campaign.request", "/api/v1/control/marketing/campaigns", True, "transactional_outbox", "advertising"),
-    "n8n.automation.request": ("n8n-automation", "automation.command.request", "/api/v1/control/automations", False, "transactional_inbox_outbox", "none"),
     "odoo.event.publish": ("odoo-integration", "odoo.events.publish", "/api/v1/odoo/events", False, "durable_inbox", "none"),
     "social.publish.request": ("codestra-social", "social.publish.request", "/api/v1/control/social/publications", True, "transactional_outbox", "social"),
 }

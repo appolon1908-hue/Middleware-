@@ -49,10 +49,10 @@ class ProviderOperationPolicyTests(unittest.TestCase):
         identity = copy.deepcopy(self.identity)
         grant = next(
             item for item in identity["grants"]
-            if item["callerClientId"] == "n8n-automation"
+            if item["callerClientId"] == "codestra-ai"
             and item["targetClientId"] == "middleware-api"
         )
-        grant["scopes"].remove("automation.command.request")
+        grant["scopes"].remove("ai.inference.request")
         self.assert_rejected(identity=identity)
 
     def test_direct_middleware_provider_grant_is_rejected(self) -> None:

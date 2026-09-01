@@ -1,0 +1,28 @@
+schema_version: "1.0"
+source_sha: "42add9b7523546f91f318cb336293fbcdc9b26af"
+operations:
+  - {domain: platform, method: GET, path: /health, canonical_operation_id: platform_health, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: platform, method: GET, path: /readiness, canonical_operation_id: platform_readiness, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: platform, method: GET, path: /dependencies, canonical_operation_id: platform_dependencies, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: platform, method: GET, path: /version, canonical_operation_id: platform_version, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: platform, method: GET, path: /capabilities, canonical_operation_id: platform_capabilities, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: commands, method: POST, path: /v1/commands, canonical_operation_id: command_submit, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: GET, path: /v1/operations/{command_id}, canonical_operation_id: operation_get, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: communications, method: POST, path: /v1/communications/messages, canonical_operation_id: communication_submit, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: intake, method: POST, path: /v1/intake/leads, canonical_operation_id: lead_intake, implementation_file: app/main.py, runtime_state: IMPLEMENTED}
+  - {domain: operations, method: GET, path: /api/v1/operations, canonical_operation_id: operations_list, implementation_file: null, runtime_state: MISSING}
+  - {domain: inbox, method: GET, path: /api/v1/inbox, canonical_operation_id: inbox_list, implementation_file: null, runtime_state: MISSING}
+  - {domain: outbox, method: GET, path: /api/v1/outbox, canonical_operation_id: outbox_list, implementation_file: null, runtime_state: MISSING}
+  - {domain: policy, method: POST, path: /api/v1/policy/decisions, canonical_operation_id: policy_decision, implementation_file: null, runtime_state: MISSING}
+  - {domain: reconciliation, method: GET, path: /api/v1/reconciliation/operations, canonical_operation_id: reconciliation_list, implementation_file: null, runtime_state: MISSING}
+  - {domain: quarantine, method: GET, path: /api/v1/quarantine/events, canonical_operation_id: quarantine_list, implementation_file: null, runtime_state: MISSING}
+  - {domain: odoo, method: POST, path: /api/v1/integrations/odoo/commands, canonical_operation_id: odoo_command, implementation_file: null, runtime_state: MISSING}
+  - {domain: n8n, method: POST, path: /api/v1/integrations/n8n/dispatch, canonical_operation_id: n8n_dispatch, implementation_file: null, runtime_state: MISSING}
+  - {domain: vicidial, method: POST, path: /api/v1/events/vicidial, canonical_operation_id: vicidial_event, implementation_file: null, runtime_state: MISSING}
+  - {domain: email, method: POST, path: /api/v1/control/communications/email, canonical_operation_id: email_control, implementation_file: null, runtime_state: MISSING}
+  - {domain: sms, method: POST, path: /api/v1/control/communications/sms, canonical_operation_id: sms_control, implementation_file: null, runtime_state: MISSING}
+  - {domain: social, method: POST, path: /api/v1/control/social/publications, canonical_operation_id: social_publish, implementation_file: null, runtime_state: MISSING}
+  - {domain: marketing, method: POST, path: /api/v1/control/marketing/campaigns, canonical_operation_id: marketing_campaign, implementation_file: null, runtime_state: MISSING}
+  - {domain: ai, method: POST, path: /api/v1/control/ai/inference-requests, canonical_operation_id: ai_inference, implementation_file: null, runtime_state: MISSING}
+  - {domain: telephony, method: POST, path: /v1/telephony/calls, canonical_operation_id: telephony_call, implementation_file: null, runtime_state: MISSING}
+  - {domain: webhooks, method: POST, path: /v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}, canonical_operation_id: webhook_ingress, implementation_file: null, runtime_state: MISSING}

@@ -37,6 +37,7 @@ def main() -> None:
             "workflow.trigger",
         },
         ("n8n-automation", "middleware-api"): {
+            "automation.command.request",
             "workflow.result.publish",
         },
     }

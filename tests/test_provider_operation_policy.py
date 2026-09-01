@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import copy
+import importlib.util
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "provider_policy_validator",
+    ROOT / "scripts" / "validate_provider_operation_policy.py",
+)
+assert SPEC is not None and SPEC.loader is not None
+VALIDATOR = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(VALIDATOR)
+
+
+class ProviderOperationPolicyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.policy = json.loads(VALIDATOR.POLICY.read_text(encoding="utf-8"))
+        cls.identity = json.loads(VALIDATOR.IDENTITY.read_text(encoding="utf-8"))
+        cls.safety = {
+            name.strip(): value.strip()
+            for line in VALIDATOR.SAFETY_BASELINE.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#") and "=" in line
+            for name, value in [line.split("=", 1)]
+        }
+
+    def assert_rejected(self, identity=None, safety=None) -> None:
+        with self.assertRaises(SystemExit):
+            VALIDATOR.validate(
+                copy.deepcopy(self.policy),
+                copy.deepcopy(identity if identity is not None else self.identity),
+                copy.deepcopy(safety if safety is not None else self.safety),
+            )
+
+    def test_unregistered_operation_caller_is_rejected(self) -> None:
+        identity = copy.deepcopy(self.identity)
+        identity["services"] = [
+            service for service in identity["services"]
+            if service["clientId"] != "codestra-ai"
+        ]
+        self.assert_rejected(identity=identity)
+
+    def test_missing_operation_scope_is_rejected(self) -> None:
+        identity = copy.deepcopy(self.identity)
+        grant = next(
+            item for item in identity["grants"]
+            if item["callerClientId"] == "n8n-automation"
+            and item["targetClientId"] == "middleware-api"
+        )
+        grant["scopes"].remove("automation.command.request")
+        self.assert_rejected(identity=identity)
+
+    def test_direct_middleware_provider_grant_is_rejected(self) -> None:
+        identity = copy.deepcopy(self.identity)
+        identity["grants"].append(
+            {
+                "callerClientId": "middleware-api",
+                "targetClientId": "klyrow-gateway",
+                "audience": "klyrow-gateway",
+                "scopes": ["email.send"],
+            }
+        )
+        self.assert_rejected(identity=identity)
+
+    def test_enabled_or_missing_safety_gate_is_rejected(self) -> None:
+        safety = copy.deepcopy(self.safety)
+        safety["LIVE_EMAIL_DELIVERY"] = "true"
+        self.assert_rejected(safety=safety)
+        safety.pop("LIVE_EMAIL_DELIVERY")
+        self.assert_rejected(safety=safety)
+
+
+if __name__ == "__main__":
+    unittest.main()

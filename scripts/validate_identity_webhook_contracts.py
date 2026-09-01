@@ -16,6 +16,12 @@ EXPECTED_CLIENTS = [
     "kong-gateway",
     "middleware-api",
     "middleware-worker",
+    "codestra-ai",
+    "codestra-communication",
+    "codestra-marketing",
+    "codestra-social",
+    "ai-provider-adapter",
+    "marketing-provider-adapter",
     "odoo-integration",
     "n8n-automation",
     "vicidial-adapter",
@@ -58,6 +64,19 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
         "inbox.process",
         "outbox.dispatch",
     },
+    ("codestra-ai", "middleware-api"): {
+        "ai.inference.request",
+    },
+    ("codestra-communication", "middleware-api"): {
+        "communication.email.request",
+        "communication.sms.request",
+    },
+    ("codestra-marketing", "middleware-api"): {
+        "marketing.campaign.request",
+    },
+    ("codestra-social", "middleware-api"): {
+        "social.publish.request",
+    },
     ("odoo-integration", "middleware-api"): {
         "odoo.delivery.result.publish",
         "odoo.events.publish",
@@ -72,6 +91,7 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
         "workflow.trigger",
     },
     ("n8n-automation", "middleware-api"): {
+        "automation.command.request",
         "workflow.result.publish",
     },
     ("vicidial-adapter", "middleware-api"): {
@@ -83,17 +103,15 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
         "callbacks.dispatch",
         "telephony.commands.write",
     },
-    ("middleware-api", "telnexa-gateway"): {
+    ("middleware-worker", "telnexa-gateway"): {
         "sms.send",
-        "sms.status.read",
     },
     ("telnexa-gateway", "middleware-api"): {
         "sms.events.publish",
         "sms.inbound.publish",
     },
-    ("middleware-api", "klyrow-gateway"): {
+    ("middleware-worker", "klyrow-gateway"): {
         "email.send",
-        "email.status.read",
     },
     ("klyrow-gateway", "middleware-api"): {
         "email.events.publish",
@@ -108,9 +126,14 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
         "crawler.progress.publish",
         "crawler.results.publish",
     },
-    ("middleware-api", "postly-adapter"): {
+    ("middleware-worker", "postly-adapter"): {
         "social.publish",
-        "social.status.read",
+    },
+    ("middleware-worker", "ai-provider-adapter"): {
+        "ai.provider.dispatch",
+    },
+    ("middleware-worker", "marketing-provider-adapter"): {
+        "marketing.provider.dispatch",
     },
     ("postly-adapter", "middleware-api"): {
         "social.events.publish",

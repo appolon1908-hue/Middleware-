@@ -53,6 +53,7 @@ python3 scripts/validate_n8n_flow.py
 
 printf '==> Validating canonical provider-operation authority\n'
 python3 scripts/validate_provider_operation_policy.py
+python3 -m unittest discover -s tests -p 'test_provider_operation_policy.py'
 
 printf '==> Validating supplemental site/provider workstreams\n'
 python3 scripts/validate_site_workstreams.py

@@ -114,6 +114,25 @@ class ProviderOperationPolicyTests(unittest.TestCase):
         grant["scopes"].remove("sms.status.read")
         self.assert_rejected(identity=identity)
 
+    def test_non_effect_operation_durability_drift_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        operation = next(
+            item for item in policy["operations"]
+            if item["id"] == "odoo.event.publish"
+        )
+        operation["durability"] = "best_effort"
+        self.assert_rejected(policy=policy)
+
+    def test_duplicate_provider_class_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        adapter = next(
+            item for item in policy["providerAdapters"]
+            if item["providerClass"] == "ai"
+        )
+        policy["providerAdapters"].append(copy.deepcopy(adapter))
+        policy["providerAdapters"].sort(key=lambda item: item["providerClass"])
+        self.assert_rejected(policy=policy)
+
 
 if __name__ == "__main__":
     unittest.main()

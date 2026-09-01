@@ -16,13 +16,13 @@ ROUTE = re.compile(r"^/api/v1/[a-z0-9][a-z0-9/_-]*$")
 EXPECTED_CALLERS = {"codestra-ai", "codestra-communication", "codestra-marketing", "codestra-social", "n8n-automation", "odoo-integration"}
 EXPECTED_PROVIDER_FLAGS = {"advertising": "LIVE_ADVERTISING_ENABLED", "ai": "EXTERNAL_MODEL_CALLS_ENABLED", "email": "LIVE_EMAIL_DELIVERY", "sms": "LIVE_SMS_DELIVERY", "social": "SOCIAL_PUBLISHING_ENABLED"}
 EXPECTED_OPERATIONS = {
-    "ai.inference.request": ("codestra-ai", "ai.inference.request", "/api/v1/control/ai/inference-requests", "ai"),
-    "communication.email.request": ("codestra-communication", "communication.email.request", "/api/v1/control/communications/email", "email"),
-    "communication.sms.request": ("codestra-communication", "communication.sms.request", "/api/v1/control/communications/sms", "sms"),
-    "marketing.campaign.request": ("codestra-marketing", "marketing.campaign.request", "/api/v1/control/marketing/campaigns", "advertising"),
-    "n8n.automation.request": ("n8n-automation", "automation.command.request", "/api/v1/control/automations", "none"),
-    "odoo.event.publish": ("odoo-integration", "odoo.events.publish", "/api/v1/odoo/events", "none"),
-    "social.publish.request": ("codestra-social", "social.publish.request", "/api/v1/control/social/publications", "social"),
+    "ai.inference.request": ("codestra-ai", "ai.inference.request", "/api/v1/control/ai/inference-requests", True, "transactional_outbox", "ai"),
+    "communication.email.request": ("codestra-communication", "communication.email.request", "/api/v1/control/communications/email", True, "transactional_outbox", "email"),
+    "communication.sms.request": ("codestra-communication", "communication.sms.request", "/api/v1/control/communications/sms", True, "transactional_outbox", "sms"),
+    "marketing.campaign.request": ("codestra-marketing", "marketing.campaign.request", "/api/v1/control/marketing/campaigns", True, "transactional_outbox", "advertising"),
+    "n8n.automation.request": ("n8n-automation", "automation.command.request", "/api/v1/control/automations", False, "transactional_inbox_outbox", "none"),
+    "odoo.event.publish": ("odoo-integration", "odoo.events.publish", "/api/v1/odoo/events", False, "durable_inbox", "none"),
+    "social.publish.request": ("codestra-social", "social.publish.request", "/api/v1/control/social/publications", True, "transactional_outbox", "social"),
 }
 EXPECTED_ADAPTERS = {
     "advertising": ("marketing-provider-adapter", "marketing.provider.dispatch", ()),
@@ -62,6 +62,7 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
             fail(f"scope invalid: {operation['scope']}")
         exact_operation = (
             operation["caller"], operation["scope"], operation["route"],
+            operation["externalEffect"], operation["durability"],
             operation["providerClass"],
         )
         if exact_operation != EXPECTED_OPERATIONS.get(identifier):
@@ -106,7 +107,10 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
     for adapter in adapters:
         if set(adapter) != {"providerClass", "adapterClientId", "workerClientId", "dispatchScope", "readbackScopes", "safetyFlag"}:
             fail("provider adapter fields invalid")
-        provider_class = adapter["providerClass"]; classes.add(provider_class)
+        provider_class = adapter["providerClass"]
+        if provider_class in classes:
+            fail(f"duplicate provider adapter: {provider_class}")
+        classes.add(provider_class)
         if adapter["workerClientId"] != "middleware-worker":
             fail(f"direct provider caller found: {provider_class}")
         exact_adapter = (

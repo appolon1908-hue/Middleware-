@@ -88,6 +88,32 @@ class ProviderOperationPolicyTests(unittest.TestCase):
         operation["providerClass"] = "email"
         self.assert_rejected(policy=policy)
 
+    def test_operation_route_and_scope_swap_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        email = next(item for item in policy["operations"] if item["id"] == "communication.email.request")
+        sms = next(item for item in policy["operations"] if item["id"] == "communication.sms.request")
+        email["route"], sms["route"] = sms["route"], email["route"]
+        email["scope"], sms["scope"] = sms["scope"], email["scope"]
+        self.assert_rejected(policy=policy)
+
+    def test_provider_adapter_and_scope_swap_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        advertising = next(item for item in policy["providerAdapters"] if item["providerClass"] == "advertising")
+        ai = next(item for item in policy["providerAdapters"] if item["providerClass"] == "ai")
+        advertising["adapterClientId"], ai["adapterClientId"] = ai["adapterClientId"], advertising["adapterClientId"]
+        advertising["dispatchScope"], ai["dispatchScope"] = ai["dispatchScope"], advertising["dispatchScope"]
+        self.assert_rejected(policy=policy)
+
+    def test_missing_readback_scope_is_rejected(self) -> None:
+        identity = copy.deepcopy(self.identity)
+        grant = next(
+            item for item in identity["grants"]
+            if item["callerClientId"] == "middleware-worker"
+            and item["targetClientId"] == "telnexa-gateway"
+        )
+        grant["scopes"].remove("sms.status.read")
+        self.assert_rejected(identity=identity)
+
 
 if __name__ == "__main__":
     unittest.main()

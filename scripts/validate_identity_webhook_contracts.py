@@ -105,6 +105,7 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
     },
     ("middleware-worker", "telnexa-gateway"): {
         "sms.send",
+        "sms.status.read",
     },
     ("telnexa-gateway", "middleware-api"): {
         "sms.events.publish",
@@ -112,6 +113,7 @@ EXPECTED_GRANTS: dict[tuple[str, str], set[str]] = {
     },
     ("middleware-worker", "klyrow-gateway"): {
         "email.send",
+        "email.status.read",
     },
     ("klyrow-gateway", "middleware-api"): {
         "email.events.publish",

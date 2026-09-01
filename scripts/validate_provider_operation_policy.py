@@ -15,14 +15,21 @@ SCOPE = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$")
 ROUTE = re.compile(r"^/api/v1/[a-z0-9][a-z0-9/_-]*$")
 EXPECTED_CALLERS = {"codestra-ai", "codestra-communication", "codestra-marketing", "codestra-social", "n8n-automation", "odoo-integration"}
 EXPECTED_PROVIDER_FLAGS = {"advertising": "LIVE_ADVERTISING_ENABLED", "ai": "EXTERNAL_MODEL_CALLS_ENABLED", "email": "LIVE_EMAIL_DELIVERY", "sms": "LIVE_SMS_DELIVERY", "social": "SOCIAL_PUBLISHING_ENABLED"}
-EXPECTED_OPERATION_PROVIDER_CLASSES = {
-    "ai.inference.request": "ai",
-    "communication.email.request": "email",
-    "communication.sms.request": "sms",
-    "marketing.campaign.request": "advertising",
-    "n8n.automation.request": "none",
-    "odoo.event.publish": "none",
-    "social.publish.request": "social",
+EXPECTED_OPERATIONS = {
+    "ai.inference.request": ("codestra-ai", "ai.inference.request", "/api/v1/control/ai/inference-requests", "ai"),
+    "communication.email.request": ("codestra-communication", "communication.email.request", "/api/v1/control/communications/email", "email"),
+    "communication.sms.request": ("codestra-communication", "communication.sms.request", "/api/v1/control/communications/sms", "sms"),
+    "marketing.campaign.request": ("codestra-marketing", "marketing.campaign.request", "/api/v1/control/marketing/campaigns", "advertising"),
+    "n8n.automation.request": ("n8n-automation", "automation.command.request", "/api/v1/control/automations", "none"),
+    "odoo.event.publish": ("odoo-integration", "odoo.events.publish", "/api/v1/odoo/events", "none"),
+    "social.publish.request": ("codestra-social", "social.publish.request", "/api/v1/control/social/publications", "social"),
+}
+EXPECTED_ADAPTERS = {
+    "advertising": ("marketing-provider-adapter", "marketing.provider.dispatch", ()),
+    "ai": ("ai-provider-adapter", "ai.provider.dispatch", ()),
+    "email": ("klyrow-gateway", "email.send", ("email.status.read",)),
+    "sms": ("telnexa-gateway", "sms.send", ("sms.status.read",)),
+    "social": ("postly-adapter", "social.publish", ()),
 }
 
 
@@ -53,8 +60,12 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
             fail(f"route invalid or duplicate: {route}")
         if not SCOPE.fullmatch(operation["scope"]):
             fail(f"scope invalid: {operation['scope']}")
-        if operation["providerClass"] != EXPECTED_OPERATION_PROVIDER_CLASSES.get(identifier):
-            fail(f"operation provider class mismatch: {identifier}")
+        exact_operation = (
+            operation["caller"], operation["scope"], operation["route"],
+            operation["providerClass"],
+        )
+        if exact_operation != EXPECTED_OPERATIONS.get(identifier):
+            fail(f"operation authority mismatch: {identifier}")
         identifiers.add(identifier); routes.add(route); callers.add(operation["caller"])
         if operation["externalEffect"]:
             if operation["durability"] != "transactional_outbox":
@@ -65,7 +76,7 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
             fail(f"non-effectful operation names provider: {identifier}")
     if callers != EXPECTED_CALLERS:
         fail("caller coverage mismatch")
-    if identifiers != set(EXPECTED_OPERATION_PROVIDER_CLASSES):
+    if identifiers != set(EXPECTED_OPERATIONS):
         fail("operation coverage mismatch")
     services = {
         service.get("clientId"): service
@@ -93,18 +104,26 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
         fail("providerAdapters must be a non-empty sorted list")
     classes = set()
     for adapter in adapters:
-        if set(adapter) != {"providerClass", "adapterClientId", "workerClientId", "dispatchScope", "safetyFlag"}:
+        if set(adapter) != {"providerClass", "adapterClientId", "workerClientId", "dispatchScope", "readbackScopes", "safetyFlag"}:
             fail("provider adapter fields invalid")
         provider_class = adapter["providerClass"]; classes.add(provider_class)
         if adapter["workerClientId"] != "middleware-worker":
             fail(f"direct provider caller found: {provider_class}")
+        exact_adapter = (
+            adapter["adapterClientId"], adapter["dispatchScope"],
+            tuple(adapter["readbackScopes"]),
+        )
+        if exact_adapter != EXPECTED_ADAPTERS.get(provider_class):
+            fail(f"provider adapter authority mismatch: {provider_class}")
         if adapter["safetyFlag"] != EXPECTED_PROVIDER_FLAGS.get(provider_class):
             fail(f"provider safety flag mismatch: {provider_class}")
         if safety_baseline.get(adapter["safetyFlag"], "").lower() not in {
             "0", "false", "no", "off", "disabled"
         }:
             fail(f"provider safety flag is not disabled in baseline: {provider_class}")
-        if not SCOPE.fullmatch(adapter["dispatchScope"]):
+        if not SCOPE.fullmatch(adapter["dispatchScope"]) or any(
+            not SCOPE.fullmatch(scope) for scope in adapter["readbackScopes"]
+        ):
             fail(f"provider dispatch scope invalid: {provider_class}")
         adapter_client = adapter["adapterClientId"]
         matching = [
@@ -114,7 +133,10 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
             and grant.get("targetClientId") == adapter_client
             and grant.get("audience") == adapter_client
         ]
-        if len(matching) != 1 or adapter["dispatchScope"] not in matching[0].get("scopes", []):
+        required_adapter_scopes = {
+            adapter["dispatchScope"], *adapter["readbackScopes"]
+        }
+        if len(matching) != 1 or set(matching[0].get("scopes", [])) != required_adapter_scopes:
             fail(f"worker lacks exact adapter audience/scope grant: {provider_class}")
         direct = [
             grant

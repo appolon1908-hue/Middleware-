@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
-from .commands import CommandEnvelope, CommandError
+from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
 from .communications import (
     CommunicationsConflict,
@@ -43,7 +43,7 @@ from .observability import (
 from .operations_dashboard import router as operations_dashboard_router
 from .operations import router as operations_router
 from .runtime import Runtime, build_runtime
-from .runtime_safety import runtime_safety_readback
+from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
 from .security import SecurityError
 from .service import (
     IngressError,
@@ -295,6 +295,7 @@ def create_app(
     async def capabilities(request: Request) -> JSONResponse:
         safety = runtime_safety_readback(request.app.state.runtime.settings)
         effective = dict(safety["external_effects"])
+        effective.update(safety["umbrella_controls"])
         effective["PRODUCTION_DIALING"] = safety["production_dialing"] == "ENABLED"
         return JSONResponse(
             status_code=200,
@@ -337,14 +338,16 @@ def create_app(
             "configuration_checksum": resolved.configuration_checksum,
         }
 
-    @app.get("/v1/runtime/safety")
-    async def runtime_safety(request: Request) -> dict[str, object]:
+    @app.get("/v1/runtime/safety", response_model=RuntimeSafetyReadback)
+    async def runtime_safety(request: Request) -> RuntimeSafetyReadback:
         await request.app.state.runtime.tokens.verify(
             request.headers.get("Authorization", ""),
             expected_client_id="monitoring-readonly",
             required_scope="health.read",
         )
-        return runtime_safety_readback(request.app.state.runtime.settings)
+        return RuntimeSafetyReadback.model_validate(
+            runtime_safety_readback(request.app.state.runtime.settings)
+        )
 
     def communications_service(request: Request) -> CommunicationsService:
         active = request.app.state.runtime
@@ -354,6 +357,7 @@ def create_app(
             active.communications = CommunicationsService(
                 store=MemoryCommunicationsStore(),
                 commands=active.commands,
+                umbrella_controls=active.settings.umbrella_controls,
             )
         return active.communications
 
@@ -671,9 +675,20 @@ def create_app(
             from .security import AuthorizationError
 
             raise AuthorizationError("token subject is required for commands")
+        if (
+            caller.client_id == "n8n-automation"
+            and active.settings.umbrella_controls.get(
+                "N8N_EXTERNAL_PROVIDER_WRITES"
+            )
+            is not True
+        ):
+            raise CommandCapabilityDisabled(
+                "N8N_EXTERNAL_PROVIDER_WRITES is disabled"
+            )
         operation = await active.commands.submit(
             command,
             authenticated_subject=subject,
+            authenticated_client_id=caller.client_id,
         )
         status_code = 200 if operation.duplicate else 202
         return JSONResponse(

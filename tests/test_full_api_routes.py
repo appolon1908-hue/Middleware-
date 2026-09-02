@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fastapi.testclient import TestClient
 from app.commands import CommandService, MemoryCommandStore
 from app.main import create_app
@@ -32,6 +34,55 @@ def test_system_safety_is_authenticated_and_fail_closed(test_settings):
         body=response.json()
         assert body["CALLS_PLACED"]==0
         assert all(body[key] is False for key in ("LIVE_ADVERTISING_ENABLED","EXTERNAL_DELIVERY_ENABLED","SOCIAL_PUBLISHING_ENABLED","EXTERNAL_MODEL_CALLS_ENABLED","LIVE_SMS_DELIVERY","LIVE_EMAIL_DELIVERY","LIVE_PSTN_DIALING","N8N_EXTERNAL_PROVIDER_WRITES","PRODUCTION_DIALING"))
+
+def test_system_capabilities_report_effective_umbrella_state(test_settings):
+    settings=replace(
+        test_settings,
+        umbrella_controls={
+            **test_settings.umbrella_controls,
+            "LIVE_ADVERTISING_ENABLED":True,
+        },
+    )
+    with TestClient(_app(settings)) as client:
+        response=client.get("/v1/system/capabilities",headers={"Authorization":"Bearer legacy-status-token","X-Tenant-ID":"tenant-1"})
+    assert response.status_code==200
+    assert response.json()["LIVE_ADVERTISING_ENABLED"] is True
+    assert response.json()["evidence"]=="effective_runtime"
+
+def test_policy_decision_never_treats_umbrella_switch_as_a_grant(test_settings):
+    settings=replace(
+        test_settings,
+        umbrella_controls={
+            **test_settings.umbrella_controls,
+            "LIVE_ADVERTISING_ENABLED":True,
+        },
+    )
+    headers={
+        "Authorization":"Bearer legacy-command-token",
+        "X-Tenant-ID":"tenant-1",
+        "X-Correlation-ID":"policy-decision-test",
+        "Idempotency-Key":"policy-decision-test",
+    }
+    with TestClient(_app(settings)) as client:
+        response=client.post(
+            "/v1/policy/decisions",
+            json={
+                "capability":"LIVE_ADVERTISING_ENABLED",
+                "proposed_action":"start an advertising campaign",
+            },
+            headers=headers,
+        )
+    assert response.status_code==200
+    assert response.json()["decision"]=="DENY"
+
+def test_runtime_safety_openapi_publishes_typed_v11_schema(test_settings):
+    schema=_app(test_settings).openapi()
+    response=schema["paths"]["/v1/runtime/safety"]["get"]["responses"]["200"]
+    model=response["content"]["application/json"]["schema"]
+    assert model["$ref"]=="#/components/schemas/RuntimeSafetyReadback"
+    component=schema["components"]["schemas"]["RuntimeSafetyReadback"]
+    assert "umbrella_controls" in component["required"]
+    assert component["additionalProperties"] is False
 
 def test_generic_provider_webhook_preserves_signature_and_replay_controls(test_settings,runtime):
     path="/v1/webhooks/odoo/events/webhook-1"; route=ROUTE_BY_PATH["/api/v1/odoo/events"]

@@ -7,7 +7,11 @@ from temporalio.client import Client
 from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
-from .commands import CommandEnvelope, TEMPORAL_COMMAND_DESTINATION
+from .commands import (
+    AUTHENTICATED_CLIENT_ID_KEY,
+    CommandEnvelope,
+    TEMPORAL_COMMAND_DESTINATION,
+)
 from .storage import OutboxRecord
 from .temporal_workflows import CommandExecutionRequest, CommandExecutionWorkflow
 
@@ -33,8 +37,17 @@ class TemporalCommandDispatcher:
             raise TemporalTransportError(
                 "outbox row targets an unsupported Temporal destination"
             )
+        durable_payload = dict(record.payload)
+        authenticated_client_id = durable_payload.pop(
+            AUTHENTICATED_CLIENT_ID_KEY,
+            None,
+        )
+        if not isinstance(authenticated_client_id, str) or not authenticated_client_id:
+            raise TemporalTransportError(
+                "outbox command is missing authenticated client provenance"
+            )
         try:
-            command = CommandEnvelope.model_validate(record.payload)
+            command = CommandEnvelope.model_validate(durable_payload)
         except Exception as exc:
             raise TemporalTransportError(
                 "outbox command does not match the canonical command envelope"
@@ -54,6 +67,7 @@ class TemporalCommandDispatcher:
 
         request = CommandExecutionRequest(
             **command.model_dump(mode="json"),
+            authenticated_client_id=authenticated_client_id,
             resume_from_queued=command.idempotency_key.startswith("operation-retry:"),
         )
         try:

@@ -79,10 +79,20 @@ class CapturingCommandStore(MemoryCommandStore):
     def __init__(self) -> None:
         super().__init__()
         self.submitted: list[CommandEnvelope] = []
+        self.authenticated_client_ids: list[str] = []
 
-    async def submit(self, command: CommandEnvelope):
+    async def submit(
+        self,
+        command: CommandEnvelope,
+        *,
+        authenticated_client_id: str,
+    ):
         self.submitted.append(command.model_copy(deep=True))
-        return await super().submit(command)
+        self.authenticated_client_ids.append(authenticated_client_id)
+        return await super().submit(
+            command,
+            authenticated_client_id=authenticated_client_id,
+        )
 
 
 def _runtime(test_settings, *, sms_enabled: bool = True) -> Runtime:
@@ -242,6 +252,7 @@ def test_sms_api_creates_one_canonical_telnexa_command_and_usage(test_settings) 
 
         assert isinstance(runtime.commands.store, CapturingCommandStore)
         assert len(runtime.commands.store.submitted) == 1
+        assert runtime.commands.store.authenticated_client_ids == ["kyqra"]
         command = runtime.commands.store.submitted[0]
         assert command.command_type == "sms.message.submit.v1"
         assert command.target == "telnexa-sms"

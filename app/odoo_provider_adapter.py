@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -111,6 +112,23 @@ class OdooProviderAdapter:
 
     def _require_active(self, request: CommandExecutionRequest) -> None:
         self._validate_identity(request)
+        if not re.fullmatch(
+            r"[a-z0-9]+(?:-[a-z0-9]+)*",
+            request.authenticated_client_id,
+        ) or len(request.authenticated_client_id) > 100:
+            raise OdooProviderAdapterError(
+                "authenticated client provenance is missing or invalid"
+            )
+        if (
+            request.authenticated_client_id == "n8n-automation"
+            and self.settings.umbrella_controls.get(
+                "N8N_EXTERNAL_PROVIDER_WRITES"
+            )
+            is not True
+        ):
+            raise OdooProviderAdapterError(
+                "N8N_EXTERNAL_PROVIDER_WRITES is disabled"
+            )
         if self.settings.external_effects.get("ODOO_WRITE") is not True:
             raise OdooProviderAdapterError("ODOO_WRITE is disabled")
         provenance = request.payload.get("provenance")

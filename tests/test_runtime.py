@@ -11,6 +11,7 @@ from app.contracts import ROUTE_BY_PATH, WEBHOOK_ROUTES
 from app.main import create_app
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
+from app.runtime_safety import runtime_safety_readback
 from app.storage import MemoryInboxStore
 
 from .conftest import FakeTokenVerifier, make_event, signed_headers
@@ -342,6 +343,7 @@ def test_health_ready_version(test_settings, runtime) -> None:
         capabilities = client.get("/capabilities")
         assert capabilities.status_code == 200
         assert capabilities.json()["capabilities"]["PRODUCTION_DIALING"] is False
+        assert capabilities.json()["capabilities"]["LIVE_ADVERTISING_ENABLED"] is False
 
 
 def test_runtime_safety_readback_is_authenticated_and_schema_valid(
@@ -367,13 +369,20 @@ def test_runtime_safety_readback_is_authenticated_and_schema_valid(
         (
             Path(__file__).resolve().parents[1]
             / "contracts"
-            / "runtime-safety-readback.v1.schema.json"
+            / "runtime-safety-readback.v1.1.schema.json"
         ).read_text(encoding="utf-8")
     )
     Draft202012Validator(schema).validate(value)
     assert value["environment"] == "test"
     assert value["provider_effects_disabled"] is True
     assert value["all_external_effects_disabled"] is True
+    assert value["umbrella_controls"] == {
+        "EXTERNAL_DELIVERY_ENABLED": False,
+        "EXTERNAL_MODEL_CALLS_ENABLED": False,
+        "LIVE_ADVERTISING_ENABLED": False,
+        "N8N_EXTERNAL_PROVIDER_WRITES": False,
+        "SOCIAL_PUBLISHING_ENABLED": False,
+    }
     assert value["staging_safe"] is False
     assert "test-secret-value" not in accepted.text
 
@@ -413,6 +422,45 @@ def test_runtime_safety_readback_proves_fail_closed_staging(
     }
     assert value["production_activation_configured"] is False
     assert not any(value["external_effects"].values())
+    assert not any(value["umbrella_controls"].values())
+
+
+def test_runtime_safety_aggregate_summaries_include_umbrella_controls(
+    test_settings,
+) -> None:
+    enabled = replace(
+        test_settings,
+        umbrella_controls={
+            **test_settings.umbrella_controls,
+            "EXTERNAL_DELIVERY_ENABLED": True,
+        },
+    )
+
+    value = runtime_safety_readback(enabled)
+
+    assert value["umbrella_controls"]["EXTERNAL_DELIVERY_ENABLED"] is True
+    assert value["provider_effects_disabled"] is False
+    assert value["all_external_effects_disabled"] is False
+
+
+def test_runtime_discovery_allowlists_every_umbrella_control() -> None:
+    discovery = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "discover_middleware_runtime.sh"
+    ).read_text(encoding="utf-8")
+    allowlist = discovery.partition("safe_controls=")[2].partition(
+        "printf '\\nCOMPOSE_PROJECTS\\n'"
+    )[0]
+    assert allowlist
+    for name in (
+        "LIVE_ADVERTISING_ENABLED",
+        "EXTERNAL_DELIVERY_ENABLED",
+        "SOCIAL_PUBLISHING_ENABLED",
+        "EXTERNAL_MODEL_CALLS_ENABLED",
+        "N8N_EXTERNAL_PROVIDER_WRITES",
+    ):
+        assert name in allowlist
 
 
 def test_readiness_reports_named_failure_without_dependency_details(

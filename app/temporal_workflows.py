@@ -96,6 +96,7 @@ class CommandExecutionRequest:
     idempotency_key: str
     capability: str
     payload: dict[str, Any]
+    authenticated_client_id: str = ""
     resume_from_queued: bool = False
 
 

@@ -94,6 +94,48 @@ def test_external_effect_flags_fail_closed() -> None:
         )
 
 
+def test_umbrella_controls_default_false_and_reject_malformed_values() -> None:
+    settings = Settings.from_env(
+        {"APP_ENV": "test", "ALLOW_IN_MEMORY_STORAGE": "true"}
+    )
+    assert settings.umbrella_controls == {
+        "LIVE_ADVERTISING_ENABLED": False,
+        "EXTERNAL_DELIVERY_ENABLED": False,
+        "SOCIAL_PUBLISHING_ENABLED": False,
+        "EXTERNAL_MODEL_CALLS_ENABLED": False,
+        "N8N_EXTERNAL_PROVIDER_WRITES": False,
+    }
+    with pytest.raises(ConfigurationError, match="EXTERNAL_DELIVERY_ENABLED"):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "EXTERNAL_DELIVERY_ENABLED": "missing-is-not-false",
+            }
+        )
+
+
+def test_staging_rejects_enabled_umbrella_control() -> None:
+    with pytest.raises(ConfigurationError, match="staging umbrella controls"):
+        Settings.from_env(
+            {**staging_env(), "EXTERNAL_MODEL_CALLS_ENABLED": "true"}
+        )
+
+
+def test_external_delivery_umbrella_is_an_authoritative_kill_switch() -> None:
+    with pytest.raises(ConfigurationError, match="EXTERNAL_DELIVERY_ENABLED"):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "ODOO_WRITE": "true",
+                "FORM_ODOO_DELIVERY_ENABLED": "true",
+                "ODOO_19_BASE_URL": "https://odoo.internal.invalid",
+                "ODOO_19_HMAC_SECRET": "s" * 40,
+            }
+        )
+
+
 def test_jetstream_dispatch_requires_matching_gate_and_authorization() -> None:
     with pytest.raises(ConfigurationError):
         Settings.from_env(

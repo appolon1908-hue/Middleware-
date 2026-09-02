@@ -18,7 +18,7 @@ from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAFETY_SCHEMA = ROOT / "contracts" / "runtime-safety-readback.v1.schema.json"
+SAFETY_SCHEMA = ROOT / "contracts" / "runtime-safety-readback.v1.1.schema.json"
 SOURCE_SHA = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 PRODUCER = "odoo-integration"
@@ -51,6 +51,13 @@ REQUIRED_EFFECT_CONTROLS = {
     "LIVE_SMS_DELIVERY",
     "LIVE_EMAIL_DELIVERY",
     "UNRESTRICTED_CRAWLING",
+}
+REQUIRED_UMBRELLA_CONTROLS = {
+    "LIVE_ADVERTISING_ENABLED",
+    "EXTERNAL_DELIVERY_ENABLED",
+    "SOCIAL_PUBLISHING_ENABLED",
+    "EXTERNAL_MODEL_CALLS_ENABLED",
+    "N8N_EXTERNAL_PROVIDER_WRITES",
 }
 
 
@@ -100,6 +107,7 @@ def validate_runtime_safety(
     dispatch = value["dispatch"]
     persistence = value["persistence"]
     effects = value["external_effects"]
+    umbrella_controls = value["umbrella_controls"]
     if value["environment"] != "staging":
         raise AcceptanceError("runtime is not staging")
     if value["runtime_profile_id"] != EXPECTED_PROFILE:
@@ -123,6 +131,15 @@ def validate_runtime_safety(
     enabled = sorted(name for name, enabled in effects.items() if enabled)
     if enabled:
         raise AcceptanceError("staging external effects are enabled: " + ", ".join(enabled))
+    if set(umbrella_controls) != REQUIRED_UMBRELLA_CONTROLS:
+        raise AcceptanceError("runtime umbrella-control set is incomplete or unexpected")
+    enabled_umbrella = sorted(
+        name for name, enabled in umbrella_controls.items() if enabled
+    )
+    if enabled_umbrella:
+        raise AcceptanceError(
+            "staging umbrella controls are enabled: " + ", ".join(enabled_umbrella)
+        )
     if value["production_dialing"] != "DISABLED":
         raise AcceptanceError("production dialing is not disabled")
     if value["production_activation_configured"] is not False:

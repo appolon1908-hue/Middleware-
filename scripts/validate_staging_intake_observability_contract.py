@@ -181,7 +181,10 @@ def main() -> None:
     security_source = (ROOT / "app/security.py").read_text()
     assert '@app.get("/metrics")' in main_source
     assert 'required_scope="metrics.read"' in main_source
-    assert '@app.get("/v1/runtime/safety")' in main_source
+    assert (
+        '@app.get("/v1/runtime/safety", response_model=RuntimeSafetyReadback)'
+        in main_source
+    )
     assert 'required_scope="health.read"' in main_source
     assert "expires_at - issued_at > 300" in security_source
     print("MIDDLEWARE_STAGING_INTAKE_OBSERVABILITY_CONTRACT=PASS")

@@ -15,6 +15,7 @@ from app.commands import (
     CommandPolicyRegistry,
     CommandService,
     MemoryCommandStore,
+    command_digest,
     decode_readback_evidence,
     verify_readback_evidence_digest,
 )
@@ -61,14 +62,17 @@ async def test_memory_command_ledger_is_idempotent_and_state_guarded() -> None:
     store = MemoryCommandStore()
     command = CommandEnvelope.model_validate(command_payload())
 
-    first = await store.submit(command)
-    duplicate = await store.submit(command)
+    first = await store.submit(command, authenticated_client_id="test-client")
+    duplicate = await store.submit(command, authenticated_client_id="test-client")
     assert first.state == "persisted"
     assert duplicate.duplicate is True
 
     conflicting = command.model_copy(update={"payload": {"contact_id": "changed"}})
     with pytest.raises(CommandConflict):
-        await store.submit(conflicting)
+        await store.submit(conflicting, authenticated_client_id="test-client")
+
+    with pytest.raises(CommandConflict):
+        await store.submit(command, authenticated_client_id="another-client")
 
     queued = await store.transition(
         command.tenant_id,
@@ -89,10 +93,27 @@ async def test_memory_command_ledger_is_idempotent_and_state_guarded() -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_command_ledger_preserves_legacy_retry_idempotency() -> None:
+    store = MemoryCommandStore()
+    command = CommandEnvelope.model_validate(command_payload())
+    first = await store.submit(command, authenticated_client_id="test-client")
+    legacy_entry = (command_digest(command), first)
+    store._commands[(command.tenant_id, command.command_id)] = legacy_entry
+    store._idempotency[(command.tenant_id, command.idempotency_key)] = legacy_entry
+
+    duplicate = await store.submit(
+        command,
+        authenticated_client_id="post-upgrade-client",
+    )
+
+    assert duplicate.duplicate is True
+
+
+@pytest.mark.asyncio
 async def test_memory_command_ledger_persists_redacted_readback_evidence() -> None:
     store = MemoryCommandStore()
     command = CommandEnvelope.model_validate(command_payload())
-    await store.submit(command)
+    await store.submit(command, authenticated_client_id="test-client")
     with pytest.raises(CommandConflict, match="only on completion"):
         await store.transition(
             command.tenant_id,
@@ -148,16 +169,25 @@ async def test_command_policy_fails_closed() -> None:
     service = CommandService(MemoryCommandStore(), enabled_policy())
 
     with pytest.raises(CommandCapabilityDisabled):
-        await service.submit(command, authenticated_subject="different-user")
+        await service.submit(
+            command,
+            authenticated_subject="different-user",
+            authenticated_client_id="test-client",
+        )
     with pytest.raises(CommandCapabilityDisabled):
         await CommandService(
             MemoryCommandStore(),
             CommandPolicyRegistry(enabled_policy().policies, {"ODOO_WRITE": False}),
-        ).submit(command, authenticated_subject="user-123")
+        ).submit(
+            command,
+            authenticated_subject="user-123",
+            authenticated_client_id="test-client",
+        )
     with pytest.raises(CommandCapabilityDisabled):
         await service.submit(
             command.model_copy(update={"target": "another-adapter"}),
             authenticated_subject="user-123",
+            authenticated_client_id="test-client",
         )
 
 

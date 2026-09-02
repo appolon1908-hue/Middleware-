@@ -392,6 +392,211 @@
         "title": "ReconciliationResolution",
         "type": "object"
       },
+      "RuntimeSafetyDispatch": {
+        "additionalProperties": false,
+        "properties": {
+          "nats_mode": {
+            "enum": [
+              "disabled",
+              "isolated",
+              "production"
+            ],
+            "title": "Nats Mode",
+            "type": "string"
+          },
+          "outbox_enabled": {
+            "title": "Outbox Enabled",
+            "type": "boolean"
+          },
+          "temporal_worker_mode": {
+            "enum": [
+              "disabled",
+              "isolated",
+              "production"
+            ],
+            "title": "Temporal Worker Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outbox_enabled",
+          "nats_mode",
+          "temporal_worker_mode"
+        ],
+        "title": "RuntimeSafetyDispatch",
+        "type": "object"
+      },
+      "RuntimeSafetyPersistence": {
+        "additionalProperties": false,
+        "properties": {
+          "in_memory": {
+            "title": "In Memory",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "in_memory"
+        ],
+        "title": "RuntimeSafetyPersistence",
+        "type": "object"
+      },
+      "RuntimeSafetyReadback": {
+        "additionalProperties": false,
+        "description": "Machine-readable v1.1 response published by the runtime OpenAPI.",
+        "properties": {
+          "all_external_effects_disabled": {
+            "title": "All External Effects Disabled",
+            "type": "boolean"
+          },
+          "dispatch": {
+            "$ref": "#/components/schemas/RuntimeSafetyDispatch"
+          },
+          "environment": {
+            "enum": [
+              "development",
+              "test",
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "external_effects": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "minProperties": 1,
+            "title": "External Effects",
+            "type": "object"
+          },
+          "persistence": {
+            "$ref": "#/components/schemas/RuntimeSafetyPersistence"
+          },
+          "production_activation_configured": {
+            "title": "Production Activation Configured",
+            "type": "boolean"
+          },
+          "production_dialing": {
+            "const": "DISABLED",
+            "title": "Production Dialing",
+            "type": "string"
+          },
+          "provider_effects_disabled": {
+            "title": "Provider Effects Disabled",
+            "type": "boolean"
+          },
+          "release": {
+            "$ref": "#/components/schemas/RuntimeSafetyRelease"
+          },
+          "runtime_profile_id": {
+            "minLength": 1,
+            "title": "Runtime Profile Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "1.1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "service": {
+            "const": "middleware-api",
+            "title": "Service",
+            "type": "string"
+          },
+          "staging_safe": {
+            "title": "Staging Safe",
+            "type": "boolean"
+          },
+          "umbrella_controls": {
+            "$ref": "#/components/schemas/RuntimeSafetyUmbrellaControls"
+          }
+        },
+        "required": [
+          "schema_version",
+          "service",
+          "environment",
+          "runtime_profile_id",
+          "release",
+          "persistence",
+          "dispatch",
+          "external_effects",
+          "umbrella_controls",
+          "production_dialing",
+          "production_activation_configured",
+          "provider_effects_disabled",
+          "all_external_effects_disabled",
+          "staging_safe"
+        ],
+        "title": "RuntimeSafetyReadback",
+        "type": "object"
+      },
+      "RuntimeSafetyRelease": {
+        "additionalProperties": false,
+        "properties": {
+          "build_time": {
+            "minLength": 1,
+            "title": "Build Time",
+            "type": "string"
+          },
+          "image_digest": {
+            "minLength": 1,
+            "title": "Image Digest",
+            "type": "string"
+          },
+          "schema_head": {
+            "minLength": 1,
+            "title": "Schema Head",
+            "type": "string"
+          },
+          "source_sha": {
+            "minLength": 1,
+            "title": "Source Sha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_sha",
+          "image_digest",
+          "schema_head",
+          "build_time"
+        ],
+        "title": "RuntimeSafetyRelease",
+        "type": "object"
+      },
+      "RuntimeSafetyUmbrellaControls": {
+        "additionalProperties": false,
+        "properties": {
+          "EXTERNAL_DELIVERY_ENABLED": {
+            "title": "External Delivery Enabled",
+            "type": "boolean"
+          },
+          "EXTERNAL_MODEL_CALLS_ENABLED": {
+            "title": "External Model Calls Enabled",
+            "type": "boolean"
+          },
+          "LIVE_ADVERTISING_ENABLED": {
+            "title": "Live Advertising Enabled",
+            "type": "boolean"
+          },
+          "N8N_EXTERNAL_PROVIDER_WRITES": {
+            "title": "N8N External Provider Writes",
+            "type": "boolean"
+          },
+          "SOCIAL_PUBLISHING_ENABLED": {
+            "title": "Social Publishing Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "LIVE_ADVERTISING_ENABLED",
+          "EXTERNAL_DELIVERY_ENABLED",
+          "SOCIAL_PUBLISHING_ENABLED",
+          "EXTERNAL_MODEL_CALLS_ENABLED",
+          "N8N_EXTERNAL_PROVIDER_WRITES"
+        ],
+        "title": "RuntimeSafetyUmbrellaControls",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -9792,8 +9997,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Runtime Safety V1 Runtime Safety Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RuntimeSafetyReadback"
                 }
               }
             },

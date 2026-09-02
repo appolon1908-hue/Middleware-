@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +19,7 @@ from .provider_canary import provider_evidence_digest
 ROOT = Path(__file__).resolve().parents[1]
 TEMPORAL_COMMAND_DESTINATION = "temporal-command"
 ODOO_COMMAND_DESTINATION = "odoo-command"
+AUTHENTICATED_CLIENT_ID_KEY = "_authenticated_client_id"
 CommandState = Literal[
     "persisted",
     "queued",
@@ -277,6 +279,48 @@ def command_digest(command: CommandEnvelope) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def authenticated_command_payload(
+    command: CommandEnvelope,
+    authenticated_client_id: str,
+) -> dict[str, Any]:
+    """Build the internal durable envelope without changing the public command."""
+
+    payload = command.model_dump(mode="json")
+    payload[AUTHENTICATED_CLIENT_ID_KEY] = authenticated_client_id
+    return payload
+
+
+def authenticated_command_digest(
+    command: CommandEnvelope,
+    authenticated_client_id: str,
+) -> str:
+    canonical = json.dumps(
+        authenticated_command_payload(command, authenticated_client_id),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def command_digest_matches(
+    persisted_digest: str,
+    command: CommandEnvelope,
+    authenticated_client_id: str,
+) -> bool:
+    """Accept current provenance-bound digests and pre-provenance legacy rows.
+
+    A legacy match preserves retry idempotency only. Its durable payload remains
+    unchanged and therefore still lacks authenticated provenance, so execution
+    continues to fail closed at the provider adapter.
+    """
+
+    return persisted_digest in {
+        authenticated_command_digest(command, authenticated_client_id),
+        command_digest(command),
+    }
+
+
 _SENSITIVE_METADATA_PARTS = ("authorization", "token", "password", "secret", "credential", "private_key", "api_key", "access_token", "refresh_token")
 
 
@@ -294,7 +338,12 @@ def redact_metadata(value: object) -> dict[str, Any]:
 
 
 class CommandStore(Protocol):
-    async def submit(self, command: CommandEnvelope) -> CommandOperation:
+    async def submit(
+        self,
+        command: CommandEnvelope,
+        *,
+        authenticated_client_id: str,
+    ) -> CommandOperation:
         ...
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
@@ -333,8 +382,13 @@ class MemoryCommandStore:
         self._attempts: dict[tuple[str, UUID], list[OperationAttempt]] = {}
         self._mutations: dict[tuple[str, UUID, str, str, str], tuple[str, CommandOperation]] = {}
 
-    async def submit(self, command: CommandEnvelope) -> CommandOperation:
-        digest = command_digest(command)
+    async def submit(
+        self,
+        command: CommandEnvelope,
+        *,
+        authenticated_client_id: str,
+    ) -> CommandOperation:
+        digest = authenticated_command_digest(command, authenticated_client_id)
         command_key = (command.tenant_id, command.command_id)
         idempotency_key = (command.tenant_id, command.idempotency_key)
         existing_by_id = self._commands.get(command_key)
@@ -349,7 +403,9 @@ class MemoryCommandStore:
             )
         existing = existing_by_id or existing_by_idempotency
         if existing is not None:
-            if existing[0] != digest:
+            if not command_digest_matches(
+                existing[0], command, authenticated_client_id
+            ):
                 raise CommandConflict(
                     "command identity was reused with different content"
                 )
@@ -365,7 +421,7 @@ class MemoryCommandStore:
         entry = (digest, operation)
         self._commands[command_key] = entry
         self._idempotency[idempotency_key] = entry
-        self._events[command_key] = [OperationEvent(event_id=1, operation_id=command.command_id, previous_state=None, new_state="persisted", actor_id=command.requested_by, reason="validated command and persisted delivery intent", safe_metadata={}, created_at=now)]
+        self._events[command_key] = [OperationEvent(event_id=1, operation_id=command.command_id, previous_state=None, new_state="persisted", actor_id=command.requested_by, reason="validated command and persisted delivery intent", safe_metadata={"authenticated_client_id": authenticated_client_id}, created_at=now)]
         self._attempts[command_key] = []
         return operation
 
@@ -614,9 +670,14 @@ class PostgresCommandStore:
             duplicate=duplicate,
         )
 
-    async def submit(self, command: CommandEnvelope) -> CommandOperation:
-        digest = command_digest(command)
-        payload = command.model_dump(mode="json")
+    async def submit(
+        self,
+        command: CommandEnvelope,
+        *,
+        authenticated_client_id: str,
+    ) -> CommandOperation:
+        digest = authenticated_command_digest(command, authenticated_client_id)
+        payload = authenticated_command_payload(command, authenticated_client_id)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 row = await conn.fetchrow(
@@ -647,12 +708,17 @@ class PostgresCommandStore:
                         INSERT INTO middleware_command_audit (
                             tenant_id, command_id, previous_state, new_state,
                             actor_id, reason, metadata
-                        ) VALUES ($1,$2,NULL,'persisted',$3,$4,'{}'::jsonb)
+                        ) VALUES ($1,$2,NULL,'persisted',$3,$4,$5::jsonb)
                         """,
                         command.tenant_id,
                         str(command.command_id),
                         command.requested_by,
                         "validated command and persisted delivery intent",
+                        json.dumps(
+                            {"authenticated_client_id": authenticated_client_id},
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ),
                     )
                     await conn.execute(
                         """
@@ -687,7 +753,11 @@ class PostgresCommandStore:
                     (item["command_id"], item["idempotency_key"])
                     for item in existing_rows
                 }
-                if len(identities) != 1 or existing_rows[0]["payload_sha256"] != digest:
+                if len(identities) != 1 or not command_digest_matches(
+                    existing_rows[0]["payload_sha256"],
+                    command,
+                    authenticated_client_id,
+                ):
                     raise CommandConflict(
                         "command identity was reused with different content"
                     )
@@ -1084,13 +1154,24 @@ class CommandService:
         command: CommandEnvelope,
         *,
         authenticated_subject: str,
+        authenticated_client_id: str,
     ) -> CommandOperation:
         if command.requested_by != authenticated_subject:
             raise CommandCapabilityDisabled(
                 "requested_by must equal the authenticated token subject"
             )
+        if not re.fullmatch(
+            r"[a-z0-9]+(?:-[a-z0-9]+)*",
+            authenticated_client_id,
+        ) or len(authenticated_client_id) > 100:
+            raise CommandCapabilityDisabled(
+                "authenticated client ID is invalid"
+            )
         self.policies.authorize(command)
-        return await self.store.submit(command)
+        return await self.store.submit(
+            command,
+            authenticated_client_id=authenticated_client_id,
+        )
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
         return await self.store.get(tenant_id, command_id)

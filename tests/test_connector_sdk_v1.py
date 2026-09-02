@@ -276,7 +276,7 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
         )
 
     def test_manifests_are_disabled_and_non_overlapping(self) -> None:
-        self.assertEqual(len(self.records), 8)
+        self.assertEqual(len(self.records), 10)
         self.assertEqual(
             self.registry.validate_global_invariants(),
             (),

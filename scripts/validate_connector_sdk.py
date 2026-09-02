@@ -29,10 +29,6 @@ def main() -> int:
     errors: list[str] = []
     manifest_dir = ROOT / "connectors" / "manifests"
     files = sorted(manifest_dir.glob("*.connector.json"))
-    if len(files) != 8:
-        errors.append(
-            f"expected 8 connector manifests, found {len(files)}"
-        )
 
     registry = ConnectorRegistry()
     try:

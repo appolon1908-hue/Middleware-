@@ -64,6 +64,9 @@ python3 scripts/validate_site_routes_and_leads.py
 printf '==> Validating unified-intake observability and pending activation gates\n'
 python3 scripts/validate_intake_observability.py
 
+printf '==> Validating fixed-recipient observability alert delivery\n'
+python3 scripts/validate_observability_alert_contract.py
+
 if [[ -x scripts/project_ci.sh ]]; then
   printf '==> Running project-specific locked dependency and test pipeline\n'
   scripts/project_ci.sh

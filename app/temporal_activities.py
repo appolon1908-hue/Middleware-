@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from .commands import CommandConflict, CommandNotFound, PostgresCommandStore
+from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .temporal_workflows import (
     ActivityResult,
@@ -17,6 +18,14 @@ from .temporal_workflows import (
     ProvisioningStepRequest,
     ReconciliationRequest,
 )
+
+
+class ProviderAdapter(Protocol):
+    async def execute(self, request: CommandExecutionRequest) -> ActivityResult:
+        ...
+
+    async def readback(self, request: CommandExecutionRequest) -> ActivityResult:
+        ...
 
 
 class FailClosedWorkflowActivities:
@@ -75,9 +84,11 @@ class CommandLedgerWorkflowActivities:
         self,
         store: PostgresCommandStore,
         odoo: OdooProviderAdapter | None = None,
+        klyrow_alert: KlyrowAlertAdapter | None = None,
     ) -> None:
         self.store = store
         self.odoo = odoo
+        self.klyrow_alert = klyrow_alert
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -107,24 +118,26 @@ class CommandLedgerWorkflowActivities:
             readback_evidence=operation.readback_evidence,
         )
 
-    def _odoo(self, request: CommandExecutionRequest) -> OdooProviderAdapter:
-        if request.target != "odoo-19" or self.odoo is None:
-            raise ApplicationError(
-                "no production provider adapter is activated for this command",
-                non_retryable=True,
-                type="CapabilityDisabled",
-            )
-        return self.odoo
+    def _adapter(self, request: CommandExecutionRequest) -> ProviderAdapter:
+        if request.target == "odoo-19" and self.odoo is not None:
+            return self.odoo
+        if request.target == "klyrow-alert-email" and self.klyrow_alert is not None:
+            return self.klyrow_alert
+        raise ApplicationError(
+            "no production provider adapter is activated for this command",
+            non_retryable=True,
+            type="CapabilityDisabled",
+        )
 
     @activity.defn(name="execute_command")
     async def execute_command(
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
-        adapter = self._odoo(request)
+        adapter = self._adapter(request)
         try:
             return await adapter.execute(request)
-        except OdooProviderAdapterError as exc:
+        except (OdooProviderAdapterError, KlyrowAlertAdapterError) as exc:
             raise ApplicationError(
                 str(exc),
                 type="ProviderAdapterError",
@@ -135,10 +148,10 @@ class CommandLedgerWorkflowActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
-        adapter = self._odoo(request)
+        adapter = self._adapter(request)
         try:
             return await adapter.readback(request)
-        except OdooProviderAdapterError as exc:
+        except (OdooProviderAdapterError, KlyrowAlertAdapterError) as exc:
             raise ApplicationError(
                 str(exc),
                 type="ProviderReadbackError",

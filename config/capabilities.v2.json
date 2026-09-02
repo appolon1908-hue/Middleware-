@@ -3,6 +3,7 @@
   "default_policy": "DENY",
   "capabilities": {
     "EMAIL_DELIVERY": false,
+    "OBSERVABILITY_ALERT_EMAIL_DELIVERY": false,
     "SMS_DELIVERY": false,
     "SOCIAL_PUBLISH": false,
     "CRAWLER_EXECUTION": false,
@@ -17,5 +18,14 @@
     "DEAD_LETTER_REPLAY": false,
     "PROVISIONING_WRITE": false
   },
-  "activation_requirements": ["protected_merged_sha", "exact_head_tests", "independent_approval", "staging_no_effect", "backup_restore", "rollback_rehearsal", "bounded_canary", "runtime_readback"]
+  "activation_requirements": [
+    "protected_merged_sha",
+    "exact_head_tests",
+    "independent_approval",
+    "staging_no_effect",
+    "backup_restore",
+    "rollback_rehearsal",
+    "bounded_canary",
+    "runtime_readback"
+  ]
 }

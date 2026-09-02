@@ -1740,10 +1740,12 @@ class PostgresIncidentStore:
                 row = await conn.fetchrow(
                     """
                     UPDATE middleware_observability_incidents SET
-                      state=$3, last_seen_at=$4, resolved_at=CASE WHEN $3='resolved'
-                        THEN $4 ELSE NULL END,
-                      source_deployment=$5, correlation_id=$6,
-                      resource_version=resource_version+1, updated_at=$4
+                      state=$3::text, last_seen_at=$4::timestamptz,
+                      resolved_at=CASE WHEN $3::text='resolved'
+                        THEN $4::timestamptz ELSE NULL::timestamptz END,
+                      source_deployment=$5::text, correlation_id=$6::text,
+                      resource_version=resource_version+1,
+                      updated_at=$4::timestamptz
                     WHERE tenant_id=$1 AND incident_id=$2 RETURNING *
                     """,
                     policy.tenant_id,

@@ -699,6 +699,9 @@ def test_postgres_mutation_query_casts_conditional_parameters() -> None:
     assert "THEN $5::timestamptz ELSE NULL::timestamptz END" in source
     assert "THEN $6::text ELSE NULL::text END" in source
     assert "updated_at=$5::timestamptz" in source
+    assert "last_seen_at=$4::timestamptz" in source
+    assert "THEN $4::timestamptz ELSE NULL::timestamptz END" in source
+    assert "source_deployment=$5::text, correlation_id=$6::text" in source
 
 
 def test_canonical_openapi_methods_match_runtime() -> None:

@@ -318,8 +318,6 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
-      parameters:
-      - *id001
   /v1/operations-dashboard/tenants/{tenant_id}:
     get:
       tags:
@@ -3991,7 +3989,6 @@ paths:
         schema:
           type: string
           title: Webhook Id
-      - *id001
       responses:
         '200':
           description: Successful Response
@@ -4074,7 +4071,6 @@ paths:
         schema:
           type: string
           title: Webhook Id
-      - *id001
       responses:
         '200':
           description: Successful Response
@@ -4116,7 +4112,6 @@ paths:
         schema:
           type: string
           title: Webhook Id
-      - *id001
       responses:
         '200':
           description: Successful Response
@@ -4711,8 +4706,6 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
-      parameters:
-      - *id001
   /v1/intake/surveys/responses:
     post:
       summary: Submit Survey Response
@@ -4741,8 +4734,6 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
-      parameters:
-      - *id001
   /v1/commands:
     post:
       summary: Submit Command

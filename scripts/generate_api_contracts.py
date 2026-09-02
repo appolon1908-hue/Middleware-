@@ -24,7 +24,7 @@ def main()->None:
             if method not in {"get","post","put","patch","delete"}: continue
             if path not in public:
                 operation["security"]=[{"bearerAuth":[]}]
-            if path.startswith("/v1/") and path not in {"/v1/runtime/safety"}:
+            if path.startswith("/v1/") and path not in {"/v1/runtime/safety"} and "webhook" not in path and not path.startswith("/v1/intake/"):
                 params=operation.setdefault("parameters",[])
                 if not any(p.get("name")=="X-Tenant-ID" for p in params): params.append(tenant)
                 if method in MUTATIONS and not ("webhook" in path or path.startswith("/v1/intake/")):

@@ -5,6 +5,8 @@ from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
 from tests.test_commands import CommandTokenVerifier, enabled_policy
+from tests.conftest import make_event, signed_headers
+from app.contracts import ROUTE_BY_PATH
 
 REQUIRED={
 "/v1/inbox","/v1/inbox/{record_id}","/v1/inbox/{record_id}/events","/v1/inbox/{record_id}/reprocess","/v1/inbox/{record_id}/quarantine","/v1/inbox/{record_id}/release",
@@ -28,3 +30,15 @@ def test_system_safety_is_authenticated_and_fail_closed(test_settings):
         body=response.json()
         assert body["CALLS_PLACED"]==0
         assert all(body[key] is False for key in ("LIVE_ADVERTISING_ENABLED","EXTERNAL_DELIVERY_ENABLED","SOCIAL_PUBLISHING_ENABLED","EXTERNAL_MODEL_CALLS_ENABLED","LIVE_SMS_DELIVERY","LIVE_EMAIL_DELIVERY","LIVE_PSTN_DIALING","N8N_EXTERNAL_PROVIDER_WRITES","PRODUCTION_DIALING"))
+
+def test_generic_provider_webhook_preserves_signature_and_replay_controls(test_settings,runtime):
+    path="/v1/webhooks/odoo/events/webhook-1"; route=ROUTE_BY_PATH["/api/v1/odoo/events"]
+    event=make_event(producer=route.producer_client_id,event_type=sorted(route.event_types)[0])
+    body,headers=signed_headers(path=path,producer=route.producer_client_id,scope=route.required_scope,event=event)
+    with TestClient(create_app(settings=test_settings,runtime=runtime)) as client:
+        first=client.post(path,content=body,headers=headers)
+        assert first.status_code==202
+        replay=client.post(path,content=body,headers=headers)
+        assert replay.status_code==200 and replay.json()["duplicate"] is True
+        unsigned=dict(headers); unsigned["X-Codestra-Signature"]="sha256="+"0"*64
+        assert client.post(path,content=body,headers=unsigned).status_code==401

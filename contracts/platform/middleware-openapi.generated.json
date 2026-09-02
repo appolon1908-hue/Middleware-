@@ -2657,16 +2657,6 @@
               "title": "Webhook Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -2731,16 +2721,6 @@
             "required": true,
             "schema": {
               "title": "Webhook Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
               "type": "string"
             }
           }
@@ -4152,18 +4132,6 @@
     "/v1/intake/leads": {
       "post": {
         "operationId": "submit_lead_v1_intake_leads_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -4209,18 +4177,6 @@
     "/v1/intake/surveys/responses": {
       "post": {
         "operationId": "submit_survey_response_v1_intake_surveys_responses_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -6700,18 +6656,6 @@
     "/v1/operations-dashboard/webhooks": {
       "get": {
         "operationId": "webhooks_v1_operations_dashboard_webhooks_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -9590,16 +9534,6 @@
             "required": true,
             "schema": {
               "title": "Webhook Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
               "type": "string"
             }
           }

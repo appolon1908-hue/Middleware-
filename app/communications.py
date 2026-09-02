@@ -190,6 +190,35 @@ class Paged(BaseModel):
     nextCursor: str | None = None
 
 
+class CommunicationMessagePage(BaseModel):
+    items: list[CommunicationMessage]
+    nextCursor: str | None = None
+
+
+class CommunicationEventPage(BaseModel):
+    items: list[MessageEvent]
+    nextCursor: str | None = None
+
+
+class ProviderHealthReport(BaseModel):
+    status: str
+    checkedAt: datetime
+    providers: list[dict[str, Any]]
+
+
+class ProviderReputationReport(BaseModel):
+    status: str
+    checkedAt: datetime
+    domains: list[dict[str, Any]]
+    providers: list[dict[str, Any]]
+
+
+class CommunicationUsageReport(BaseModel):
+    from_: datetime = Field(alias="from")
+    to: datetime
+    totals: list[dict[str, Any]]
+
+
 def _canonical_digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()

@@ -8,8 +8,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from .commands import API_OPERATION_STATES, OperationMutationRequest
+from .commands import (
+    API_OPERATION_STATES,
+    CommandOperation,
+    OperationAttempt,
+    OperationEvent,
+    OperationMutationRequest,
+)
 from .control_plane_auth import caller_for_authorization
 from .security import RequestValidationError, authorize_tenant
 from .storage import StorageError
@@ -17,6 +24,35 @@ from .storage import StorageError
 router = APIRouter(prefix="/v1/operations", tags=["operations"])
 OperationApiState = Literal["RECEIVED", "QUEUED", "SUBMITTED", "ACCEPTED", "UNKNOWN", "COMPLETED", "FAILED", "RECONCILIATION_REQUIRED", "DEAD_LETTERED", "CANCELLED"]
 _PERSISTED_BY_API_STATE = {value: key for key, value in API_OPERATION_STATES.items()}
+
+
+class OperationResponse(CommandOperation):
+    state: OperationApiState
+    duplicate: bool
+
+
+class OperationListResponse(BaseModel):
+    items: list[OperationResponse]
+    next_cursor: str | None = None
+
+
+class OperationEventResponse(OperationEvent):
+    previous_state: OperationApiState | None
+    new_state: OperationApiState
+
+
+class OperationEventListResponse(BaseModel):
+    items: list[OperationEventResponse]
+    next_cursor: str | None = None
+
+
+class OperationAttemptResponse(OperationAttempt):
+    state: OperationApiState
+
+
+class OperationAttemptListResponse(BaseModel):
+    items: list[OperationAttemptResponse]
+    next_cursor: str | None = None
 
 
 def _operation_json(operation) -> dict[str, Any]:
@@ -71,7 +107,7 @@ async def _mutation_context(request: Request):
     return active.commands, tenant_id, actor_id, idempotency_key
 
 
-@router.get("")
+@router.get("", response_model=OperationListResponse)
 async def list_operations(request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None, state: OperationApiState | None = None, command_type: str | None = Query(None, min_length=1, max_length=180)) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "operations")
@@ -84,14 +120,14 @@ async def list_operations(request: Request, limit: int = Query(50, ge=1, le=100)
     return JSONResponse(content={"items": [_operation_json(item) for item in items], "next_cursor": next_cursor})
 
 
-@router.get("/{command_id}")
+@router.get("/{command_id}", response_model=OperationResponse)
 async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
     service, tenant_id = await _context(request)
     operation = await service.get(tenant_id, command_id)
     return JSONResponse(content=_operation_json(operation), headers={"X-Correlation-ID": operation.correlation_id})
 
 
-@router.get("/{command_id}/events")
+@router.get("/{command_id}/events", response_model=OperationEventListResponse)
 async def list_events(command_id: UUID, request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "events")
@@ -109,7 +145,7 @@ async def list_events(command_id: UUID, request: Request, limit: int = Query(50,
     return JSONResponse(content={"items": payload, "next_cursor": next_cursor})
 
 
-@router.get("/{command_id}/attempts")
+@router.get("/{command_id}/attempts", response_model=OperationAttemptListResponse)
 async def list_attempts(command_id: UUID, request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "attempts")
@@ -126,14 +162,14 @@ async def list_attempts(command_id: UUID, request: Request, limit: int = Query(5
     return JSONResponse(content={"items": payload, "next_cursor": next_cursor})
 
 
-@router.post("/{command_id}/cancel")
+@router.post("/{command_id}/cancel", response_model=OperationResponse)
 async def cancel_operation(command_id: UUID, body: OperationMutationRequest, request: Request) -> JSONResponse:
     service, tenant_id, actor_id, idempotency_key = await _mutation_context(request)
     operation = await service.mutate_operation(tenant_id, command_id, action="cancel", actor_id=actor_id, idempotency_key=idempotency_key, expected_version=body.expected_version, reason=body.reason)
     return JSONResponse(content=_operation_json(operation))
 
 
-@router.post("/{command_id}/reconcile")
+@router.post("/{command_id}/reconcile", response_model=OperationResponse)
 async def reconcile_operation(command_id: UUID, body: OperationMutationRequest, request: Request) -> JSONResponse:
     service, tenant_id, actor_id, idempotency_key = await _mutation_context(request)
     operation = await service.mutate_operation(tenant_id, command_id, action="reconcile", actor_id=actor_id, idempotency_key=idempotency_key, expected_version=body.expected_version, reason=body.reason)

@@ -30,7 +30,10 @@ def main()->None:
                 if method in MUTATIONS and not ("webhook" in path or path.startswith("/v1/intake/")):
                     if not any(p.get("name")=="X-Correlation-ID" for p in params): params.extend([correlation,idem])
             responses=operation.setdefault("responses",{})
-            for code,text in (("400","Invalid canonical request"),("401","Authentication failed"),("403","Scope or tenant denied"),("404","Resource not found"),("409","Version, state, or idempotency conflict"),("422","Request cannot be processed"),("429","Rate limited"),("503","Required durable dependency unavailable")):
+            # Preserve business-specific 422 responses emitted by the runtime, but do
+            # not advertise a generic 422 that the application-wide validation
+            # handler normalizes to the canonical 400 envelope.
+            for code,text in (("400","Invalid canonical request"),("401","Authentication failed"),("403","Scope or tenant denied"),("404","Resource not found"),("409","Version, state, or idempotency conflict"),("429","Rate limited"),("503","Required durable dependency unavailable")):
                 responses.setdefault(code,{"description":text})
     generated=ROOT/"contracts/platform/middleware-openapi.generated.json"
     generated.write_text(json.dumps(schema,indent=2,sort_keys=True)+"\n",encoding="utf-8")

@@ -7,14 +7,18 @@ from datetime import UTC, datetime
 from typing import AsyncIterator
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import ValidationError
+from pydantic import AwareDatetime, ValidationError
 
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
 from .communications import (
+    CommunicationEventPage,
+    CommunicationMessage,
+    CommunicationMessagePage,
+    CommunicationUsageReport,
     CommunicationsConflict,
     CommunicationsError,
     CommunicationsNotFound,
@@ -22,6 +26,8 @@ from .communications import (
     CreateMessageRequest,
     MemoryCommunicationsStore,
     Paged,
+    ProviderHealthReport,
+    ProviderReputationReport,
 )
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
 from .control_api import router as control_api_router
@@ -46,6 +52,8 @@ from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
 from .security import SecurityError
 from .service import (
+    CANONICAL_ERROR_SCHEMA,
+    EVENT_TYPE_422_RESPONSE,
     IngressError,
     PayloadTooLargeError,
     ReplayConflictError,
@@ -53,6 +61,7 @@ from .service import (
 )
 from .storage import ReplayConflict, StorageError
 from .survey_routes import register_survey_routes
+
 
 
 def _correlation_id(request: Request) -> str:
@@ -381,8 +390,8 @@ def create_app(
 
         authorize_tenant(claims, tenant_id)
 
-    @app.post("/v1/communication/messages")
-    @app.post("/v1/communications/messages")
+    @app.post("/v1/communication/messages", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
+    @app.post("/v1/communications/messages", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
     async def create_communication_message(
         body: CreateMessageRequest,
         request: Request,
@@ -427,7 +436,7 @@ def create_app(
             headers={"X-Correlation-ID": message.correlationId},
         )
 
-    @app.get("/v1/communications/messages")
+    @app.get("/v1/communications/messages", response_model=CommunicationMessagePage)
     async def list_communication_messages(request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
@@ -446,8 +455,8 @@ def create_app(
             ).model_dump(mode="json"),
         )
 
-    @app.get("/v1/communication/messages/{messageId}")
-    @app.get("/v1/communications/messages/{messageId}")
+    @app.get("/v1/communication/messages/{messageId}", response_model=CommunicationMessage)
+    @app.get("/v1/communications/messages/{messageId}", response_model=CommunicationMessage)
     async def get_communication_message(messageId: UUID, request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
@@ -458,7 +467,7 @@ def create_app(
             content=message.model_dump(mode="json"),
         )
 
-    @app.get("/v1/communications/messages/{messageId}/events")
+    @app.get("/v1/communications/messages/{messageId}/events", response_model=CommunicationEventPage)
     async def list_communication_message_events(
         messageId: UUID,
         request: Request,
@@ -477,7 +486,7 @@ def create_app(
             ).model_dump(mode="json"),
         )
 
-    @app.post("/v1/communications/messages/{messageId}/cancel")
+    @app.post("/v1/communications/messages/{messageId}/cancel", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
     async def cancel_communication_message(messageId: UUID, request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         idempotency_key = request.headers.get("Idempotency-Key", "")
@@ -510,23 +519,27 @@ def create_app(
             content=message.model_dump(mode="json"),
         )
 
-    @app.get("/v1/communications/provider-health")
-    @app.get("/v1/communications/providers/health")
+    @app.get("/v1/communications/provider-health", response_model=ProviderHealthReport)
+    @app.get("/v1/communications/providers/health", response_model=ProviderHealthReport)
     async def get_communication_provider_health(request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
         service = communications_service(request)
         return JSONResponse(status_code=200, content=await service.adapter.health(tenant_id))
 
-    @app.get("/v1/communications/reputation")
+    @app.get("/v1/communications/reputation", response_model=ProviderReputationReport)
     async def get_communication_reputation(request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
         service = communications_service(request)
         return JSONResponse(status_code=200, content=await service.adapter.reputation(tenant_id))
 
-    @app.get("/v1/communications/usage")
-    async def get_communication_usage(request: Request) -> JSONResponse:
+    @app.get("/v1/communications/usage", response_model=CommunicationUsageReport)
+    async def get_communication_usage(
+        request: Request,
+        from_: AwareDatetime | None = Query(None, alias="from"),
+        to: AwareDatetime | None = Query(None),
+    ) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
         messages = [
@@ -537,8 +550,8 @@ def create_app(
         return JSONResponse(
             status_code=200,
             content={
-                "from": request.query_params.get("from") or datetime.now(UTC).isoformat(),
-                "to": request.query_params.get("to") or datetime.now(UTC).isoformat(),
+                "from": (from_ or datetime.now(UTC)).isoformat(),
+                "to": (to or datetime.now(UTC)).isoformat(),
                 "totals": [
                     {
                         "channel": channel,
@@ -740,10 +753,41 @@ def create_app(
             ingress,
             methods=["POST"],
             name=f"ingress-{route.producer_client_id}-{route.path.rsplit('/', 1)[-1]}",
+            responses={422: EVENT_TYPE_422_RESPONSE},
         )
 
     for webhook_route in WEBHOOK_ROUTES:
         register(webhook_route)
+
+    generated_openapi = app.openapi
+
+    def canonical_openapi() -> dict:
+        schema = generated_openapi()
+        automatic_validation = {
+            "description": "Validation Error",
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+                }
+            },
+        }
+        for path_item in schema.get("paths", {}).values():
+            for operation in path_item.values():
+                if not isinstance(operation, dict):
+                    continue
+                responses = operation.get("responses", {})
+                if responses.get("422") != automatic_validation:
+                    continue
+                responses.pop("422")
+                invalid = responses.setdefault(
+                    "400", {"description": "Invalid canonical request"}
+                )
+                invalid["content"] = {
+                    "application/json": {"schema": CANONICAL_ERROR_SCHEMA}
+                }
+        return schema
+
+    app.openapi = canonical_openapi
 
     return app
 

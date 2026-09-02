@@ -167,6 +167,26 @@ def validate_source_policy() -> dict[str, Any]:
                 f"{workflow.name}: checkout credentials must not persist",
             )
 
+    production_environment_users = [
+        workflow.name
+        for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml"))
+        if "environment: production" in workflow.read_text(encoding="utf-8")
+    ]
+    require(
+        production_environment_users == ["automated-production-promotion.yml"],
+        "production environment must be used only by the automated promotion gate",
+    )
+    promotion_gate = (WORKFLOW_DIR / production_environment_users[0]).read_text(
+        encoding="utf-8"
+    )
+    for contract in (
+        'workflows: ["Signed Middleware Release"]',
+        "needs: verify-release",
+        "PRODUCTION_BUSINESS_WRITES_ENABLED=NO",
+        "PRODUCTION_EXTERNAL_EFFECTS_ENABLED=NONE",
+    ):
+        require(contract in promotion_gate, f"production promotion gate lacks {contract}")
+
     run_ci = RUN_CI_PATH.read_text(encoding="utf-8")
     for command in (
         "python3 scripts/validate_repository_governance.py",

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-from pathlib import Path
 
 import pytest
 
@@ -152,19 +151,3 @@ def test_environment_rejects_invalid_reviewer() -> None:
                 },
             }
         )
-
-
-def test_production_environment_is_referenced_only_by_automated_gate() -> None:
-    workflows = Path(".github/workflows")
-    users = [
-        path.name
-        for path in workflows.glob("*.yml")
-        if "environment: production" in path.read_text()
-    ]
-    assert users == ["automated-production-promotion.yml"]
-
-    gate = (workflows / users[0]).read_text()
-    assert 'workflows: ["Signed Middleware Release"]' in gate
-    assert "needs: verify-release" in gate
-    assert "PRODUCTION_BUSINESS_WRITES_ENABLED=NO" in gate
-    assert "PRODUCTION_EXTERNAL_EFFECTS_ENABLED=NONE" in gate

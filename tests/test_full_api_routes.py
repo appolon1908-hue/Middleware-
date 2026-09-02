@@ -5,6 +5,7 @@ from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
 from tests.test_commands import CommandTokenVerifier, enabled_policy
+from tests.test_commands import command_payload
 from tests.conftest import make_event, signed_headers
 from app.contracts import ROUTE_BY_PATH
 
@@ -42,3 +43,14 @@ def test_generic_provider_webhook_preserves_signature_and_replay_controls(test_s
         assert replay.status_code==200 and replay.json()["duplicate"] is True
         unsigned=dict(headers); unsigned["X-Codestra-Signature"]="sha256="+"0"*64
         assert client.post(path,content=body,headers=unsigned).status_code==401
+
+def test_odoo_domain_command_reuses_durable_operation_and_scope_controls(test_settings):
+    body=command_payload(); headers={"Authorization":"Bearer legacy-command-token","X-Tenant-ID":"tenant-1","X-Correlation-ID":body["correlation_id"],"Idempotency-Key":body["idempotency_key"]}
+    with TestClient(_app(test_settings)) as client:
+        submitted=client.post("/v1/odoo/commands",json=body,headers=headers)
+        assert submitted.status_code==202
+        read={"Authorization":"Bearer legacy-status-token","X-Tenant-ID":"tenant-1"}
+        assert client.get(f"/v1/odoo/operations/{body['command_id']}",headers=read).status_code==200
+        assert client.get(f"/v1/email/operations/{body['command_id']}",headers=read).status_code==404
+        missing_version=client.post(f"/v1/odoo/operations/{body['command_id']}/cancel",json={"reason":"operator_requested"},headers={**headers,"Idempotency-Key":"domain-cancel-key"})
+        assert missing_version.status_code==400

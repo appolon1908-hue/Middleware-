@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -542,6 +542,154 @@ def test_transition_identity_does_not_depend_on_transport_key() -> None:
             second.json()["operations"][0]["incident_id"]
             == first.json()["operations"][0]["incident_id"]
         )
+
+
+def test_warning_repeat_uses_persisted_notification_timing() -> None:
+    value = webhook()
+    value["alerts"][0]["labels"]["severity"] = "warning"
+    active_runtime = runtime()
+    runtime_app = create_app(
+        settings=settings(),
+        runtime=active_runtime,
+        policy=policy(),
+        env={
+            "OBSERVABILITY_ALERT_EMAIL_DELIVERY": "true",
+            "OBSERVABILITY_ALERT_ACTIVATION_ID": "CHG-TEST-OBS-ALERT-01",
+        },
+    )
+    with TestClient(runtime_app) as client:
+        first = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-first-0001"),
+        )
+        assert first.status_code == 202
+        first_operation = first.json()["operations"][0]["operation_id"]
+        assert first.json()["operations"][0]["notification_status"] == "scheduled"
+
+        suppressed = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-suppressed-0001"),
+        )
+        assert suppressed.status_code == 200
+        assert suppressed.json()["operations"][0]["operation_id"] == first_operation
+
+        assert active_runtime.incidents is not None
+        store = active_runtime.incidents.store
+        notification_key = next(iter(store._notifications))  # type: ignore[attr-defined]
+        notification = store._notifications[notification_key][0]  # type: ignore[attr-defined]
+        store._notifications[notification_key][0] = (  # type: ignore[attr-defined]
+            notification[0],
+            notification[1],
+            notification[2],
+            datetime.now(UTC) - timedelta(seconds=14_401),
+        )
+
+        suppressed_replay = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-suppressed-0001"),
+        )
+        assert suppressed_replay.status_code == 200
+        assert (
+            suppressed_replay.json()["operations"][0]["operation_id"]
+            == first_operation
+        )
+
+        repeated = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-second-0001"),
+        )
+        assert repeated.status_code == 202
+        repeated_operation = repeated.json()["operations"][0]["operation_id"]
+        assert repeated_operation != first_operation
+        assert repeated.json()["operations"][0]["notification_status"] == "queued"
+
+        replay = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-second-0001"),
+        )
+        assert replay.status_code == 200
+        assert replay.json()["operations"][0]["operation_id"] == repeated_operation
+
+        incident_id = repeated.json()["operations"][0]["incident_id"]
+        timeline = client.get(
+            f"/v1/observability/incidents/{incident_id}/timeline",
+            headers=headers("observability-operator", key="warning-timeline-0001"),
+        )
+        assert [item["event_type"] for item in timeline.json()["items"]] == [
+            "firing",
+            "notification_suppressed",
+            "notification_repeat",
+        ]
+
+
+def test_status_cycles_and_rejects_stale_observations() -> None:
+    value = webhook()
+    with TestClient(app()) as client:
+        accepted = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="status-cycle-alert-0001"),
+        )
+        incident_id = accepted.json()["operations"][0]["incident_id"]
+
+        def status_payload(observed_at: str, state: str) -> dict[str, Any]:
+            return {
+                "observedAt": observed_at,
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [
+                    {
+                        "groupKey": value["groupKey"],
+                        "fingerprint": value["alerts"][0]["fingerprint"],
+                        "startsAt": value["alerts"][0]["startsAt"],
+                        "state": state,
+                        "silencedBy": ["silence-cycle-1"]
+                        if state == "silenced"
+                        else [],
+                        "inhibitedBy": [],
+                    }
+                ],
+            }
+
+        silenced = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=status_payload("2026-09-02T16:02:00Z", "silenced"),
+            headers=headers(key="status-cycle-silenced-0001"),
+        )
+        assert silenced.status_code == 200
+        firing = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=status_payload("2026-09-02T16:03:00Z", "firing"),
+            headers=headers(key="status-cycle-firing-0001"),
+        )
+        assert firing.status_code == 200
+        assert firing.json()["items"][0]["state"] == "firing"
+
+        stale = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=status_payload("2026-09-02T16:01:00Z", "silenced"),
+            headers=headers(key="status-cycle-stale-0001"),
+        )
+        assert stale.status_code == 409
+        assert stale.json()["code"] == "incident_conflict"
+
+        reused_key = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=status_payload("2026-09-02T16:04:00Z", "silenced"),
+            headers=headers(key="status-cycle-firing-0001"),
+        )
+        assert reused_key.status_code == 409
+        assert reused_key.json()["code"] == "incident_conflict"
+
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers("observability-operator", key="status-cycle-read-0001"),
+        )
+        assert detail.json()["state"] == "firing"
 
 
 def test_canonical_openapi_methods_match_runtime() -> None:

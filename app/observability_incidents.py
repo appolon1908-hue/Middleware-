@@ -206,7 +206,7 @@ def transition_identity(
     return "alert-transition-v1:" + hashlib.sha256(material).hexdigest()
 
 
-def status_identity(item: AlertmanagerStatusItem) -> str:
+def status_identity(item: AlertmanagerStatusItem, observed_at: datetime) -> str:
     material = json.dumps(
         {
             "group_key": item.group_key,
@@ -215,11 +215,40 @@ def status_identity(item: AlertmanagerStatusItem) -> str:
             "state": item.state,
             "silenced_by": sorted(item.silenced_by),
             "inhibited_by": sorted(item.inhibited_by),
+            "observed_at": observed_at.isoformat(),
         },
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
     return "alert-status-v1:" + hashlib.sha256(material).hexdigest()
+
+
+def repeat_event_identity(request_key: str) -> str:
+    return "alert-repeat-event-v1:" + hashlib.sha256(
+        request_key.encode("utf-8")
+    ).hexdigest()
+
+
+def suppressed_event_identity(request_key: str) -> str:
+    return "alert-suppressed-event-v1:" + hashlib.sha256(
+        request_key.encode("utf-8")
+    ).hexdigest()
+
+
+def repeat_command(command: CommandEnvelope, request_key: str) -> CommandEnvelope:
+    idempotency_key = "obs-alert-repeat-v1:" + hashlib.sha256(
+        f"{command.idempotency_key}\n{request_key}".encode("utf-8")
+    ).hexdigest()
+    command_id = uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"https://operations.codestra.co/observability/alert-repeats/{idempotency_key}",
+    )
+    value = command.model_dump(mode="python")
+    value["command_id"] = command_id
+    value["idempotency_key"] = idempotency_key
+    value["payload"]["message_id"] = str(command_id)
+    value["payload"]["alert"]["notification_repeat"] = True
+    return CommandEnvelope.model_validate(value)
 
 
 def request_identity(client_id: str, key: str, fingerprint: str) -> str:
@@ -356,6 +385,7 @@ class MemoryIncidentStore:
         self._event_replays: dict[str, tuple[str, IncidentIngestionResult | IncidentRecord]] = {}
         self._notifications: dict[tuple[str, uuid.UUID], list[tuple[int, uuid.UUID, str, datetime]]] = {}
         self._mutations: dict[tuple[str, uuid.UUID, str, str, str], tuple[str, IncidentRecord]] = {}
+        self._status_observed: dict[tuple[str, uuid.UUID], datetime] = {}
         self._lock = asyncio.Lock()
         self._event_sequence = 0
         self._notification_sequence = 0
@@ -412,17 +442,18 @@ class MemoryIncidentStore:
             {"group_key": group_key, "alert": alert.model_dump(mode="json")}
         )
         async with self._lock:
-            replay = self._event_replays.get(f"{policy.tenant_id}:{event_key}")
+            transition_replay = self._event_replays.get(
+                f"{policy.tenant_id}:{event_key}"
+            )
             request_replay = self._event_replays.get(
                 f"{policy.tenant_id}:{request_key}"
             )
-            if replay is not None and request_replay is not None and replay != request_replay:
-                raise IncidentConflict("request and transition identities disagree")
-            replay = replay or request_replay
-            if replay is not None:
-                if replay[0] != payload_digest or not isinstance(replay[1], IncidentIngestionResult):
+            if request_replay is not None:
+                if request_replay[0] != payload_digest or not isinstance(
+                    request_replay[1], IncidentIngestionResult
+                ):
                     raise IncidentConflict("alert transition identity was reused with different content")
-                value = replay[1]
+                value = request_replay[1]
                 return value.model_copy(
                     update={
                         "duplicate": True,
@@ -434,6 +465,134 @@ class MemoryIncidentStore:
                         ),
                     }
                 )
+            if transition_replay is not None:
+                if transition_replay[0] != payload_digest or not isinstance(
+                    transition_replay[1], IncidentIngestionResult
+                ):
+                    raise IncidentConflict(
+                        "alert transition identity was reused with different content"
+                    )
+                now = datetime.now(UTC)
+                incident_id = incident_identity(policy.tenant_id, alert.fingerprint)
+                key = (policy.tenant_id, incident_id)
+                notifications = self._notifications.get(key, [])
+                repeat_eligible = (
+                    alert.status == "firing"
+                    and notification_kind == "grouped"
+                    and command is not None
+                    and notifications
+                    and now
+                    >= max(item[3] for item in notifications)
+                    + timedelta(seconds=policy.warning_repeat_interval_seconds)
+                )
+                if repeat_eligible:
+                    previous = self._incidents[key]
+                    repeated_command = repeat_command(command, request_key)
+                    operation = await self.commands.store.submit(
+                        repeated_command,
+                        authenticated_client_id=authenticated_client_id,
+                    )
+                    state, _ = next_incident_state(previous.state, alert.status)
+                    incident = previous.model_copy(
+                        update={
+                            "state": state,
+                            "last_seen_at": now,
+                            "source_deployment": source_deployment,
+                            "correlation_id": correlation_id,
+                            "resource_version": previous.resource_version + 1,
+                            "updated_at": now,
+                            "duplicate": False,
+                        }
+                    )
+                    self._incidents[key] = incident
+                    timeline = self._append_event(
+                        incident=incident,
+                        event_type="notification_repeat",
+                        previous=previous.state,
+                        actor_id=actor_id,
+                        correlation_id=correlation_id,
+                        source_deployment=source_deployment,
+                        operation_id=operation.command_id,
+                        metadata={
+                            "event_key": repeat_event_identity(request_key),
+                            "payload_sha256": payload_digest,
+                            "repeat_of_transition": event_key,
+                        },
+                        occurred_at=now,
+                    )
+                    self._notification_sequence += 1
+                    self._notifications.setdefault(key, []).append(
+                        (
+                            self._notification_sequence,
+                            operation.command_id,
+                            notification_kind,
+                            now,
+                        )
+                    )
+                    result = IncidentIngestionResult(
+                        incident=incident,
+                        operation=operation,
+                        notification_status="queued",
+                        timeline_event_id=timeline.event_id,
+                        duplicate=False,
+                    )
+                    entry = (payload_digest, result)
+                    self._event_replays[f"{policy.tenant_id}:{event_key}"] = entry
+                    self._event_replays[
+                        f"{policy.tenant_id}:{repeat_event_identity(request_key)}"
+                    ] = entry
+                    self._event_replays[f"{policy.tenant_id}:{request_key}"] = entry
+                    return result
+
+                value = transition_replay[1]
+                replay_result = value.model_copy(
+                    update={
+                        "duplicate": True,
+                        "incident": value.incident.model_copy(
+                            update={"duplicate": True}
+                        ),
+                        "operation": (
+                            value.operation.model_copy(update={"duplicate": True})
+                            if value.operation is not None
+                            else None
+                        ),
+                    }
+                )
+                if not (
+                    alert.status == "firing"
+                    and notification_kind == "grouped"
+                    and command is not None
+                    and notifications
+                ):
+                    return replay_result
+                timeline = self._append_event(
+                    incident=replay_result.incident,
+                    event_type="notification_suppressed",
+                    previous=replay_result.incident.state,
+                    actor_id=actor_id,
+                    correlation_id=correlation_id,
+                    source_deployment=source_deployment,
+                    operation_id=(
+                        replay_result.operation.command_id
+                        if replay_result.operation is not None
+                        else None
+                    ),
+                    metadata={
+                        "event_key": suppressed_event_identity(request_key),
+                        "payload_sha256": payload_digest,
+                        "suppressed_transition": event_key,
+                        "reason": "repeat_interval_not_elapsed",
+                    },
+                    occurred_at=now,
+                )
+                replay_result = replay_result.model_copy(
+                    update={"timeline_event_id": timeline.event_id}
+                )
+                self._event_replays[f"{policy.tenant_id}:{request_key}"] = (
+                    payload_digest,
+                    replay_result,
+                )
+                return replay_result
 
             now = datetime.now(UTC)
             incident_id = incident_identity(policy.tenant_id, alert.fingerprint)
@@ -539,13 +698,18 @@ class MemoryIncidentStore:
         request_idempotency_key: str,
         observed_at: datetime,
     ) -> IncidentRecord:
-        event_key = status_identity(item)
+        event_key = status_identity(item, observed_at)
         request_key = request_identity(
             ALERTMANAGER_CLIENT_ID,
             request_idempotency_key,
             item.fingerprint,
         )
-        digest = canonical_payload_sha256(item.model_dump(mode="json"))
+        digest = canonical_payload_sha256(
+            {
+                "item": item.model_dump(mode="json"),
+                "observed_at": observed_at.isoformat(),
+            }
+        )
         async with self._lock:
             replay = self._event_replays.get(f"{policy.tenant_id}:{event_key}")
             request_replay = self._event_replays.get(
@@ -560,6 +724,9 @@ class MemoryIncidentStore:
                 return replay[1].model_copy(update={"duplicate": True})
             incident_id = incident_identity(policy.tenant_id, item.fingerprint)
             key = (policy.tenant_id, incident_id)
+            latest_observed = self._status_observed.get(key)
+            if latest_observed is not None and observed_at <= latest_observed:
+                raise IncidentConflict("status observation is not newer than current evidence")
             previous = self._incidents.get(key)
             if previous is None or previous.group_key != item.group_key:
                 raise IncidentNotFound("status reconciliation incident was not found")
@@ -590,11 +757,13 @@ class MemoryIncidentStore:
                     "event_key": event_key,
                     "silenced_by": sorted(item.silenced_by),
                     "inhibited_by": sorted(item.inhibited_by),
+                    "status_source": "alertmanager-status",
                 },
                 occurred_at=observed_at,
             )
             self._event_replays[f"{policy.tenant_id}:{event_key}"] = (digest, incident)
             self._event_replays[f"{policy.tenant_id}:{request_key}"] = (digest, incident)
+            self._status_observed[key] = observed_at
             return incident
 
     async def get(self, tenant_id: str, incident_id: uuid.UUID) -> IncidentRecord:
@@ -1006,6 +1175,50 @@ class PostgresIncidentStore:
             raise IncidentConflict("notification operation is missing")
         return self.command_store._operation(row)
 
+    async def _replay_result(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        tenant_id: str,
+        incident_id: uuid.UUID,
+        operation_id: uuid.UUID | str | None,
+        notification_class: str | None,
+        timeline_event_id: int,
+        notification_kind: str,
+    ) -> IncidentIngestionResult:
+        row = await conn.fetchrow(
+            """SELECT * FROM middleware_observability_incidents
+               WHERE tenant_id=$1 AND incident_id=$2""",
+            tenant_id,
+            incident_id,
+        )
+        if row is None:
+            raise IncidentConflict("incident replay projection is missing")
+        operation = await self._operation_on_connection(
+            conn,
+            tenant_id,
+            operation_id,
+        )
+        return IncidentIngestionResult(
+            incident=self._incident(row, duplicate=True),
+            operation=(
+                operation.model_copy(update={"duplicate": True})
+                if operation is not None
+                else None
+            ),
+            notification_status=(
+                "scheduled"
+                if notification_class == "grouped" and operation is not None
+                else "queued"
+                if operation is not None
+                else "state_only"
+                if notification_kind == "state_only"
+                else "disabled"
+            ),
+            timeline_event_id=timeline_event_id,
+            duplicate=True,
+        )
+
     async def ingest(
         self,
         *,
@@ -1037,7 +1250,9 @@ class PostgresIncidentStore:
                 replays = await conn.fetch(
                     """
                     SELECT e.incident_id,e.operation_id,e.payload_sha256,e.id,
-                           ni.notification_class
+                           ni.notification_class,
+                           e.event_key=$2 AS transition_match,
+                           e.request_idempotency_key=$3 AS request_match
                     FROM middleware_observability_incident_events e
                     LEFT JOIN middleware_observability_notification_intents ni
                       ON ni.tenant_id=e.tenant_id AND ni.operation_id=e.operation_id
@@ -1049,42 +1264,248 @@ class PostgresIncidentStore:
                     event_key,
                     request_key,
                 )
-                if replays:
-                    if len({row["id"] for row in replays}) != 1 or any(
+                request_matches = [row for row in replays if row["request_match"]]
+                transition_matches = [
+                    row for row in replays if row["transition_match"]
+                ]
+                if request_matches:
+                    if len(request_matches) != 1 or any(
                         row["payload_sha256"] != payload_digest for row in replays
                     ):
                         raise IncidentConflict(
-                            "alert transition identities disagree or contain different content"
+                            "request identity disagrees with the alert transition"
                         )
-                    replay = replays[0]
-                    row = await conn.fetchrow(
-                        """SELECT * FROM middleware_observability_incidents
-                           WHERE tenant_id=$1 AND incident_id=$2""",
+                    replay = request_matches[0]
+                    return await self._replay_result(
+                        conn,
+                        tenant_id=policy.tenant_id,
+                        incident_id=replay["incident_id"],
+                        operation_id=replay["operation_id"],
+                        notification_class=replay["notification_class"],
+                        timeline_event_id=replay["id"],
+                        notification_kind=notification_kind,
+                    )
+
+                if transition_matches:
+                    if len(transition_matches) != 1 or any(
+                        row["payload_sha256"] != payload_digest
+                        for row in transition_matches
+                    ):
+                        raise IncidentConflict(
+                            "alert transition identity was reused with different content"
+                        )
+                    transition = transition_matches[0]
+                    latest_notification = await conn.fetchrow(
+                        """
+                        SELECT ni.operation_id,ni.notification_class,ni.scheduled_at,
+                               e.id AS event_id
+                        FROM middleware_observability_notification_intents ni
+                        LEFT JOIN middleware_observability_incident_events e
+                          ON e.tenant_id=ni.tenant_id
+                         AND e.operation_id=ni.operation_id
+                        WHERE ni.tenant_id=$1 AND ni.incident_id=$2
+                        ORDER BY ni.id DESC, e.id DESC LIMIT 1
+                        """,
                         policy.tenant_id,
-                        replay["incident_id"],
+                        transition["incident_id"],
+                    )
+                    now = datetime.now(UTC)
+                    repeat_eligible = (
+                        alert.status == "firing"
+                        and notification_kind == "grouped"
+                        and command is not None
+                        and latest_notification is not None
+                        and now
+                        >= latest_notification["scheduled_at"]
+                        + timedelta(
+                            seconds=policy.warning_repeat_interval_seconds
+                        )
+                    )
+                    if not repeat_eligible:
+                        replay = latest_notification or transition
+                        replay_result = await self._replay_result(
+                            conn,
+                            tenant_id=policy.tenant_id,
+                            incident_id=transition["incident_id"],
+                            operation_id=replay["operation_id"],
+                            notification_class=replay["notification_class"],
+                            timeline_event_id=(
+                                replay["event_id"]
+                                if latest_notification is not None
+                                and replay["event_id"] is not None
+                                else transition["id"]
+                            ),
+                            notification_kind=notification_kind,
+                        )
+                        if not (
+                            alert.status == "firing"
+                            and notification_kind == "grouped"
+                            and command is not None
+                            and latest_notification is not None
+                        ):
+                            return replay_result
+                        suppressed_event_id = await conn.fetchval(
+                            """
+                            INSERT INTO middleware_observability_incident_events (
+                              tenant_id,incident_id,event_key,request_idempotency_key,
+                              event_type,previous_state,new_state,actor_id,correlation_id,
+                              source_deployment,operation_id,payload_sha256,safe_metadata,
+                              occurred_at
+                            ) VALUES (
+                              $1,$2,$3,$4,'notification_suppressed',$5,$5,$6,$7,$8,$9,$10,
+                              $11::jsonb,$12
+                            ) RETURNING id
+                            """,
+                            policy.tenant_id,
+                            transition["incident_id"],
+                            suppressed_event_identity(request_key),
+                            request_key,
+                            replay_result.incident.state,
+                            actor_id,
+                            correlation_id,
+                            source_deployment,
+                            (
+                                str(replay_result.operation.command_id)
+                                if replay_result.operation is not None
+                                else None
+                            ),
+                            payload_digest,
+                            json.dumps(
+                                {
+                                    "suppressed_transition": event_key,
+                                    "reason": "repeat_interval_not_elapsed",
+                                },
+                                separators=(",", ":"),
+                            ),
+                            now,
+                        )
+                        await conn.execute(
+                            """
+                            INSERT INTO middleware_observability_incident_audit (
+                              tenant_id,incident_id,event_id,action,actor_id,
+                              previous_state,new_state,correlation_id,safe_metadata
+                            ) VALUES (
+                              $1,$2,$3,'notification_suppressed',$4,$5,$5,$6,$7::jsonb
+                            )
+                            """,
+                            policy.tenant_id,
+                            transition["incident_id"],
+                            suppressed_event_id,
+                            actor_id,
+                            replay_result.incident.state,
+                            correlation_id,
+                            json.dumps(
+                                {
+                                    "suppressed_transition": event_key,
+                                    "reason": "repeat_interval_not_elapsed",
+                                },
+                                separators=(",", ":"),
+                            ),
+                        )
+                        return replay_result.model_copy(
+                            update={"timeline_event_id": suppressed_event_id}
+                        )
+
+                    previous = await conn.fetchrow(
+                        """SELECT * FROM middleware_observability_incidents
+                           WHERE tenant_id=$1 AND incident_id=$2 FOR UPDATE""",
+                        policy.tenant_id,
+                        incident_id,
+                    )
+                    if previous is None:
+                        raise IncidentConflict("repeat incident projection is missing")
+                    state, _ = next_incident_state(previous["state"], alert.status)
+                    row = await conn.fetchrow(
+                        """
+                        UPDATE middleware_observability_incidents SET
+                          state=$3,last_seen_at=$4,source_deployment=$5,
+                          correlation_id=$6,resource_version=resource_version+1,
+                          updated_at=$4
+                        WHERE tenant_id=$1 AND incident_id=$2 RETURNING *
+                        """,
+                        policy.tenant_id,
+                        incident_id,
+                        state,
+                        now,
+                        source_deployment,
+                        correlation_id,
                     )
                     assert row is not None
-                    operation = await self._operation_on_connection(
-                        conn, policy.tenant_id, replay["operation_id"]
+                    repeated = repeat_command(command, request_key)
+                    operation = await self.command_store.submit_on_connection(
+                        conn,
+                        repeated,
+                        authenticated_client_id=authenticated_client_id,
+                        next_attempt_at=now,
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO middleware_observability_notification_intents (
+                          tenant_id,incident_id,operation_id,notification_class,
+                          idempotency_key,scheduled_at
+                        ) VALUES ($1,$2,$3,'grouped',$4,$5)
+                        """,
+                        policy.tenant_id,
+                        incident_id,
+                        str(operation.command_id),
+                        repeated.idempotency_key,
+                        now,
+                    )
+                    repeat_key = repeat_event_identity(request_key)
+                    repeat_event_id = await conn.fetchval(
+                        """
+                        INSERT INTO middleware_observability_incident_events (
+                          tenant_id,incident_id,event_key,request_idempotency_key,
+                          event_type,previous_state,new_state,actor_id,correlation_id,
+                          source_deployment,operation_id,payload_sha256,safe_metadata,
+                          occurred_at
+                        ) VALUES (
+                          $1,$2,$3,$4,'notification_repeat',$5,$6,$7,$8,$9,$10,$11,
+                          $12::jsonb,$13
+                        ) RETURNING id
+                        """,
+                        policy.tenant_id,
+                        incident_id,
+                        repeat_key,
+                        request_key,
+                        previous["state"],
+                        state,
+                        actor_id,
+                        correlation_id,
+                        source_deployment,
+                        str(operation.command_id),
+                        payload_digest,
+                        json.dumps(
+                            {"repeat_of_transition": event_key},
+                            separators=(",", ":"),
+                        ),
+                        now,
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO middleware_observability_incident_audit (
+                          tenant_id,incident_id,event_id,action,actor_id,
+                          previous_state,new_state,correlation_id,safe_metadata
+                        ) VALUES ($1,$2,$3,'notification_repeat',$4,$5,$6,$7,$8::jsonb)
+                        """,
+                        policy.tenant_id,
+                        incident_id,
+                        repeat_event_id,
+                        actor_id,
+                        previous["state"],
+                        state,
+                        correlation_id,
+                        json.dumps(
+                            {"repeat_of_transition": event_key},
+                            separators=(",", ":"),
+                        ),
                     )
                     return IncidentIngestionResult(
-                        incident=self._incident(row, duplicate=True),
-                        operation=(
-                            operation.model_copy(update={"duplicate": True})
-                            if operation
-                            else None
-                        ),
-                        notification_status=(
-                            "scheduled"
-                            if replay["notification_class"] == "grouped" and operation
-                            else "queued"
-                            if operation
-                            else "state_only"
-                            if notification_kind == "state_only"
-                            else "disabled"
-                        ),
-                        timeline_event_id=replay["id"],
-                        duplicate=True,
+                        incident=self._incident(row),
+                        operation=operation,
+                        notification_status="queued",
+                        timeline_event_id=repeat_event_id,
+                        duplicate=False,
                     )
 
                 previous = await conn.fetchrow(
@@ -1247,13 +1668,18 @@ class PostgresIncidentStore:
         request_idempotency_key: str,
         observed_at: datetime,
     ) -> IncidentRecord:
-        event_key = status_identity(item)
+        event_key = status_identity(item, observed_at)
         request_key = request_identity(
             ALERTMANAGER_CLIENT_ID,
             request_idempotency_key,
             item.fingerprint,
         )
-        digest = canonical_payload_sha256(item.model_dump(mode="json"))
+        digest = canonical_payload_sha256(
+            {
+                "item": item.model_dump(mode="json"),
+                "observed_at": observed_at.isoformat(),
+            }
+        )
         incident_id = incident_identity(policy.tenant_id, item.fingerprint)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -1295,6 +1721,20 @@ class PostgresIncidentStore:
                 )
                 if previous is None or previous["group_key"] != item.group_key:
                     raise IncidentNotFound("status reconciliation incident was not found")
+                latest_observed = await conn.fetchval(
+                    """
+                    SELECT max(occurred_at)
+                    FROM middleware_observability_incident_events
+                    WHERE tenant_id=$1 AND incident_id=$2
+                      AND safe_metadata->>'status_source'='alertmanager-status'
+                    """,
+                    policy.tenant_id,
+                    incident_id,
+                )
+                if latest_observed is not None and observed_at <= latest_observed:
+                    raise IncidentConflict(
+                        "status observation is not newer than current evidence"
+                    )
                 state, event_type = next_incident_state(previous["state"], item.state)
                 now = datetime.now(UTC)
                 row = await conn.fetchrow(
@@ -1339,6 +1779,7 @@ class PostgresIncidentStore:
                         {
                             "silenced_by": sorted(item.silenced_by),
                             "inhibited_by": sorted(item.inhibited_by),
+                            "status_source": "alertmanager-status",
                         },
                         separators=(",", ":"),
                     ),

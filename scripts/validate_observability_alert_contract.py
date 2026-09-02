@@ -211,6 +211,8 @@ def main() -> None:
         "middleware_observability_notification_intents",
         "middleware_observability_incident_mutations",
         "request_idempotency_key",
+        "notification_repeat",
+        "notification_suppressed",
         "REFERENCES middleware_commands(tenant_id,command_id)",
     ):
         if marker not in migration:

@@ -25,6 +25,7 @@ from app.observability_alert_contract import (
 )
 from app.observability_incidents import (
     AlertmanagerStatusItem,
+    IncidentConflict,
     IncidentService,
     PostgresIncidentStore,
     incident_identity,
@@ -87,6 +88,7 @@ def alert(*, fingerprint: str, severity: str = "critical") -> AlertmanagerAlert:
             "annotations": {
                 "summary": "Disposable incident integration test",
                 "description": "No provider or production traffic is produced.",
+                "runbook_url": "https://runbooks.example.invalid/incident-integration",
             },
             "startsAt": "2026-09-02T16:00:00Z",
             "endsAt": "2026-09-02T16:00:00Z",
@@ -120,7 +122,7 @@ def services(pool: asyncpg.Pool) -> tuple[CommandService, IncidentService]:
     return commands, incidents
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture
 async def pool() -> asyncpg.Pool:
     assert DATABASE_URL, "DATABASE_URL is required"
     value = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
@@ -218,6 +220,44 @@ async def test_incident_command_and_notification_commit_atomically(
         observed_at=datetime(2026, 9, 2, 16, 1, tzinfo=UTC),
     )
     assert silenced.state == "silenced"
+    firing = await incidents.store.ingest_status(
+        policy=policy(),
+        item=AlertmanagerStatusItem.model_validate(
+            {
+                "groupKey": GROUP_KEY,
+                "fingerprint": item.fingerprint,
+                "startsAt": "2026-09-02T16:00:00Z",
+                "state": "firing",
+                "silencedBy": [],
+                "inhibitedBy": [],
+            }
+        ),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-correlation-status-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-request-0002",
+        observed_at=datetime(2026, 9, 2, 16, 2, tzinfo=UTC),
+    )
+    assert firing.state == "firing"
+    with pytest.raises(IncidentConflict):
+        await incidents.store.ingest_status(
+            policy=policy(),
+            item=AlertmanagerStatusItem.model_validate(
+                {
+                    "groupKey": GROUP_KEY,
+                    "fingerprint": item.fingerprint,
+                    "startsAt": "2026-09-02T16:00:00Z",
+                    "state": "silenced",
+                    "silencedBy": ["stale-silence-1"],
+                    "inhibitedBy": [],
+                }
+            ),
+            actor_id=ACTOR_ID,
+            correlation_id="incident-correlation-status-stale",
+            source_deployment="alertmanager-disposable-ci",
+            request_idempotency_key="incident-status-request-stale",
+            observed_at=datetime(2026, 9, 2, 16, 0, tzinfo=UTC),
+        )
     timeline = await incidents.store.list_timeline(
         TENANT_ID,
         first.incident.incident_id,
@@ -228,8 +268,9 @@ async def test_incident_command_and_notification_commit_atomically(
         "firing",
         "acknowledge",
         "silenced",
+        "firing",
     ]
-    assert timeline[-1].occurred_at == datetime(2026, 9, 2, 16, 1, tzinfo=UTC)
+    assert timeline[-1].occurred_at == datetime(2026, 9, 2, 16, 2, tzinfo=UTC)
 
     async with pool.acquire() as conn:
         with pytest.raises(asyncpg.PostgresError):
@@ -292,4 +333,76 @@ async def test_command_conflict_rolls_back_incident_projection(
                 incident_identity(TENANT_ID, item.fingerprint),
             )
             == 0
+        )
+
+
+@pytest.mark.asyncio
+async def test_warning_repeat_uses_persisted_schedule(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    item = alert(fingerprint="incident-warning-repeat-0001", severity="warning")
+    first = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-repeat-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-repeat-request-0001",
+    )
+    assert first.operation is not None
+    assert first.notification_status == "scheduled"
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE middleware_observability_notification_intents
+            SET scheduled_at=now() - interval '14401 seconds'
+            WHERE tenant_id=$1 AND incident_id=$2
+            """,
+            TENANT_ID,
+            first.incident.incident_id,
+        )
+
+    repeated = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-repeat-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-repeat-request-0002",
+    )
+    assert repeated.operation is not None
+    assert repeated.operation.command_id != first.operation.command_id
+    assert repeated.notification_status == "queued"
+    replay = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-repeat-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-repeat-request-0002",
+    )
+    assert replay.duplicate is True
+    assert replay.operation is not None
+    assert replay.operation.command_id == repeated.operation.command_id
+
+    async with pool.acquire() as conn:
+        assert (
+            await conn.fetchval(
+                "SELECT count(*) FROM middleware_observability_notification_intents "
+                "WHERE tenant_id=$1 AND incident_id=$2",
+                TENANT_ID,
+                first.incident.incident_id,
+            )
+            == 2
+        )
+        assert (
+            await conn.fetchval(
+                "SELECT count(*) FROM middleware_observability_incident_events "
+                "WHERE tenant_id=$1 AND incident_id=$2 "
+                "AND event_type='notification_repeat'",
+                TENANT_ID,
+                first.incident.incident_id,
+            )
+            == 1
         )

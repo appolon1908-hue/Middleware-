@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS middleware_observability_incident_events (
   incident_id uuid NOT NULL,
   event_key text NOT NULL,
   request_idempotency_key text NOT NULL,
-  event_type text NOT NULL CHECK(event_type IN ('firing','resolved','reopened','acknowledge','resolve','reopen','inhibited','silenced')),
+  event_type text NOT NULL CHECK(event_type IN ('firing','resolved','reopened','notification_repeat','notification_suppressed','acknowledge','resolve','reopen','inhibited','silenced')),
   previous_state text CHECK(previous_state IS NULL OR previous_state IN ('firing','acknowledged','resolved','inhibited','silenced')),
   new_state text NOT NULL CHECK(new_state IN ('firing','acknowledged','resolved','inhibited','silenced')),
   actor_id text NOT NULL,

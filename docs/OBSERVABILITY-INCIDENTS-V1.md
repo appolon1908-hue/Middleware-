@@ -45,11 +45,19 @@ matches; changed content fails closed.
 Alertmanager webhook state does not reliably encode inhibited and silenced
 evidence. Therefore `/v1/integrations/alertmanager/status-events` is a separate,
 authenticated desired-state source. It records bounded silence/inhibition IDs and
-the source observation time in the immutable timeline.
+the source observation time in the immutable timeline. The observation time is
+part of the semantic idempotency digest. Status cycles such as firing to silenced
+to firing are retained, while observations at or before the latest persisted
+status evidence fail closed with `409` and cannot overwrite current state.
 
 Notification policy is deterministic: critical/high are immediate, warning is
 grouped after 300 seconds with a 14,400-second repeat contract, and info is
-state-only. Delivery remains disabled by default. When enabled later, the incident
+state-only. A warning repeat is eligible only after the latest persisted
+notification schedule plus the repeat interval. Before that boundary the new
+transport identity is durably recorded as `notification_suppressed`; after it, a
+deterministic `notification_repeat` command, intent, timeline event, and audit
+entry commit atomically. Replaying either transport identity returns its original
+decision. Delivery remains disabled by default. When enabled later, the incident
 transaction creates a governed `observability.alert.email.send.v1` command, its
 command audit/outbox, and a notification intent. The provider adapter still
 requires read-back before authoritative completion. No direct SMTP path exists.

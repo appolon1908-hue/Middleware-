@@ -33,7 +33,7 @@ jobs:
       - name: Apply net provider-control production diff
         run: |
           set -Eeuo pipefail
-          test "$(git rev-parse HEAD^)" = "454d7d659cbb95e5e21443c5d6bb7794ddfe2880"
+          test "$(git merge-base HEAD 454d7d659cbb95e5e21443c5d6bb7794ddfe2880)" = "454d7d659cbb95e5e21443c5d6bb7794ddfe2880"
           git diff --binary \
             5d830ab1c3629447a873b45dca19a043adea78e0 \
             abbae5a7075ae4a260da562eb7136f6171703a25 \
@@ -89,7 +89,6 @@ jobs:
               "        enabled = {\n            name\n            for name, value in self.external_effects.items()\n            if value and name not in UMBRELLA_CONTROL_NAMES\n        }\n",
               "external-effect validation block",
           )
-
           replace_once(
               Path("app/provider_control_api.py"),
               "    subject = claims.get(\"sub\")\n    if not isinstance(subject, str) or not subject.strip():\n        raise AuthorizationError(\"machine token subject is required\")\n\n    command = CommandEnvelope(\n",

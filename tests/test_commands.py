@@ -228,7 +228,7 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
             },
         )
         assert status.status_code == 200, status.text
-        assert status.json()["state"] == "persisted"
+        assert status.json()["state"] == "RECEIVED"
 
         wrong_tenant = client.get(
             f"/v1/operations/{body['command_id']}",

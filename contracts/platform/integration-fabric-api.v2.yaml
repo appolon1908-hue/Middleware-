@@ -1,272 +1,5000 @@
 openapi: 3.1.0
 info:
-  title: Codestra Integration Fabric API
-  version: 2.0.0
-  description: Contract-first platform, operation, integration, and private automation API.
-servers:
-  - url: https://api.codestra.co
-    description: Public gateway; runtime activation is outside this contract.
+  title: Codestra Middleware API
+  version: 0.1.0
+  description: Exact generated Middleware runtime contract. Bearer tokens use issuer
+    https://auth.codestra.co/realms/codestra and audience middleware-api. Tenant-scoped
+    reads enforce each configured caller status_scope; mutations enforce command_scope.
+    External effects remain disabled.
 paths:
-  /v1/runtime/safety:
-    get:
-      operationId: getRuntimeSafety
-      description: Read effective non-secret safety controls from the running process.
-      security: [{oauth2: [health.read]}]
+  /v1/integrations/n8n/commands:
+    post:
+      tags:
+      - n8n-control-plane
+      summary: Submit N8N Command
+      description: 'Accept a durable command through the legacy n8n v1 compatibility
+        route.
+
+
+        Kong remains the network/API gateway. Middleware independently validates the
+
+        original Keycloak token so a gateway routing mistake cannot grant write
+
+        authority. The canonical successor is the lease-bound v2 automation API.'
+      operationId: submit_n8n_command_v1_integrations_n8n_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
-          description: Effective runtime safety controls and immutable release identity
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '../runtime-safety-readback.v1.schema.json'
-        '401': {description: Monitoring identity is missing or invalid}
-        '403': {description: Monitoring identity lacks health.read}
-  /v1/commands:
-    post:
-      operationId: submitCommand
-      security: [{oauth2: [middleware.request.forward]}]
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      deprecated: true
+      security:
+      - bearerAuth: []
       parameters:
-        - {$ref: '#/components/parameters/HeaderTenantId'}
-        - {$ref: '#/components/parameters/CorrelationId'}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
+      - &id001
+        name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      - &id002
+        name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      - &id003
+        name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+  /v1/integrations/n8n/operations/{command_id}:
+    get:
+      tags:
+      - n8n-control-plane
+      summary: Get N8N Operation
+      description: Return durable command state through the legacy n8n v1 compatibility
+        route.
+      operationId: get_n8n_operation_v1_integrations_n8n_operations__command_id__get
+      deprecated: true
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations-dashboard/overview:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Overview
+      operationId: overview_v1_operations_dashboard_overview_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/auth-gateway:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Auth Gateway
+      operationId: auth_gateway_v1_operations_dashboard_auth_gateway_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/routes:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Routes
+      operationId: routes_v1_operations_dashboard_routes_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/providers:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Providers
+      operationId: providers_v1_operations_dashboard_providers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/messages/lifecycle:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Message Lifecycle
+      operationId: message_lifecycle_v1_operations_dashboard_messages_lifecycle_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/webhooks:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Webhooks
+      operationId: webhooks_v1_operations_dashboard_webhooks_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations-dashboard/tenants/{tenant_id}:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Tenant Activity
+      operationId: tenant_activity_v1_operations_dashboard_tenants__tenant_id__get
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations-dashboard/queues:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Queues
+      operationId: queues_v1_operations_dashboard_queues_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/release-gates:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Release Gates
+      operationId: release_gates_v1_operations_dashboard_release_gates_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations-dashboard/canaries:
+    get:
+      tags:
+      - operations-dashboard
+      summary: Canaries
+      operationId: canaries_v1_operations_dashboard_canaries_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/operations:
+    get:
+      tags:
+      - operations
+      summary: List Operations
+      operationId: list_operations_v1_operations_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - RECEIVED
+            - QUEUED
+            - SUBMITTED
+            - ACCEPTED
+            - UNKNOWN
+            - COMPLETED
+            - FAILED
+            - RECONCILIATION_REQUIRED
+            - DEAD_LETTERED
+            - CANCELLED
+            type: string
+          - type: 'null'
+          title: State
+      - name: command_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 180
+          - type: 'null'
+          title: Command Type
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations/{command_id}:
+    get:
+      tags:
+      - operations
+      summary: Get Operation
+      operationId: get_operation_v1_operations__command_id__get
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations/{command_id}/events:
+    get:
+      tags:
+      - operations
+      summary: List Events
+      operationId: list_events_v1_operations__command_id__events_get
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations/{command_id}/attempts:
+    get:
+      tags:
+      - operations
+      summary: List Attempts
+      operationId: list_attempts_v1_operations__command_id__attempts_get
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations/{command_id}/cancel:
+    post:
+      tags:
+      - operations
+      summary: Cancel Operation
+      operationId: cancel_operation_v1_operations__command_id__cancel_post
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      - *id001
+      - *id002
+      - *id003
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: './command-envelope.v1.schema.json'
+              $ref: '#/components/schemas/OperationMutationRequest'
       responses:
-        '202': {$ref: '#/components/responses/CommandOperation'}
-        '200': {$ref: '#/components/responses/CommandOperation'}
-        '400': {description: Invalid canonical command or header mismatch}
-        '403': {description: Tenant, subject, owner, or capability denied}
-        '409': {description: Command identity reused with different content}
-  /v1/platform/tenants:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/operations/{command_id}/reconcile:
     post:
-      operationId: createTenant
-      security: [{oauth2: [platform.tenant.create]}]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - operations
+      summary: Reconcile Operation
+      operationId: reconcile_operation_v1_operations__command_id__reconcile_post
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
       responses:
-        '202': {$ref: '#/components/responses/OperationAccepted'}
-  /v1/platform/tenants/{tenant_id}:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/inbox:
     get:
-      operationId: getTenant
-      security: [{oauth2: [platform.tenant.read]}]
-      parameters: [{$ref: '#/components/parameters/TenantId'}]
+      tags:
+      - durable-control
+      summary: Inbox List
+      operationId: inbox_list_v1_inbox_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
       responses:
-        '200': {description: Tenant projection}
-    patch:
-      operationId: updateTenant
-      security: [{oauth2: [platform.tenant.write]}]
-      parameters: [{$ref: '#/components/parameters/TenantId'}, {$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/IfMatch'}]
-      responses:
-        '202': {$ref: '#/components/responses/OperationAccepted'}
-  /v1/platform/tenants/{tenant_id}/preflight:
-    post:
-      operationId: runTenantPreflight
-      security: [{oauth2: [platform.preflight.execute]}]
-      parameters: [{$ref: '#/components/parameters/TenantId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {$ref: '#/components/responses/OperationAccepted'}
-  /v1/platform/tenants/{tenant_id}/readiness:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/outbox:
     get:
-      operationId: getTenantReadiness
-      security: [{oauth2: [platform.readiness.read]}]
-      parameters: [{$ref: '#/components/parameters/TenantId'}]
+      tags:
+      - durable-control
+      summary: Outbox List
+      operationId: outbox_list_v1_outbox_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
       responses:
-        '200': {description: Authoritative readiness projection}
-  /v1/integrations/catalog:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/inbox/{record_id}:
     get:
-      operationId: listIntegrationCatalog
-      security: [{oauth2: [integration.catalog.read]}]
-      responses:
-        '200': {description: Available integration types}
-  /v1/integrations/connections:
-    post:
-      operationId: createIntegrationConnection
-      security: [{oauth2: [integration.connection.write]}]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {$ref: '#/components/responses/OperationAccepted'}
-  /v1/integrations/connections/{connection_id}/test:
-    post:
-      operationId: testIntegrationConnection
-      security: [{oauth2: [integration.connection.test]}]
+      tags:
+      - durable-control
+      summary: Inbox Detail
+      operationId: inbox_detail_v1_inbox__record_id__get
       parameters:
-        - {name: connection_id, in: path, required: true, schema: {type: string, format: uuid}}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
       responses:
-        '202': {$ref: '#/components/responses/OperationAccepted'}
-  /v1/operations/{command_id}:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/outbox/{record_id}:
     get:
-      operationId: getCommandOperation
-      security: [{oauth2: [middleware.status.read]}]
+      tags:
+      - durable-control
+      summary: Outbox Detail
+      operationId: outbox_detail_v1_outbox__record_id__get
       parameters:
-        - {name: command_id, in: path, required: true, schema: {type: string, format: uuid}}
-        - {$ref: '#/components/parameters/HeaderTenantId'}
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
       responses:
-        '200': {$ref: '#/components/responses/CommandOperation'}
-        '403': {description: Tenant access denied}
-        '404': {description: Command operation not found}
-  /v1/dead-letters/{dead_letter_id}/replay:
-    post:
-      operationId: requestDeadLetterReplay
-      security: [{oauth2: [operations.replay.request]}]
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/inbox/{record_id}/events:
+    get:
+      tags:
+      - durable-control
+      summary: Inbox Events
+      operationId: inbox_events_v1_inbox__record_id__events_get
       parameters:
-        - {name: dead_letter_id, in: path, required: true, schema: {type: string, format: uuid}}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
-        - {$ref: '#/components/parameters/IfMatch'}
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
       responses:
-        '202': {$ref: '#/components/responses/OperationAccepted'}
-  /internal/v1/automation/runs/claim:
-    post:
-      operationId: claimAutomationRun
-      security: [{oauth2: [automation.job.claim]}]
-      responses:
-        '200': {description: Leased automation run}
-        '204': {description: No eligible run}
-  /internal/v1/automation/runs/{run_id}/heartbeat:
-    post:
-      operationId: heartbeatAutomationRun
-      security: [{oauth2: [automation.job.heartbeat]}]
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/outbox/{record_id}/attempts:
+    get:
+      tags:
+      - durable-control
+      summary: Outbox Attempts
+      operationId: outbox_attempts_v1_outbox__record_id__attempts_get
       parameters:
-        - {name: run_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
       responses:
-        '200': {description: Lease extended}
-        '409': {description: Lease lost}
-  /internal/v1/automation/runs/{run_id}/result:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/inbox/{record_id}/reprocess:
     post:
-      operationId: reportAutomationResult
-      security: [{oauth2: [automation.job.complete, automation.job.fail]}]
+      tags:
+      - durable-control
+      summary: Inbox Reprocess
+      operationId: inbox_reprocess_v1_inbox__record_id__reprocess_post
       parameters:
-        - {name: run_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
       responses:
-        '200': {description: Terminal result accepted idempotently}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/inbox/{record_id}/quarantine:
+    post:
+      tags:
+      - durable-control
+      summary: Inbox Quarantine
+      operationId: inbox_quarantine_v1_inbox__record_id__quarantine_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/inbox/{record_id}/release:
+    post:
+      tags:
+      - durable-control
+      summary: Inbox Release
+      operationId: inbox_release_v1_inbox__record_id__release_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/outbox/{record_id}/cancel:
+    post:
+      tags:
+      - durable-control
+      summary: Outbox Cancel
+      operationId: outbox_cancel_v1_outbox__record_id__cancel_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/outbox/{record_id}/retry:
+    post:
+      tags:
+      - durable-control
+      summary: Outbox Retry
+      operationId: outbox_retry_v1_outbox__record_id__retry_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/reconciliation/operations/{record_id}/request:
+    post:
+      tags:
+      - durable-control
+      summary: Outbox Reconcile
+      operationId: outbox_reconcile_v1_reconciliation_operations__record_id__request_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/outbox/{record_id}/reconcile:
+    post:
+      tags:
+      - durable-control
+      summary: Outbox Reconcile
+      operationId: outbox_reconcile_v1_outbox__record_id__reconcile_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/system/capabilities:
+    get:
+      tags:
+      - durable-control
+      summary: System Capabilities
+      operationId: system_capabilities_v1_system_capabilities_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/system/safety-state:
+    get:
+      tags:
+      - durable-control
+      summary: System Safety
+      operationId: system_safety_v1_system_safety_state_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/system/readiness:
+    get:
+      tags:
+      - durable-control
+      summary: System Readiness
+      operationId: system_readiness_v1_system_readiness_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/policy/effective:
+    get:
+      tags:
+      - durable-control
+      summary: Effective Policy
+      operationId: effective_policy_v1_policy_effective_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/policy/decisions:
+    post:
+      tags:
+      - durable-control
+      summary: Policy Decision
+      operationId: policy_decision_v1_policy_decisions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDecisionRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/reconciliation/operations:
+    get:
+      tags:
+      - durable-control
+      summary: Reconciliation List
+      operationId: reconciliation_list_v1_reconciliation_operations_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/audit/events:
+    get:
+      tags:
+      - durable-control
+      summary: Audit Events
+      operationId: audit_events_v1_audit_events_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/odoo/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Odoo Command
+      operationId: submit_odoo_command_v1_odoo_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/crm/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Crm Command
+      operationId: submit_crm_command_v1_crm_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/email/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Email Command
+      operationId: submit_email_command_v1_email_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/sms/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Sms Command
+      operationId: submit_sms_command_v1_sms_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/telephony/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Telephony Command
+      operationId: submit_telephony_command_v1_telephony_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/social/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Social Command
+      operationId: submit_social_command_v1_social_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/marketing/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Marketing Command
+      operationId: submit_marketing_command_v1_marketing_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/ai/commands:
+    post:
+      tags:
+      - domain-control
+      summary: Submit Ai Command
+      operationId: submit_ai_command_v1_ai_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/odoo/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Odoo Operation
+      operationId: get_odoo_operation_v1_odoo_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/crm/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Crm Operation
+      operationId: get_crm_operation_v1_crm_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/email/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Email Operation
+      operationId: get_email_operation_v1_email_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/sms/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Sms Operation
+      operationId: get_sms_operation_v1_sms_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/telephony/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Telephony Operation
+      operationId: get_telephony_operation_v1_telephony_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/social/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Social Operation
+      operationId: get_social_operation_v1_social_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/marketing/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Marketing Operation
+      operationId: get_marketing_operation_v1_marketing_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/ai/operations/{operation_id}:
+    get:
+      tags:
+      - domain-control
+      summary: Get Ai Operation
+      operationId: get_ai_operation_v1_ai_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/odoo/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Odoo Operations
+      operationId: list_odoo_operations_v1_odoo_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/crm/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Crm Operations
+      operationId: list_crm_operations_v1_crm_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/email/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Email Operations
+      operationId: list_email_operations_v1_email_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/sms/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Sms Operations
+      operationId: list_sms_operations_v1_sms_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/telephony/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Telephony Operations
+      operationId: list_telephony_operations_v1_telephony_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/social/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Social Operations
+      operationId: list_social_operations_v1_social_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/marketing/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Marketing Operations
+      operationId: list_marketing_operations_v1_marketing_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/ai/operations:
+    get:
+      tags:
+      - domain-control
+      summary: List Ai Operations
+      operationId: list_ai_operations_v1_ai_operations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/odoo/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: Cancel Odoo Operation
+      operationId: cancel_odoo_operation_v1_odoo_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/odoo/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: Reconcile Odoo Operation
+      operationId: reconcile_odoo_operation_v1_odoo_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/crm/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: Cancel Crm Operation
+      operationId: cancel_crm_operation_v1_crm_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/crm/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: Reconcile Crm Operation
+      operationId: reconcile_crm_operation_v1_crm_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/telephony/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: Cancel Telephony Operation
+      operationId: cancel_telephony_operation_v1_telephony_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/telephony/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: Reconcile Telephony Operation
+      operationId: reconcile_telephony_operation_v1_telephony_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/social/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: Cancel Social Operation
+      operationId: cancel_social_operation_v1_social_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/social/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: Reconcile Social Operation
+      operationId: reconcile_social_operation_v1_social_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/marketing/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: Cancel Marketing Operation
+      operationId: cancel_marketing_operation_v1_marketing_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/marketing/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: Reconcile Marketing Operation
+      operationId: reconcile_marketing_operation_v1_marketing_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/ai/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: Cancel Ai Operation
+      operationId: cancel_ai_operation_v1_ai_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/ai/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: Reconcile Ai Operation
+      operationId: reconcile_ai_operation_v1_ai_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/integrations/n8n/operations:
+    get:
+      tags:
+      - domain-control
+      summary: N8N Operations
+      operationId: n8n_operations_v1_integrations_n8n_operations_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - RECEIVED
+            - QUEUED
+            - SUBMITTED
+            - ACCEPTED
+            - UNKNOWN
+            - COMPLETED
+            - FAILED
+            - RECONCILIATION_REQUIRED
+            - DEAD_LETTERED
+            - CANCELLED
+            type: string
+          - type: 'null'
+          title: State
+      - name: command_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Command Type
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/integrations/n8n/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - domain-control
+      summary: N8N Cancel
+      operationId: n8n_cancel_v1_integrations_n8n_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/integrations/n8n/operations/{operation_id}/reconcile:
+    post:
+      tags:
+      - domain-control
+      summary: N8N Reconcile
+      operationId: n8n_reconcile_v1_integrations_n8n_operations__operation_id__reconcile_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/odoo/provider-health:
+    get:
+      tags:
+      - domain-control
+      summary: Odoo Health
+      operationId: odoo_health_v1_odoo_provider_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/ai/provider-health:
+    get:
+      tags:
+      - domain-control
+      summary: Ai Health
+      operationId: ai_health_v1_ai_provider_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/providers/status:
+    get:
+      tags:
+      - domain-control
+      summary: Provider Status
+      operationId: provider_status_v1_providers_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/crm/mappings/validate:
+    post:
+      tags:
+      - domain-control
+      summary: Mapping Validate
+      operationId: mapping_validate_v1_crm_mappings_validate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Document
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/odoo/mappings/validate:
+    post:
+      tags:
+      - domain-control
+      summary: Mapping Validate
+      operationId: mapping_validate_v1_odoo_mappings_validate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Document
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}:
+    post:
+      tags:
+      - provider-webhooks
+      summary: Generic Webhook
+      operationId: generic_webhook_v1_webhooks__connector_id___endpoint_key___webhook_id__post
+      parameters:
+      - name: connector_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Connector Id
+      - name: endpoint_key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Endpoint Key
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Webhook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /webhooks/vicidial/call-result/{webhook_id}:
+    post:
+      tags:
+      - provider-webhooks
+      summary: Vicidial Call Result
+      operationId: vicidial_call_result_webhooks_vicidial_call_result__webhook_id__post
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Webhook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/crm/delivery-results/{webhook_id}:
+    post:
+      tags:
+      - provider-webhooks
+      summary: Crm Event
+      operationId: crm_event_v1_crm_delivery_results__webhook_id__post
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Webhook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/crm/events/{webhook_id}:
+    post:
+      tags:
+      - provider-webhooks
+      summary: Crm Event
+      operationId: crm_event_v1_crm_events__webhook_id__post
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Webhook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Health Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /ready:
+    get:
+      summary: Ready
+      operationId: ready_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /readiness:
+    get:
+      summary: Ready
+      operationId: ready_readiness_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /dependencies:
+    get:
+      summary: Dependencies
+      operationId: dependencies_dependencies_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /capabilities:
+    get:
+      summary: Capabilities
+      operationId: capabilities_capabilities_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /metrics:
+    get:
+      summary: Metrics
+      operationId: metrics_metrics_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /version:
+    get:
+      summary: Version
+      operationId: version_version_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Version Version Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/runtime/safety:
+    get:
+      summary: Runtime Safety
+      operationId: runtime_safety_v1_runtime_safety_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Runtime Safety V1 Runtime Safety Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/communications/messages:
+    get:
+      summary: List Communication Messages
+      operationId: list_communication_messages_v1_communications_messages_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+    post:
+      summary: Create Communication Message
+      operationId: create_communication_message_v1_communications_messages_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/communication/messages:
+    post:
+      summary: Create Communication Message
+      operationId: create_communication_message_v1_communication_messages_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /v1/communications/messages/{messageId}:
+    get:
+      summary: Get Communication Message
+      operationId: get_communication_message_v1_communications_messages__messageId__get
+      parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Messageid
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/communication/messages/{messageId}:
+    get:
+      summary: Get Communication Message
+      operationId: get_communication_message_v1_communication_messages__messageId__get
+      parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Messageid
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/communications/messages/{messageId}/events:
+    get:
+      summary: List Communication Message Events
+      operationId: list_communication_message_events_v1_communications_messages__messageId__events_get
+      parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Messageid
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/communications/messages/{messageId}/cancel:
+    post:
+      summary: Cancel Communication Message
+      operationId: cancel_communication_message_v1_communications_messages__messageId__cancel_post
+      parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Messageid
+      - *id001
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/communications/providers/health:
+    get:
+      summary: Get Communication Provider Health
+      operationId: get_communication_provider_health_v1_communications_providers_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/communications/provider-health:
+    get:
+      summary: Get Communication Provider Health
+      operationId: get_communication_provider_health_v1_communications_provider_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/communications/reputation:
+    get:
+      summary: Get Communication Reputation
+      operationId: get_communication_reputation_v1_communications_reputation_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/communications/usage:
+    get:
+      summary: Get Communication Usage
+      operationId: get_communication_usage_v1_communications_usage_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/intake/leads:
+    post:
+      summary: Submit Lead
+      operationId: submit_lead_v1_intake_leads_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/intake/surveys/responses:
+    post:
+      summary: Submit Survey Response
+      operationId: submit_survey_response_v1_intake_surveys_responses_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/commands:
+    post:
+      summary: Submit Command
+      operationId: submit_command_v1_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /api/v1/odoo/events:
+    post:
+      summary: Ingress-Odoo-Integration-Events
+      operationId: ingress_odoo_integration_events_api_v1_odoo_events_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/n8n/results:
+    post:
+      summary: Ingress-N8N-Automation-Results
+      operationId: ingress_n8n_automation_results_api_v1_n8n_results_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/vicidial/events:
+    post:
+      summary: Ingress-Vicidial-Adapter-Events
+      operationId: ingress_vicidial_adapter_events_api_v1_vicidial_events_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/telnexa/events:
+    post:
+      summary: Ingress-Telnexa-Gateway-Events
+      operationId: ingress_telnexa_gateway_events_api_v1_telnexa_events_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/klyrow/events:
+    post:
+      summary: Ingress-Klyrow-Gateway-Events
+      operationId: ingress_klyrow_gateway_events_api_v1_klyrow_events_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/kyqra/results:
+    post:
+      summary: Ingress-Kyqra-Gateway-Results
+      operationId: ingress_kyqra_gateway_results_api_v1_kyqra_results_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/kyqra/progress:
+    post:
+      summary: Ingress-Kyqra-Gateway-Progress
+      operationId: ingress_kyqra_gateway_progress_api_v1_kyqra_progress_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/postly/events:
+    post:
+      summary: Ingress-Postly-Adapter-Events
+      operationId: ingress_postly_adapter_events_api_v1_postly_events_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
 components:
-  securitySchemes:
-    oauth2:
-      type: oauth2
-      flows:
-        clientCredentials:
-          tokenUrl: https://auth.codestra.co/realms/codestra/protocol/openid-connect/token
-          scopes:
-            platform.tenant.create: Create a tenant operation
-            platform.tenant.read: Read authorized tenant state
-            platform.tenant.write: Change authorized tenant state
-            platform.preflight.execute: Run a no-effect readiness preflight
-            platform.readiness.read: Read authoritative readiness
-            integration.catalog.read: Read available integration types
-            integration.connection.write: Create or change connection metadata
-            integration.connection.test: Request a no-effect connection test
-            operation.read: Read operation state
-            health.read: Read health and non-secret runtime safety state
-            middleware.request.forward: Submit a governed command
-            middleware.status.read: Read an authorized command operation
-            operations.replay.request: Request protected dead-letter replay
-            automation.job.claim: Claim authorized automation work
-            automation.job.heartbeat: Extend the current lease
-            automation.job.complete: Report successful orchestration
-            automation.job.fail: Report failed orchestration
-  parameters:
-    TenantId:
-      name: tenant_id
-      in: path
-      required: true
-      schema: {type: string, format: uuid}
-    HeaderTenantId:
-      name: X-Tenant-ID
-      in: header
-      required: true
-      schema: {type: string, minLength: 1, maxLength: 128}
-    CorrelationId:
-      name: X-Correlation-ID
-      in: header
-      required: true
-      schema: {type: string, minLength: 1, maxLength: 180}
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema: {type: string, minLength: 8, maxLength: 180}
-    IfMatch:
-      name: If-Match
-      in: header
-      required: true
-      schema: {type: string, minLength: 1, maxLength: 128}
-  responses:
-    CommandOperation:
-      description: Current durable command operation
-      headers:
-        Location:
-          schema: {type: string}
-        X-Correlation-ID:
-          schema: {type: string}
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/CommandOperation'
-    OperationAccepted:
-      description: Durable asynchronous operation accepted
-      content:
-        application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data:
-                type: object
-                required: [operation_id, status]
-                properties:
-                  operation_id: {type: string, format: uuid}
-                  status: {type: string, enum: [accepted]}
-              meta:
-                type: object
-                required: [correlation_id, api_version]
-                properties:
-                  correlation_id: {type: string, format: uuid}
-                  api_version: {const: v1}
   schemas:
-    CommandOperation:
-      type: object
-      additionalProperties: false
-      required:
-        - command_id
-        - tenant_id
-        - command_type
-        - command_version
-        - target
-        - requested_by
-        - correlation_id
-        - idempotency_key
-        - capability
-        - state
-        - created_at
-        - updated_at
-        - duplicate
+    CommandEnvelope:
       properties:
-        command_id: {type: string, format: uuid}
-        tenant_id: {type: string}
-        command_type: {type: string}
-        command_version: {const: '1.0'}
-        target: {type: string}
-        requested_by: {type: string}
-        correlation_id: {type: string}
-        idempotency_key: {type: string}
-        capability: {type: string}
-        state:
+        command_id:
+          type: string
+          format: uuid
+          title: Command Id
+        command_type:
+          type: string
+          maxLength: 180
+          pattern: ^[a-z0-9]+(?:[.-][a-z0-9]+)+$
+          title: Command Type
+        command_version:
+          type: string
+          const: '1.0'
+          title: Command Version
+        target:
+          type: string
+          maxLength: 100
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          title: Target
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        requested_by:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Requested By
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        capability:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]{2,100}$
+          title: Capability
+        payload:
+          type: object
+          title: Payload
+      additionalProperties: false
+      type: object
+      required:
+      - command_id
+      - command_type
+      - command_version
+      - target
+      - tenant_id
+      - requested_by
+      - correlation_id
+      - idempotency_key
+      - capability
+      - payload
+      title: CommandEnvelope
+    ControlMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1.0
+          title: Expected Version
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - reason
+      title: ControlMutation
+    CreateMessageRequest:
+      properties:
+        channel:
           type: string
           enum:
-            - persisted
-            - queued
-            - dispatching
-            - accepted
-            - readback_pending
-            - completed
-            - failed
-            - reconciliation_required
-            - dead_lettered
-        provider_operation_id: {type: [string, 'null']}
-        last_error: {type: [string, 'null']}
-        created_at: {type: string, format: date-time}
-        updated_at: {type: string, format: date-time}
-        duplicate: {type: boolean}
+          - email
+          - sms
+          - voice
+          title: Channel
+        from:
+          anyOf:
+          - type: string
+            maxLength: 300
+            minLength: 1
+          - type: 'null'
+          title: From
+        to:
+          items:
+            type: string
+          type: array
+          maxItems: 1000
+          minItems: 1
+          title: To
+        senderIdentityId:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Senderidentityid
+        domainId:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Domainid
+        content:
+          $ref: '#/components/schemas/MessageContent'
+        scheduledAt:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Scheduledat
+        metadata:
+          type: object
+          title: Metadata
+      additionalProperties: false
+      type: object
+      required:
+      - channel
+      - to
+      - content
+      title: CreateMessageRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    MessageContent:
+      properties:
+        subject:
+          anyOf:
+          - type: string
+            maxLength: 998
+          - type: 'null'
+          title: Subject
+        text:
+          anyOf:
+          - type: string
+            maxLength: 200000
+          - type: 'null'
+          title: Text
+        html:
+          anyOf:
+          - type: string
+            maxLength: 200000
+          - type: 'null'
+          title: Html
+        templateId:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Templateid
+        templateVersion:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Templateversion
+        variables:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Variables
+        mediaUrls:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 20
+          - type: 'null'
+          title: Mediaurls
+      additionalProperties: false
+      type: object
+      title: MessageContent
+    OperationMutationRequest:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1.0
+          title: Expected Version
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - reason
+      title: OperationMutationRequest
+    PolicyDecisionRequest:
+      properties:
+        capability:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Capability
+        proposed_action:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Proposed Action
+      additionalProperties: false
+      type: object
+      required:
+      - capability
+      - proposed_action
+      title: PolicyDecisionRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak machine token; issuer auth.codestra.co realm codestra;
+        audience middleware-api

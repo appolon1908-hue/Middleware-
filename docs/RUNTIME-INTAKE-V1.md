@@ -73,7 +73,7 @@ PostgreSQL is the correctness boundary. `middleware_inbox` has unique constraint
 
 Redis is a short lease guard against concurrent duplicate processing. PostgreSQL remains authoritative if Redis state expires.
 
-Apply every numbered migration through `0003_immutable_event_ledger` before
+Apply every numbered migration through `0006_outbox_attempt_events` before
 starting a non-test runtime.
 
 ## Outbox, JetStream, retry and DLQ

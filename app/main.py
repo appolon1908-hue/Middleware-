@@ -24,6 +24,9 @@ from .communications import (
     Paged,
 )
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
+from .control_api import router as control_api_router
+from .domain_api import router as domain_api_router
+from .webhook_api import router as webhook_api_router
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .lead_intake import (
     INTAKE_PRODUCER_CLIENT_ID,
@@ -37,6 +40,7 @@ from .observability import (
     safe_traceparent,
 )
 from .operations_dashboard import router as operations_dashboard_router
+from .operations import router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import runtime_safety_readback
 from .security import SecurityError
@@ -141,6 +145,10 @@ def create_app(
     app.state.observability = telemetry
     app.include_router(n8n_control_plane_router)
     app.include_router(operations_dashboard_router)
+    app.include_router(operations_router)
+    app.include_router(control_api_router)
+    app.include_router(domain_api_router)
+    app.include_router(webhook_api_router)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):
@@ -269,6 +277,29 @@ def create_app(
             },
         )
 
+    @app.get("/dependencies")
+    async def dependencies(request: Request) -> JSONResponse:
+        report = await request.app.state.runtime.readiness()
+        return JSONResponse(
+            status_code=200 if report.ready else 503,
+            content={
+                "service": "middleware-api",
+                "environment": resolved.app_env,
+                "dependencies": report.components,
+            },
+        )
+
+    @app.get("/capabilities")
+    async def capabilities(request: Request) -> JSONResponse:
+        safety = runtime_safety_readback(request.app.state.runtime.settings)
+        effective = dict(safety["external_effects"])
+        effective["PRODUCTION_DIALING"] = safety["production_dialing"] == "ENABLED"
+        return JSONResponse(
+            status_code=200,
+            content={"service": "middleware-api", "environment": resolved.app_env,
+                     "capabilities": effective},
+        )
+
     @app.get("/metrics")
     async def metrics(request: Request) -> Response:
         await request.app.state.runtime.tokens.verify(
@@ -302,29 +333,6 @@ def create_app(
             "build_time": resolved.build_time,
             "build_timestamp": resolved.build_time,
             "configuration_checksum": resolved.configuration_checksum,
-        }
-
-    @app.get("/dependencies")
-    async def dependencies(request: Request) -> JSONResponse:
-        report = await request.app.state.runtime.readiness()
-        return JSONResponse(
-            status_code=200 if report.ready else 503,
-            content={
-                "status": "ready" if report.ready else "not_ready",
-                "dependencies": report.components,
-                "checked_at": datetime.now(UTC).isoformat(),
-            },
-        )
-
-    @app.get("/capabilities")
-    async def capabilities() -> dict[str, object]:
-        return {
-            "service": "middleware-api",
-            "environment": resolved.app_env,
-            "capabilities": {
-                **dict(sorted(resolved.external_effects.items())),
-                "PRODUCTION_DIALING": resolved.production_dialing == "ENABLED",
-            },
         }
 
     @app.get("/v1/runtime/safety")
@@ -367,6 +375,7 @@ def create_app(
 
         authorize_tenant(claims, tenant_id)
 
+    @app.post("/v1/communication/messages")
     @app.post("/v1/communications/messages")
     async def create_communication_message(
         body: CreateMessageRequest,
@@ -431,6 +440,7 @@ def create_app(
             ).model_dump(mode="json"),
         )
 
+    @app.get("/v1/communication/messages/{messageId}")
     @app.get("/v1/communications/messages/{messageId}")
     async def get_communication_message(messageId: UUID, request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
@@ -671,29 +681,6 @@ def create_app(
                 "Location": f"/v1/operations/{operation.command_id}",
                 "X-Correlation-ID": operation.correlation_id,
             },
-        )
-
-    @app.get("/v1/operations/{command_id}")
-    async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
-        active = request.app.state.runtime
-        if active.commands is None:
-            raise StorageError("command ledger is unavailable")
-        authorization = request.headers.get("Authorization", "")
-        caller = caller_for_authorization(authorization)
-        claims = await active.tokens.verify(
-            authorization,
-            expected_client_id=caller.client_id,
-            required_scope=caller.status_scope,
-        )
-        tenant_id = request.headers.get("X-Tenant-ID", "")
-        from .security import authorize_tenant
-
-        authorize_tenant(claims, tenant_id)
-        operation = await active.commands.get(tenant_id, command_id)
-        return JSONResponse(
-            status_code=200,
-            content=operation.model_dump(mode="json"),
-            headers={"X-Correlation-ID": operation.correlation_id},
         )
 
     def register(route: WebhookRoute) -> None:

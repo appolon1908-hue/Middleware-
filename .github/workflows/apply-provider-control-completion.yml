@@ -37,7 +37,14 @@ jobs:
             | base64 --decode > "$RUNNER_TEMP/middleware-remediation.patch.gz"
           gzip -dc "$RUNNER_TEMP/middleware-remediation.patch.gz" > "$RUNNER_TEMP/middleware-remediation.patch"
           echo "627000ec850a885cc12b4a5446cf157c7d4488301cef866dff3a38a3fe76160d  $RUNNER_TEMP/middleware-remediation.patch" | sha256sum -c -
-          git apply --3way --index "$RUNNER_TEMP/middleware-remediation.patch"
+          if ! git apply --3way --index "$RUNNER_TEMP/middleware-remediation.patch"; then
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+            test "${#conflicts[@]}" -eq 1
+            test "${conflicts[0]}" = "config/test-skip-register.v1.json"
+            git checkout --ours -- config/test-skip-register.v1.json
+            git add config/test-skip-register.v1.json
+          fi
+          test -z "$(git diff --name-only --diff-filter=U)"
           rm -rf .remediation
           rm -f .github/workflows/apply-provider-control-completion.yml
           git add -A

@@ -8,20 +8,28 @@
   "domainStatus": "registered",
   "requirements": {
     "canonicalIssuer": true,
+    "exactAudienceAndScope": true,
     "backendAuthorization": true,
     "tenantIsolation": true,
+    "semanticIdempotency": true,
+    "correlationIds": true,
+    "auditEvidence": true,
+    "rollbackEvidence": true,
+    "generatedOpenApiParity": true,
     "sameOriginSessionContractWhenOwned": true,
-    "brandContentAssetFooterContractsWhenOwned": true,
+    "browserTokensRemainServerSide": true,
+    "brandContentAssetFooterPageContractsWhenOwned": true,
     "hardcodedSocialUrlsProhibited": true,
     "domainRegistry": true,
-    "audit": true,
-    "rollback": true,
-    "noFabricatedBrowserUi": true
+    "noFabricatedBrowserUi": true,
+    "externalEffectsDisabledDuringAdoption": true
   },
-  "status": "branch-created",
+  "status": "blocked",
   "blockers": [
-    "SDK-repository pull request 75 must complete protected review before shared Orbit contracts are promoted.",
-    "Map existing Middleware routes to the canonical issuer, browser-session, Brand, Content, Asset, Footer, Page, domain, audit, and rollback authorities before implementation.",
-    "Reconcile api.codestra.co across Caddy, Kong, Keycloak, OpenAPI, clients, monitoring, and rollback without enabling live providers or writes."
+    "SDK-repository pull request 75 must complete protected review and publish an immutable Orbit release before this repository pins shared contracts.",
+    "Middleware pull requests 101, the clean replacement for 98, and the clean replacement for 96 must complete in protected merge order before Orbit API contracts are generated from the final runtime.",
+    "Map only Middleware-owned Brand, Content, Asset, Footer, Page, domain, audit, publication, and rollback operations; presentation components remain in frontend repositories.",
+    "Reconcile api.codestra.co across Caddy, Kong, Keycloak, generated OpenAPI, clients, monitoring, and rollback without introducing api.codestra.agency into new code.",
+    "Prove issuer, single audience, exact scopes, tenant derivation, idempotency, correlation, audit, no browser token storage, and zero external effects before candidate status."
   ]
 }

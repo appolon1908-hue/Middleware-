@@ -182,8 +182,24 @@ async def outbox_reconcile(record_id:int,body:ControlMutation,request:Request): 
 
 
 def _capabilities(request:Request):
-    safety=runtime_safety_readback(request.app.state.runtime.settings); effects=safety["external_effects"]
-    return {"LIVE_ADVERTISING_ENABLED":False,"EXTERNAL_DELIVERY_ENABLED":False,"SOCIAL_PUBLISHING_ENABLED":False,"EXTERNAL_MODEL_CALLS_ENABLED":False,"LIVE_SMS_DELIVERY":False,"LIVE_EMAIL_DELIVERY":False,"LIVE_PSTN_DIALING":False,"N8N_EXTERNAL_PROVIDER_WRITES":False,"PRODUCTION_DIALING":False,"CALLS_PLACED":0,"evidence":"configured_fail_closed","runtime":effects}
+    safety=runtime_safety_readback(request.app.state.runtime.settings)
+    effects=safety["external_effects"]
+    umbrella=safety["umbrella_controls"]
+    return {
+        "LIVE_ADVERTISING_ENABLED":umbrella["LIVE_ADVERTISING_ENABLED"],
+        "EXTERNAL_DELIVERY_ENABLED":umbrella["EXTERNAL_DELIVERY_ENABLED"],
+        "SOCIAL_PUBLISHING_ENABLED":umbrella["SOCIAL_PUBLISHING_ENABLED"],
+        "EXTERNAL_MODEL_CALLS_ENABLED":umbrella["EXTERNAL_MODEL_CALLS_ENABLED"],
+        "LIVE_SMS_DELIVERY":False,
+        "LIVE_EMAIL_DELIVERY":False,
+        "LIVE_PSTN_DIALING":False,
+        "N8N_EXTERNAL_PROVIDER_WRITES":umbrella["N8N_EXTERNAL_PROVIDER_WRITES"],
+        "PRODUCTION_DIALING":safety["production_dialing"] == "ENABLED",
+        "CALLS_PLACED":0,
+        "evidence":"effective_runtime",
+        "runtime":effects,
+        "umbrella_controls":umbrella,
+    }
 
 @router.get("/v1/system/capabilities")
 async def system_capabilities(request:Request): await _auth(request); return _capabilities(request)
@@ -204,7 +220,7 @@ class PolicyDecisionRequest(BaseModel):
 
 @router.post("/v1/policy/decisions")
 async def policy_decision(body:PolicyDecisionRequest,request:Request):
-    await _auth(request,mutation=True); caps=_capabilities(request); enabled=caps.get(body.capability) is True
+    await _auth(request,mutation=True); caps=_capabilities(request); runtime=caps["runtime"]; enabled=runtime.get(body.capability) is True
     return {"decision":"ALLOW" if enabled else "DENY","capability":body.capability,"proposed_action":body.proposed_action,"external_effects":False,"reason":"capability_enabled" if enabled else "fail_closed"}
 
 @router.get("/v1/reconciliation/operations")

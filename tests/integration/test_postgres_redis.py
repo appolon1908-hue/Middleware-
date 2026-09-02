@@ -12,7 +12,12 @@ import pytest
 import pytest_asyncio
 from redis.asyncio import Redis
 
-from app.commands import CommandConflict, CommandEnvelope, PostgresCommandStore
+from app.commands import (
+    CommandConflict,
+    CommandEnvelope,
+    PostgresCommandStore,
+    command_digest,
+)
 from app.models import EventEnvelope
 from app.replay import RedisReplayGuard, ReplayBusy
 from app.storage import PostgresInboxStore, PostgresOutboxStore, ReconciliationError, ReplayConflict
@@ -329,14 +334,15 @@ async def test_command_intent_outbox_and_audit_are_one_durable_transaction(
         }
     )
 
-    accepted = await store.submit(command)
-    duplicate = await store.submit(command)
+    accepted = await store.submit(command, authenticated_client_id="test-client")
+    duplicate = await store.submit(command, authenticated_client_id="test-client")
     assert accepted.state == "persisted"
     assert duplicate.duplicate is True
 
     with pytest.raises(CommandConflict):
         await store.submit(
-            command.model_copy(update={"payload": {"contact_id": "changed"}})
+            command.model_copy(update={"payload": {"contact_id": "changed"}}),
+            authenticated_client_id="test-client",
         )
 
     for new_state in (
@@ -379,6 +385,25 @@ async def test_command_intent_outbox_and_audit_are_one_durable_transaction(
             command.tenant_id,
             str(command.command_id),
         )
+        authenticated_client_id = await conn.fetchval(
+            """
+            SELECT payload->>'_authenticated_client_id'
+            FROM middleware_outbox
+            WHERE tenant_id=$1 AND command_id=$2
+              AND destination='temporal-command'
+            """,
+            command.tenant_id,
+            str(command.command_id),
+        )
+        audit_client_id = await conn.fetchval(
+            """
+            SELECT metadata->>'authenticated_client_id'
+            FROM middleware_command_audit
+            WHERE tenant_id=$1 AND command_id=$2 AND new_state='persisted'
+            """,
+            command.tenant_id,
+            str(command.command_id),
+        )
         attempts = await conn.fetchval(
             """
             SELECT count(*) FROM middleware_command_attempts
@@ -388,6 +413,8 @@ async def test_command_intent_outbox_and_audit_are_one_durable_transaction(
             str(command.command_id),
         )
     assert outbox_count == 1
+    assert authenticated_client_id == "test-client"
+    assert audit_client_id == "test-client"
     assert [row["new_state"] for row in audit_states] == [
         "persisted",
         "queued",
@@ -400,6 +427,66 @@ async def test_command_intent_outbox_and_audit_are_one_durable_transaction(
 
 
 @pytest.mark.asyncio
+async def test_postgres_command_retry_accepts_pre_provenance_digest(
+    pool: asyncpg.Pool,
+) -> None:
+    store = PostgresCommandStore(pool)
+    command = CommandEnvelope.model_validate(
+        {
+            "command_id": "00000000-0000-4000-8000-000000000091",
+            "command_type": "crm.contact.create.v1",
+            "command_version": "1.0",
+            "target": "odoo-19",
+            "tenant_id": "tenant-legacy-command",
+            "requested_by": "user-legacy",
+            "correlation_id": "correlation-legacy-command",
+            "idempotency_key": "idempotency-legacy-command",
+            "capability": "ODOO_WRITE",
+            "payload": {"contact_id": "contact-legacy"},
+        }
+    )
+    public_payload = command.model_dump(mode="json")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO middleware_commands (
+                command_id, tenant_id, command_type, command_version,
+                target, requested_by, correlation_id, idempotency_key,
+                capability, payload, payload_sha256, state
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,'persisted')
+            """,
+            str(command.command_id),
+            command.tenant_id,
+            command.command_type,
+            command.command_version,
+            command.target,
+            command.requested_by,
+            command.correlation_id,
+            command.idempotency_key,
+            command.capability,
+            json.dumps(public_payload, separators=(",", ":"), sort_keys=True),
+            command_digest(command),
+        )
+
+    duplicate = await store.submit(
+        command,
+        authenticated_client_id="post-upgrade-client",
+    )
+
+    assert duplicate.duplicate is True
+    async with pool.acquire() as conn:
+        assert await conn.fetchval(
+            """
+            SELECT payload ? '_authenticated_client_id'
+            FROM middleware_commands
+            WHERE tenant_id=$1 AND command_id=$2
+            """,
+            command.tenant_id,
+            str(command.command_id),
+        ) is False
+
+
+@pytest.mark.asyncio
 async def test_postgres_operation_reads_and_cancel_are_tenant_isolated_and_atomic(pool: asyncpg.Pool) -> None:
     store = PostgresCommandStore(pool)
     command = CommandEnvelope.model_validate({
@@ -409,7 +496,7 @@ async def test_postgres_operation_reads_and_cancel_are_tenant_isolated_and_atomi
         "correlation_id": "correlation-operation-2", "idempotency_key": "idempotency-operation-2",
         "capability": "ODOO_WRITE", "payload": {"contact_id": "contact-2"},
     })
-    await store.submit(command)
+    await store.submit(command, authenticated_client_id="test-client")
     assert len(await store.list_operations("tenant-operation", limit=2)) == 1
     assert await store.list_operations("another-tenant", limit=2) == []
     events = await store.list_events("tenant-operation", command.command_id, limit=2)
@@ -434,7 +521,7 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
         "correlation_id": "correlation-operation-3", "idempotency_key": "idempotency-operation-3",
         "capability": "ODOO_WRITE", "payload": {"contact_id": "contact-3"},
     })
-    await store.submit(command)
+    await store.submit(command, authenticated_client_id="test-client")
     for state in ("queued", "dispatching", "failed"):
         await store.transition(
             command.tenant_id,
@@ -462,7 +549,9 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
             str(command.command_id),
         )
     assert row is not None and row["event_type"] == command.command_type
-    retry_envelope = CommandEnvelope.model_validate(json.loads(row["payload"]))
+    retry_payload = json.loads(row["payload"])
+    assert retry_payload.pop("_authenticated_client_id") == "test-client"
+    retry_envelope = CommandEnvelope.model_validate(retry_payload)
     assert retry_envelope.command_id == command.command_id
     assert retry_envelope.idempotency_key == row["idempotency_key"]
     assert retry_envelope.payload == command.payload

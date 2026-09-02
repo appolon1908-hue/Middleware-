@@ -28,6 +28,7 @@ REQUIRED = (
     "requirements-connector-runtime.txt",
     "contracts/release-manifest.v1.schema.json",
     "contracts/runtime-safety-readback.v1.schema.json",
+    "contracts/runtime-safety-readback.v1.1.schema.json",
     "scripts/release_manifest.py",
     "scripts/staging_synthetic_acceptance.py",
     "scripts/synthetic_acceptance_ci.sh",

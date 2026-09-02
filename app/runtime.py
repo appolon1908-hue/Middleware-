@@ -97,6 +97,7 @@ async def build_runtime(settings: Settings) -> Runtime:
             communications=CommunicationsService(
                 store=MemoryCommunicationsStore(),
                 commands=commands,
+                umbrella_controls=settings.umbrella_controls,
             ),
         )
     assert settings.database_url is not None
@@ -125,6 +126,7 @@ async def build_runtime(settings: Settings) -> Runtime:
     runtime.communications = CommunicationsService(
         store=await PostgresCommunicationsStore.connect(settings.database_url),
         commands=runtime.commands,
+        umbrella_controls=settings.umbrella_controls,
     )
     if not await runtime.ready():
         await runtime.close()

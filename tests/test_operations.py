@@ -25,7 +25,7 @@ def test_operation_reads_are_tenant_scoped_paginated_and_redacted(test_settings)
     store = MemoryCommandStore()
     commands = [CommandEnvelope.model_validate(command_payload(command_id=str(uuid4()), idempotency_key=f"idempotency-{index}")) for index in range(3)]
     import asyncio
-    for command in commands: asyncio.run(store.submit(command))
+    for command in commands: asyncio.run(store.submit(command, authenticated_client_id="test-client"))
     asyncio.run(store.transition("tenant-1", commands[0].command_id, new_state="queued", actor_id="worker", reason="queued"))
     asyncio.run(store.transition("tenant-1", commands[0].command_id, new_state="dispatching", actor_id="worker", reason="dispatch"))
     store._events[("tenant-1", commands[0].command_id)][-1].safe_metadata.update({"access_token": "never-return", "nested": {"password": "never-return"}})
@@ -68,8 +68,8 @@ def test_versioned_cancel_and_reconcile_are_idempotent_and_provider_free(test_se
     store = MemoryCommandStore()
     cancel_command = CommandEnvelope.model_validate(command_payload(command_id=str(uuid4()), idempotency_key="cancel-command-key"))
     reconcile_command = CommandEnvelope.model_validate(command_payload(command_id=str(uuid4()), idempotency_key="reconcile-command-key"))
-    asyncio.run(store.submit(cancel_command))
-    asyncio.run(store.submit(reconcile_command))
+    asyncio.run(store.submit(cancel_command, authenticated_client_id="test-client"))
+    asyncio.run(store.submit(reconcile_command, authenticated_client_id="test-client"))
     for state in ("queued", "dispatching", "accepted", "readback_pending"):
         asyncio.run(store.transition("tenant-1", reconcile_command.command_id, new_state=state, actor_id="worker", reason=state))
     mutation_headers = {**_headers(), "Authorization": "Bearer legacy-command-token", "X-Correlation-ID": "mutation-correlation", "Idempotency-Key": "mutation-idempotency"}

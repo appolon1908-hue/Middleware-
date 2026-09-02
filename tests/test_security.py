@@ -94,6 +94,48 @@ def test_external_effect_flags_fail_closed() -> None:
         )
 
 
+def test_umbrella_controls_default_false_and_reject_malformed_values() -> None:
+    settings = Settings.from_env(
+        {"APP_ENV": "test", "ALLOW_IN_MEMORY_STORAGE": "true"}
+    )
+    assert settings.umbrella_controls == {
+        "LIVE_ADVERTISING_ENABLED": False,
+        "EXTERNAL_DELIVERY_ENABLED": False,
+        "SOCIAL_PUBLISHING_ENABLED": False,
+        "EXTERNAL_MODEL_CALLS_ENABLED": False,
+        "N8N_EXTERNAL_PROVIDER_WRITES": False,
+    }
+    with pytest.raises(ConfigurationError, match="EXTERNAL_DELIVERY_ENABLED"):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "EXTERNAL_DELIVERY_ENABLED": "missing-is-not-false",
+            }
+        )
+
+
+def test_staging_rejects_enabled_umbrella_control() -> None:
+    with pytest.raises(ConfigurationError, match="staging umbrella controls"):
+        Settings.from_env(
+            {**staging_env(), "EXTERNAL_MODEL_CALLS_ENABLED": "true"}
+        )
+
+
+def test_external_delivery_umbrella_is_an_authoritative_kill_switch() -> None:
+    with pytest.raises(ConfigurationError, match="EXTERNAL_DELIVERY_ENABLED"):
+        Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "ODOO_WRITE": "true",
+                "FORM_ODOO_DELIVERY_ENABLED": "true",
+                "ODOO_19_BASE_URL": "https://odoo.internal.invalid",
+                "ODOO_19_HMAC_SECRET": "s" * 40,
+            }
+        )
+
+
 def test_jetstream_dispatch_requires_matching_gate_and_authorization() -> None:
     with pytest.raises(ConfigurationError):
         Settings.from_env(
@@ -254,6 +296,8 @@ def staging_env() -> dict[str, str]:
         "NATS_SUBJECT_PREFIX": "codestra.staging.events",
         "TEMPORAL_NAMESPACE": "codestra-staging",
         "TEMPORAL_TASK_QUEUE": "codestra-staging-critical",
+        "KEYCLOAK_ISSUER": "https://auth-staging.codestra.co/realms/codestra",
+        "KEYCLOAK_JWKS_URI": "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
         "APP_SOURCE_SHA": "a" * 40,
         "IMAGE_DIGEST": "sha256:" + "b" * 64,
         "BUILD_TIME": "2026-08-26T23:00:00Z",
@@ -281,6 +325,25 @@ def test_staging_requires_every_webhook_secret() -> None:
         env[name] = "x" * 32
     settings = Settings.from_env(env)
     settings.validate_all_webhook_secrets()
+
+
+def test_staging_rejects_production_identity_authority() -> None:
+    env = staging_env()
+    env["KEYCLOAK_ISSUER"] = "https://auth.codestra.co/realms/codestra"
+    env["KEYCLOAK_JWKS_URI"] = "https://auth.codestra.co/realms/codestra/protocol/openid-connect/certs"
+    with pytest.raises(ConfigurationError, match="staging identity authority"):
+        Settings.from_env(env)
+
+
+def test_production_rejects_staging_identity_authority() -> None:
+    with pytest.raises(ConfigurationError, match="production identity authority"):
+        Settings.from_env(
+            {
+                "APP_ENV": "production",
+                "KEYCLOAK_ISSUER": "https://auth-staging.codestra.co/realms/codestra",
+                "KEYCLOAK_JWKS_URI": "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
+            }
+        )
 
 
 def test_runtime_profiles_reject_cross_environment_resources_and_activation() -> None:

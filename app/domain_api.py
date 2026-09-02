@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from .commands import CommandEnvelope, OperationMutationRequest
+from .commands import CommandCapabilityDisabled, CommandEnvelope, OperationMutationRequest
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .operations import OperationApiState, _mutation_context, _operation_json, list_operations as core_list_operations
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
@@ -26,7 +26,9 @@ async def _submit(domain:str,command:CommandEnvelope,request:Request):
     if request.headers.get("X-Tenant-ID")!=command.tenant_id or request.headers.get("X-Correlation-ID")!=command.correlation_id or request.headers.get("Idempotency-Key")!=command.idempotency_key: raise RequestValidationError("tenant, correlation, and idempotency headers must match command")
     subject=claims.get("sub")
     if not isinstance(subject,str) or not subject: raise AuthorizationError("token subject is required")
-    operation=await active.commands.submit(command,authenticated_subject=subject)
+    if caller.client_id == "n8n-automation" and active.settings.umbrella_controls.get("N8N_EXTERNAL_PROVIDER_WRITES") is not True:
+        raise CommandCapabilityDisabled("N8N_EXTERNAL_PROVIDER_WRITES is disabled")
+    operation=await active.commands.submit(command,authenticated_subject=subject,authenticated_client_id=caller.client_id)
     return JSONResponse(status_code=200 if operation.duplicate else 202,content=operation.model_dump(mode="json"),headers={"Location":f"/v1/{domain}/operations/{operation.command_id}","X-Correlation-ID":operation.correlation_id})
 
 

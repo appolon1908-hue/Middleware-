@@ -4,6 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from app.commands import CommandPolicy, CommandPolicyRegistry, CommandService, MemoryCommandStore
@@ -157,6 +158,59 @@ def test_valid_moneybee_token_can_submit_crm_command(test_settings) -> None:
         response = client.post("/v1/commands", json=body, headers=_headers(body, token))
     assert response.status_code == 202, response.text
     assert response.json()["state"] == "persisted"
+
+
+def test_n8n_umbrella_blocks_canonical_command_route(test_settings) -> None:
+    body = _command()
+    token = _token("n8n-automation", ["middleware.request.forward"])
+    with TestClient(
+        create_app(settings=test_settings, runtime=_runtime(test_settings))
+    ) as client:
+        response = client.post("/v1/commands", json=body, headers=_headers(body, token))
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "capability_disabled"
+
+
+@pytest.mark.parametrize("path", ("/v1/odoo/commands", "/v1/crm/commands"))
+def test_n8n_umbrella_blocks_domain_command_routes(test_settings, path: str) -> None:
+    body = _command()
+    token = _token("n8n-automation", ["middleware.request.forward"])
+    with TestClient(
+        create_app(settings=test_settings, runtime=_runtime(test_settings))
+    ) as client:
+        response = client.post(path, json=body, headers=_headers(body, token))
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "capability_disabled"
+
+
+def test_n8n_umbrella_blocks_communications_before_persistence(test_settings) -> None:
+    active = _runtime(test_settings)
+    token = _token("n8n-automation", ["middleware.request.forward"])
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Tenant-ID": "tenant-1",
+        "X-Correlation-ID": "correlation-n8n-communications-001",
+        "Idempotency-Key": "idempotency-n8n-communications-001",
+    }
+    body = {
+        "channel": "email",
+        "from": "sender@example.com",
+        "to": ["recipient@example.com"],
+        "content": {"text": "must remain blocked"},
+    }
+
+    with TestClient(create_app(settings=test_settings, runtime=active)) as client:
+        response = client.post(
+            "/v1/communications/messages",
+            json=body,
+            headers=headers,
+        )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "capability_disabled"
+    assert active.communications is not None
+    assert active.communications.store.messages == {}
+    assert active.communications.store.idempotency == {}
 
 
 def test_missing_and_invalid_tokens_are_401(test_settings) -> None:

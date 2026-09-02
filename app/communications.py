@@ -5,7 +5,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Mapping, Protocol
 
 import asyncpg
 
@@ -21,7 +21,7 @@ from pydantic import (
 )
 
 from .canonical_contracts import validate_specialized_contract
-from .commands import CommandEnvelope, CommandService
+from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandService
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .sms import compliance_keyword, normalize_e164, normalize_sms_sender, sms_segments
@@ -412,6 +412,7 @@ class DisabledCommunicationsProviderReadAdapter:
 class CommunicationsService:
     store: MemoryCommunicationsStore | PostgresCommunicationsStore
     commands: CommandService
+    umbrella_controls: Mapping[str, bool] = field(default_factory=dict)
     adapter: CommunicationsProviderReadAdapter = field(
         default_factory=DisabledCommunicationsProviderReadAdapter
     )
@@ -439,6 +440,13 @@ class CommunicationsService:
         subject = claims.get("sub")
         if subject != actor:
             raise AuthorizationError("requested actor must equal token subject")
+        if (
+            caller.client_id == "n8n-automation"
+            and self.umbrella_controls.get("N8N_EXTERNAL_PROVIDER_WRITES") is not True
+        ):
+            raise CommandCapabilityDisabled(
+                "N8N_EXTERNAL_PROVIDER_WRITES is disabled"
+            )
         body = request.model_dump(mode="json", by_alias=True)
         digest = _canonical_digest(body)
         key = (tenant_id, "POST /v1/communications/messages", idempotency_key)
@@ -623,7 +631,11 @@ class CommunicationsService:
             return message, False
 
         assert command is not None
-        await self.commands.submit(command, authenticated_subject=actor)
+        await self.commands.submit(
+            command,
+            authenticated_subject=actor,
+            authenticated_client_id=caller.client_id,
+        )
         message.status = "queued"
         message.updatedAt = datetime.now(UTC)
         self.store.messages[(tenant_id, message_id)] = message

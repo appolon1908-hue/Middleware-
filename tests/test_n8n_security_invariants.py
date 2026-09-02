@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -128,15 +129,42 @@ def _headers(
     }
 
 
-def _client(test_settings, verifier: ControlledN8nTokenVerifier) -> TestClient:
+def _client(
+    test_settings,
+    verifier: ControlledN8nTokenVerifier,
+    *,
+    provider_writes_enabled: bool = True,
+) -> TestClient:
+    settings = replace(
+        test_settings,
+        umbrella_controls={
+            **test_settings.umbrella_controls,
+            "N8N_EXTERNAL_PROVIDER_WRITES": provider_writes_enabled,
+        },
+    )
     runtime = Runtime(
-        settings=test_settings,
+        settings=settings,
         inbox=MemoryInboxStore(),
         replay=MemoryReplayGuard(),
         tokens=verifier,
         commands=CommandService(MemoryCommandStore(), _policy()),
     )
-    return TestClient(create_app(settings=test_settings, runtime=runtime))
+    return TestClient(create_app(settings=settings, runtime=runtime))
+
+
+def test_n8n_provider_write_umbrella_blocks_durable_submission(test_settings) -> None:
+    verifier = ControlledN8nTokenVerifier()
+    body = _body()
+
+    with _client(test_settings, verifier, provider_writes_enabled=False) as client:
+        response = client.post(
+            "/v1/integrations/n8n/commands",
+            json=body,
+            headers=_headers(body),
+        )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "capability_disabled"
 
 
 def test_legacy_n8n_aliases_publish_deprecation_and_successor_metadata(

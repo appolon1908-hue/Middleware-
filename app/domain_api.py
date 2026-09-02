@@ -30,9 +30,11 @@ async def _submit(domain:str,command:CommandEnvelope,request:Request):
     return JSONResponse(status_code=200 if operation.duplicate else 202,content=operation.model_dump(mode="json"),headers={"Location":f"/v1/{domain}/operations/{operation.command_id}","X-Correlation-ID":operation.correlation_id})
 
 
+def _submit_handler(domain:str):
+    async def handler(command:CommandEnvelope,request:Request): return await _submit(domain,command,request)
+    return handler
 for _domain in ("odoo","crm","email","sms","telephony","social","marketing","ai"):
-    async def submit(command:CommandEnvelope,request:Request,domain:str=_domain): return await _submit(domain,command,request)
-    router.add_api_route(f"/v1/{_domain}/commands",submit,methods=["POST"],name=f"submit_{_domain}_command")
+    router.add_api_route(f"/v1/{_domain}/commands",_submit_handler(_domain),methods=["POST"],name=f"submit_{_domain}_command")
 
 
 async def _get(domain:str,operation_id:UUID,request:Request):
@@ -47,9 +49,11 @@ async def _get(domain:str,operation_id:UUID,request:Request):
     return JSONResponse(content=_operation_json(operation))
 
 
+def _detail_handler(domain:str):
+    async def handler(operation_id:UUID,request:Request): return await _get(domain,operation_id,request)
+    return handler
 for _domain in ("odoo","crm","email","sms","telephony","social","marketing","ai"):
-    async def detail(operation_id:UUID,request:Request,domain:str=_domain): return await _get(domain,operation_id,request)
-    router.add_api_route(f"/v1/{_domain}/operations/{{operation_id}}",detail,methods=["GET"],name=f"get_{_domain}_operation")
+    router.add_api_route(f"/v1/{_domain}/operations/{{operation_id}}",_detail_handler(_domain),methods=["GET"],name=f"get_{_domain}_operation")
 
 async def _list_domain(domain:str,request:Request):
     active=request.app.state.runtime
@@ -58,9 +62,11 @@ async def _list_domain(domain:str,request:Request):
     rows=await active.commands.list_operations(tenant,limit=100)
     return {"items":[_operation_json(row) for row in rows if row.command_type.startswith(_PREFIXES[domain])],"next_cursor":None}
 
+def _list_handler(domain:str):
+    async def handler(request:Request): return await _list_domain(domain,request)
+    return handler
 for _domain in ("odoo","crm","email","sms","telephony","social","marketing","ai"):
-    async def listing(request:Request,domain:str=_domain): return await _list_domain(domain,request)
-    router.add_api_route(f"/v1/{_domain}/operations",listing,methods=["GET"],name=f"list_{_domain}_operations")
+    router.add_api_route(f"/v1/{_domain}/operations",_list_handler(_domain),methods=["GET"],name=f"list_{_domain}_operations")
 
 
 async def _mutate(domain:str,operation_id:UUID,body:OperationMutationRequest,request:Request,action:str):
@@ -73,10 +79,12 @@ async def _mutate(domain:str,operation_id:UUID,body:OperationMutationRequest,req
     return JSONResponse(content=_operation_json(operation))
 
 
+def _mutation_handler(domain:str,action:str):
+    async def handler(operation_id:UUID,body:OperationMutationRequest,request:Request): return await _mutate(domain,operation_id,body,request,action)
+    return handler
 for _domain in ("odoo","crm","telephony","social","marketing","ai"):
     for _action in ("cancel","reconcile"):
-        async def mutation(operation_id:UUID,body:OperationMutationRequest,request:Request,domain:str=_domain,action:str=_action): return await _mutate(domain,operation_id,body,request,action)
-        router.add_api_route(f"/v1/{_domain}/operations/{{operation_id}}/{_action}",mutation,methods=["POST"],name=f"{_action}_{_domain}_operation")
+        router.add_api_route(f"/v1/{_domain}/operations/{{operation_id}}/{_action}",_mutation_handler(_domain,_action),methods=["POST"],name=f"{_action}_{_domain}_operation")
 
 
 @router.get("/v1/integrations/n8n/operations")
@@ -84,13 +92,18 @@ async def n8n_operations(request:Request,limit:int=50,cursor:str|None=None,state
     return await core_list_operations(request=request,limit=limit,cursor=cursor,state=state,command_type=command_type)
 
 @router.post("/v1/integrations/n8n/operations/{operation_id}/cancel")
-async def n8n_cancel(operation_id:UUID,body:OperationMutationRequest,request:Request): return await _mutate("crm",operation_id,body,request,"cancel")
+async def n8n_cancel(operation_id:UUID,body:OperationMutationRequest,request:Request): return await _mutate_any(operation_id,body,request,"cancel")
 @router.post("/v1/integrations/n8n/operations/{operation_id}/reconcile")
-async def n8n_reconcile(operation_id:UUID,body:OperationMutationRequest,request:Request): return await _mutate("crm",operation_id,body,request,"reconcile")
+async def n8n_reconcile(operation_id:UUID,body:OperationMutationRequest,request:Request): return await _mutate_any(operation_id,body,request,"reconcile")
 
-@router.post("/v1/communication/messages")
+async def _mutate_any(operation_id:UUID,body:OperationMutationRequest,request:Request,action:str):
+    service,tenant,actor,idem=await _mutation_context(request)
+    operation=await service.mutate_operation(tenant,operation_id,action=action,actor_id=actor,idempotency_key=idem,expected_version=body.expected_version,reason=body.reason)
+    return JSONResponse(content=_operation_json(operation))
+
+@router.post("/v1/communication/messages",deprecated=True)
 async def communication_submit_alias() -> RedirectResponse: return RedirectResponse("/v1/communications/messages",status_code=308)
-@router.get("/v1/communication/messages/{message_id}")
+@router.get("/v1/communication/messages/{message_id}",deprecated=True)
 async def communication_detail_alias(message_id:UUID) -> RedirectResponse: return RedirectResponse(f"/v1/communications/messages/{message_id}",status_code=308)
 
 async def _health(request:Request,provider:str):

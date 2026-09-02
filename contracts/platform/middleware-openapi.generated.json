@@ -1009,16 +1009,6 @@
         "operationId": "submit_ai_command_v1_ai_commands_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "ai",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -1116,16 +1106,6 @@
         "operationId": "list_ai_operations_v1_ai_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "ai",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -1161,14 +1141,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -1199,16 +1172,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "ai",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -1286,26 +1249,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "ai",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "cancel",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -1413,26 +1356,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "ai",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "reconcile",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -1764,6 +1687,7 @@
     },
     "/v1/communication/messages": {
       "post": {
+        "deprecated": true,
         "operationId": "communication_submit_alias_v1_communication_messages_post",
         "parameters": [
           {
@@ -1844,6 +1768,7 @@
     },
     "/v1/communication/messages/{message_id}": {
       "get": {
+        "deprecated": true,
         "operationId": "communication_detail_alias_v1_communication_messages__message_id__get",
         "parameters": [
           {
@@ -2543,16 +2468,6 @@
         "operationId": "submit_crm_command_v1_crm_commands_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "crm",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -2880,16 +2795,6 @@
         "operationId": "list_crm_operations_v1_crm_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "crm",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -2925,14 +2830,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -2963,16 +2861,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "crm",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -3050,26 +2938,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "crm",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "cancel",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -3181,26 +3049,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "crm",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "reconcile",
-              "title": "Action",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -3297,16 +3145,6 @@
       "post": {
         "operationId": "submit_email_command_v1_email_commands_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "email",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "name": "X-Tenant-ID",
@@ -3405,16 +3243,6 @@
         "operationId": "list_email_operations_v1_email_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "email",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -3450,14 +3278,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -3488,16 +3309,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "email",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -4753,16 +4564,6 @@
         "operationId": "submit_marketing_command_v1_marketing_commands_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "marketing",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -4860,16 +4661,6 @@
         "operationId": "list_marketing_operations_v1_marketing_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "marketing",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -4905,14 +4696,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -4943,16 +4727,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "marketing",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -5030,26 +4804,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "marketing",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "cancel",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -5161,26 +4915,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "marketing",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "reconcile",
-              "title": "Action",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -5277,16 +5011,6 @@
       "post": {
         "operationId": "submit_odoo_command_v1_odoo_commands_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "odoo",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "name": "X-Tenant-ID",
@@ -5483,16 +5207,6 @@
         "operationId": "list_odoo_operations_v1_odoo_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "odoo",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -5528,14 +5242,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -5566,16 +5273,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "odoo",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -5653,26 +5350,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "odoo",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "cancel",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -5780,26 +5457,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "odoo",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "reconcile",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -8010,16 +7667,6 @@
         "operationId": "submit_sms_command_v1_sms_commands_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "sms",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -8117,16 +7764,6 @@
         "operationId": "list_sms_operations_v1_sms_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "sms",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -8162,14 +7799,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -8200,16 +7830,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "sms",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -8280,16 +7900,6 @@
       "post": {
         "operationId": "submit_social_command_v1_social_commands_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "social",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "name": "X-Tenant-ID",
@@ -8388,16 +7998,6 @@
         "operationId": "list_social_operations_v1_social_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "social",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -8433,14 +8033,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -8471,16 +8064,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "social",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -8558,26 +8141,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "social",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "cancel",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -8685,26 +8248,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "social",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "reconcile",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -8986,16 +8529,6 @@
         "operationId": "submit_telephony_command_v1_telephony_commands_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "telephony",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -9093,16 +8626,6 @@
         "operationId": "list_telephony_operations_v1_telephony_operations_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "telephony",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -9138,14 +8661,7 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request cannot be processed"
           },
           "429": {
             "description": "Rate limited"
@@ -9176,16 +8692,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "telephony",
-              "title": "Domain",
               "type": "string"
             }
           },
@@ -9263,26 +8769,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "telephony",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "cancel",
-              "title": "Action",
               "type": "string"
             }
           },
@@ -9390,26 +8876,6 @@
             "schema": {
               "format": "uuid",
               "title": "Operation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "domain",
-            "required": false,
-            "schema": {
-              "default": "telephony",
-              "title": "Domain",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "action",
-            "required": false,
-            "schema": {
-              "default": "reconcile",
-              "title": "Action",
               "type": "string"
             }
           },

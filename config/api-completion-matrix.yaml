@@ -140,13 +140,13 @@ operations:
   path: /v1/communication/messages
   canonical_operation_id: communication_submit_alias_v1_communication_messages_post
   implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
+  runtime_state: DEPRECATED
 - domain: communication
   method: GET
   path: /v1/communication/messages/{message_id}
   canonical_operation_id: communication_detail_alias_v1_communication_messages__message_id__get
   implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
+  runtime_state: DEPRECATED
 - domain: communications
   method: GET
   path: /v1/communications/messages

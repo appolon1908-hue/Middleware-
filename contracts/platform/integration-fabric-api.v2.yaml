@@ -1595,23 +1595,12 @@ paths:
       - domain-control
       summary: Submit Odoo Command
       operationId: submit_odoo_command_v1_odoo_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: odoo
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1640,29 +1629,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/crm/commands:
     post:
       tags:
       - domain-control
       summary: Submit Crm Command
       operationId: submit_crm_command_v1_crm_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: crm
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1691,29 +1673,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/email/commands:
     post:
       tags:
       - domain-control
       summary: Submit Email Command
       operationId: submit_email_command_v1_email_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: email
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1742,29 +1717,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/sms/commands:
     post:
       tags:
       - domain-control
       summary: Submit Sms Command
       operationId: submit_sms_command_v1_sms_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: sms
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1793,29 +1761,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/telephony/commands:
     post:
       tags:
       - domain-control
       summary: Submit Telephony Command
       operationId: submit_telephony_command_v1_telephony_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: telephony
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1844,29 +1805,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/social/commands:
     post:
       tags:
       - domain-control
       summary: Submit Social Command
       operationId: submit_social_command_v1_social_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: social
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1895,29 +1849,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/marketing/commands:
     post:
       tags:
       - domain-control
       summary: Submit Marketing Command
       operationId: submit_marketing_command_v1_marketing_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: marketing
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1946,29 +1893,22 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/ai/commands:
     post:
       tags:
       - domain-control
       summary: Submit Ai Command
       operationId: submit_ai_command_v1_ai_commands_post
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: ai
-          title: Domain
-      - *id001
-      - *id002
-      - *id003
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandEnvelope'
+        required: true
       responses:
         '200':
           description: Successful Response
@@ -1997,6 +1937,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/odoo/operations/{operation_id}:
     get:
       tags:
@@ -2011,13 +1955,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: odoo
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2061,13 +1998,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: crm
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2111,13 +2041,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: email
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2161,13 +2084,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: sms
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2211,13 +2127,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: telephony
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2261,13 +2170,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: social
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2311,13 +2213,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: marketing
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2361,13 +2256,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: ai
-          title: Domain
       - *id001
       responses:
         '200':
@@ -2403,27 +2291,12 @@ paths:
       - domain-control
       summary: List Odoo Operations
       operationId: list_odoo_operations_v1_odoo_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: odoo
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2434,39 +2307,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/crm/operations:
     get:
       tags:
       - domain-control
       summary: List Crm Operations
       operationId: list_crm_operations_v1_crm_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: crm
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2477,39 +2339,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/email/operations:
     get:
       tags:
       - domain-control
       summary: List Email Operations
       operationId: list_email_operations_v1_email_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: email
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2520,39 +2371,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/sms/operations:
     get:
       tags:
       - domain-control
       summary: List Sms Operations
       operationId: list_sms_operations_v1_sms_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: sms
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2563,39 +2403,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/telephony/operations:
     get:
       tags:
       - domain-control
       summary: List Telephony Operations
       operationId: list_telephony_operations_v1_telephony_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: telephony
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2606,39 +2435,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/social/operations:
     get:
       tags:
       - domain-control
       summary: List Social Operations
       operationId: list_social_operations_v1_social_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: social
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2649,39 +2467,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/marketing/operations:
     get:
       tags:
       - domain-control
       summary: List Marketing Operations
       operationId: list_marketing_operations_v1_marketing_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: marketing
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2692,39 +2499,28 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/ai/operations:
     get:
       tags:
       - domain-control
       summary: List Ai Operations
       operationId: list_ai_operations_v1_ai_operations_get
-      parameters:
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: ai
-          title: Domain
-      - *id001
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -2735,12 +2531,16 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
   /v1/odoo/operations/{operation_id}/cancel:
     post:
       tags:
@@ -2755,20 +2555,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: odoo
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: cancel
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -2820,20 +2606,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: odoo
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: reconcile
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -2885,20 +2657,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: crm
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: cancel
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -2950,20 +2708,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: crm
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: reconcile
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3015,20 +2759,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: telephony
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: cancel
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3080,20 +2810,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: telephony
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: reconcile
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3145,20 +2861,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: social
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: cancel
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3210,20 +2912,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: social
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: reconcile
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3275,20 +2963,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: marketing
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: cancel
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3340,20 +3014,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: marketing
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: reconcile
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3405,20 +3065,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: ai
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: cancel
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3470,20 +3116,6 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - name: domain
-        in: query
-        required: false
-        schema:
-          type: string
-          default: ai
-          title: Domain
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          default: reconcile
-          title: Action
       - *id001
       - *id002
       - *id003
@@ -3729,6 +3361,7 @@ paths:
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
+      deprecated: true
       security:
       - bearerAuth: []
       parameters:
@@ -3741,6 +3374,7 @@ paths:
       - domain-control
       summary: Communication Detail Alias
       operationId: communication_detail_alias_v1_communication_messages__message_id__get
+      deprecated: true
       parameters:
       - name: message_id
         in: path

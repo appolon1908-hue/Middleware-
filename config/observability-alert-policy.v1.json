@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "policy_id": "codestra-observability-alert-mail-v1",
+  "tenant_id": "codestra-platform",
+  "receiver": "codestra-observability-email",
+  "recipient_policy_id": "codestra-observability-admin-v1",
+  "sender_policy_id": "codestra-alert-sender-v1",
+  "recipient": "appolon@codestra.co",
+  "sender": "alerts@codestra.co",
+  "reply_to": "appolon@codestra.co",
+  "allowed_environments": [
+    "production"
+  ],
+  "allowed_severities": [
+    "critical",
+    "warning"
+  ],
+  "max_alerts_per_request": 20,
+  "max_body_bytes": 131072,
+  "normal_delivery_path": "middleware-klyrow-adapter",
+  "direct_smtp_allowed": false,
+  "delivery_enabled_by_default": false
+}

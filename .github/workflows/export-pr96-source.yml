@@ -1,0 +1,40 @@
+name: Export PR96 exact source
+
+on:
+  push:
+    branches:
+      - chatgpt/pr96-source-export-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Export clean parent tree
+        run: |
+          set -Eeuo pipefail
+          target="$(git rev-parse HEAD^)"
+          test "$target" = "0137e60eb09d8dc6e28fca7c425c8dabd443bbe7"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/pr96-${target}.tar.gz" "$target"
+          sha256sum "$RUNNER_TEMP/pr96-${target}.tar.gz" > "$RUNNER_TEMP/pr96-${target}.tar.gz.sha256"
+
+      - name: Upload exact source archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr96-source-0137e60eb09d8dc6e28fca7c425c8dabd443bbe7
+          path: |
+            ${{ runner.temp }}/pr96-0137e60eb09d8dc6e28fca7c425c8dabd443bbe7.tar.gz
+            ${{ runner.temp }}/pr96-0137e60eb09d8dc6e28fca7c425c8dabd443bbe7.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

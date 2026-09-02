@@ -1113,6 +1113,52 @@ def test_status_snapshot_before_resolved_end_cannot_reopen_incident() -> None:
         assert detail.json()["state"] == "resolved"
 
 
+def test_newer_firing_status_reopens_ended_occurrence_for_matching_webhook() -> None:
+    value = webhook()
+    resolved_value = copy.deepcopy(value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="status-reopen-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+
+        reopened = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json={
+                "observedAt": "2026-09-02T16:11:00Z",
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [
+                    {
+                        "groupKey": value["groupKey"],
+                        "fingerprint": value["alerts"][0]["fingerprint"],
+                        "startsAt": value["alerts"][0]["startsAt"],
+                        "state": "firing",
+                        "silencedBy": [],
+                        "inhibitedBy": [],
+                    }
+                ],
+            },
+            headers=headers(key="status-reopen-snapshot-0001"),
+        )
+        assert reopened.status_code == 200
+        assert reopened.json()["items"][0]["state"] == "firing"
+        assert reopened.json()["items"][0]["ends_at"] is None
+
+        matching = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="status-reopen-webhook-0001"),
+        )
+        assert matching.status_code == 202
+        assert matching.json()["operations"][0]["incident_id"] == incident_id
+
+
 def test_status_snapshot_reports_partial_application_per_item() -> None:
     value = webhook()
     with TestClient(app()) as client:

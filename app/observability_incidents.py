@@ -936,6 +936,12 @@ class MemoryIncidentStore:
             incident = previous.model_copy(
                 update={
                     "state": state,
+                    # A newer authoritative firing snapshot reopens this exact
+                    # occurrence. Clear its prior terminal evidence so the
+                    # matching webhook can subsequently create the governed
+                    # notification command without looking like a delayed
+                    # pre-resolution replay.
+                    "ends_at": None if state == "firing" else previous.ends_at,
                     "last_seen_at": now,
                     "source_deployment": source_deployment,
                     "correlation_id": correlation_id,
@@ -2187,6 +2193,8 @@ class PostgresIncidentStore:
                     """
                     UPDATE middleware_observability_incidents SET
                       state=$3::text, last_seen_at=$4::timestamptz,
+                      ends_at=CASE WHEN $3::text='firing'
+                        THEN NULL::timestamptz ELSE ends_at END,
                       resolved_at=CASE WHEN $3::text='resolved'
                         THEN $4::timestamptz ELSE NULL::timestamptz END,
                       source_deployment=$5::text, correlation_id=$6::text,

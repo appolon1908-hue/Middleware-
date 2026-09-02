@@ -60,7 +60,10 @@ webhook transition whose `startsAt` predates the persisted occurrence is also
 rejected before replay or projection mutation, so a delayed resolved or firing
 webhook cannot replace a newer recurrence. A firing webhook whose `startsAt`
 equals an already-ended occurrence is likewise stale and cannot erase its
-resolved evidence. PostgreSQL status events retain the
+resolved evidence. A firing status observation strictly newer than the
+persisted `endsAt` is authoritative reopening evidence: it clears the terminal
+`endsAt` before a matching same-occurrence webhook is accepted. PostgreSQL
+status events retain the
 original sanitized response projection; retrying an older status request after
 a newer status has applied therefore returns the original result without
 rewinding the current projection. A multi-item snapshot returns explicit
@@ -138,7 +141,8 @@ live data must never be destroyed for a test.
 
 Normal application rollback keeps schema 0009 and redeploys the recorded previous
 immutable image digest. The rollback candidate must pass the same-start
-resolved-then-delayed-firing denial tests for both memory and PostgreSQL stores;
+resolved-then-delayed-firing denial and newer-status-then-webhook reopening tests
+for both memory and PostgreSQL stores;
 an image that can erase persisted `endsAt` evidence is not an eligible rollback
 target. Schema rollback is offline and destructive to incident
 evidence. It requires independent approval, stopped writers, exports and checksums

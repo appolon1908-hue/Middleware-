@@ -541,13 +541,21 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
         reason="known_safe_failure",
     )
     assert retried.state == "queued" and retried.resource_version == 2
+    assert retried.last_error is None
     async with pool.acquire() as conn:
+        persisted_last_error = await conn.fetchval(
+            """SELECT last_error FROM middleware_commands
+               WHERE tenant_id=$1 AND command_id=$2""",
+            command.tenant_id,
+            str(command.command_id),
+        )
         row = await conn.fetchrow(
             """SELECT event_type,payload,idempotency_key FROM middleware_outbox
                WHERE tenant_id=$1 AND command_id=$2 AND idempotency_key LIKE 'operation-retry:%'""",
             command.tenant_id,
             str(command.command_id),
         )
+    assert persisted_last_error is None
     assert row is not None and row["event_type"] == command.command_type
     retry_payload = json.loads(row["payload"])
     assert retry_payload.pop("_authenticated_client_id") == "test-client"
@@ -555,6 +563,9 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
     assert retry_envelope.command_id == command.command_id
     assert retry_envelope.idempotency_key == row["idempotency_key"]
     assert retry_envelope.payload == command.payload
+
+    # The dispatcher marks operation-retry envelopes as resume_from_queued, so
+    # the durable mutation must already have completed failed -> queued.
 
 
 async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:

@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-
-import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,16 +34,23 @@ def main() -> None:
     adapters = json.loads(
         (ROOT / "config/adapter-registry.v2.json").read_text(encoding="utf-8")
     )["adapters"]
-    contract = yaml.safe_load(
-        (ROOT / "contracts/observability/alert-api.v1.openapi.yaml").read_text(
-            encoding="utf-8"
-        )
+    contract_source = (
+        ROOT / "contracts/observability/alert-api.v1.openapi.yaml"
+    ).read_text(encoding="utf-8")
+    contract_paths = set(
+        re.findall(r"^  (/[^:]+):\s*$", contract_source, flags=re.MULTILINE)
     )
-    compose = yaml.safe_load(
-        (ROOT / "deploy/observability-alerts/compose.core-production.yaml").read_text(
-            encoding="utf-8"
-        )
+    compose_source = (
+        ROOT / "deploy/observability-alerts/compose.core-production.yaml"
+    ).read_text(encoding="utf-8")
+    service_match = re.search(
+        r"^  observability-alert-api:\n(?P<body>.*?)(?=^\S|\Z)",
+        compose_source,
+        flags=re.MULTILINE | re.DOTALL,
     )
+    if service_match is None:
+        fail("observability alert API Compose service is missing")
+    service_source = service_match.group("body")
     api_source = (
         (ROOT / "app/observability_alerts.py").read_text(encoding="utf-8")
         + (ROOT / "app/observability_alert_contract.py").read_text(
@@ -126,20 +132,27 @@ def main() -> None:
         "/readiness",
         "/version",
         "/capabilities",
+        "/v1/integrations/alertmanager/events",
         "/v1/observability/alerts",
         "/v1/observability/alerts/{operation_id}",
         "/v1/observability/alerts/{operation_id}/events",
         "/v1/observability/alert-delivery-events",
     }
-    if set(contract.get("paths", {})) != required_paths:
+    if contract_paths != required_paths:
         fail("OpenAPI route inventory drifted")
 
-    service = compose.get("services", {}).get("observability-alert-api", {})
-    if "@sha256:" not in service.get("image", ""):
+    image_authority = (
+        "image: ${MIDDLEWARE_IMAGE:?set exact "
+        "registry/repository@sha256:<digest>}"
+    )
+    if image_authority not in service_source:
         fail("production image must require an immutable digest")
-    if service.get("read_only") is not True or service.get("cap_drop") != ["ALL"]:
+    if (
+        "read_only: true" not in service_source
+        or "cap_drop: [ALL]" not in service_source
+    ):
         fail("container hardening drifted")
-    if service.get("ports"):
+    if re.search(r"^    ports:\s*$", service_source, flags=re.MULTILINE):
         fail("observability alert API must not publish a host port")
 
     required_markers = (

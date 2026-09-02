@@ -209,7 +209,8 @@ def create_app(
             "sender_policy_id": active_policy.sender_policy_id,
         }
 
-    @app.post("/v1/observability/alerts")
+    @app.post("/v1/integrations/alertmanager/events")
+    @app.post("/v1/observability/alerts", deprecated=True)
     async def submit_alerts(request: Request) -> JSONResponse:
         actor, correlation_id = await authorize(
             request,
@@ -230,12 +231,14 @@ def create_app(
         if len(webhook.alerts) > active_policy.max_alerts_per_request:
             raise RequestValidationError("too many alerts in one request")
 
-        operations = []
         for alert in webhook.alerts:
             if alert.labels["environment"] not in active_policy.allowed_environments:
                 raise AuthorizationError("alert environment is not approved")
             if alert.labels["severity"] not in active_policy.allowed_severities:
                 raise AuthorizationError("alert severity is not approved")
+
+        operations = []
+        for alert in webhook.alerts:
             command = build_command(
                 policy=active_policy,
                 alert=alert,
@@ -247,6 +250,7 @@ def create_app(
             operation = await request.app.state.runtime.commands.submit(
                 command,
                 authenticated_subject=actor,
+                authenticated_client_id=ALERTMANAGER_CLIENT_ID,
             )
             operations.append(operation_view(operation, alert))
 

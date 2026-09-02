@@ -7,7 +7,7 @@ Normal alerts do not use direct Alertmanager SMTP. The approved path is:
 ```text
 Prometheus
   -> Alertmanager (`alertmanager-service`)
-  -> POST /v1/observability/alerts
+  -> POST /v1/integrations/alertmanager/events
   -> Middleware durable command ledger and outbox
   -> Temporal command execution
   -> `KlyrowAlertAdapter`

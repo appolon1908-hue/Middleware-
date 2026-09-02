@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 from datetime import UTC, datetime
 from typing import Any
@@ -14,6 +15,7 @@ from app.commands import (
     MemoryCommandStore,
 )
 from app.config import Settings
+from app.observability_alert_contract import AlertmanagerWebhook
 from app.observability_alerts import AlertPolicy, create_app
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
@@ -180,7 +182,7 @@ def app(active: bool = True):
 def test_firing_alert_is_durable_and_replay_safe() -> None:
     with TestClient(app()) as client:
         response = client.post(
-            "/v1/observability/alerts",
+            "/v1/integrations/alertmanager/events",
             json=webhook(),
             headers=headers(),
         )
@@ -219,6 +221,74 @@ def test_firing_alert_is_durable_and_replay_safe() -> None:
         )
         assert events.status_code == 200
         assert events.json()["items"][0]["new_state"] == "persisted"
+
+
+def test_mixed_status_group_processes_each_alert_transition() -> None:
+    value = webhook()
+    resolved = copy.deepcopy(value["alerts"][0])
+    resolved["status"] = "resolved"
+    resolved["fingerprint"] = "resolved123456"
+    resolved["endsAt"] = "2026-09-02T16:05:00Z"
+    value["alerts"].append(resolved)
+    with TestClient(app()) as client:
+        response = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="mixed-status-alert-group-v1"),
+        )
+        assert response.status_code == 202
+        assert [item["alert_state"] for item in response.json()["operations"]] == [
+            "firing",
+            "resolved",
+        ]
+
+
+def test_annotation_urls_are_sanitized_before_command_creation() -> None:
+    value = webhook()
+    parsed = AlertmanagerWebhook.model_validate(value)
+    alert = parsed.alerts[0]
+    assert alert.annotations["runbook_url"] == (
+        "https://graf.codestra.media/d/runbooks/host-down"
+    )
+    assert alert.annotations["dashboard_url"] == (
+        "https://graf.codestra.media/d/host/provider"
+    )
+
+
+def test_invalid_later_alert_does_not_partially_persist_batch() -> None:
+    value = webhook()
+    denied = copy.deepcopy(value["alerts"][0])
+    denied["fingerprint"] = "denied123456"
+    denied["labels"]["environment"] = "production"
+    value["alerts"].append(denied)
+    active_runtime = runtime()
+    with TestClient(
+        create_app(
+            settings=settings(),
+            runtime=active_runtime,
+            policy=policy(),
+            env={
+                "OBSERVABILITY_ALERT_EMAIL_DELIVERY": "true",
+                "OBSERVABILITY_ALERT_ACTIVATION_ID": "CHG-TEST-OBS-ALERT-01",
+            },
+        )
+    ) as client:
+        response = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="all-or-nothing-alert-group-v1"),
+        )
+        assert response.status_code == 403
+    assert active_runtime.commands is not None
+    assert (
+        asyncio.run(
+            active_runtime.commands.list_operations(
+                "codestra-platform",
+                limit=100,
+            )
+        )
+        == []
+    )
 
 
 def test_same_identity_with_changed_payload_is_a_conflict() -> None:

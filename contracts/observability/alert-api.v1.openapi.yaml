@@ -3,12 +3,34 @@ info:
   title: Codestra Middleware Observability Alert API
   version: 1.0.0
   description: >-
-    Fixed-recipient, durable Alertmanager ingress. Each request contains exactly
-    one alert transition so validation, idempotency and durable persistence are
-    atomic. The API does not expose arbitrary SMTP.
+    Fixed-recipient, durable Alertmanager ingress. The complete group is
+    validated before each alert transition is submitted under its own stable
+    identity. The API does not expose arbitrary SMTP.
 servers:
   - url: https://middleware-observability-alerts.internal.codestra.co
 paths:
+  /v1/integrations/alertmanager/events:
+    post:
+      operationId: ingestAlertmanagerEvent
+      summary: Persist Alertmanager transitions as durable operations
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AlertmanagerWebhook'}
+      responses:
+        '202': {description: New durable operations were accepted}
+        '200': {description: Exact idempotent replay}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /health:
     get:
       operationId: healthObservabilityAlerts
@@ -42,6 +64,7 @@ paths:
   /v1/observability/alerts:
     post:
       operationId: submitObservabilityAlert
+      deprecated: true
       summary: Persist one Alertmanager transition as one durable command
       security: [{bearerAuth: []}]
       parameters:

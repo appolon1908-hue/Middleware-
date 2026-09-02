@@ -133,12 +133,16 @@ class AlertmanagerAlert(BaseModel):
     @field_validator("annotations")
     @classmethod
     def validate_annotations(cls, value: dict[str, str]) -> dict[str, str]:
-        return safe_map(
+        sanitized = safe_map(
             value,
             allowed=SAFE_ANNOTATIONS,
             maximum_items=12,
             maximum_value=4_096,
         )
+        for key in ("runbook_url", "dashboard_url"):
+            if key in sanitized:
+                sanitized[key] = safe_url(sanitized[key])
+        return sanitized
 
     @field_validator("generator_url")
     @classmethod
@@ -201,8 +205,6 @@ class AlertmanagerWebhook(BaseModel):
             raise ValueError("alerts must not be empty")
         if self.truncated_alerts:
             raise ValueError("truncated Alertmanager payloads are not accepted")
-        if any(alert.status != self.status for alert in self.alerts):
-            raise ValueError("group status must match every alert status")
         return self
 
 

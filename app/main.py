@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import ValidationError
+from pydantic import AwareDatetime, ValidationError
 
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
@@ -534,8 +534,8 @@ def create_app(
     @app.get("/v1/communications/usage", response_model=CommunicationUsageReport)
     async def get_communication_usage(
         request: Request,
-        from_: datetime | None = Query(None, alias="from"),
-        to: datetime | None = Query(None),
+        from_: AwareDatetime | None = Query(None, alias="from"),
+        to: AwareDatetime | None = Query(None),
     ) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)

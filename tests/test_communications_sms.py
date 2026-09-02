@@ -275,6 +275,12 @@ def test_sms_api_creates_one_canonical_telnexa_command_and_usage(test_settings) 
         totals = {item["channel"]: item for item in usage.json()["totals"]}
         assert totals["sms"]["accepted"] == 1
         assert totals["email"]["accepted"] == 0
+        naive_usage = client.get(
+            "/v1/communications/usage?from=2026-09-01T12:00:00",
+            headers=_headers(scope="kyqra.middleware.status.read"),
+        )
+        assert naive_usage.status_code == 400
+        assert naive_usage.json()["error"]["code"] == "invalid_request"
 
 
 def test_sms_schema_sender_scope_and_kill_switch_fail_closed(test_settings) -> None:

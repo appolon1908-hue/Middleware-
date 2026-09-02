@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
+from typing import Any
 import urllib.error
 import urllib.request
 
@@ -14,8 +16,11 @@ OPERATION_TEMPLATE = "/v1/operations/{command_id}"
 OPERATION_PROBE = "/v1/operations/00000000-0000-0000-0000-000000000000"
 LEGACY_COMMAND_PATH = "/v1/integrations/n8n/commands"
 LEGACY_OPERATION_TEMPLATE = "/v1/integrations/n8n/operations/{command_id}"
-LEGACY_OPERATION_PROBE = "/v1/integrations/n8n/operations/00000000-0000-0000-0000-000000000000"
+LEGACY_OPERATION_PROBE = (
+    "/v1/integrations/n8n/operations/00000000-0000-0000-0000-000000000000"
+)
 VICIDIAL_PATH = "/api/v1/vicidial/events"
+HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 OPERATIONS_DASHBOARD_PATHS = (
     "/v1/operations-dashboard/overview",
     "/v1/operations-dashboard/auth-gateway",
@@ -51,6 +56,46 @@ def request(
         return exc.code, json.loads(exc.read().decode())
 
 
+def route_operations(paths: dict[str, Any]) -> set[tuple[str, str]]:
+    return {
+        (method.upper(), path)
+        for path, item in paths.items()
+        if isinstance(item, dict)
+        for method in item
+        if method in HTTP_METHODS
+    }
+
+
+def load_contract(path: str) -> dict[str, Any]:
+    contract_path = Path(path)
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AssertionError(
+            f"cannot load generated API contract {contract_path}: {exc}"
+        ) from exc
+    if not isinstance(contract, dict) or not isinstance(contract.get("paths"), dict):
+        raise AssertionError(
+            "generated API contract must contain an OpenAPI paths object"
+        )
+    return contract
+
+
+def assert_runtime_contract_parity(
+    runtime_openapi: dict[str, Any],
+    contract_file: str,
+) -> None:
+    expected = route_operations(load_contract(contract_file)["paths"])
+    actual = route_operations(runtime_openapi["paths"])
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    assert not missing and not unexpected, (
+        "runtime/generated OpenAPI route drift: "
+        f"missing={missing}, unexpected={unexpected}"
+    )
+    assert expected, "generated API contract must contain at least one operation"
+
+
 def assert_fail_closed(status_code: int, response_body: dict) -> None:
     assert status_code in {401, 403}
     assert response_body.get("error", {}).get("code") in {
@@ -60,13 +105,25 @@ def assert_fail_closed(status_code: int, response_body: dict) -> None:
     assert response_body != {"detail": "Not Found"}
 
 
-def certify(base: str, *, expect_operations_dashboard: bool = False) -> None:
+def certify(
+    base: str,
+    *,
+    expect_operations_dashboard: bool = False,
+    contract_file: str | None = None,
+) -> None:
     command_path = COMMAND_PATH if expect_operations_dashboard else LEGACY_COMMAND_PATH
-    operation_template = OPERATION_TEMPLATE if expect_operations_dashboard else LEGACY_OPERATION_TEMPLATE
-    operation_probe = OPERATION_PROBE if expect_operations_dashboard else LEGACY_OPERATION_PROBE
+    operation_template = (
+        OPERATION_TEMPLATE if expect_operations_dashboard else LEGACY_OPERATION_TEMPLATE
+    )
+    operation_probe = (
+        OPERATION_PROBE if expect_operations_dashboard else LEGACY_OPERATION_PROBE
+    )
     status, openapi = request(base, "GET", "/openapi.json")
     assert status == 200
     paths = openapi["paths"]
+    if contract_file is not None:
+        assert_runtime_contract_parity(openapi, contract_file)
+
     assert "post" in paths[command_path]
     assert "get" in paths[operation_template]
     assert "post" in paths[VICIDIAL_PATH]
@@ -166,10 +223,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--expect-operations-dashboard", action="store_true")
+    parser.add_argument(
+        "--contract-file",
+        help="Generated OpenAPI JSON whose route/method set must equal the runtime.",
+    )
     args = parser.parse_args()
     certify(
         args.base_url,
         expect_operations_dashboard=args.expect_operations_dashboard,
+        contract_file=args.contract_file,
     )
     print("PRODUCTION_ROUTE_CONTRACT=PASS")
     return 0

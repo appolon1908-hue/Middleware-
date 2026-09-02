@@ -453,7 +453,7 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
         expected_version=1,
         reason="known_safe_failure",
     )
-    assert retried.state == "failed" and retried.resource_version == 2
+    assert retried.state == "queued" and retried.resource_version == 2
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """SELECT event_type,payload,idempotency_key FROM middleware_outbox
@@ -467,16 +467,8 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
     assert retry_envelope.idempotency_key == row["idempotency_key"]
     assert retry_envelope.payload == command.payload
 
-    # The retry mutation intentionally leaves the command FAILED. The new
-    # Temporal execution owns the canonical failed -> queued transition.
-    queued = await store.transition(
-        command.tenant_id,
-        command.command_id,
-        new_state="queued",
-        actor_id="temporal:codestra.command-execution.v1",
-        reason="Temporal workflow accepted durable retry intent",
-    )
-    assert queued.state == "queued"
+    # The dispatcher marks operation-retry envelopes as resume_from_queued, so
+    # the durable mutation must already have completed failed -> queued.
 
 
 async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:

@@ -220,4 +220,11 @@ for _spec in PROVIDER_CONTROL_SPECS:
         methods=["POST"],
         name="provider_control_" + _spec.operation_id.replace(".", "_"),
         summary=f"Submit {_spec.operation_id} through the durable operation engine",
+        status_code=202,
+        responses={
+            200: {
+                "description": "Idempotent replay of the existing durable operation"
+            },
+            202: {"description": "Durable provider operation accepted"},
+        },
     )

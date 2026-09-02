@@ -85,6 +85,9 @@ def test_provider_policy_external_routes_are_registered_exactly(test_settings) -
     }
     assert expected == {spec.route for spec in PROVIDER_CONTROL_SPECS}
     assert expected <= set(app.openapi()["paths"])
+    for route in expected:
+        responses = app.openapi()["paths"][route]["post"]["responses"]
+        assert {"200", "202"} <= set(responses)
 
 
 def test_exact_provider_control_routes_reuse_the_durable_operation_engine(

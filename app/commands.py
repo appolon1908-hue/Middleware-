@@ -417,10 +417,10 @@ class MemoryCommandStore:
         else:
             if operation.state != "failed":
                 raise CommandConflict("operation is not safely retryable")
-            # A retry mutation only records durable retry intent. The Temporal
-            # workflow remains responsible for the failed -> queued transition so
-            # every execution follows the same state-machine entry path.
-            updates = {}
+            # The retry envelope is explicitly marked resume_from_queued by the
+            # Temporal dispatcher. Persist the failed -> queued transition here so
+            # the workflow can safely continue with queued -> dispatching.
+            updates = {"state": "queued"}
         now = datetime.now().astimezone()
         updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
         self._commands[key] = (digest, updated)
@@ -808,11 +808,10 @@ class PostgresCommandStore:
                 else:
                     if previous != "failed":
                         raise CommandConflict("operation is not safely retryable")
-                    # Preserve FAILED until the newly started Temporal workflow
-                    # records failed -> queued. Pre-transitioning here causes the
-                    # workflow's canonical first transition to become queued ->
-                    # queued and fail before adapter execution.
-                    new_state = previous
+                    # Retry envelopes are dispatched with resume_from_queued=True.
+                    # Persist failed -> queued atomically with the retry intent so
+                    # the workflow's first transition is queued -> dispatching.
+                    new_state = "queued"
                     work_key = "operation-retry:" + hashlib.sha256(
                         f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()
                     ).hexdigest()
@@ -824,7 +823,10 @@ class PostgresCommandStore:
                     retry_envelope["idempotency_key"] = work_key
                     row = await conn.fetchrow(
                         """UPDATE middleware_commands
-                           SET resource_version=resource_version+1, updated_at=now()
+                           SET state='queued',
+                               resource_version=resource_version+1,
+                               queued_at=now(),
+                               updated_at=now()
                            WHERE tenant_id=$1 AND command_id=$2
                            RETURNING *""",
                         tenant_id,

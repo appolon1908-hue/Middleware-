@@ -86,3 +86,41 @@ def test_versioned_cancel_and_reconcile_are_idempotent_and_provider_free(test_se
         assert reconciled.status_code == 200
         assert reconciled.json()["state"] == "RECONCILIATION_REQUIRED"
         assert reconciled.json()["resource_version"] == 2
+
+def test_retry_mutation_queues_before_temporal_resume(test_settings) -> None:
+    import asyncio
+
+    store = MemoryCommandStore()
+    command = CommandEnvelope.model_validate(
+        command_payload(
+            command_id=str(uuid4()),
+            idempotency_key="retry-command-key",
+        )
+    )
+    asyncio.run(store.submit(command))
+    for state in ("queued", "dispatching", "failed"):
+        asyncio.run(
+            store.transition(
+                "tenant-1",
+                command.command_id,
+                new_state=state,
+                actor_id="temporal:test",
+                reason=state,
+            )
+        )
+
+    retried = asyncio.run(
+        store.mutate_operation(
+            "tenant-1",
+            command.command_id,
+            action="retry",
+            actor_id="operator-1",
+            idempotency_key="retry-mutation-key",
+            expected_version=1,
+            reason="known_safe_failure",
+        )
+    )
+
+    assert retried.state == "queued"
+    assert retried.resource_version == 2
+    assert store._events[("tenant-1", command.command_id)][-1].new_state == "queued"

@@ -515,12 +515,15 @@
         },
         "responses": {
           "200": {
+            "description": "Idempotent replay of the existing durable operation"
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {}
               }
             },
-            "description": "Successful Response"
+            "description": "Durable provider operation accepted"
           },
           "400": {
             "description": "Invalid canonical request"
@@ -612,12 +615,15 @@
         },
         "responses": {
           "200": {
+            "description": "Idempotent replay of the existing durable operation"
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {}
               }
             },
-            "description": "Successful Response"
+            "description": "Durable provider operation accepted"
           },
           "400": {
             "description": "Invalid canonical request"
@@ -709,12 +715,15 @@
         },
         "responses": {
           "200": {
+            "description": "Idempotent replay of the existing durable operation"
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {}
               }
             },
-            "description": "Successful Response"
+            "description": "Durable provider operation accepted"
           },
           "400": {
             "description": "Invalid canonical request"
@@ -806,12 +815,15 @@
         },
         "responses": {
           "200": {
+            "description": "Idempotent replay of the existing durable operation"
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {}
               }
             },
-            "description": "Successful Response"
+            "description": "Durable provider operation accepted"
           },
           "400": {
             "description": "Invalid canonical request"
@@ -903,12 +915,15 @@
         },
         "responses": {
           "200": {
+            "description": "Idempotent replay of the existing durable operation"
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {}
               }
             },
-            "description": "Successful Response"
+            "description": "Durable provider operation accepted"
           },
           "400": {
             "description": "Invalid canonical request"

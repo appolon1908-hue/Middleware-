@@ -70,7 +70,7 @@ def test_compatibility_operation_read_is_authenticated_and_tenant_scoped(test_se
         assert denied.status_code == 403
 
 
-def test_operation_retry_is_versioned_idempotent_and_failed_only(test_settings):
+def test_operation_retry_is_versioned_idempotent_and_queues_temporal_resume(test_settings):
     body = command_payload()
     headers = {
         "Authorization": "Bearer legacy-command-token",
@@ -94,7 +94,7 @@ def test_operation_retry_is_versioned_idempotent_and_failed_only(test_settings):
             json={"expected_version": 1, "reason": "known_safe_retry"},
         )
         assert first.status_code == 200
-        assert first.json()["state"] == "FAILED"
+        assert first.json()["state"] == "QUEUED"
         replay = client.post(
             f"/api/v1/operations/{body['command_id']}/retry",
             headers=mutation,

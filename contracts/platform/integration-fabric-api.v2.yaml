@@ -4483,11 +4483,13 @@ paths:
               $ref: '#/components/schemas/ProviderControlRequest'
         required: true
       responses:
-        '200':
-          description: Successful Response
+        '202':
+          description: Durable provider operation accepted
           content:
             application/json:
               schema: {}
+        '200':
+          description: Idempotent replay of the existing durable operation
         '422':
           description: Validation Error
           content:
@@ -4527,11 +4529,13 @@ paths:
               $ref: '#/components/schemas/ProviderControlRequest'
         required: true
       responses:
-        '200':
-          description: Successful Response
+        '202':
+          description: Durable provider operation accepted
           content:
             application/json:
               schema: {}
+        '200':
+          description: Idempotent replay of the existing durable operation
         '422':
           description: Validation Error
           content:
@@ -4571,11 +4575,13 @@ paths:
               $ref: '#/components/schemas/ProviderControlRequest'
         required: true
       responses:
-        '200':
-          description: Successful Response
+        '202':
+          description: Durable provider operation accepted
           content:
             application/json:
               schema: {}
+        '200':
+          description: Idempotent replay of the existing durable operation
         '422':
           description: Validation Error
           content:
@@ -4615,11 +4621,13 @@ paths:
               $ref: '#/components/schemas/ProviderControlRequest'
         required: true
       responses:
-        '200':
-          description: Successful Response
+        '202':
+          description: Durable provider operation accepted
           content:
             application/json:
               schema: {}
+        '200':
+          description: Idempotent replay of the existing durable operation
         '422':
           description: Validation Error
           content:
@@ -4659,11 +4667,13 @@ paths:
               $ref: '#/components/schemas/ProviderControlRequest'
         required: true
       responses:
-        '200':
-          description: Successful Response
+        '202':
+          description: Durable provider operation accepted
           content:
             application/json:
               schema: {}
+        '200':
+          description: Idempotent replay of the existing durable operation
         '422':
           description: Validation Error
           content:

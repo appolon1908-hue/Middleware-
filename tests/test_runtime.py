@@ -326,6 +326,7 @@ def test_health_ready_version(test_settings, runtime) -> None:
             "identity_jwks": "ready",
             "command_store": "not_configured",
             "communications_store": "not_configured",
+            "incident_store": "not_configured",
         }
         assert "checked_at" in readiness.json()
         assert client.get("/readiness").json()["components"] == readiness.json()["components"]
@@ -336,7 +337,7 @@ def test_health_ready_version(test_settings, runtime) -> None:
         assert version["service"] == "middleware-api"
         assert version["environment"] == "test"
         assert version["runtime_profile_id"] == "local-unlocked"
-        assert version["schema_head"] == "0008_durable_communications"
+        assert version["schema_head"] == "0009_observability_incidents"
         assert version["git_sha"] == version["source_sha"]
         assert version["schema_version"] == version["schema_head"]
         assert {"release_id", "image_digest", "build_timestamp", "configuration_checksum"} <= set(version)

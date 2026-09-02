@@ -676,92 +676,114 @@ class PostgresCommandStore:
         *,
         authenticated_client_id: str,
     ) -> CommandOperation:
-        digest = authenticated_command_digest(command, authenticated_client_id)
-        payload = authenticated_command_payload(command, authenticated_client_id)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
-                row = await conn.fetchrow(
-                    """
-                    INSERT INTO middleware_commands (
-                        command_id, tenant_id, command_type, command_version,
-                        target, requested_by, correlation_id, idempotency_key,
-                        capability, payload, payload_sha256, state
-                    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,'persisted')
-                    ON CONFLICT DO NOTHING
-                    RETURNING *
-                    """,
-                    str(command.command_id),
-                    command.tenant_id,
-                    command.command_type,
-                    command.command_version,
-                    command.target,
-                    command.requested_by,
-                    command.correlation_id,
-                    command.idempotency_key,
-                    command.capability,
-                    json.dumps(payload, separators=(",", ":"), sort_keys=True),
-                    digest,
-                )
-                if row is not None:
-                    await conn.execute(
-                        """
-                        INSERT INTO middleware_command_audit (
-                            tenant_id, command_id, previous_state, new_state,
-                            actor_id, reason, metadata
-                        ) VALUES ($1,$2,NULL,'persisted',$3,$4,$5::jsonb)
-                        """,
-                        command.tenant_id,
-                        str(command.command_id),
-                        command.requested_by,
-                        "validated command and persisted delivery intent",
-                        json.dumps(
-                            {"authenticated_client_id": authenticated_client_id},
-                            separators=(",", ":"),
-                            sort_keys=True,
-                        ),
-                    )
-                    await conn.execute(
-                        """
-                        INSERT INTO middleware_outbox (
-                            tenant_id, command_id, destination, event_type, payload,
-                            idempotency_key
-                        ) VALUES ($1,$2,$3,$4,$5::jsonb,$6)
-                        """,
-                        command.tenant_id,
-                        str(command.command_id),
-                        TEMPORAL_COMMAND_DESTINATION,
-                        command.command_type,
-                        json.dumps(payload, separators=(",", ":"), sort_keys=True),
-                        command.idempotency_key,
-                    )
-                    return self._operation(row)
-
-                existing_rows = await conn.fetch(
-                    """
-                    SELECT * FROM middleware_commands
-                    WHERE (tenant_id=$1 AND command_id=$2)
-                       OR (tenant_id=$1 AND idempotency_key=$3)
-                    ORDER BY created_at ASC
-                    """,
-                    command.tenant_id,
-                    str(command.command_id),
-                    command.idempotency_key,
-                )
-                if not existing_rows:
-                    raise CommandConflict("command conflict could not be reconciled")
-                identities = {
-                    (item["command_id"], item["idempotency_key"])
-                    for item in existing_rows
-                }
-                if len(identities) != 1 or not command_digest_matches(
-                    existing_rows[0]["payload_sha256"],
+                return await self.submit_on_connection(
+                    conn,
                     command,
-                    authenticated_client_id,
-                ):
-                    raise CommandConflict(
-                        "command identity was reused with different content"
-                    )
-                return self._operation(existing_rows[0], duplicate=True)
+                    authenticated_client_id=authenticated_client_id,
+                )
+
+    async def submit_on_connection(
+        self,
+        conn: asyncpg.Connection,
+        command: CommandEnvelope,
+        *,
+        authenticated_client_id: str,
+        next_attempt_at: datetime | None = None,
+    ) -> CommandOperation:
+        """Persist a command using the caller's transaction.
+
+        Incident ingestion uses this primitive so the incident projection,
+        timeline, audit row, command, and notification outbox intent commit or
+        roll back together.
+        """
+
+        digest = authenticated_command_digest(command, authenticated_client_id)
+        payload = authenticated_command_payload(command, authenticated_client_id)
+        row = await conn.fetchrow(
+            """
+            INSERT INTO middleware_commands (
+                command_id, tenant_id, command_type, command_version,
+                target, requested_by, correlation_id, idempotency_key,
+                capability, payload, payload_sha256, state
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,'persisted')
+            ON CONFLICT DO NOTHING
+            RETURNING *
+            """,
+            str(command.command_id),
+            command.tenant_id,
+            command.command_type,
+            command.command_version,
+            command.target,
+            command.requested_by,
+            command.correlation_id,
+            command.idempotency_key,
+            command.capability,
+            json.dumps(payload, separators=(",", ":"), sort_keys=True),
+            digest,
+        )
+        if row is not None:
+            await conn.execute(
+                """
+                INSERT INTO middleware_command_audit (
+                    tenant_id, command_id, previous_state, new_state,
+                    actor_id, reason, metadata
+                ) VALUES ($1,$2,NULL,'persisted',$3,$4,$5::jsonb)
+                """,
+                command.tenant_id,
+                str(command.command_id),
+                command.requested_by,
+                "validated command and persisted delivery intent",
+                json.dumps(
+                    {"authenticated_client_id": authenticated_client_id},
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+            )
+            await conn.execute(
+                """
+                INSERT INTO middleware_outbox (
+                    tenant_id, command_id, destination, event_type, payload,
+                    idempotency_key, next_attempt_at
+                ) VALUES ($1,$2,$3,$4,$5::jsonb,$6,COALESCE($7,now()))
+                """,
+                command.tenant_id,
+                str(command.command_id),
+                TEMPORAL_COMMAND_DESTINATION,
+                command.command_type,
+                json.dumps(payload, separators=(",", ":"), sort_keys=True),
+                command.idempotency_key,
+                next_attempt_at,
+            )
+            return self._operation(row)
+
+        existing_rows = await conn.fetch(
+            """
+            SELECT * FROM middleware_commands
+            WHERE (tenant_id=$1 AND command_id=$2)
+               OR (tenant_id=$1 AND idempotency_key=$3)
+            ORDER BY created_at ASC
+            """,
+            command.tenant_id,
+            str(command.command_id),
+            command.idempotency_key,
+        )
+        if not existing_rows:
+            raise CommandConflict("command conflict could not be reconciled")
+        identities = {
+            (item["command_id"], item["idempotency_key"])
+            for item in existing_rows
+        }
+        if len(identities) != 1 or not command_digest_matches(
+            existing_rows[0]["payload_sha256"],
+            command,
+            authenticated_client_id,
+        ):
+            raise CommandConflict(
+                "command identity was reused with different content"
+            )
+        return self._operation(existing_rows[0], duplicate=True)
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
         async with self.pool.acquire() as conn:
@@ -1108,7 +1130,7 @@ class PostgresCommandStore:
                     """,
                     list(self.REQUIRED_TRIGGERS),
                 )
-            if head != 8:
+            if head != 9:
                 return False
             observed_columns = {
                 table: set() for table in self.REQUIRED_COLUMNS
@@ -1156,6 +1178,23 @@ class CommandService:
         authenticated_subject: str,
         authenticated_client_id: str,
     ) -> CommandOperation:
+        self.validate_submission(
+            command,
+            authenticated_subject=authenticated_subject,
+            authenticated_client_id=authenticated_client_id,
+        )
+        return await self.store.submit(
+            command,
+            authenticated_client_id=authenticated_client_id,
+        )
+
+    def validate_submission(
+        self,
+        command: CommandEnvelope,
+        *,
+        authenticated_subject: str,
+        authenticated_client_id: str,
+    ) -> None:
         if command.requested_by != authenticated_subject:
             raise CommandCapabilityDisabled(
                 "requested_by must equal the authenticated token subject"
@@ -1168,10 +1207,6 @@ class CommandService:
                 "authenticated client ID is invalid"
             )
         self.policies.authorize(command)
-        return await self.store.submit(
-            command,
-            authenticated_client_id=authenticated_client_id,
-        )
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
         return await self.store.get(tenant_id, command_id)

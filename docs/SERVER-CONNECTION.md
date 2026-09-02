@@ -491,4 +491,4 @@ MIDDLEWARE_DEPLOY_HOST_KEY
 MIDDLEWARE_GHCR_READ_TOKEN
 ```
 
-Keep application and integration credentials on the server or in a dedicated secret manager, not in workflow YAML. Protect production with required reviewers and deploy only from the protected release branch or reviewed `main` commit according to the release policy.
+Keep application and integration credentials on the server or in a dedicated secret manager, not in workflow YAML. Protect production with exact-head automated CI, signed immutable release evidence, the repository-controlled production admission workflow, and deployment only from protected `main`. Human reviews remain available but are not mandatory.

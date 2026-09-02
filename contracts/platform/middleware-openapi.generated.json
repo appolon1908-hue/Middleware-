@@ -5335,6 +5335,40 @@
         "operationId": "get_communication_usage_v1_communications_usage_get",
         "parameters": [
           {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
             "in": "header",
             "name": "X-Tenant-ID",
             "required": true,
@@ -5372,7 +5406,14 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "description": "Request cannot be processed"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           },
           "429": {
             "description": "Rate limited"

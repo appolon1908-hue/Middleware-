@@ -5274,6 +5274,26 @@ paths:
     get:
       summary: Get Communication Usage
       operationId: get_communication_usage_v1_communications_usage_get
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To
+      - *id001
       responses:
         '200':
           description: Successful Response
@@ -5281,6 +5301,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationUsageReport'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
         '401':
@@ -5291,16 +5317,12 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
-        '422':
-          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
-      parameters:
-      - *id001
   /v1/intake/leads:
     post:
       summary: Submit Lead

@@ -41,3 +41,13 @@ def test_communication_success_responses_use_typed_schemas(test_settings):
         assert response["content"]["application/json"]["schema"] == {
             "$ref": f"#/components/schemas/{model}"
         }
+
+
+def test_communication_usage_query_timestamps_are_validated(test_settings):
+    schema = create_app(settings=test_settings).openapi()
+    parameters = schema["paths"]["/v1/communications/usage"]["get"]["parameters"]
+    timestamps = {item["name"]: item["schema"] for item in parameters if item["name"] in {"from", "to"}}
+    assert timestamps == {
+        "from": {"anyOf": [{"format": "date-time", "type": "string"}, {"type": "null"}], "title": "From"},
+        "to": {"anyOf": [{"format": "date-time", "type": "string"}, {"type": "null"}], "title": "To"},
+    }

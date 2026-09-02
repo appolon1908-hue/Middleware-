@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import AsyncIterator
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
@@ -532,7 +532,11 @@ def create_app(
         return JSONResponse(status_code=200, content=await service.adapter.reputation(tenant_id))
 
     @app.get("/v1/communications/usage", response_model=CommunicationUsageReport)
-    async def get_communication_usage(request: Request) -> JSONResponse:
+    async def get_communication_usage(
+        request: Request,
+        from_: datetime | None = Query(None, alias="from"),
+        to: datetime | None = Query(None),
+    ) -> JSONResponse:
         tenant_id = _tenant_from_header(request)
         await _authorize_read(request, tenant_id)
         messages = [
@@ -543,8 +547,8 @@ def create_app(
         return JSONResponse(
             status_code=200,
             content={
-                "from": request.query_params.get("from") or datetime.now(UTC).isoformat(),
-                "to": request.query_params.get("to") or datetime.now(UTC).isoformat(),
+                "from": (from_ or datetime.now(UTC)).isoformat(),
+                "to": (to or datetime.now(UTC)).isoformat(),
                 "totals": [
                     {
                         "channel": channel,

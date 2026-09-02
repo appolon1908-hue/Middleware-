@@ -376,6 +376,11 @@ def test_delivery_callback_uses_durable_inbox_and_is_replay_safe() -> None:
         assert first.json()["status"] == "accepted"
         assert first.json()["authoritative_completion"] == "provider-readback"
 
+        stored = client.app.state.runtime.inbox
+        assert stored.ledger_records[-1].payload["event_type"] == (
+            "codestra.observability.alert_delivery.v1"
+        )
+
         replay = client.post(
             "/v1/observability/alert-delivery-events",
             json=delivery,

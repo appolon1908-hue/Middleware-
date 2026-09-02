@@ -338,7 +338,7 @@ def create_app(
             )
         envelope = EventEnvelope(
             event_id=event.event_id,
-            event_type="observability.alert.delivery.v1",
+            event_type="codestra.observability.alert_delivery.v1",
             event_version="1.0",
             occurred_at=event.occurred_at,
             received_at=event.occurred_at,

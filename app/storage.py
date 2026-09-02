@@ -11,7 +11,7 @@ import asyncpg
 from .models import EventEnvelope, IngressResult
 
 
-RUNTIME_SCHEMA_VERSION = 3
+RUNTIME_SCHEMA_VERSION = 9
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
@@ -241,6 +241,9 @@ class PostgresInboxStore:
             "status",
             "processed_at",
             "last_error",
+            "resource_version", "quarantined_at", "quarantine_reason",
+            "released_at", "reprocess_requested_at",
+            "discarded_at", "discard_reason",
         },
         "middleware_outbox": {
             "id",
@@ -258,7 +261,16 @@ class PostgresInboxStore:
             "dead_lettered_at",
             "reconciliation_required_at",
             "last_error",
+            "command_id",
+            "cancelled_at",
+            "resource_version",
         },
+        "middleware_communication_messages": {"tenant_id", "message_id", "payload", "updated_at"},
+        "middleware_communication_events": {"id", "tenant_id", "event_id", "message_id", "occurred_at", "payload"},
+        "middleware_communication_idempotency": {"tenant_id", "route", "idempotency_key", "request_sha256", "message_id", "created_at"},
+        "middleware_communication_provider_events": {"tenant_id", "provider_event_id", "request_sha256", "created_at"},
+        "middleware_communication_suppressions": {"tenant_id", "channel", "subject", "created_at"},
+        "middleware_communication_cancellations": {"tenant_id", "message_id", "idempotency_key", "created_at"},
         "middleware_reconciliation_audit": {
             "id",
             "outbox_id",
@@ -286,8 +298,40 @@ class PostgresInboxStore:
             "payload",
             "recorded_at",
         },
+        "middleware_operation_mutations": {"id", "tenant_id", "command_id", "action", "actor_id", "idempotency_key", "request_sha256", "response_status", "response_payload", "created_at"},
+        "middleware_control_mutations": {"id","tenant_id","resource_kind","resource_id","action","actor_id","api_version","idempotency_key","request_sha256","response_status","response_payload","created_at"},
+        "middleware_control_audit": {"id","tenant_id","resource_kind","resource_id","action","actor_id","reason","previous_state","new_state","metadata","created_at"},
+        "middleware_outbox_attempt_events": {"id","outbox_id","tenant_id","attempt_number","event_type","worker_id","safe_error_code","created_at"},
     }
     REQUIRED_UDT_TYPES = {
+        ("middleware_communication_messages", "tenant_id"): "text",
+        ("middleware_communication_messages", "message_id"): "uuid",
+        ("middleware_communication_messages", "payload"): "jsonb",
+        ("middleware_communication_messages", "updated_at"): "timestamptz",
+        ("middleware_communication_events", "id"): "int8",
+        ("middleware_communication_events", "tenant_id"): "text",
+        ("middleware_communication_events", "event_id"): "uuid",
+        ("middleware_communication_events", "message_id"): "uuid",
+        ("middleware_communication_events", "occurred_at"): "timestamptz",
+        ("middleware_communication_events", "payload"): "jsonb",
+        ("middleware_communication_idempotency", "tenant_id"): "text",
+        ("middleware_communication_idempotency", "route"): "text",
+        ("middleware_communication_idempotency", "idempotency_key"): "text",
+        ("middleware_communication_idempotency", "request_sha256"): "bpchar",
+        ("middleware_communication_idempotency", "message_id"): "uuid",
+        ("middleware_communication_idempotency", "created_at"): "timestamptz",
+        ("middleware_communication_provider_events", "tenant_id"): "text",
+        ("middleware_communication_provider_events", "provider_event_id"): "text",
+        ("middleware_communication_provider_events", "request_sha256"): "bpchar",
+        ("middleware_communication_provider_events", "created_at"): "timestamptz",
+        ("middleware_communication_suppressions", "tenant_id"): "text",
+        ("middleware_communication_suppressions", "channel"): "text",
+        ("middleware_communication_suppressions", "subject"): "text",
+        ("middleware_communication_suppressions", "created_at"): "timestamptz",
+        ("middleware_communication_cancellations", "tenant_id"): "text",
+        ("middleware_communication_cancellations", "message_id"): "uuid",
+        ("middleware_communication_cancellations", "idempotency_key"): "text",
+        ("middleware_communication_cancellations", "created_at"): "timestamptz",
         ("middleware_schema_migrations", "version"): "int4",
         ("middleware_schema_migrations", "name"): "text",
         ("middleware_schema_migrations", "applied_at"): "timestamptz",
@@ -304,6 +348,13 @@ class PostgresInboxStore:
         ("middleware_inbox", "status"): "text",
         ("middleware_inbox", "processed_at"): "timestamptz",
         ("middleware_inbox", "last_error"): "text",
+        ("middleware_inbox", "resource_version"): "int8",
+        ("middleware_inbox", "quarantined_at"): "timestamptz",
+        ("middleware_inbox", "quarantine_reason"): "text",
+        ("middleware_inbox", "released_at"): "timestamptz",
+        ("middleware_inbox", "reprocess_requested_at"): "timestamptz",
+        ("middleware_inbox", "discarded_at"): "timestamptz",
+        ("middleware_inbox", "discard_reason"): "text",
         ("middleware_outbox", "id"): "int8",
         ("middleware_outbox", "tenant_id"): "text",
         ("middleware_outbox", "destination"): "text",
@@ -319,6 +370,9 @@ class PostgresInboxStore:
         ("middleware_outbox", "dead_lettered_at"): "timestamptz",
         ("middleware_outbox", "reconciliation_required_at"): "timestamptz",
         ("middleware_outbox", "last_error"): "text",
+        ("middleware_outbox", "command_id"): "text",
+        ("middleware_outbox", "cancelled_at"): "timestamptz",
+        ("middleware_outbox", "resource_version"): "int8",
         ("middleware_reconciliation_audit", "id"): "int8",
         ("middleware_reconciliation_audit", "outbox_id"): "int8",
         ("middleware_reconciliation_audit", "tenant_id"): "text",
@@ -342,6 +396,47 @@ class PostgresInboxStore:
         ("middleware_event_ledger", "entry_hash"): "bpchar",
         ("middleware_event_ledger", "payload"): "jsonb",
         ("middleware_event_ledger", "recorded_at"): "timestamptz",
+        ("middleware_operation_mutations", "id"): "int8",
+        ("middleware_operation_mutations", "tenant_id"): "text",
+        ("middleware_operation_mutations", "command_id"): "text",
+        ("middleware_operation_mutations", "action"): "text",
+        ("middleware_operation_mutations", "actor_id"): "text",
+        ("middleware_operation_mutations", "idempotency_key"): "text",
+        ("middleware_operation_mutations", "request_sha256"): "bpchar",
+        ("middleware_operation_mutations", "response_status"): "int4",
+        ("middleware_operation_mutations", "response_payload"): "jsonb",
+        ("middleware_operation_mutations", "created_at"): "timestamptz",
+        ("middleware_control_mutations", "id"): "int8",
+        ("middleware_control_mutations", "tenant_id"): "text",
+        ("middleware_control_mutations", "resource_kind"): "text",
+        ("middleware_control_mutations", "resource_id"): "text",
+        ("middleware_control_mutations", "action"): "text",
+        ("middleware_control_mutations", "actor_id"): "text",
+        ("middleware_control_mutations", "api_version"): "text",
+        ("middleware_control_mutations", "idempotency_key"): "text",
+        ("middleware_control_mutations", "request_sha256"): "bpchar",
+        ("middleware_control_mutations", "response_status"): "int4",
+        ("middleware_control_mutations", "response_payload"): "jsonb",
+        ("middleware_control_mutations", "created_at"): "timestamptz",
+        ("middleware_control_audit", "id"): "int8",
+        ("middleware_control_audit", "tenant_id"): "text",
+        ("middleware_control_audit", "resource_kind"): "text",
+        ("middleware_control_audit", "resource_id"): "text",
+        ("middleware_control_audit", "action"): "text",
+        ("middleware_control_audit", "actor_id"): "text",
+        ("middleware_control_audit", "reason"): "text",
+        ("middleware_control_audit", "previous_state"): "text",
+        ("middleware_control_audit", "new_state"): "text",
+        ("middleware_control_audit", "metadata"): "jsonb",
+        ("middleware_control_audit", "created_at"): "timestamptz",
+        ("middleware_outbox_attempt_events", "id"): "int8",
+        ("middleware_outbox_attempt_events", "outbox_id"): "int8",
+        ("middleware_outbox_attempt_events", "tenant_id"): "text",
+        ("middleware_outbox_attempt_events", "attempt_number"): "int4",
+        ("middleware_outbox_attempt_events", "event_type"): "text",
+        ("middleware_outbox_attempt_events", "worker_id"): "text",
+        ("middleware_outbox_attempt_events", "safe_error_code"): "text",
+        ("middleware_outbox_attempt_events", "created_at"): "timestamptz",
     }
     REQUIRED_KEYS = {
         ("middleware_schema_migrations", "PRIMARY KEY", ("version",)),
@@ -366,11 +461,21 @@ class PostgresInboxStore:
             "UNIQUE",
             ("tenant_id", "idempotency_key"),
         ),
+        ("middleware_operation_mutations", "PRIMARY KEY", ("id",)),
+        ("middleware_operation_mutations", "UNIQUE", ("tenant_id", "command_id", "action", "actor_id", "idempotency_key")),
+        ("middleware_control_mutations", "PRIMARY KEY", ("id",)),
+        ("middleware_control_mutations", "UNIQUE", ("tenant_id","resource_kind","resource_id","action","actor_id","api_version","idempotency_key")),
+        ("middleware_control_audit", "PRIMARY KEY", ("id",)),
+        ("middleware_outbox_attempt_events", "PRIMARY KEY", ("id",)),
     }
     REQUIRED_TRIGGERS = {
         "middleware_event_ledger_immutable",
         "middleware_command_audit_immutable",
         "middleware_reconciliation_audit_immutable",
+        "middleware_operation_mutations_immutable",
+        "middleware_control_mutations_immutable",
+        "middleware_control_audit_immutable",
+        "middleware_outbox_attempt_events_immutable",
     }
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -722,6 +827,7 @@ class PostgresOutboxStore:
                             'maximum attempts exhausted after worker lease expiry'
                         )
                     WHERE completed_at IS NULL
+                      AND cancelled_at IS NULL
                       AND dead_lettered_at IS NULL
                       AND reconciliation_required_at IS NULL
                       AND attempt_count >= $1
@@ -735,6 +841,7 @@ class PostgresOutboxStore:
                         SELECT id
                         FROM middleware_outbox
                         WHERE completed_at IS NULL
+                          AND cancelled_at IS NULL
                           AND dead_lettered_at IS NULL
                           AND reconciliation_required_at IS NULL
                           AND attempt_count < $3
@@ -757,6 +864,8 @@ class PostgresOutboxStore:
                     lease_seconds,
                     max_attempts,
                 )
+                if row:
+                    await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id) VALUES($1,$2,$3,'claimed',$4)",row["id"],row["tenant_id"],row["attempt_count"],worker_id)
         if not row:
             return None
         raw_payload = row["payload"]
@@ -773,17 +882,20 @@ class PostgresOutboxStore:
 
     async def complete(self, record_id: int, *, worker_id: str) -> None:
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
+          async with conn.transaction():
+            row = await conn.fetchrow(
                 """
                 UPDATE middleware_outbox
                 SET completed_at=now(), lease_owner=NULL, lease_until=NULL, last_error=NULL
                 WHERE id=$1 AND lease_owner=$2 AND reconciliation_required_at IS NULL
+                RETURNING tenant_id,attempt_count
                 """,
                 record_id,
                 worker_id,
             )
-            if result != "UPDATE 1":
+            if row is None:
                 raise StorageError("outbox lease ownership lost before completion")
+            await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id) VALUES($1,$2,$3,'completed',$4)",record_id,row["tenant_id"],row["attempt_count"],worker_id)
 
     async def quarantine_unknown_outcome(
         self,
@@ -799,27 +911,24 @@ class PostgresOutboxStore:
             raise ValueError("lease_seconds must be positive")
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
-                """
-                UPDATE middleware_outbox
-                SET last_error=$3,
-                    reconciliation_required_at=now(),
-                    lease_until=now() + ($4 * interval '1 second')
-                WHERE id=$1
-                  AND lease_owner=$2
-                  AND lease_until IS NOT NULL
-                  AND lease_until > now()
-                  AND completed_at IS NULL
-                  AND dead_lettered_at IS NULL
-                  AND reconciliation_required_at IS NULL
-                """,
-                record_id,
-                worker_id,
-                safe_error,
-                lease_seconds,
-            )
-            if result != "UPDATE 1":
-                raise StorageError("outbox lease ownership lost before reconciliation quarantine")
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    UPDATE middleware_outbox
+                    SET last_error=$3,
+                        reconciliation_required_at=now(),
+                        lease_until=now() + ($4 * interval '1 second')
+                    WHERE id=$1 AND lease_owner=$2 AND lease_until IS NOT NULL
+                      AND lease_until > now() AND completed_at IS NULL
+                      AND dead_lettered_at IS NULL
+                      AND reconciliation_required_at IS NULL
+                    RETURNING tenant_id,attempt_count
+                    """,
+                    record_id, worker_id, safe_error, lease_seconds,
+                )
+                if row is None:
+                    raise StorageError("outbox lease ownership lost before reconciliation quarantine")
+                await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id,safe_error_code) VALUES($1,$2,$3,'unknown_outcome',$4,'unknown_provider_outcome')",record_id,row["tenant_id"],row["attempt_count"],worker_id)
 
     async def renew_active_dispatch(
         self,
@@ -993,7 +1102,8 @@ class PostgresOutboxStore:
             raise ValueError("max_attempts must be positive")
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
+            async with conn.transaction():
+                row = await conn.fetchrow(
                 """
                 UPDATE middleware_outbox
                 SET last_error=$3,
@@ -1010,11 +1120,13 @@ class PostgresOutboxStore:
                 WHERE id=$1
                   AND lease_owner=$2
                   AND reconciliation_required_at IS NULL
+                RETURNING tenant_id,attempt_count
                 """,
-                record_id,
-                worker_id,
-                safe_error,
-                max_attempts,
-            )
-            if result != "UPDATE 1":
-                raise StorageError("outbox lease ownership lost before retry transition")
+                    record_id,
+                    worker_id,
+                    safe_error,
+                    max_attempts,
+                )
+                if row is None:
+                    raise StorageError("outbox lease ownership lost before retry transition")
+                await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id,safe_error_code) VALUES($1,$2,$3,'failed',$4,'delivery_failed')",record_id,row["tenant_id"],row["attempt_count"],worker_id)

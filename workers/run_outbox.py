@@ -4,10 +4,12 @@ from __future__ import annotations
 import asyncio
 
 import asyncpg
+import httpx
 
 from app.config import ConfigurationError, Settings
-from app.commands import TEMPORAL_COMMAND_DESTINATION
+from app.commands import ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
+from app.odoo_transport import OdooCommandDispatcher
 from app.storage import NATS_JETSTREAM_DESTINATION, PostgresOutboxStore
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
@@ -17,9 +19,11 @@ from app.worker import OutboxWorker
 async def main() -> None:
     settings = Settings.from_env()
     temporal_enabled = settings.temporal_worker_mode != "disabled"
-    if not settings.outbox_dispatch_enabled and not temporal_enabled:
+    odoo_enabled = settings.odoo_delivery_enabled
+    if not settings.outbox_dispatch_enabled and not temporal_enabled and not odoo_enabled:
         raise ConfigurationError(
-            "both JetStream and Temporal outbox dispatch are intentionally disabled"
+            "JetStream, Temporal, and Odoo outbox dispatch are all intentionally "
+            "disabled"
         )
     if settings.database_url is None:
         raise ConfigurationError("DATABASE_URL is required for the outbox worker")
@@ -31,6 +35,7 @@ async def main() -> None:
         command_timeout=10,
     )
     publisher: NatsJetStreamPublisher | None = None
+    odoo_client: httpx.AsyncClient | None = None
     try:
         handlers = {}
         if settings.outbox_dispatch_enabled:
@@ -43,6 +48,19 @@ async def main() -> None:
                 settings.temporal_task_queue,
             )
             handlers[TEMPORAL_COMMAND_DESTINATION] = temporal_dispatcher.dispatch
+        if odoo_enabled:
+            # Registered only when ODOO_WRITE is on, so the handler cannot be
+            # reached while the capability is closed.
+            odoo_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.odoo_timeout_seconds)
+            )
+            handlers[ODOO_COMMAND_DESTINATION] = OdooCommandDispatcher(
+                client=odoo_client,
+                base_url=settings.odoo_base_url or "",
+                secrets=dict(settings.odoo_tenant_hmac_secrets),
+                source_delivery_enabled=settings.odoo_source_delivery_enabled,
+                default_secret=settings.odoo_default_hmac_secret or None,
+            ).dispatch
         worker = OutboxWorker(
             PostgresOutboxStore(pool),
             handlers,
@@ -51,6 +69,8 @@ async def main() -> None:
     finally:
         if publisher is not None:
             await publisher.close()
+        if odoo_client is not None:
+            await odoo_client.aclose()
         await pool.close()
 
 

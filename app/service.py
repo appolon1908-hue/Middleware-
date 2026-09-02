@@ -13,6 +13,29 @@ from .security import RequestValidationError, authorize_tenant, verify_signed_re
 from .storage import ReplayConflict, canonical_payload_sha256
 
 
+CANONICAL_ERROR_SCHEMA = {
+    "type": "object",
+    "required": ["error"],
+    "properties": {
+        "error": {
+            "type": "object",
+            "required": ["code", "message", "correlation_id", "retryable", "details"],
+            "properties": {
+                "code": {"type": "string"},
+                "message": {"type": "string"},
+                "correlation_id": {"type": "string"},
+                "retryable": {"type": "boolean"},
+                "details": {"type": "object"},
+            },
+        }
+    },
+}
+EVENT_TYPE_422_RESPONSE = {
+    "description": "Event type is not allowed for this webhook",
+    "content": {"application/json": {"schema": CANONICAL_ERROR_SCHEMA}},
+}
+
+
 class IngressError(RuntimeError):
     status_code = 400
     code = "ingress_error"

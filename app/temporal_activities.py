@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from .commands import CommandConflict, CommandNotFound, CommandState, PostgresCommandStore
+from .commands import CommandConflict, CommandNotFound, PostgresCommandStore
+from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
+from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .temporal_workflows import (
     ActivityResult,
     CommandExecutionRequest,
@@ -16,6 +18,14 @@ from .temporal_workflows import (
     ProvisioningStepRequest,
     ReconciliationRequest,
 )
+
+
+class ProviderAdapter(Protocol):
+    async def execute(self, request: CommandExecutionRequest) -> ActivityResult:
+        ...
+
+    async def readback(self, request: CommandExecutionRequest) -> ActivityResult:
+        ...
 
 
 class FailClosedWorkflowActivities:
@@ -70,8 +80,15 @@ class FailClosedWorkflowActivities:
 
 
 class CommandLedgerWorkflowActivities:
-    def __init__(self, store: PostgresCommandStore) -> None:
+    def __init__(
+        self,
+        store: PostgresCommandStore,
+        odoo: OdooProviderAdapter | None = None,
+        klyrow_alert: KlyrowAlertAdapter | None = None,
+    ) -> None:
         self.store = store
+        self.odoo = odoo
+        self.klyrow_alert = klyrow_alert
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -86,6 +103,7 @@ class CommandLedgerWorkflowActivities:
                 actor_id=request.actor_id,
                 reason=request.reason,
                 provider_operation_id=request.provider_operation_id,
+                readback_evidence=request.readback_evidence,
             )
         except (ValueError, CommandConflict, CommandNotFound) as exc:
             raise ApplicationError(
@@ -97,6 +115,18 @@ class CommandLedgerWorkflowActivities:
             status=operation.state,
             detail=request.reason,
             provider_operation_id=operation.provider_operation_id,
+            readback_evidence=operation.readback_evidence,
+        )
+
+    def _adapter(self, request: CommandExecutionRequest) -> ProviderAdapter:
+        if request.target == "odoo-19" and self.odoo is not None:
+            return self.odoo
+        if request.target == "klyrow-alert-email" and self.klyrow_alert is not None:
+            return self.klyrow_alert
+        raise ApplicationError(
+            "no production provider adapter is activated for this command",
+            non_retryable=True,
+            type="CapabilityDisabled",
         )
 
     @activity.defn(name="execute_command")
@@ -104,22 +134,28 @@ class CommandLedgerWorkflowActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
-        raise ApplicationError(
-            "no production provider adapter is activated for this command",
-            non_retryable=True,
-            type="CapabilityDisabled",
-        )
+        adapter = self._adapter(request)
+        try:
+            return await adapter.execute(request)
+        except (OdooProviderAdapterError, KlyrowAlertAdapterError) as exc:
+            raise ApplicationError(
+                str(exc),
+                type="ProviderAdapterError",
+            ) from exc
 
     @activity.defn(name="readback_command")
     async def readback_command(
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
-        raise ApplicationError(
-            "no provider read-back adapter is activated for this command",
-            non_retryable=True,
-            type="CapabilityDisabled",
-        )
+        adapter = self._adapter(request)
+        try:
+            return await adapter.readback(request)
+        except (OdooProviderAdapterError, KlyrowAlertAdapterError) as exc:
+            raise ApplicationError(
+                str(exc),
+                type="ProviderReadbackError",
+            ) from exc
 
     def registered(self) -> tuple[Any, ...]:
         return (

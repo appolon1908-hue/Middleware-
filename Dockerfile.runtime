@@ -26,7 +26,9 @@ ENV PYTHONPATH=/opt/runtime/lib/python3.13/site-packages \
     PYTHONUNBUFFERED=1 \
     APP_SOURCE_SHA=${SOURCE_REVISION} \
     APP_VERSION=${SOURCE_VERSION} \
-    BUILD_TIME=${BUILD_DATE}
+    BUILD_TIME=${BUILD_DATE} \
+    RELEASE_ID=${SOURCE_VERSION} \
+    CONFIGURATION_CHECKSUM=runtime-injected
 COPY --from=runtime-dependencies /opt/runtime /opt/runtime
 WORKDIR /app
 COPY --chown=65532:65532 app ./app

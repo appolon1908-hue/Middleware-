@@ -276,7 +276,20 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
         )
 
     def test_manifests_are_disabled_and_non_overlapping(self) -> None:
-        self.assertEqual(len(self.records), 8)
+        self.assertEqual(
+            {record.manifest.connector_id for record in self.records},
+            {
+                "beyvra-nonfinancial",
+                "klyrow-alert-email",
+                "klyrow-email",
+                "kyqra-crawler",
+                "odoo-19",
+                "postly-social",
+                "provisioning-service",
+                "telnexa-sms",
+                "vicidial-restricted",
+            },
+        )
         self.assertEqual(
             self.registry.validate_global_invariants(),
             (),

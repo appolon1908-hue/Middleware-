@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -14,8 +15,12 @@ from app.commands import (
     CommandPolicyRegistry,
     CommandService,
     MemoryCommandStore,
+    command_digest,
+    decode_readback_evidence,
+    verify_readback_evidence_digest,
 )
 from app.main import create_app
+from app.provider_canary import provider_evidence_digest
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
@@ -57,14 +62,17 @@ async def test_memory_command_ledger_is_idempotent_and_state_guarded() -> None:
     store = MemoryCommandStore()
     command = CommandEnvelope.model_validate(command_payload())
 
-    first = await store.submit(command)
-    duplicate = await store.submit(command)
+    first = await store.submit(command, authenticated_client_id="test-client")
+    duplicate = await store.submit(command, authenticated_client_id="test-client")
     assert first.state == "persisted"
     assert duplicate.duplicate is True
 
     conflicting = command.model_copy(update={"payload": {"contact_id": "changed"}})
     with pytest.raises(CommandConflict):
-        await store.submit(conflicting)
+        await store.submit(conflicting, authenticated_client_id="test-client")
+
+    with pytest.raises(CommandConflict):
+        await store.submit(command, authenticated_client_id="another-client")
 
     queued = await store.transition(
         command.tenant_id,
@@ -85,25 +93,110 @@ async def test_memory_command_ledger_is_idempotent_and_state_guarded() -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_command_ledger_preserves_legacy_retry_idempotency() -> None:
+    store = MemoryCommandStore()
+    command = CommandEnvelope.model_validate(command_payload())
+    first = await store.submit(command, authenticated_client_id="test-client")
+    legacy_entry = (command_digest(command), first)
+    store._commands[(command.tenant_id, command.command_id)] = legacy_entry
+    store._idempotency[(command.tenant_id, command.idempotency_key)] = legacy_entry
+
+    duplicate = await store.submit(
+        command,
+        authenticated_client_id="post-upgrade-client",
+    )
+
+    assert duplicate.duplicate is True
+
+
+@pytest.mark.asyncio
+async def test_memory_command_ledger_persists_redacted_readback_evidence() -> None:
+    store = MemoryCommandStore()
+    command = CommandEnvelope.model_validate(command_payload())
+    await store.submit(command, authenticated_client_id="test-client")
+    with pytest.raises(CommandConflict, match="only on completion"):
+        await store.transition(
+            command.tenant_id,
+            command.command_id,
+            new_state="queued",
+            actor_id="temporal:test",
+            reason="invalid early proof",
+            readback_evidence={"status": "delivered"},
+        )
+    for state in ("queued", "dispatching", "accepted", "readback_pending"):
+        await store.transition(
+            command.tenant_id,
+            command.command_id,
+            new_state=state,
+            actor_id="temporal:test",
+            reason=f"transition to {state}",
+        )
+    evidence = {"provider_reference": "provider-operation-1", "status": "matched"}
+    completed = await store.transition(
+        command.tenant_id,
+        command.command_id,
+        new_state="completed",
+        actor_id="temporal:test",
+        reason="provider read-back matched",
+        provider_operation_id="provider-operation-1",
+        readback_evidence=evidence,
+    )
+    assert completed.readback_evidence == evidence
+    assert completed.readback_evidence_sha256 == provider_evidence_digest(evidence)
+    fetched = await store.get(command.tenant_id, command.command_id)
+    assert fetched.readback_evidence_sha256 == completed.readback_evidence_sha256
+
+
+def test_postgres_jsonb_readback_text_is_decoded_before_api_serialization() -> None:
+    evidence = {"provider_reference": "provider-operation-1", "status": "matched"}
+    assert decode_readback_evidence(json.dumps(evidence)) == evidence
+    digest = provider_evidence_digest(evidence)
+    assert verify_readback_evidence_digest(json.dumps(evidence), digest) == (
+        evidence,
+        digest,
+    )
+    with pytest.raises(RuntimeError, match="invalid JSON"):
+        decode_readback_evidence("not-json")
+    with pytest.raises(RuntimeError, match="JSON object"):
+        decode_readback_evidence("[]")
+    with pytest.raises(RuntimeError, match="does not match"):
+        verify_readback_evidence_digest(evidence, "sha256:" + "0" * 64)
+
+
+@pytest.mark.asyncio
 async def test_command_policy_fails_closed() -> None:
     command = CommandEnvelope.model_validate(command_payload())
     service = CommandService(MemoryCommandStore(), enabled_policy())
 
     with pytest.raises(CommandCapabilityDisabled):
-        await service.submit(command, authenticated_subject="different-user")
+        await service.submit(
+            command,
+            authenticated_subject="different-user",
+            authenticated_client_id="test-client",
+        )
     with pytest.raises(CommandCapabilityDisabled):
         await CommandService(
             MemoryCommandStore(),
             CommandPolicyRegistry(enabled_policy().policies, {"ODOO_WRITE": False}),
-        ).submit(command, authenticated_subject="user-123")
+        ).submit(
+            command,
+            authenticated_subject="user-123",
+            authenticated_client_id="test-client",
+        )
     with pytest.raises(CommandCapabilityDisabled):
         await service.submit(
             command.model_copy(update={"target": "another-adapter"}),
             authenticated_subject="user-123",
+            authenticated_client_id="test-client",
         )
 
 
 class CommandTokenVerifier:
+    _TOKENS = {
+        "middleware.request.forward": "legacy-command-token",
+        "middleware.status.read": "legacy-status-token",
+    }
+
     async def verify(
         self,
         authorization: str,
@@ -112,7 +205,7 @@ class CommandTokenVerifier:
         required_scope: str,
     ) -> dict[str, Any]:
         assert expected_client_id == "kong-gateway"
-        if authorization != f"Bearer {required_scope}":
+        if authorization != f"Bearer {self._TOKENS[required_scope]}":
             from app.security import AuthenticationError
 
             raise AuthenticationError("invalid command token")
@@ -141,7 +234,7 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
     )
     body = command_payload()
     headers = {
-        "Authorization": "Bearer middleware.request.forward",
+        "Authorization": "Bearer legacy-command-token",
         "X-Tenant-ID": body["tenant_id"],
         "X-Correlation-ID": body["correlation_id"],
         "Idempotency-Key": body["idempotency_key"],
@@ -151,26 +244,27 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         first = client.post("/v1/commands", json=body, headers=headers)
         assert first.status_code == 202, first.text
         assert first.headers["location"] == f"/v1/operations/{body['command_id']}"
-        assert first.json()["state"] == "persisted"
+        assert first.json()["state"] == "RECEIVED"
 
         duplicate = client.post("/v1/commands", json=body, headers=headers)
         assert duplicate.status_code == 200, duplicate.text
         assert duplicate.json()["duplicate"] is True
+        assert duplicate.json()["state"] == "RECEIVED"
 
         status = client.get(
             f"/v1/operations/{body['command_id']}",
             headers={
-                "Authorization": "Bearer middleware.status.read",
+                "Authorization": "Bearer legacy-status-token",
                 "X-Tenant-ID": "tenant-1",
             },
         )
         assert status.status_code == 200, status.text
-        assert status.json()["state"] == "persisted"
+        assert status.json()["state"] == "RECEIVED"
 
         wrong_tenant = client.get(
             f"/v1/operations/{body['command_id']}",
             headers={
-                "Authorization": "Bearer middleware.status.read",
+                "Authorization": "Bearer legacy-status-token",
                 "X-Tenant-ID": "tenant-2",
             },
         )

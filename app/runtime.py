@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .commands import (
     CommandPolicyRegistry,
@@ -10,10 +11,14 @@ from .commands import (
     MemoryCommandStore,
     PostgresCommandStore,
 )
+from .communications import CommunicationsService, MemoryCommunicationsStore, PostgresCommunicationsStore
 from .config import Settings
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
 from .storage import InboxStore, MemoryInboxStore, PostgresInboxStore
+
+if TYPE_CHECKING:
+    from .observability_incidents import IncidentService
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,8 @@ class Runtime:
     replay: ReplayGuard
     tokens: TokenVerifier
     commands: CommandService | None = None
+    communications: CommunicationsService | None = None
+    incidents: IncidentService | None = None
 
     async def readiness(self) -> ReadinessReport:
         checks: dict[str, Awaitable[bool] | None] = {
@@ -46,6 +53,12 @@ class Runtime:
             checks["command_store"] = self.commands.store.ready()
         else:
             checks["command_store"] = None
+        checks["communications_store"] = (
+            self.communications.store.ready() if self.communications is not None else None
+        )
+        checks["incident_store"] = (
+            self.incidents.store.ready() if self.incidents is not None else None
+        )
 
         async def bounded(check: Awaitable[bool] | None) -> str:
             if check is None:
@@ -70,21 +83,31 @@ class Runtime:
     async def close(self) -> None:
         await self.inbox.close()
         await self.replay.close()
+        if self.communications is not None:
+            await self.communications.store.close()
         if self.commands is not None:
             await self.commands.store.close()
+        if self.incidents is not None:
+            await self.incidents.store.close()
 
 
 async def build_runtime(settings: Settings) -> Runtime:
     tokens = KeycloakJwtVerifier(settings)
     if settings.allow_in_memory_storage:
+        commands = CommandService(
+            store=MemoryCommandStore(),
+            policies=CommandPolicyRegistry.load(),
+        )
         return Runtime(
             settings=settings,
             inbox=MemoryInboxStore(),
             replay=MemoryReplayGuard(),
             tokens=tokens,
-            commands=CommandService(
-                store=MemoryCommandStore(),
-                policies=CommandPolicyRegistry.load(),
+            commands=commands,
+            communications=CommunicationsService(
+                store=MemoryCommunicationsStore(),
+                commands=commands,
+                umbrella_controls=settings.umbrella_controls,
             ),
         )
     assert settings.database_url is not None
@@ -109,6 +132,11 @@ async def build_runtime(settings: Settings) -> Runtime:
             store=commands,
             policies=CommandPolicyRegistry.load(),
         ),
+    )
+    runtime.communications = CommunicationsService(
+        store=await PostgresCommunicationsStore.connect(settings.database_url),
+        commands=runtime.commands,
+        umbrella_controls=settings.umbrella_controls,
     )
     if not await runtime.ready():
         await runtime.close()

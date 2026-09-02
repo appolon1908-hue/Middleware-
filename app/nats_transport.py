@@ -23,6 +23,8 @@ def event_subject(prefix: str, event_type: str) -> str:
     match = _EVENT_TYPE.fullmatch(event_type)
     if match is None:
         raise NatsTransportError("event type cannot be mapped to a NATS subject")
+    if event_type.startswith(f"{prefix}."):
+        return event_type
     return f"{prefix}.{match.group('name')}"
 
 

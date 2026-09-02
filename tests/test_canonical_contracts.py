@@ -9,9 +9,11 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from referencing import Registry, Resource
 
 from app.canonical_contracts import (
+    CanonicalContractError,
     contract_schema,
     contract_validator,
     validate_contract,
+    validate_specialized_contract,
 )
 from app.commands import CommandEnvelope
 from app.models import EventEnvelope
@@ -190,3 +192,34 @@ def test_domain_specializations_resolve_locally_and_validate_canonical_values() 
         registry=registry,
         format_checker=FormatChecker(),
     ).validate(odoo_command)
+
+
+def test_telnexa_sms_command_specialization_is_fail_closed() -> None:
+    sms_command = {
+        **command_value(),
+        "command_type": "sms.message.submit.v1",
+        "payload": {
+            "message_id": "00000000-0000-4000-8000-000000000020",
+            "channel": "sms",
+            "destination": "+49123456789",
+            "sender": "Telnexa",
+            "content": "contract test",
+            "encoding": "GSM-7",
+            "characters": 13,
+            "segments": 1,
+            "category": "transactional",
+            "client_reference": "00000000-0000-4000-8000-000000000020",
+            "scheduled_at": None,
+            "billing_account_id": None,
+            "campaign_id": None,
+        },
+    }
+    validate_specialized_contract("telnexa_sms_command", sms_command)
+    with pytest.raises(CanonicalContractError):
+        validate_specialized_contract(
+            "telnexa_sms_command",
+            {
+                **sms_command,
+                "payload": {**sms_command["payload"], "destination": "not-e164"},
+            },
+        )

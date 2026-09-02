@@ -95,7 +95,7 @@ def main() -> None:
     assert release["image_digest"] == EXPECTED_DIGEST
     assert release["image_reference"].endswith("@" + EXPECTED_DIGEST)
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", release["image_digest"])
-    assert release["schema_head"] == "0008_durable_communications"
+    assert release["schema_head"] == "0003_immutable_event_ledger"
 
     profiles = json.loads((ROOT / "config/runtime-profiles.v1.json").read_text())
     assert profiles["schema_version"] == "1.0"

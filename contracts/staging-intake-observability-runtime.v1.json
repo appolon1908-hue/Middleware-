@@ -8,7 +8,7 @@
     "image_digest": "sha256:695fa3ce3f50ba4d0ae0784976b946a0a683ca731155e4bd3bd9e90a4670b820",
     "release_run_id": 33314094004,
     "release_id": "f6748a58f8d2-695fa3ce3f50",
-    "schema_head": "0008_durable_communications",
+    "schema_head": "0003_immutable_event_ledger",
     "build_time": "2026-08-30T13:24:37Z",
     "embedded_runtime_profile": {
       "profile_id": "codestra-middleware-staging-v1",

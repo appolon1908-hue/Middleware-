@@ -94,7 +94,7 @@ def test_operation_retry_is_versioned_idempotent_and_failed_only(test_settings):
             json={"expected_version": 1, "reason": "known_safe_retry"},
         )
         assert first.status_code == 200
-        assert first.json()["state"] == "QUEUED"
+        assert first.json()["state"] == "FAILED"
         replay = client.post(
             f"/api/v1/operations/{body['command_id']}/retry",
             headers=mutation,

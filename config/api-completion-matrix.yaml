@@ -3,6 +3,36 @@ inventory_base_sha: f9ae3142272729e4d697c81fd15cc9db124b87d8
 classification_complete: true
 unknown_endpoints: 0
 operations:
+- domain: control
+  method: POST
+  path: /api/v1/control/ai/inference-requests
+  canonical_operation_id: provider_control_ai_inference_request_api_v1_control_ai_inference_requests_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/communications/email
+  canonical_operation_id: provider_control_communication_email_request_api_v1_control_communications_email_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/communications/sms
+  canonical_operation_id: provider_control_communication_sms_request_api_v1_control_communications_sms_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/marketing/campaigns
+  canonical_operation_id: provider_control_marketing_campaign_request_api_v1_control_marketing_campaigns_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/social/publications
+  canonical_operation_id: provider_control_social_publish_request_api_v1_control_social_publications_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: inbox
   method: GET
   path: /api/v1/inbox

@@ -27,6 +27,7 @@ from .contracts import WEBHOOK_ROUTES, WebhookRoute
 from .control_api import router as control_api_router
 from .compatibility_api import router as compatibility_api_router
 from .domain_api import router as domain_api_router
+from .provider_control_api import router as provider_control_api_router
 from .webhook_api import router as webhook_api_router
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .lead_intake import (
@@ -150,6 +151,7 @@ def create_app(
     app.include_router(control_api_router)
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
+    app.include_router(provider_control_api_router)
     app.include_router(webhook_api_router)
 
     @app.middleware("http")

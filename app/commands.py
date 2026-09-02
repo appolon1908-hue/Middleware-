@@ -415,8 +415,12 @@ class MemoryCommandStore:
             if operation.state not in {"dispatching", "accepted", "readback_pending", "reconciliation_required"}: raise CommandConflict("operation is not reconcilable")
             updates = {"state": "reconciliation_required", "reconciliation_requested_at": datetime.now().astimezone(), "reconciliation_reason": reason}
         else:
-            if operation.state != "failed": raise CommandConflict("operation is not safely retryable")
-            updates = {"state": "queued", "last_error": None}
+            if operation.state != "failed":
+                raise CommandConflict("operation is not safely retryable")
+            # A retry mutation only records durable retry intent. The Temporal
+            # workflow remains responsible for the failed -> queued transition so
+            # every execution follows the same state-machine entry path.
+            updates = {}
         now = datetime.now().astimezone()
         updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
         self._commands[key] = (digest, updated)
@@ -802,15 +806,43 @@ class PostgresCommandStore:
                     await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
                         VALUES ($1,$2,$3,'operation.reconcile.v1',$4::jsonb,$5) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, json.dumps({"command_id": str(command_id), "action": "reconcile", "reason": reason}), work_key)
                 else:
-                    if previous != "failed": raise CommandConflict("operation is not safely retryable")
-                    new_state = "queued"
-                    work_key = "operation-retry:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
-                    retry_envelope = json.loads(current["payload"]) if isinstance(current["payload"], str) else dict(current["payload"])
+                    if previous != "failed":
+                        raise CommandConflict("operation is not safely retryable")
+                    # Preserve FAILED until the newly started Temporal workflow
+                    # records failed -> queued. Pre-transitioning here causes the
+                    # workflow's canonical first transition to become queued ->
+                    # queued and fail before adapter execution.
+                    new_state = previous
+                    work_key = "operation-retry:" + hashlib.sha256(
+                        f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()
+                    ).hexdigest()
+                    retry_envelope = (
+                        json.loads(current["payload"])
+                        if isinstance(current["payload"], str)
+                        else dict(current["payload"])
+                    )
                     retry_envelope["idempotency_key"] = work_key
-                    row = await conn.fetchrow("""UPDATE middleware_commands SET state='queued', resource_version=resource_version+1,
-                        last_error=NULL, queued_at=now(), updated_at=now() WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id))
-                    await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
-                        VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, current["command_type"], json.dumps(retry_envelope), work_key)
+                    row = await conn.fetchrow(
+                        """UPDATE middleware_commands
+                           SET resource_version=resource_version+1, updated_at=now()
+                           WHERE tenant_id=$1 AND command_id=$2
+                           RETURNING *""",
+                        tenant_id,
+                        str(command_id),
+                    )
+                    await conn.execute(
+                        """INSERT INTO middleware_outbox (
+                               tenant_id, command_id, destination, event_type,
+                               payload, idempotency_key
+                           ) VALUES ($1,$2,$3,$4,$5::jsonb,$6)
+                           ON CONFLICT DO NOTHING""",
+                        tenant_id,
+                        str(command_id),
+                        TEMPORAL_COMMAND_DESTINATION,
+                        current["command_type"],
+                        json.dumps(retry_envelope),
+                        work_key,
+                    )
                 assert row is not None
                 await conn.execute("""INSERT INTO middleware_command_audit (tenant_id, command_id, previous_state, new_state, actor_id, reason, metadata)
                     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)""", tenant_id, str(command_id), previous, new_state, actor_id, reason, json.dumps({"action": action, "resource_version": row["resource_version"]}))

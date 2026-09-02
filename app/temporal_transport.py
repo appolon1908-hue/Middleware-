@@ -52,7 +52,10 @@ class TemporalCommandDispatcher:
                 "outbox idempotency key does not match the command envelope"
             )
 
-        request = CommandExecutionRequest(**command.model_dump(mode="json"))
+        request = CommandExecutionRequest(
+            **command.model_dump(mode="json"),
+            resume_from_queued=command.idempotency_key.startswith("operation-retry:"),
+        )
         try:
             await self.client.start_workflow(
                 CommandExecutionWorkflow.run,

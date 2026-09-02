@@ -305,6 +305,21 @@ def next_incident_state(
     return "firing", "firing"
 
 
+def webhook_transition_predates_projection(
+    alert: AlertmanagerAlert,
+    *,
+    starts_at: datetime,
+    ends_at: datetime | None,
+) -> bool:
+    """Reject transitions that cannot be newer than the current occurrence."""
+
+    return alert.starts_at < starts_at or (
+        alert.status == "firing"
+        and alert.starts_at == starts_at
+        and ends_at is not None
+    )
+
+
 class IncidentStore(Protocol):
     async def ingest(
         self,
@@ -483,7 +498,11 @@ class MemoryIncidentStore:
             current_projection = self._incidents.get(key)
             if (
                 current_projection is not None
-                and alert.starts_at < current_projection.starts_at
+                and webhook_transition_predates_projection(
+                    alert,
+                    starts_at=current_projection.starts_at,
+                    ends_at=current_projection.ends_at,
+                )
             ):
                 raise IncidentConflict(
                     "alert transition predates the current alert occurrence"
@@ -1538,7 +1557,11 @@ class PostgresIncidentStore:
                 )
                 if (
                     current_projection is not None
-                    and alert.starts_at < current_projection["starts_at"]
+                    and webhook_transition_predates_projection(
+                        alert,
+                        starts_at=current_projection["starts_at"],
+                        ends_at=current_projection["ends_at"],
+                    )
                 ):
                     raise IncidentConflict(
                         "alert transition predates the current alert occurrence"

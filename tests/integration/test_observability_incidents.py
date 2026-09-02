@@ -897,3 +897,36 @@ async def test_delayed_webhook_cannot_replace_newer_occurrence(
     current = await incidents.store.get(TENANT_ID, first.incident.incident_id)
     assert current.starts_at == newer_item.starts_at
     assert current.resource_version == newer.incident.resource_version
+
+
+@pytest.mark.asyncio
+async def test_delayed_firing_cannot_reopen_already_ended_occurrence(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    firing_item = alert(fingerprint="incident-ended-occurrence-0001")
+    resolved_payload = firing_item.model_dump(mode="json", by_alias=True)
+    resolved_payload["status"] = "resolved"
+    resolved_payload["endsAt"] = "2026-09-02T16:10:00Z"
+    resolved_item = AlertmanagerAlert.model_validate(resolved_payload)
+    resolved = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=resolved_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-ended-occurrence-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-ended-occurrence-request-0001",
+    )
+    with pytest.raises(IncidentConflict):
+        await incidents.ingest(
+            group_key=GROUP_KEY,
+            alert=firing_item,
+            actor_id=ACTOR_ID,
+            correlation_id="incident-ended-occurrence-correlation-0002",
+            source_deployment="alertmanager-disposable-ci",
+            request_idempotency_key="incident-ended-occurrence-request-0002",
+        )
+    current = await incidents.store.get(TENANT_ID, resolved.incident.incident_id)
+    assert current.state == "resolved"
+    assert current.ends_at == resolved_item.ends_at
+    assert current.resource_version == resolved.incident.resource_version

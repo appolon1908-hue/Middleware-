@@ -959,6 +959,38 @@ def test_delayed_webhook_cannot_replace_a_newer_alert_occurrence() -> None:
         assert detail.json()["starts_at"] == "2026-09-02T17:00:00Z"
 
 
+def test_delayed_firing_webhook_cannot_reopen_an_already_ended_occurrence() -> None:
+    firing_value = webhook()
+    resolved_value = copy.deepcopy(firing_value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="ended-occurrence-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+        delayed = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=firing_value,
+            headers=headers(key="ended-occurrence-delayed-firing-0001"),
+        )
+        assert delayed.status_code == 409
+        assert delayed.json()["code"] == "incident_conflict"
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers(
+                "observability-operator", key="ended-occurrence-read-0001"
+            ),
+        )
+        assert detail.status_code == 200
+        assert detail.json()["state"] == "resolved"
+        assert detail.json()["ends_at"] == "2026-09-02T16:10:00Z"
+
+
 def test_status_cycles_and_rejects_stale_observations() -> None:
     value = webhook()
     with TestClient(app()) as client:

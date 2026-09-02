@@ -172,3 +172,33 @@ async def system_capabilities(request:Request): await _auth(request); return _ca
 async def system_safety(request:Request): await _auth(request); return {"capabilities":_capabilities(request),"external_effects":"DISABLED","unknown_evidence_fails_closed":True}
 @router.get("/v1/system/readiness")
 async def system_readiness(request:Request): await _auth(request); report=await request.app.state.runtime.readiness(); return JSONResponse(status_code=200 if report.ready else 503,content={"status":"ready" if report.ready else "not_ready","components":report.components,"capabilities":_capabilities(request)})
+
+@router.get("/v1/policy/effective")
+async def effective_policy(request:Request):
+    await _auth(request)
+    return {"default":"DENY","external_effects":"DISABLED","capabilities":_capabilities(request),"ambiguous_provider_effects":"MANUAL_RECONCILIATION_REQUIRED"}
+
+class PolicyDecisionRequest(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    capability:str=Field(min_length=1,max_length=100)
+    proposed_action:str=Field(min_length=1,max_length=180)
+
+@router.post("/v1/policy/decisions")
+async def policy_decision(body:PolicyDecisionRequest,request:Request):
+    await _auth(request,mutation=True); caps=_capabilities(request); enabled=caps.get(body.capability) is True
+    return {"decision":"ALLOW" if enabled else "DENY","capability":body.capability,"proposed_action":body.proposed_action,"external_effects":False,"reason":"capability_enabled" if enabled else "fail_closed"}
+
+@router.get("/v1/reconciliation/operations")
+async def reconciliation_list(request:Request,limit:int=Query(50,ge=1,le=100)):
+    tenant=await _auth(request); pool=_pool(request)
+    async with pool.acquire() as conn: rows=await conn.fetch("SELECT * FROM middleware_outbox WHERE tenant_id=$1 AND reconciliation_required_at IS NOT NULL ORDER BY reconciliation_required_at,id LIMIT $2",tenant,limit)
+    return {"items":[_safe_outbox(r) for r in rows],"next_cursor":None}
+
+@router.get("/v1/audit/events")
+async def audit_events(request:Request,limit:int=Query(50,ge=1,le=100)):
+    tenant=await _auth(request); pool=_pool(request)
+    async with pool.acquire() as conn:
+        rows=await conn.fetch("""SELECT id,'control' AS authority,resource_kind,resource_id,action,actor_id,reason,created_at FROM middleware_control_audit WHERE tenant_id=$1
+          UNION ALL SELECT id,'command','command',command_id,new_state,actor_id,reason,created_at FROM middleware_command_audit WHERE tenant_id=$1
+          ORDER BY created_at DESC,id DESC LIMIT $2""",tenant,limit)
+    return {"items":[dict(r) for r in rows],"next_cursor":None}

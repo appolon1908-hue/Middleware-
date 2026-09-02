@@ -1,0 +1,30 @@
+from fastapi.testclient import TestClient
+from app.commands import CommandService, MemoryCommandStore
+from app.main import create_app
+from app.replay import MemoryReplayGuard
+from app.runtime import Runtime
+from app.storage import MemoryInboxStore
+from tests.test_commands import CommandTokenVerifier, enabled_policy
+
+REQUIRED={
+"/v1/inbox","/v1/inbox/{record_id}","/v1/inbox/{record_id}/events","/v1/inbox/{record_id}/reprocess","/v1/inbox/{record_id}/quarantine","/v1/inbox/{record_id}/release",
+"/v1/outbox","/v1/outbox/{record_id}","/v1/outbox/{record_id}/attempts","/v1/outbox/{record_id}/cancel","/v1/outbox/{record_id}/retry",
+"/v1/system/capabilities","/v1/system/safety-state","/v1/system/readiness","/v1/policy/effective","/v1/policy/decisions","/v1/reconciliation/operations","/v1/audit/events","/v1/providers/status",
+"/v1/integrations/n8n/operations","/v1/integrations/n8n/operations/{operation_id}/cancel","/v1/integrations/n8n/operations/{operation_id}/reconcile",
+"/v1/email/commands","/v1/sms/commands","/v1/telephony/commands","/v1/social/commands","/v1/marketing/commands","/v1/ai/commands","/v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}","/webhooks/vicidial/call-result/{webhook_id}"}
+
+def _app(test_settings):
+    commands=CommandService(MemoryCommandStore(),enabled_policy())
+    return create_app(settings=test_settings,runtime=Runtime(settings=test_settings,inbox=MemoryInboxStore(),replay=MemoryReplayGuard(),tokens=CommandTokenVerifier(),commands=commands))
+
+def test_required_control_routes_are_registered(test_settings):
+    assert REQUIRED <= set(_app(test_settings).openapi()["paths"])
+
+def test_system_safety_is_authenticated_and_fail_closed(test_settings):
+    with TestClient(_app(test_settings)) as client:
+        assert client.get("/v1/system/capabilities",headers={"X-Tenant-ID":"tenant-1"}).status_code==401
+        response=client.get("/v1/system/capabilities",headers={"Authorization":"Bearer legacy-status-token","X-Tenant-ID":"tenant-1"})
+        assert response.status_code==200
+        body=response.json()
+        assert body["CALLS_PLACED"]==0
+        assert all(body[key] is False for key in ("LIVE_ADVERTISING_ENABLED","EXTERNAL_DELIVERY_ENABLED","SOCIAL_PUBLISHING_ENABLED","EXTERNAL_MODEL_CALLS_ENABLED","LIVE_SMS_DELIVERY","LIVE_EMAIL_DELIVERY","LIVE_PSTN_DIALING","N8N_EXTERNAL_PROVIDER_WRITES","PRODUCTION_DIALING"))

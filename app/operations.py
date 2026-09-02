@@ -28,6 +28,7 @@ _PERSISTED_BY_API_STATE = {value: key for key, value in API_OPERATION_STATES.ite
 
 class OperationResponse(CommandOperation):
     state: OperationApiState
+    duplicate: bool
 
 
 class OperationListResponse(BaseModel):

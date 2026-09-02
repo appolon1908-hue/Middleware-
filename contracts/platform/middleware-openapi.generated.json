@@ -937,7 +937,6 @@
             "type": "string"
           },
           "duplicate": {
-            "default": false,
             "title": "Duplicate",
             "type": "boolean"
           },
@@ -1063,7 +1062,8 @@
           "capability",
           "state",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "duplicate"
         ],
         "title": "OperationResponse",
         "type": "object"

@@ -50,3 +50,4 @@ def test_operation_success_responses_use_typed_schemas(test_settings) -> None:
         assert response["content"]["application/json"]["schema"] == {
             "$ref": f"#/components/schemas/{model}"
         }
+    assert "duplicate" in schema["components"]["schemas"]["OperationResponse"]["required"]

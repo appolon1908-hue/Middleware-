@@ -6365,7 +6365,6 @@ components:
         duplicate:
           type: boolean
           title: Duplicate
-          default: false
       additionalProperties: false
       type: object
       required:
@@ -6381,6 +6380,7 @@ components:
       - state
       - created_at
       - updated_at
+      - duplicate
       title: OperationResponse
     PolicyDecision:
       properties:

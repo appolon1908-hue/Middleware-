@@ -19,6 +19,7 @@ async def test_durable_inbox_outbox_control_api_is_tenant_scoped_and_idempotent(
             await conn.execute("""INSERT INTO middleware_inbox(event_id,tenant_id,source_client_id,event_type,body_sha256,semantic_sha256,idempotency_key,correlation_id,payload,status) VALUES('full-api-event-1','tenant-1','odoo-integration','codestra.odoo.lead.updated',$1,$1,'full-api-event-1','full-api-correlation',$2::jsonb,'accepted') ON CONFLICT DO NOTHING""",digest,json.dumps(payload))
             await conn.execute("""INSERT INTO middleware_event_ledger(tenant_id,tenant_sequence,event_id,event_type,event_version,source_client_id,correlation_id,causation_id,idempotency_key,semantic_sha256,previous_entry_hash,entry_hash,payload) VALUES('tenant-1',999999,'full-api-event-1','codestra.odoo.lead.updated','1.0','odoo-integration','full-api-correlation','full-api-cause','full-api-event-1',$1,$2,$2,$3::jsonb) ON CONFLICT DO NOTHING""",digest,"0"*64,json.dumps(payload))
             outbox_id=await conn.fetchval("""INSERT INTO middleware_outbox(tenant_id,destination,event_type,payload,idempotency_key) VALUES('tenant-1','nats-jetstream','full.api.test','{}','full-api-outbox') ON CONFLICT(tenant_id,destination,idempotency_key) DO UPDATE SET event_type=EXCLUDED.event_type RETURNING id""")
+            reconciliation_id=await conn.fetchval("""INSERT INTO middleware_outbox(tenant_id,destination,event_type,payload,idempotency_key,reconciliation_required_at,last_error) VALUES('tenant-1','nats-jetstream','full.api.reconcile','{}','full-api-reconcile',now(),'unknown outcome') ON CONFLICT(tenant_id,destination,idempotency_key) DO UPDATE SET reconciliation_required_at=now(),completed_at=NULL,dead_lettered_at=NULL,cancelled_at=NULL,lease_owner=NULL,lease_until=NULL,resource_version=1 RETURNING id""")
         runtime=Runtime(settings=test_settings,inbox=PostgresInboxStore(pool),replay=MemoryReplayGuard(),tokens=CommandTokenVerifier())
         app=create_app(settings=test_settings,runtime=runtime)
         app.state.runtime=runtime
@@ -40,5 +41,17 @@ async def test_durable_inbox_outbox_control_api_is_tenant_scoped_and_idempotent(
             assert discarded.status_code==200 and discarded.json()["discarded_at"] is not None
             cancelled=await client.post(f"/v1/outbox/{outbox_id}/cancel",headers={**mutation,"Idempotency-Key":"full-api-outbox-cancel"},json={"expected_version":1,"reason":"operator_requested"})
             assert cancelled.status_code==200 and cancelled.json()["state"]=="CANCELLED"
+            resolution_headers={**mutation,"Idempotency-Key":"full-api-reconcile-resolve"}
+            resolved=await client.post(f"/api/v1/reconciliation/operations/{reconciliation_id}/resolve",headers=resolution_headers,json={"expected_version":1,"action":"retry","reason":"operator_verified_no_effect"})
+            assert resolved.status_code==200 and resolved.json()["state"]=="PENDING" and resolved.json()["resource_version"]==2
+            replay=await client.post(f"/api/v1/reconciliation/operations/{reconciliation_id}/resolve",headers=resolution_headers,json={"expected_version":1,"action":"retry","reason":"operator_verified_no_effect"})
+            assert replay.status_code==200 and replay.json()==resolved.json()
+            conflict=await client.post(f"/api/v1/reconciliation/operations/{reconciliation_id}/resolve",headers=resolution_headers,json={"expected_version":1,"action":"complete","reason":"changed_semantics"})
+            assert conflict.status_code==409
+            hidden=await client.get(f"/api/v1/reconciliation/operations/{reconciliation_id}",headers={"Authorization":"Bearer legacy-status-token","X-Tenant-ID":"tenant-2"})
+            assert hidden.status_code==403
+        async with pool.acquire() as conn:
+            assert await conn.fetchval("SELECT count(*) FROM middleware_reconciliation_audit WHERE tenant_id='tenant-1' AND outbox_id=$1",reconciliation_id)==1
+            assert await conn.fetchval("SELECT count(*) FROM middleware_control_mutations WHERE tenant_id='tenant-1' AND resource_kind='outbox' AND resource_id=$1 AND action='resolve:retry'",str(reconciliation_id))==1
     finally:
         await pool.close()

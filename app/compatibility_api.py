@@ -6,6 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -209,7 +210,7 @@ async def reconciliation_resolve(record_id: int, body: ReconciliationResolution,
             )
             await conn.execute(
                 "INSERT INTO middleware_control_mutations(tenant_id,resource_kind,resource_id,action,actor_id,idempotency_key,request_sha256,response_status,response_payload) VALUES($1,'outbox',$2,$3,$4,$5,$6,200,$7::jsonb)",
-                tenant, str(record_id), action, actor, idem, digest, json.dumps(payload, default=str),
+                tenant, str(record_id), action, actor, idem, digest, json.dumps(jsonable_encoder(payload)),
             )
             return payload
 

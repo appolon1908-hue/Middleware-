@@ -924,7 +924,7 @@ def test_status_snapshot_before_resolved_end_cannot_reopen_incident() -> None:
             headers=headers(key="status-order-stale-0001"),
         )
         assert stale_status.status_code == 409
-        assert stale_status.json()["items"][0]["code"] == "incident_conflict"
+        assert stale_status.json()["code"] == "incident_conflict"
         detail = client.get(
             f"/v1/observability/incidents/{incident_id}",
             headers=headers("observability-operator", key="status-order-read-0001"),

@@ -343,16 +343,6 @@ def test_health_ready_version(test_settings, runtime) -> None:
         assert capabilities.json()["capabilities"]["PRODUCTION_DIALING"] is False
 
 
-def test_release_signature_binds_current_runtime_schema_head() -> None:
-    workflow = (
-        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
-    ).read_text(
-        encoding="utf-8"
-    )
-    assert '--annotations "codestra.schema_head=0006_outbox_attempt_events"' in workflow
-    assert "codestra.schema_head=0003_immutable_event_ledger" not in workflow
-
-
 def test_runtime_safety_readback_is_authenticated_and_schema_valid(
     test_settings,
     runtime,

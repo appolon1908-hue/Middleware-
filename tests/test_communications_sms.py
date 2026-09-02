@@ -389,7 +389,7 @@ def test_sms_segments_suppression_tenant_isolation_and_cancel(test_settings) -> 
         operation = asyncio.run(
             runtime.commands.store.get("tenant-1", UUID(created["operationId"]))
         )
-        assert operation.state == "dead_lettered"
+    assert operation.state == "cancelled"
 
 
 def test_signed_telnexa_dlr_is_replay_safe_and_monotonic(test_settings) -> None:

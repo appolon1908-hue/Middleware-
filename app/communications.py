@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
+import asyncpg
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -239,6 +241,8 @@ def _command_state_to_canonical(state: str) -> MessageStatus | None:
         return "indeterminate"
     if state in {"failed", "dead_lettered"}:
         return "failed"
+    if state == "cancelled":
+        return "cancelled"
     return None
 
 
@@ -259,6 +263,12 @@ class MemoryCommunicationsStore:
 
     async def ready(self) -> bool:
         return True
+
+    async def persist(self) -> None:
+        return None
+
+    async def close(self) -> None:
+        return None
 
     def add_event(
         self,
@@ -288,6 +298,63 @@ class MemoryCommunicationsStore:
         if not any(item.eventId == event.eventId for item in timeline):
             timeline.append(event)
         return event
+
+
+class PostgresCommunicationsStore(MemoryCommunicationsStore):
+    """Durable communications projection; the command ledger remains authoritative."""
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        super().__init__()
+        self.pool = pool
+
+    @classmethod
+    async def connect(cls, database_url: str) -> "PostgresCommunicationsStore":
+        pool = await asyncpg.create_pool(database_url, min_size=1, max_size=5)
+        store = cls(pool)
+        await store._load()
+        return store
+
+    async def _load(self) -> None:
+        async with self.pool.acquire() as conn:
+            for row in await conn.fetch("SELECT payload FROM middleware_communication_messages"):
+                raw = row["payload"]
+                message = (CommunicationMessage.model_validate_json(raw) if isinstance(raw, str) else CommunicationMessage.model_validate(raw))
+                self.messages[(message.tenantId, message.messageId)] = message
+            for row in await conn.fetch("SELECT tenant_id,payload FROM middleware_communication_events ORDER BY occurred_at,id"):
+                raw = row["payload"]
+                event = (MessageEvent.model_validate_json(raw) if isinstance(raw, str) else MessageEvent.model_validate(raw))
+                self.events.setdefault((row["tenant_id"], event.messageId), []).append(event)
+            for row in await conn.fetch("SELECT tenant_id,route,idempotency_key,request_sha256,message_id FROM middleware_communication_idempotency"):
+                self.idempotency[(row["tenant_id"], row["route"], row["idempotency_key"])] = (row["request_sha256"], row["message_id"])
+            for row in await conn.fetch("SELECT tenant_id,provider_event_id,request_sha256 FROM middleware_communication_provider_events"):
+                self.provider_event_digests[(row["tenant_id"], row["provider_event_id"])] = row["request_sha256"]
+            for row in await conn.fetch("SELECT tenant_id,channel,subject FROM middleware_communication_suppressions"):
+                self.suppressions.add((row["tenant_id"], row["channel"], row["subject"]))
+            for row in await conn.fetch("SELECT tenant_id,message_id,idempotency_key FROM middleware_communication_cancellations"):
+                self.cancellations.add((row["tenant_id"], row["message_id"], row["idempotency_key"]))
+
+    async def persist(self) -> None:
+        async with self.pool.acquire() as conn, conn.transaction():
+            for (tenant, _), message in self.messages.items():
+                await conn.execute("INSERT INTO middleware_communication_messages(tenant_id,message_id,payload,updated_at) VALUES($1,$2,$3::jsonb,$4) ON CONFLICT(tenant_id,message_id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at", tenant, message.messageId, message.model_dump_json(), message.updatedAt)
+            for (tenant, _), timeline in self.events.items():
+                for event in timeline:
+                    await conn.execute("INSERT INTO middleware_communication_events(tenant_id,event_id,message_id,occurred_at,payload) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id,event_id) DO NOTHING", tenant, event.eventId, event.messageId, event.occurredAt, event.model_dump_json())
+            for (tenant, route, key), (digest, message_id) in self.idempotency.items():
+                await conn.execute("INSERT INTO middleware_communication_idempotency(tenant_id,route,idempotency_key,request_sha256,message_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", tenant, route, key, digest, message_id)
+            for (tenant, event_id), digest in self.provider_event_digests.items():
+                await conn.execute("INSERT INTO middleware_communication_provider_events(tenant_id,provider_event_id,request_sha256) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", tenant, event_id, digest)
+            for item in self.suppressions:
+                if len(item) == 3:
+                    await conn.execute("INSERT INTO middleware_communication_suppressions(tenant_id,channel,subject) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", *item)
+            for tenant, message_id, key in self.cancellations:
+                await conn.execute("INSERT INTO middleware_communication_cancellations(tenant_id,message_id,idempotency_key) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", tenant, message_id, key)
+
+    async def ready(self) -> bool:
+        return await self.pool.fetchval("SELECT to_regclass('middleware_communication_messages') IS NOT NULL") is True
+
+    async def close(self) -> None:
+        await self.pool.close()
 
 
 class CommunicationsProviderReadAdapter(Protocol):
@@ -343,7 +410,7 @@ class DisabledCommunicationsProviderReadAdapter:
 
 @dataclass
 class CommunicationsService:
-    store: MemoryCommunicationsStore
+    store: MemoryCommunicationsStore | PostgresCommunicationsStore
     commands: CommandService
     adapter: CommunicationsProviderReadAdapter = field(
         default_factory=DisabledCommunicationsProviderReadAdapter
@@ -552,6 +619,7 @@ class CommunicationsService:
                 status="suppressed",
                 provider=provider,
             )
+            await self.store.persist()
             return message, False
 
         assert command is not None
@@ -566,6 +634,7 @@ class CommunicationsService:
             status="queued",
             provider=provider,
         )
+        await self.store.persist()
         return message, False
 
     def list_messages(self, tenant_id: str, *, channel: str | None = None, status: str | None = None) -> list[CommunicationMessage]:
@@ -642,6 +711,7 @@ class CommunicationsService:
                 f"codestra:communications:{tenant_id}:{operation.command_id}:{operation.state}",
             ),
         )
+        await self.store.persist()
         return updated
 
     async def cancel(
@@ -679,23 +749,19 @@ class CommunicationsService:
         if message.operationId is None:
             raise CommunicationsConflict("message does not own a cancellable command")
         operation = await self.commands.get(tenant_id, message.operationId)
-        if operation.state == "persisted":
-            operation = await self.commands.store.transition(
-                tenant_id,
-                message.operationId,
-                new_state="queued",
-                actor_id=actor,
-                reason="cancellation claimed persisted command",
-            )
-        if operation.state != "queued":
+        if operation.state not in {"persisted", "queued"}:
             raise CommunicationsConflict("message command is already being dispatched")
-        await self.commands.store.transition(
+        cancelled_operation = await self.commands.mutate_operation(
             tenant_id,
             message.operationId,
-            new_state="dead_lettered",
+            action="cancel",
             actor_id=actor,
-            reason="cancelled before provider dispatch",
+            idempotency_key=idempotency_key,
+            expected_version=operation.resource_version,
+            reason="communication cancelled before provider dispatch",
         )
+        if cancelled_operation.state != "cancelled":
+            raise CommunicationsConflict("message command cancellation requires reconciliation")
         updated = message.model_copy(
             update={
                 "status": "cancelled",
@@ -712,6 +778,7 @@ class CommunicationsService:
             status="cancelled",
             provider=message.provider,
         )
+        await self.store.persist()
         return updated, False
 
     def _record_inbound_sms(self, envelope: Any, payload: dict[str, Any]) -> bool:
@@ -832,7 +899,7 @@ class CommunicationsService:
             )
         return True
 
-    def record_provider_event(self, envelope: Any) -> bool:
+    async def record_provider_event(self, envelope: Any) -> bool:
         payload = envelope.payload if hasattr(envelope, "payload") else {}
         tenant_id = envelope.tenant_id
         event_id = str(envelope.event_id)
@@ -854,6 +921,7 @@ class CommunicationsService:
         }:
             recorded = self._record_inbound_sms(envelope, payload)
             self.store.provider_event_digests[replay_key] = event_digest
+            await self.store.persist()
             return recorded
 
         raw_message_id = (
@@ -943,4 +1011,5 @@ class CommunicationsService:
             event_id=_provider_event_uuid(tenant_id, event_id),
         )
         self.store.provider_event_digests[replay_key] = event_digest
+        await self.store.persist()
         return True

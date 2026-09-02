@@ -714,7 +714,7 @@ def create_app(
                 from .models import EventEnvelope
 
                 envelope = EventEnvelope.model_validate(json.loads(raw))
-                request.app.state.runtime.communications.record_provider_event(envelope)
+                await request.app.state.runtime.communications.record_provider_event(envelope)
             return JSONResponse(
                 status_code=status_code,
                 content=result.model_dump(mode="json"),

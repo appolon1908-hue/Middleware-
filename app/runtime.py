@@ -10,7 +10,7 @@ from .commands import (
     MemoryCommandStore,
     PostgresCommandStore,
 )
-from .communications import CommunicationsService, MemoryCommunicationsStore
+from .communications import CommunicationsService, MemoryCommunicationsStore, PostgresCommunicationsStore
 from .config import Settings
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
@@ -48,6 +48,9 @@ class Runtime:
             checks["command_store"] = self.commands.store.ready()
         else:
             checks["command_store"] = None
+        checks["communications_store"] = (
+            self.communications.store.ready() if self.communications is not None else None
+        )
 
         async def bounded(check: Awaitable[bool] | None) -> str:
             if check is None:
@@ -72,6 +75,8 @@ class Runtime:
     async def close(self) -> None:
         await self.inbox.close()
         await self.replay.close()
+        if self.communications is not None:
+            await self.communications.store.close()
         if self.commands is not None:
             await self.commands.store.close()
 
@@ -118,7 +123,7 @@ async def build_runtime(settings: Settings) -> Runtime:
         ),
     )
     runtime.communications = CommunicationsService(
-        store=MemoryCommunicationsStore(),
+        store=await PostgresCommunicationsStore.connect(settings.database_url),
         commands=runtime.commands,
     )
     if not await runtime.ready():

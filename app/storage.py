@@ -11,7 +11,7 @@ import asyncpg
 from .models import EventEnvelope, IngressResult
 
 
-RUNTIME_SCHEMA_VERSION = 7
+RUNTIME_SCHEMA_VERSION = 8
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
@@ -265,6 +265,12 @@ class PostgresInboxStore:
             "cancelled_at",
             "resource_version",
         },
+        "middleware_communication_messages": {"tenant_id", "message_id", "payload", "updated_at"},
+        "middleware_communication_events": {"id", "tenant_id", "event_id", "message_id", "occurred_at", "payload"},
+        "middleware_communication_idempotency": {"tenant_id", "route", "idempotency_key", "request_sha256", "message_id", "created_at"},
+        "middleware_communication_provider_events": {"tenant_id", "provider_event_id", "request_sha256", "created_at"},
+        "middleware_communication_suppressions": {"tenant_id", "channel", "subject", "created_at"},
+        "middleware_communication_cancellations": {"tenant_id", "message_id", "idempotency_key", "created_at"},
         "middleware_reconciliation_audit": {
             "id",
             "outbox_id",
@@ -298,6 +304,34 @@ class PostgresInboxStore:
         "middleware_outbox_attempt_events": {"id","outbox_id","tenant_id","attempt_number","event_type","worker_id","safe_error_code","created_at"},
     }
     REQUIRED_UDT_TYPES = {
+        ("middleware_communication_messages", "tenant_id"): "text",
+        ("middleware_communication_messages", "message_id"): "uuid",
+        ("middleware_communication_messages", "payload"): "jsonb",
+        ("middleware_communication_messages", "updated_at"): "timestamptz",
+        ("middleware_communication_events", "id"): "int8",
+        ("middleware_communication_events", "tenant_id"): "text",
+        ("middleware_communication_events", "event_id"): "uuid",
+        ("middleware_communication_events", "message_id"): "uuid",
+        ("middleware_communication_events", "occurred_at"): "timestamptz",
+        ("middleware_communication_events", "payload"): "jsonb",
+        ("middleware_communication_idempotency", "tenant_id"): "text",
+        ("middleware_communication_idempotency", "route"): "text",
+        ("middleware_communication_idempotency", "idempotency_key"): "text",
+        ("middleware_communication_idempotency", "request_sha256"): "bpchar",
+        ("middleware_communication_idempotency", "message_id"): "uuid",
+        ("middleware_communication_idempotency", "created_at"): "timestamptz",
+        ("middleware_communication_provider_events", "tenant_id"): "text",
+        ("middleware_communication_provider_events", "provider_event_id"): "text",
+        ("middleware_communication_provider_events", "request_sha256"): "bpchar",
+        ("middleware_communication_provider_events", "created_at"): "timestamptz",
+        ("middleware_communication_suppressions", "tenant_id"): "text",
+        ("middleware_communication_suppressions", "channel"): "text",
+        ("middleware_communication_suppressions", "subject"): "text",
+        ("middleware_communication_suppressions", "created_at"): "timestamptz",
+        ("middleware_communication_cancellations", "tenant_id"): "text",
+        ("middleware_communication_cancellations", "message_id"): "uuid",
+        ("middleware_communication_cancellations", "idempotency_key"): "text",
+        ("middleware_communication_cancellations", "created_at"): "timestamptz",
         ("middleware_schema_migrations", "version"): "int4",
         ("middleware_schema_migrations", "name"): "text",
         ("middleware_schema_migrations", "applied_at"): "timestamptz",

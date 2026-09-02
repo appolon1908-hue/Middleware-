@@ -375,6 +375,7 @@ def create_app(
 
         authorize_tenant(claims, tenant_id)
 
+    @app.post("/v1/communication/messages")
     @app.post("/v1/communications/messages")
     async def create_communication_message(
         body: CreateMessageRequest,
@@ -439,6 +440,7 @@ def create_app(
             ).model_dump(mode="json"),
         )
 
+    @app.get("/v1/communication/messages/{messageId}")
     @app.get("/v1/communications/messages/{messageId}")
     async def get_communication_message(messageId: UUID, request: Request) -> JSONResponse:
         tenant_id = _tenant_from_header(request)

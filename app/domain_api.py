@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 
 from .commands import CommandEnvelope, OperationMutationRequest
 from .control_plane_auth import authorize_command, caller_for_authorization
@@ -100,11 +100,6 @@ async def _mutate_any(operation_id:UUID,body:OperationMutationRequest,request:Re
     service,tenant,actor,idem=await _mutation_context(request)
     operation=await service.mutate_operation(tenant,operation_id,action=action,actor_id=actor,idempotency_key=idem,expected_version=body.expected_version,reason=body.reason)
     return JSONResponse(content=_operation_json(operation))
-
-@router.post("/v1/communication/messages",deprecated=True)
-async def communication_submit_alias() -> RedirectResponse: return RedirectResponse("/v1/communications/messages",status_code=308)
-@router.get("/v1/communication/messages/{message_id}",deprecated=True)
-async def communication_detail_alias(message_id:UUID) -> RedirectResponse: return RedirectResponse(f"/v1/communications/messages/{message_id}",status_code=308)
 
 async def _health(request:Request,provider:str):
     await _get_auth(request)

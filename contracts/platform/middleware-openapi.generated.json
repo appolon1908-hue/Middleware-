@@ -1687,8 +1687,7 @@
     },
     "/v1/communication/messages": {
       "post": {
-        "deprecated": true,
-        "operationId": "communication_submit_alias_v1_communication_messages_post",
+        "operationId": "create_communication_message_v1_communication_messages_post",
         "parameters": [
           {
             "in": "header",
@@ -1721,6 +1720,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -1746,7 +1755,14 @@
             "description": "Version, state, or idempotency conflict"
           },
           "422": {
-            "description": "Request cannot be processed"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           },
           "429": {
             "description": "Rate limited"
@@ -1760,24 +1776,20 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Communication Submit Alias",
-        "tags": [
-          "domain-control"
-        ]
+        "summary": "Create Communication Message"
       }
     },
-    "/v1/communication/messages/{message_id}": {
+    "/v1/communication/messages/{messageId}": {
       "get": {
-        "deprecated": true,
-        "operationId": "communication_detail_alias_v1_communication_messages__message_id__get",
+        "operationId": "get_communication_message_v1_communication_messages__messageId__get",
         "parameters": [
           {
             "in": "path",
-            "name": "message_id",
+            "name": "messageId",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Message Id",
+              "title": "Messageid",
               "type": "string"
             }
           },
@@ -1838,10 +1850,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Communication Detail Alias",
-        "tags": [
-          "domain-control"
-        ]
+        "summary": "Get Communication Message"
       }
     },
     "/v1/communications/messages": {

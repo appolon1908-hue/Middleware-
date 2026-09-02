@@ -3433,85 +3433,6 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
-  /v1/communication/messages:
-    post:
-      tags:
-      - domain-control
-      summary: Communication Submit Alias
-      operationId: communication_submit_alias_v1_communication_messages_post
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '400':
-          description: Invalid canonical request
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '422':
-          description: Request cannot be processed
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      deprecated: true
-      security:
-      - bearerAuth: []
-      parameters:
-      - *id001
-      - *id002
-      - *id003
-  /v1/communication/messages/{message_id}:
-    get:
-      tags:
-      - domain-control
-      summary: Communication Detail Alias
-      operationId: communication_detail_alias_v1_communication_messages__message_id__get
-      deprecated: true
-      parameters:
-      - name: message_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Message Id
-      - *id001
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-        '400':
-          description: Invalid canonical request
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
   /v1/odoo/provider-health:
     get:
       tags:
@@ -4167,10 +4088,93 @@ paths:
       - *id001
       - *id002
       - *id003
+  /v1/communication/messages:
+    post:
+      summary: Create Communication Message
+      operationId: create_communication_message_v1_communication_messages_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /v1/communications/messages/{messageId}:
     get:
       summary: Get Communication Message
       operationId: get_communication_message_v1_communications_messages__messageId__get
+      parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Messageid
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/communication/messages/{messageId}:
+    get:
+      summary: Get Communication Message
+      operationId: get_communication_message_v1_communication_messages__messageId__get
       parameters:
       - name: messageId
         in: path

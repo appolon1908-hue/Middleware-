@@ -138,15 +138,15 @@ operations:
 - domain: communication
   method: POST
   path: /v1/communication/messages
-  canonical_operation_id: communication_submit_alias_v1_communication_messages_post
+  canonical_operation_id: create_communication_message_v1_communication_messages_post
   implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
+  runtime_state: IMPLEMENTED
 - domain: communication
   method: GET
-  path: /v1/communication/messages/{message_id}
-  canonical_operation_id: communication_detail_alias_v1_communication_messages__message_id__get
+  path: /v1/communication/messages/{messageId}
+  canonical_operation_id: get_communication_message_v1_communication_messages__messageId__get
   implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
+  runtime_state: IMPLEMENTED
 - domain: communications
   method: GET
   path: /v1/communications/messages

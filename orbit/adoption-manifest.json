@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "2.0.0",
+  "repository": "appolon1908-hue/Middleware-",
+  "classification": "backend-api",
+  "targetBranch": "codex/codestra-orbit-v2-middleware",
+  "adoptionMode": "contract-only",
+  "domain": "api.codestra.co",
+  "domainStatus": "registered",
+  "requirements": {
+    "canonicalIssuer": true,
+    "backendAuthorization": true,
+    "tenantIsolation": true,
+    "sameOriginSessionContractWhenOwned": true,
+    "brandContentAssetFooterContractsWhenOwned": true,
+    "hardcodedSocialUrlsProhibited": true,
+    "domainRegistry": true,
+    "audit": true,
+    "rollback": true,
+    "noFabricatedBrowserUi": true
+  },
+  "status": "branch-created",
+  "blockers": [
+    "SDK-repository pull request 75 must complete protected review before shared Orbit contracts are promoted.",
+    "Map existing Middleware routes to the canonical issuer, browser-session, Brand, Content, Asset, Footer, Page, domain, audit, and rollback authorities before implementation.",
+    "Reconcile api.codestra.co across Caddy, Kong, Keycloak, OpenAPI, clients, monitoring, and rollback without enabling live providers or writes."
+  ]
+}

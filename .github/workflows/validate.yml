@@ -62,7 +62,7 @@ jobs:
       - name: Refuse production completion while automation v2 remains xfail
         run: |
           set -Eeuo pipefail
-          output="$(PYTHONPATH=. .venv-ci/bin/python scripts/validate_automation_v2_conformance.py)"
+          output="$(PYTHONPATH=. .venv-ci/bin/python scripts/validate_automation_contract_conformance.py)"
           printf '%s\n' "$output"
           implemented="$(sed -n 's/^AUTOMATION_CONFORMANCE_IMPLEMENTED=//p' <<<"$output")"
           expected="$(sed -n 's/^AUTOMATION_CONFORMANCE_EXPECTED=//p' <<<"$output")"

@@ -1,16 +1,25 @@
-from scripts import certify_production_route_contract as certification
 from pathlib import Path
+
+from scripts import certify_production_route_contract as certification
 
 
 def test_certification_uses_parameterized_operation_and_exact_provider_route():
     assert certification.COMMAND_PATH == "/v1/commands"
     assert certification.OPERATION_COLLECTION_PATH == "/v1/operations"
     assert certification.OPERATION_TEMPLATE == "/v1/operations/{command_id}"
-    assert certification.OPERATION_PROBE.endswith("00000000-0000-0000-0000-000000000000")
+    assert certification.OPERATION_PROBE.endswith(
+        "00000000-0000-0000-0000-000000000000"
+    )
     assert certification.VICIDIAL_PATH == "/api/v1/vicidial/events"
     assert certification.OPERATION_PROBE != certification.OPERATION_COLLECTION_PATH
-    assert "/v1/operations-dashboard/overview" in certification.OPERATIONS_DASHBOARD_PATHS
-    assert "/v1/operations-dashboard/tenants/{tenant_id}" in certification.OPERATIONS_DASHBOARD_PATHS
+    assert (
+        "/v1/operations-dashboard/overview"
+        in certification.OPERATIONS_DASHBOARD_PATHS
+    )
+    assert (
+        "/v1/operations-dashboard/tenants/{tenant_id}"
+        in certification.OPERATIONS_DASHBOARD_PATHS
+    )
 
 
 def test_certification_rejects_unregistered_or_open_responses():
@@ -29,6 +38,19 @@ def test_dashboard_and_generated_contract_certification_are_explicit():
         "expect_operations_dashboard": False,
         "contract_file": None,
     }
+
+
+def test_dashboard_tenant_template_is_materialized_for_runtime_probe():
+    assert certification.dashboard_probe_path(
+        "/v1/operations-dashboard/tenants/{tenant_id}",
+        "tenant-certification",
+    ) == "/v1/operations-dashboard/tenants/tenant-certification"
+    assert all(
+        certification.dashboard_probe_path(path, "tenant-certification").startswith(
+            "/v1/operations-dashboard/"
+        )
+        for path in certification.OPERATIONS_DASHBOARD_PATHS
+    )
 
 
 def test_generated_contract_loader_requires_an_openapi_paths_object(tmp_path):
@@ -57,8 +79,14 @@ def test_middleware_independently_enforces_complete_machine_identity_contract():
     assert 'expected_client_id="n8n-automation"' in control_plane
     assert 'required_scope="middleware.request.forward"' in control_plane
     assert 'required_scope="middleware.status.read"' in control_plane
-    assert 'request.headers.get("X-Correlation-ID") != command.correlation_id' in control_plane
-    assert 'request.headers.get("Idempotency-Key") != command.idempotency_key' in control_plane
+    assert (
+        'request.headers.get("X-Correlation-ID") != command.correlation_id'
+        in control_plane
+    )
+    assert (
+        'request.headers.get("Idempotency-Key") != command.idempotency_key'
+        in control_plane
+    )
 
 
 def test_write_disabled_adapter_contract_is_certified():

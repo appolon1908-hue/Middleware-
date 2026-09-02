@@ -41,6 +41,9 @@ jobs:
       - name: Run complete fail-closed repository validation
         run: bash scripts/run_ci.sh
 
+      - name: Install pinned generated-contract dependency
+        run: python -m pip install --disable-pip-version-check --no-cache-dir PyYAML==6.0.3
+
       - name: Prove generated API contracts and completion matrix are current
         run: |
           set -Eeuo pipefail

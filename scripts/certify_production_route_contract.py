@@ -107,6 +107,10 @@ def assert_fail_closed(status_code: int, response_body: dict) -> None:
     assert response_body != {"detail": "Not Found"}
 
 
+def dashboard_probe_path(path_template: str, tenant_id: str) -> str:
+    return path_template.replace("{tenant_id}", tenant_id)
+
+
 def certify(
     base: str,
     *,
@@ -208,16 +212,18 @@ def certify(
         (read_status, read_body),
     ]
     if expect_operations_dashboard:
-        responses.append(
+        dashboard_headers = {
+            "X-Tenant-ID": command["tenant_id"],
+            "X-Correlation-ID": command["correlation_id"],
+        }
+        responses.extend(
             request(
                 base,
                 "GET",
-                "/v1/operations-dashboard/overview",
-                headers={
-                    "X-Tenant-ID": command["tenant_id"],
-                    "X-Correlation-ID": command["correlation_id"],
-                },
+                dashboard_probe_path(path, command["tenant_id"]),
+                headers=dashboard_headers,
             )
+            for path in OPERATIONS_DASHBOARD_PATHS
         )
     for status_code, response_body in responses:
         assert_fail_closed(status_code, response_body)

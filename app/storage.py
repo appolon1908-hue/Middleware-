@@ -11,7 +11,7 @@ import asyncpg
 from .models import EventEnvelope, IngressResult
 
 
-RUNTIME_SCHEMA_VERSION = 6
+RUNTIME_SCHEMA_VERSION = 7
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
@@ -243,6 +243,7 @@ class PostgresInboxStore:
             "last_error",
             "resource_version", "quarantined_at", "quarantine_reason",
             "released_at", "reprocess_requested_at",
+            "discarded_at", "discard_reason",
         },
         "middleware_outbox": {
             "id",
@@ -318,6 +319,8 @@ class PostgresInboxStore:
         ("middleware_inbox", "quarantine_reason"): "text",
         ("middleware_inbox", "released_at"): "timestamptz",
         ("middleware_inbox", "reprocess_requested_at"): "timestamptz",
+        ("middleware_inbox", "discarded_at"): "timestamptz",
+        ("middleware_inbox", "discard_reason"): "text",
         ("middleware_outbox", "id"): "int8",
         ("middleware_outbox", "tenant_id"): "text",
         ("middleware_outbox", "destination"): "text",

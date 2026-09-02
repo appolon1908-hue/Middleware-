@@ -3,6 +3,18 @@ inventory_base_sha: f9ae3142272729e4d697c81fd15cc9db124b87d8
 classification_complete: true
 unknown_endpoints: 0
 operations:
+- domain: inbox
+  method: GET
+  path: /api/v1/inbox
+  canonical_operation_id: inbox_list_api_v1_inbox_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: inbox
+  method: GET
+  path: /api/v1/inbox/{record_id}
+  canonical_operation_id: inbox_detail_api_v1_inbox__record_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: klyrow
   method: POST
   path: /api/v1/klyrow/events
@@ -33,10 +45,94 @@ operations:
   canonical_operation_id: ingress_odoo_integration_events_api_v1_odoo_events_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: operations
+  method: GET
+  path: /api/v1/operations
+  canonical_operation_id: operations_list_api_v1_operations_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: operations
+  method: GET
+  path: /api/v1/operations/{operation_id}
+  canonical_operation_id: operation_detail_api_v1_operations__operation_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: operations
+  method: POST
+  path: /api/v1/operations/{operation_id}/cancel
+  canonical_operation_id: operation_cancel_api_v1_operations__operation_id__cancel_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: operations
+  method: POST
+  path: /api/v1/operations/{operation_id}/retry
+  canonical_operation_id: operation_retry_api_v1_operations__operation_id__retry_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: outbox
+  method: GET
+  path: /api/v1/outbox
+  canonical_operation_id: outbox_list_api_v1_outbox_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: outbox
+  method: GET
+  path: /api/v1/outbox/{record_id}
+  canonical_operation_id: outbox_detail_api_v1_outbox__record_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: policy
+  method: POST
+  path: /api/v1/policy/decisions
+  canonical_operation_id: policy_decision_api_v1_policy_decisions_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: postly
   method: POST
   path: /api/v1/postly/events
   canonical_operation_id: ingress_postly_adapter_events_api_v1_postly_events_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: quarantine
+  method: GET
+  path: /api/v1/quarantine/events
+  canonical_operation_id: quarantine_list_api_v1_quarantine_events_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: quarantine
+  method: GET
+  path: /api/v1/quarantine/events/{record_id}
+  canonical_operation_id: quarantine_detail_api_v1_quarantine_events__record_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: quarantine
+  method: POST
+  path: /api/v1/quarantine/events/{record_id}/discard
+  canonical_operation_id: quarantine_discard_api_v1_quarantine_events__record_id__discard_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: quarantine
+  method: POST
+  path: /api/v1/quarantine/events/{record_id}/release
+  canonical_operation_id: quarantine_release_api_v1_quarantine_events__record_id__release_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: reconciliation
+  method: GET
+  path: /api/v1/reconciliation/operations
+  canonical_operation_id: reconciliation_list_api_v1_reconciliation_operations_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: reconciliation
+  method: GET
+  path: /api/v1/reconciliation/operations/{record_id}
+  canonical_operation_id: reconciliation_detail_api_v1_reconciliation_operations__record_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: reconciliation
+  method: POST
+  path: /api/v1/reconciliation/operations/{record_id}/resolve
+  canonical_operation_id: reconciliation_resolve_api_v1_reconciliation_operations__record_id__resolve_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: telnexa
@@ -277,6 +373,12 @@ operations:
   method: GET
   path: /v1/inbox/{record_id}
   canonical_operation_id: inbox_detail_v1_inbox__record_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: inbox
+  method: POST
+  path: /v1/inbox/{record_id}/discard
+  canonical_operation_id: inbox_discard_v1_inbox__record_id__discard_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: inbox

@@ -34,6 +34,10 @@ async def test_durable_inbox_outbox_control_api_is_tenant_scoped_and_idempotent(
             assert replay.status_code==200 and replay.json()["resource_version"]==2
             changed=await client.post("/v1/inbox/full-api-event-1/quarantine",headers=mutation,json={"expected_version":1,"reason":"changed"})
             assert changed.status_code==409
+            quarantine=await client.get("/api/v1/quarantine/events/full-api-event-1",headers=read)
+            assert quarantine.status_code==200 and quarantine.json()["quarantined_at"] is not None
+            discarded=await client.post("/api/v1/quarantine/events/full-api-event-1/discard",headers={**mutation,"Idempotency-Key":"full-api-discard"},json={"expected_version":2,"reason":"evidence_retained_discard"})
+            assert discarded.status_code==200 and discarded.json()["discarded_at"] is not None
             cancelled=await client.post(f"/v1/outbox/{outbox_id}/cancel",headers={**mutation,"Idempotency-Key":"full-api-outbox-cancel"},json={"expected_version":1,"reason":"operator_requested"})
             assert cancelled.status_code==200 and cancelled.json()["state"]=="CANCELLED"
     finally:

@@ -56,7 +56,7 @@ def _pool(request: Request):
 
 
 def _safe_inbox(row) -> dict[str,Any]:
-    return {k:row[k] for k in ("event_id","tenant_id","source_client_id","event_type","body_sha256","semantic_sha256","correlation_id","received_at","status","processed_at","last_error","resource_version","quarantined_at","quarantine_reason","released_at","reprocess_requested_at")}
+    return {k:row[k] for k in ("event_id","tenant_id","source_client_id","event_type","body_sha256","semantic_sha256","correlation_id","received_at","status","processed_at","last_error","resource_version","quarantined_at","quarantine_reason","released_at","reprocess_requested_at","discarded_at","discard_reason")}
 
 
 def _safe_outbox(row) -> dict[str,Any]:
@@ -129,6 +129,7 @@ async def _mutate(request:Request,kind:str,rid:str,action:str,body:ControlMutati
         if kind=="inbox":
             if action=="quarantine": sql="UPDATE middleware_inbox SET quarantined_at=now(),quarantine_reason=$3,status='rejected',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
             elif action=="release": sql="UPDATE middleware_inbox SET released_at=now(),quarantined_at=NULL,quarantine_reason=NULL,status='accepted',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
+            elif action=="discard": sql="UPDATE middleware_inbox SET discarded_at=now(),discard_reason=$3,status='rejected',processed_at=COALESCE(processed_at,now()),resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 AND quarantined_at IS NOT NULL RETURNING *"
             else: sql="UPDATE middleware_inbox SET reprocess_requested_at=now(),status='accepted',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
         else:
             if row["completed_at"] or row["dead_lettered_at"] or row["cancelled_at"]:
@@ -166,6 +167,8 @@ async def inbox_reprocess(record_id:str,body:ControlMutation,request:Request): r
 async def inbox_quarantine(record_id:str,body:ControlMutation,request:Request): return await _mutate(request,"inbox",record_id,"quarantine",body)
 @router.post("/v1/inbox/{record_id}/release")
 async def inbox_release(record_id:str,body:ControlMutation,request:Request): return await _mutate(request,"inbox",record_id,"release",body)
+@router.post("/v1/inbox/{record_id}/discard")
+async def inbox_discard(record_id:str,body:ControlMutation,request:Request): return await _mutate(request,"inbox",record_id,"discard",body)
 @router.post("/v1/outbox/{record_id}/cancel")
 async def outbox_cancel(record_id:int,body:ControlMutation,request:Request): return await _mutate(request,"outbox",str(record_id),"cancel",body)
 @router.post("/v1/outbox/{record_id}/retry")

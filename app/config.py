@@ -229,7 +229,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0006_outbox_attempt_events",
+                "0007_authority_compatibility",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -543,9 +543,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0006_outbox_attempt_events":
+        if self.schema_head != "0007_authority_compatibility":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0006_outbox_attempt_events"
+                "SCHEMA_HEAD must be 0007_authority_compatibility"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):

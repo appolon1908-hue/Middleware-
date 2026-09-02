@@ -517,7 +517,7 @@ class MemoryIncidentStore:
                     self._incidents[key] = incident
                     timeline = self._append_event(
                         incident=incident,
-                        event_type="notification_activated",
+                        event_type="firing",
                         previous=previous.state,
                         actor_id=actor_id,
                         correlation_id=correlation_id,
@@ -1326,7 +1326,7 @@ class PostgresIncidentStore:
         incident_id: uuid.UUID,
         operation_id: uuid.UUID | str | None,
         notification_class: str | None,
-        scheduled_at: datetime | None,
+        notification_event_type: str | None,
         timeline_event_id: int,
         notification_kind: str,
     ) -> IncidentIngestionResult:
@@ -1354,8 +1354,7 @@ class PostgresIncidentStore:
                 "scheduled"
                 if notification_class == "grouped"
                 and operation is not None
-                and scheduled_at is not None
-                and scheduled_at > operation.created_at
+                and notification_event_type != "notification_repeat"
                 else "queued"
                 if operation is not None
                 else "state_only"
@@ -1485,7 +1484,7 @@ class PostgresIncidentStore:
                 replays = await conn.fetch(
                     """
                     SELECT e.incident_id,e.operation_id,e.payload_sha256,e.id,
-                           ni.notification_class,ni.scheduled_at,
+                           e.event_type,ni.notification_class,
                            e.event_key=$2 AS transition_match,
                            e.request_idempotency_key=$3 AS request_match
                     FROM middleware_observability_incident_events e
@@ -1517,7 +1516,7 @@ class PostgresIncidentStore:
                         incident_id=replay["incident_id"],
                         operation_id=replay["operation_id"],
                         notification_class=replay["notification_class"],
-                        scheduled_at=replay["scheduled_at"],
+                        notification_event_type=replay["event_type"],
                         timeline_event_id=replay["id"],
                         notification_kind=notification_kind,
                     )
@@ -1534,7 +1533,7 @@ class PostgresIncidentStore:
                     latest_notification = await conn.fetchrow(
                         """
                         SELECT ni.operation_id,ni.notification_class,ni.scheduled_at,
-                               e.id AS event_id
+                               e.id AS event_id,e.event_type
                         FROM middleware_observability_notification_intents ni
                         LEFT JOIN middleware_observability_incident_events e
                           ON e.tenant_id=ni.tenant_id
@@ -1570,7 +1569,7 @@ class PostgresIncidentStore:
                             incident_id=transition["incident_id"],
                             operation_id=replay["operation_id"],
                             notification_class=replay["notification_class"],
-                            scheduled_at=replay["scheduled_at"],
+                            notification_event_type=replay["event_type"],
                             timeline_event_id=(
                                 replay["event_id"]
                                 if latest_notification is not None
@@ -1723,6 +1722,11 @@ class PostgresIncidentStore:
                     notification_event_type = (
                         "notification_repeat"
                         if repeat_eligible
+                        else "firing"
+                    )
+                    notification_audit_action = (
+                        "notification_repeat"
+                        if repeat_eligible
                         else "notification_activated"
                     )
                     notification_event_key = (
@@ -1776,7 +1780,7 @@ class PostgresIncidentStore:
                         policy.tenant_id,
                         incident_id,
                         notification_event_id,
-                        notification_event_type,
+                        notification_audit_action,
                         actor_id,
                         previous["state"],
                         state,

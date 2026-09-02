@@ -67,8 +67,9 @@ queued immediately as a repeat. Delivery remains disabled by default. When
 enabled later, a firing incident that was previously recorded without a delivery
 intent is atomically given its first governed
 `observability.alert.email.send.v1` command, command audit/outbox, notification
-intent, and `notification_activated` timeline/audit evidence. Grouped warnings
-start their group wait at activation; immediate severities queue immediately.
+intent, a `firing` timeline event with an `activated_transition` identity, and a
+`notification_activated` audit record. Grouped warnings start their group wait
+at activation; immediate severities queue immediately.
 The provider adapter still
 requires read-back before authoritative completion. No direct SMTP path exists.
 If a warning resolves while its grouped notification is still waiting, the same

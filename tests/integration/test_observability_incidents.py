@@ -347,12 +347,17 @@ async def test_enabling_delivery_queues_an_existing_warning(
 
     async with pool.acquire() as conn:
         intent = await conn.fetchrow(
-            """SELECT ni.scheduled_at,c.created_at,o.next_attempt_at
+            """SELECT ni.scheduled_at,c.created_at,o.next_attempt_at,
+                      e.event_type,e.safe_metadata,a.action AS audit_action
                FROM middleware_observability_notification_intents ni
                JOIN middleware_commands c ON c.tenant_id=ni.tenant_id
                  AND c.command_id=ni.operation_id
                JOIN middleware_outbox o ON o.tenant_id=ni.tenant_id
                  AND o.command_id=ni.operation_id
+               JOIN middleware_observability_incident_events e
+                 ON e.tenant_id=ni.tenant_id AND e.operation_id=ni.operation_id
+               JOIN middleware_observability_incident_audit a
+                 ON a.tenant_id=e.tenant_id AND a.event_id=e.id
                WHERE ni.tenant_id=$1 AND ni.incident_id=$2""",
             TENANT_ID,
             activated.incident.incident_id,
@@ -360,6 +365,9 @@ async def test_enabling_delivery_queues_an_existing_warning(
     assert intent is not None
     assert intent["scheduled_at"] > intent["created_at"]
     assert intent["next_attempt_at"] == intent["scheduled_at"]
+    assert intent["event_type"] == "firing"
+    assert intent["audit_action"] == "notification_activated"
+    assert "activated_transition" in intent["safe_metadata"]
 
 
 @pytest.mark.asyncio

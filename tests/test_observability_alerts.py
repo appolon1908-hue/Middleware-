@@ -485,8 +485,11 @@ def test_delivery_activation_queues_a_previously_state_only_warning() -> None:
         )
         assert [event.event_type for event in timeline] == [
             "firing",
-            "notification_activated",
+            "firing",
         ]
+        assert timeline[-1].safe_metadata["activated_transition"].startswith(
+            "alert-transition-v1:"
+        )
 
     asyncio.run(scenario())
 

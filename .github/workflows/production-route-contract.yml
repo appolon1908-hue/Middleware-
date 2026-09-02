@@ -8,8 +8,134 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: production-route-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  exact-head-api-contract:
+    name: Certify exact-head API and generated contract parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact candidate head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact candidate identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'API_CONTRACT_SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+
+      - name: Build exact-source runtime image
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          build_time="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          docker build \
+            --file Dockerfile.runtime \
+            --target runtime \
+            --build-arg "SOURCE_REVISION=$SOURCE_SHA" \
+            --build-arg "SOURCE_VERSION=production-candidate-$SOURCE_SHA" \
+            --build-arg "BUILD_DATE=$build_time" \
+            --tag "codestra-middleware-route-candidate:$SOURCE_SHA" \
+            .
+
+      - name: Verify exact-source OCI identity
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(docker image inspect "codestra-middleware-route-candidate:$SOURCE_SHA" \
+            --format '{{index .Config.Labels "org.opencontainers.image.source"}}')" = \
+            'https://github.com/appolon1908-hue/Middleware-'
+          test "$(docker image inspect "codestra-middleware-route-candidate:$SOURCE_SHA" \
+            --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = \
+            "$SOURCE_SHA"
+
+      - name: Start exact-head candidate in an isolated network
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          docker pull python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
+          docker network create --internal middleware-exact-head-route-certification
+          docker run -d --name middleware-exact-head-route-certification \
+            --network middleware-exact-head-route-certification \
+            --read-only --tmpfs /tmp \
+            --env APP_ENV=development \
+            --env ALLOW_IN_MEMORY_STORAGE=true \
+            --env ODOO_WRITE=false \
+            --env LIVE_WRITE=false \
+            --env ENABLE_EXTERNAL_DELIVERY=false \
+            --env N8N_DELIVERY_ENABLED=false \
+            --env CALLBACK_DISPATCH=false \
+            --env LIVE_SMS_DELIVERY=false \
+            --env LIVE_EMAIL_DELIVERY=false \
+            --env LIVE_PSTN_DIALING=false \
+            --env PRODUCTION_DIALING=DISABLED \
+            "codestra-middleware-route-candidate:$SOURCE_SHA"
+          for attempt in $(seq 1 45); do
+            test "$(docker inspect middleware-exact-head-route-certification \
+              --format '{{.State.Health.Status}}')" = healthy && exit 0
+            sleep 1
+          done
+          docker logs middleware-exact-head-route-certification
+          exit 1
+
+      - name: Certify every generated API operation and fail-closed denial
+        run: |
+          set -Eeuo pipefail
+          docker run --rm \
+            --network middleware-exact-head-route-certification \
+            --volume "$PWD:/certification:ro" \
+            python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1 \
+            python /certification/scripts/certify_production_route_contract.py \
+              --base-url http://middleware-exact-head-route-certification:8080 \
+              --contract-file /certification/contracts/platform/middleware-openapi.generated.json \
+              --expect-operations-dashboard
+
+      - name: Prove API completion matrix remains classified and complete
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          text = pathlib.Path("config/api-completion-matrix.yaml").read_text(
+              encoding="utf-8"
+          )
+          assert re.search(r"(?m)^classification_complete: true$", text)
+          assert re.search(r"(?m)^unknown_endpoints: 0$", text)
+          for state in ("MISSING", "PARTIAL", "UNKNOWN"):
+              assert f"runtime_state: {state}" not in text
+          operations = len(re.findall(r"(?m)^- domain:", text))
+          assert operations > 0
+          print(f"API_COMPLETION_OPERATIONS={operations}")
+          print("API_COMPLETION_MATRIX=PASS")
+          PY
+
+      - name: Prove every provider effect remains disabled
+        run: |
+          docker inspect middleware-exact-head-route-certification \
+            --format '{{range .Config.Env}}{{println .}}{{end}}' |
+            python3 -c 'import sys; values=dict(line.rstrip().split("=",1) for line in sys.stdin if "=" in line); required=("ODOO_WRITE","LIVE_WRITE","ENABLE_EXTERNAL_DELIVERY","N8N_DELIVERY_ENABLED","CALLBACK_DISPATCH","LIVE_SMS_DELIVERY","LIVE_EMAIL_DELIVERY","LIVE_PSTN_DIALING"); assert all(values.get(name)=="false" for name in required); assert values.get("PRODUCTION_DIALING")=="DISABLED"; print("EXACT_HEAD_PROVIDER_EFFECTS_DISABLED=PASS")'
+
+      - name: Cleanup exact-head certification runtime
+        if: always()
+        run: |
+          docker rm -f middleware-exact-head-route-certification 2>/dev/null || true
+          docker network rm middleware-exact-head-route-certification 2>/dev/null || true
+
   signed-runtime-contract:
+    name: Preserve signed baseline runtime contract
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -63,7 +189,7 @@ jobs:
           docker logs middleware-route-certification
           exit 1
 
-      - name: Certify routes and unauthenticated denial
+      - name: Certify baseline routes and unauthenticated denial
         run: |
           docker run --rm \
             --network middleware-route-certification \

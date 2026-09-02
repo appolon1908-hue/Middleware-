@@ -45,15 +45,26 @@ def test_repository_name_aliases_are_exact_and_pre_cutover() -> None:
     assert aliases["identity_key"] == "github_repository_id"
     assert aliases["historical_evidence_immutable"] is True
 
+    mappings = aliases["mappings"]
+    assert len(mappings) == len(EXPECTED)
+
+    repository_ids = [item["github_repository_id"] for item in mappings]
+    assert len(repository_ids) == len(set(repository_ids)) == len(EXPECTED)
+
+    current_repositories = [item["current_repository"] for item in mappings]
+    target_repositories = [item["target_repository_after_cutover"] for item in mappings]
+    assert len(current_repositories) == len(set(current_repositories)) == len(EXPECTED)
+    assert len(target_repositories) == len(set(target_repositories)) == len(EXPECTED)
+
     actual = {
         item["github_repository_id"]: (
             item["current_repository"],
             item["target_repository_after_cutover"],
         )
-        for item in aliases["mappings"]
+        for item in mappings
     }
     assert actual == EXPECTED
-    assert all(item["status"] == "PREPARED_NOT_RENAMED" for item in aliases["mappings"])
+    assert all(item["status"] == "PREPARED_NOT_RENAMED" for item in mappings)
 
 
 def test_authority_registry_uses_current_names_and_records_targets() -> None:

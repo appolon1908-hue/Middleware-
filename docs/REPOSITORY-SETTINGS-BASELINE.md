@@ -83,9 +83,9 @@ Require:
 - No bypass actors
 
 Set required approvals to zero for now because the repository has one owner and
-GitHub does not allow an author to approve their own pull request. Production
-release approval remains independently enforced. Raise this to one as soon as a
-second trusted reviewer is added.
+GitHub does not allow an author to approve their own pull request. Exact-head
+automated gates remain mandatory; adding a reviewer later is optional and must
+not become a production-promotion dependency.
 
 ## Security and analysis
 
@@ -104,6 +104,12 @@ the protected branch, exact-head required checks, security and contract gates,
 resolved review conversations, immutable digest attribution, rollback evidence,
 and the read-only deployment policy. Mutable tags and live-write defaults remain
 forbidden.
+
+Only `.github/workflows/automated-production-promotion.yml` may reference the
+`production` environment. Required CI enforces that constraint. It admits only
+the exact protected-main artifact produced and verified by `release.yml`, and it
+records a read-only canary admission with business writes and all external
+effects disabled.
 
 No environment setting in this gate deploys code, restarts a service, changes
 DNS/TLS, creates provider credentials, or enables Odoo, SMS, email, PSTN,

@@ -115,18 +115,12 @@ def test_ruleset_rejects_duplicate_status_checks(policy: dict) -> None:
         ruleset_payload(broken)
 
 
-def test_production_environment_is_fail_closed() -> None:
+def test_production_environment_uses_automated_gates_without_reviewers() -> None:
     payload = environment_payload(
         {
             "wait_timer": 0,
-            "prevent_self_review": True,
-            "reviewers": [
-                {
-                    "type": "User",
-                    "id": 275410064,
-                    "login": "appolon1908-hue",
-                }
-            ],
+            "prevent_self_review": False,
+            "reviewers": [],
             "deployment_branch_policy": {
                 "protected_branches": False,
                 "custom_branch_policies": True,
@@ -134,8 +128,8 @@ def test_production_environment_is_fail_closed() -> None:
         }
     )
 
-    assert payload["prevent_self_review"] is True
-    assert payload["reviewers"] == [{"type": "User", "id": 275410064}]
+    assert payload["prevent_self_review"] is False
+    assert payload["reviewers"] == []
     assert payload["deployment_branch_policy"] == {
         "protected_branches": False,
         "custom_branch_policies": True,

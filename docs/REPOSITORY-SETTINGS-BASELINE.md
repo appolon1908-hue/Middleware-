@@ -99,10 +99,11 @@ Create `staging` and `production`. Both accept only the `main` branch.
 
 `staging` uses immutable digests and contains no live-write secret set true.
 
-`production` is deliberately fail-closed. Until a second trusted reviewer is
-added, the repository owner is the required reviewer and self-review is
-prevented. This blocks an owner-initiated deployment rather than weakening the
-independent-approval rule. Mutable tags and live-write defaults remain forbidden.
+`production` has no mandatory human reviewer. Promotion remains fail-closed on
+the protected branch, exact-head required checks, security and contract gates,
+resolved review conversations, immutable digest attribution, rollback evidence,
+and the read-only deployment policy. Mutable tags and live-write defaults remain
+forbidden.
 
 No environment setting in this gate deploys code, restarts a service, changes
 DNS/TLS, creates provider credentials, or enables Odoo, SMS, email, PSTN,

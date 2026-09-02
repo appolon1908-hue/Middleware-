@@ -40,7 +40,8 @@
     "enforcement": "active",
     "require_pull_request": true,
     "required_approvals": 0,
-    "reason_required_approvals_zero": "single-owner repository; requiring self-review causes a GitHub deadlock. Production release approval is enforced separately.",
+    "require_extra_approval_for_unattributed_changes": false,
+    "reason_required_approvals_zero": "automated promotion requires exact-head CI, security, contract, rollback, and deployment gates instead of mandatory human review.",
     "dismiss_stale_reviews": true,
     "require_review_thread_resolution": true,
     "require_linear_history": true,
@@ -50,6 +51,7 @@
     "block_deletions": true,
     "enforce_for_administrators": true,
     "required_status_checks": [
+      "validate",
       "Validate middleware source head",
       "Validate middleware merge result",
       "docker-runtime-build",
@@ -96,14 +98,8 @@
     },
     "production": {
       "wait_timer": 0,
-      "prevent_self_review": true,
-      "reviewers": [
-        {
-          "type": "User",
-          "id": 275410064,
-          "login": "appolon1908-hue"
-        }
-      ],
+      "prevent_self_review": false,
+      "reviewers": [],
       "deployment_branch_policy": {
         "protected_branches": false,
         "custom_branch_policies": true
@@ -121,7 +117,7 @@
     "live_writes_default": false,
     "odoo_write_default": false,
     "live_apply_authorized_default": false,
-    "production_release_requires_independent_human_approval": true,
+    "production_release_requires_independent_human_approval": false,
     "production_release_environment": "production"
   }
 }

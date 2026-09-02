@@ -67,6 +67,7 @@ Require:
 - Linear history
 - Branch up to date before merge
 - Status checks:
+  - `validate` (aggregate fail-closed result)
   - `Validate middleware source head`
   - `Validate middleware merge result`
   - `docker-runtime-build`
@@ -83,9 +84,9 @@ Require:
 - No bypass actors
 
 Set required approvals to zero for now because the repository has one owner and
-GitHub does not allow an author to approve their own pull request. Production
-release approval remains independently enforced. Raise this to one as soon as a
-second trusted reviewer is added.
+GitHub does not allow an author to approve their own pull request. Exact-head
+automated gates remain mandatory; adding a reviewer later is optional and must
+not become a production-promotion dependency.
 
 ## Security and analysis
 
@@ -99,10 +100,17 @@ Create `staging` and `production`. Both accept only the `main` branch.
 
 `staging` uses immutable digests and contains no live-write secret set true.
 
-`production` is deliberately fail-closed. Until a second trusted reviewer is
-added, the repository owner is the required reviewer and self-review is
-prevented. This blocks an owner-initiated deployment rather than weakening the
-independent-approval rule. Mutable tags and live-write defaults remain forbidden.
+`production` has no mandatory human reviewer. Promotion remains fail-closed on
+the protected branch, exact-head required checks, security and contract gates,
+resolved review conversations, immutable digest attribution, rollback evidence,
+and the read-only deployment policy. Mutable tags and live-write defaults remain
+forbidden.
+
+Only `.github/workflows/automated-production-promotion.yml` may reference the
+`production` environment. Required CI enforces that constraint. It admits only
+the exact protected-main artifact produced and verified by `release.yml`, and it
+records a read-only canary admission with business writes and all external
+effects disabled.
 
 No environment setting in this gate deploys code, restarts a service, changes
 DNS/TLS, creates provider credentials, or enables Odoo, SMS, email, PSTN,

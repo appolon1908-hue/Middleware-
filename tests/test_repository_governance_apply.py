@@ -97,6 +97,9 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     pull_request = rules["pull_request"]["parameters"]
     assert pull_request["allowed_merge_methods"] == ["squash"]
     assert pull_request["required_approving_review_count"] == 0
+    assert (
+        pull_request["require_extra_approval_for_unattributed_changes"] is False
+    )
     assert pull_request["required_review_thread_resolution"] is True
     status = rules["required_status_checks"]["parameters"]
     assert status["strict_required_status_checks_policy"] is True
@@ -115,18 +118,12 @@ def test_ruleset_rejects_duplicate_status_checks(policy: dict) -> None:
         ruleset_payload(broken)
 
 
-def test_production_environment_is_fail_closed() -> None:
+def test_production_environment_uses_automated_gates_without_reviewers() -> None:
     payload = environment_payload(
         {
             "wait_timer": 0,
-            "prevent_self_review": True,
-            "reviewers": [
-                {
-                    "type": "User",
-                    "id": 275410064,
-                    "login": "appolon1908-hue",
-                }
-            ],
+            "prevent_self_review": False,
+            "reviewers": [],
             "deployment_branch_policy": {
                 "protected_branches": False,
                 "custom_branch_policies": True,
@@ -134,8 +131,8 @@ def test_production_environment_is_fail_closed() -> None:
         }
     )
 
-    assert payload["prevent_self_review"] is True
-    assert payload["reviewers"] == [{"type": "User", "id": 275410064}]
+    assert payload["prevent_self_review"] is False
+    assert payload["reviewers"] == []
     assert payload["deployment_branch_policy"] == {
         "protected_branches": False,
         "custom_branch_policies": True,

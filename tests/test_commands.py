@@ -244,11 +244,12 @@ def test_command_api_accepts_duplicate_and_serves_tenant_scoped_status(
         first = client.post("/v1/commands", json=body, headers=headers)
         assert first.status_code == 202, first.text
         assert first.headers["location"] == f"/v1/operations/{body['command_id']}"
-        assert first.json()["state"] == "persisted"
+        assert first.json()["state"] == "RECEIVED"
 
         duplicate = client.post("/v1/commands", json=body, headers=headers)
         assert duplicate.status_code == 200, duplicate.text
         assert duplicate.json()["duplicate"] is True
+        assert duplicate.json()["state"] == "RECEIVED"
 
         status = client.get(
             f"/v1/operations/{body['command_id']}",

@@ -27,7 +27,7 @@ from .config import RuntimeSettings, get_settings
 from .crypto import EncryptedBodyStore
 from .cursor import CursorCodec
 from .database import Database
-from .problems import ProblemError, install_problem_handlers
+from .problems import ProblemError, install_problem_handlers, problem_response
 from .repository import ConnectorRepository, IdempotentReplay, _etag_version
 from .schemas import (
     ConnectionCreateRequest,
@@ -38,7 +38,11 @@ from .schemas import (
     WebhookRotateRequest,
     WebhookUpdateRequest,
 )
-from .webhook_ingress import EnvironmentSecretResolver, WebhookIngressService
+from .webhook_ingress import (
+    EnvironmentSecretResolver,
+    WebhookIngressService,
+    read_limited_body,
+)
 
 _CORRELATION = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
@@ -228,6 +232,27 @@ def create_app() -> FastAPI:
             else uuid4()
         )
         request.state.correlation_id = correlation_id
+        path_parts = request.url.path.strip("/").split("/")
+        public_webhook = (
+            len(path_parts) == 5
+            and path_parts[:2] == ["v1", "webhooks"]
+        )
+        if (
+            request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and request.url.path.startswith("/v1/")
+            and not public_webhook
+        ):
+            try:
+                body = await read_limited_body(
+                    request,
+                    maximum_bytes=_settings(request).maximum_management_body_bytes,
+                    error_code="MANAGEMENT_BODY_TOO_LARGE",
+                    error_title="Management request body too large",
+                    error_detail="The request body exceeds the management API limit.",
+                )
+                setattr(request, "_body", body)
+            except ProblemError as error:
+                return problem_response(request, error)
         response = await call_next(request)
         response.headers["X-Correlation-ID"] = str(correlation_id)
         response.headers["X-Content-Type-Options"] = "nosniff"

@@ -108,7 +108,7 @@ def validate_runtime_safety(
         raise AcceptanceError("deployed source SHA does not match the approved release")
     if release["image_digest"] != expected_image_digest:
         raise AcceptanceError("deployed image digest does not match the approved release")
-    if release["schema_head"] != "0004_operation_control":
+    if release["schema_head"] != "0005_durable_control_api":
         raise AcceptanceError("deployed migration head is not current")
     if persistence != {"in_memory": False}:
         raise AcceptanceError("staging must use durable persistence")

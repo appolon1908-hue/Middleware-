@@ -24,6 +24,7 @@ from .communications import (
     Paged,
 )
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
+from .control_api import router as control_api_router
 from .control_plane_auth import authorize_command, caller_for_authorization
 from .lead_intake import (
     INTAKE_PRODUCER_CLIENT_ID,
@@ -143,6 +144,7 @@ def create_app(
     app.include_router(n8n_control_plane_router)
     app.include_router(operations_dashboard_router)
     app.include_router(operations_router)
+    app.include_router(control_api_router)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):

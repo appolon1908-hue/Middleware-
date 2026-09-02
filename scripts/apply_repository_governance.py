@@ -110,6 +110,9 @@ def ruleset_payload(policy: Mapping[str, Any]) -> dict[str, Any]:
                         "dismiss_stale_reviews"
                     ],
                     "require_code_owner_review": False,
+                    "require_extra_approval_for_unattributed_changes": encoded.get(
+                        "require_extra_approval_for_unattributed_changes", False
+                    ),
                     "require_last_push_approval": False,
                     "required_approving_review_count": encoded[
                         "required_approvals"

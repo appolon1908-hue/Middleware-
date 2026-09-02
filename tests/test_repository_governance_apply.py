@@ -97,6 +97,9 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     pull_request = rules["pull_request"]["parameters"]
     assert pull_request["allowed_merge_methods"] == ["squash"]
     assert pull_request["required_approving_review_count"] == 0
+    assert (
+        pull_request["require_extra_approval_for_unattributed_changes"] is False
+    )
     assert pull_request["required_review_thread_resolution"] is True
     status = rules["required_status_checks"]["parameters"]
     assert status["strict_required_status_checks_policy"] is True

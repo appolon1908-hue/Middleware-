@@ -40,6 +40,7 @@
     "enforcement": "active",
     "require_pull_request": true,
     "required_approvals": 0,
+    "require_extra_approval_for_unattributed_changes": false,
     "reason_required_approvals_zero": "automated promotion requires exact-head CI, security, contract, rollback, and deployment gates instead of mandatory human review.",
     "dismiss_stale_reviews": true,
     "require_review_thread_resolution": true,

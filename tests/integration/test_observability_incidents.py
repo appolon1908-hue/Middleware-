@@ -187,7 +187,6 @@ async def test_incident_command_and_notification_commit_atomically(
             )
         }
     assert counts == {table: 1 for table in counts}
-
     acknowledged = await incidents.store.mutate(
         TENANT_ID,
         first.incident.incident_id,
@@ -301,6 +300,69 @@ async def test_incident_command_and_notification_commit_atomically(
 
 
 @pytest.mark.asyncio
+async def test_enabling_delivery_queues_an_existing_warning(
+    pool: asyncpg.Pool,
+) -> None:
+    commands, enabled = services(pool)
+    disabled = IncidentService(
+        store=enabled.store,
+        commands=commands,
+        policy=policy(),
+        delivery_enabled=False,
+    )
+    item = alert(fingerprint="incident-delivery-activation-0001", severity="warning")
+    first = await disabled.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-delivery-disabled-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-delivery-disabled-request-0001",
+    )
+    assert first.operation is None
+    assert first.notification_status == "disabled"
+
+    activated = await enabled.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-delivery-enabled-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-delivery-enabled-request-0001",
+    )
+    assert activated.operation is not None
+    assert activated.notification_status == "scheduled"
+    replay = await enabled.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-delivery-enabled-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-delivery-enabled-request-0001",
+    )
+    assert replay.operation is not None
+    assert replay.operation.command_id == activated.operation.command_id
+    assert replay.notification_status == "scheduled"
+    assert replay.duplicate is True
+
+    async with pool.acquire() as conn:
+        intent = await conn.fetchrow(
+            """SELECT ni.scheduled_at,c.created_at,o.next_attempt_at
+               FROM middleware_observability_notification_intents ni
+               JOIN middleware_commands c ON c.tenant_id=ni.tenant_id
+                 AND c.command_id=ni.operation_id
+               JOIN middleware_outbox o ON o.tenant_id=ni.tenant_id
+                 AND o.command_id=ni.operation_id
+               WHERE ni.tenant_id=$1 AND ni.incident_id=$2""",
+            TENANT_ID,
+            activated.incident.incident_id,
+        )
+    assert intent is not None
+    assert intent["scheduled_at"] > intent["created_at"]
+    assert intent["next_attempt_at"] == intent["scheduled_at"]
+
+
+@pytest.mark.asyncio
 async def test_command_conflict_rolls_back_incident_projection(
     pool: asyncpg.Pool,
 ) -> None:
@@ -404,6 +466,7 @@ async def test_warning_repeat_uses_persisted_schedule(
     assert replay.duplicate is True
     assert replay.operation is not None
     assert replay.operation.command_id == repeated.operation.command_id
+    assert replay.notification_status == "queued"
 
     attempts = await incidents.store.list_notification_attempts(
         TENANT_ID,

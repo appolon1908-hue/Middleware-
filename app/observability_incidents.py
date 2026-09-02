@@ -235,6 +235,12 @@ def suppressed_event_identity(request_key: str) -> str:
     ).hexdigest()
 
 
+def activation_event_identity(request_key: str) -> str:
+    return "alert-activation-event-v1:" + hashlib.sha256(
+        request_key.encode("utf-8")
+    ).hexdigest()
+
+
 def repeat_command(command: CommandEnvelope, request_key: str) -> CommandEnvelope:
     idempotency_key = "obs-alert-repeat-v1:" + hashlib.sha256(
         f"{command.idempotency_key}\n{request_key}".encode("utf-8")
@@ -476,6 +482,88 @@ class MemoryIncidentStore:
                 incident_id = incident_identity(policy.tenant_id, alert.fingerprint)
                 key = (policy.tenant_id, incident_id)
                 notifications = self._notifications.get(key, [])
+                if (
+                    alert.status == "firing"
+                    and command is not None
+                    and not notifications
+                ):
+                    previous = self._incidents[key]
+                    command = build_command(
+                        policy=policy,
+                        alert=alert,
+                        group_key=group_key,
+                        receiver=policy.receiver,
+                        actor=actor_id,
+                        correlation_id=correlation_id,
+                        incident_id=incident_id,
+                        first_seen_at=previous.first_seen_at,
+                    )
+                    operation = await self.commands.store.submit(
+                        command,
+                        authenticated_client_id=authenticated_client_id,
+                    )
+                    state, _ = next_incident_state(previous.state, alert.status)
+                    incident = previous.model_copy(
+                        update={
+                            "state": state,
+                            "last_seen_at": now,
+                            "source_deployment": source_deployment,
+                            "correlation_id": correlation_id,
+                            "resource_version": previous.resource_version + 1,
+                            "updated_at": now,
+                            "duplicate": False,
+                        }
+                    )
+                    self._incidents[key] = incident
+                    timeline = self._append_event(
+                        incident=incident,
+                        event_type="notification_activated",
+                        previous=previous.state,
+                        actor_id=actor_id,
+                        correlation_id=correlation_id,
+                        source_deployment=source_deployment,
+                        operation_id=operation.command_id,
+                        metadata={
+                            "event_key": activation_event_identity(request_key),
+                            "payload_sha256": payload_digest,
+                            "activated_transition": event_key,
+                        },
+                        occurred_at=now,
+                    )
+                    scheduled_at = now + timedelta(
+                        seconds=(
+                            policy.warning_group_wait_seconds
+                            if notification_kind == "grouped"
+                            else 0
+                        )
+                    )
+                    self._notification_sequence += 1
+                    self._notifications.setdefault(key, []).append(
+                        (
+                            self._notification_sequence,
+                            operation.command_id,
+                            notification_kind,
+                            scheduled_at,
+                        )
+                    )
+                    result = IncidentIngestionResult(
+                        incident=incident,
+                        operation=operation,
+                        notification_status=(
+                            "scheduled"
+                            if notification_kind == "grouped"
+                            else "queued"
+                        ),
+                        timeline_event_id=timeline.event_id,
+                        duplicate=False,
+                    )
+                    entry = (payload_digest, result)
+                    self._event_replays[f"{policy.tenant_id}:{event_key}"] = entry
+                    self._event_replays[
+                        f"{policy.tenant_id}:{activation_event_identity(request_key)}"
+                    ] = entry
+                    self._event_replays[f"{policy.tenant_id}:{request_key}"] = entry
+                    return result
                 repeat_eligible = (
                     alert.status == "firing"
                     and notification_kind == "grouped"
@@ -1238,6 +1326,7 @@ class PostgresIncidentStore:
         incident_id: uuid.UUID,
         operation_id: uuid.UUID | str | None,
         notification_class: str | None,
+        scheduled_at: datetime | None,
         timeline_event_id: int,
         notification_kind: str,
     ) -> IncidentIngestionResult:
@@ -1263,7 +1352,10 @@ class PostgresIncidentStore:
             ),
             notification_status=(
                 "scheduled"
-                if notification_class == "grouped" and operation is not None
+                if notification_class == "grouped"
+                and operation is not None
+                and scheduled_at is not None
+                and scheduled_at > operation.created_at
                 else "queued"
                 if operation is not None
                 else "state_only"
@@ -1393,7 +1485,7 @@ class PostgresIncidentStore:
                 replays = await conn.fetch(
                     """
                     SELECT e.incident_id,e.operation_id,e.payload_sha256,e.id,
-                           ni.notification_class,
+                           ni.notification_class,ni.scheduled_at,
                            e.event_key=$2 AS transition_match,
                            e.request_idempotency_key=$3 AS request_match
                     FROM middleware_observability_incident_events e
@@ -1425,6 +1517,7 @@ class PostgresIncidentStore:
                         incident_id=replay["incident_id"],
                         operation_id=replay["operation_id"],
                         notification_class=replay["notification_class"],
+                        scheduled_at=replay["scheduled_at"],
                         timeline_event_id=replay["id"],
                         notification_kind=notification_kind,
                     )
@@ -1453,6 +1546,11 @@ class PostgresIncidentStore:
                         transition["incident_id"],
                     )
                     now = datetime.now(UTC)
+                    activation_eligible = (
+                        alert.status == "firing"
+                        and command is not None
+                        and latest_notification is None
+                    )
                     repeat_eligible = (
                         alert.status == "firing"
                         and notification_kind == "grouped"
@@ -1464,7 +1562,7 @@ class PostgresIncidentStore:
                             seconds=policy.warning_repeat_interval_seconds
                         )
                     )
-                    if not repeat_eligible:
+                    if not repeat_eligible and not activation_eligible:
                         replay = latest_notification or transition
                         replay_result = await self._replay_result(
                             conn,
@@ -1472,6 +1570,7 @@ class PostgresIncidentStore:
                             incident_id=transition["incident_id"],
                             operation_id=replay["operation_id"],
                             notification_class=replay["notification_class"],
+                            scheduled_at=replay["scheduled_at"],
                             timeline_event_id=(
                                 replay["event_id"]
                                 if latest_notification is not None
@@ -1584,28 +1683,54 @@ class PostgresIncidentStore:
                         correlation_id,
                     )
                     assert row is not None
-                    repeated = repeat_command(command, request_key)
+                    queued_command = (
+                        repeat_command(command, request_key)
+                        if repeat_eligible
+                        else command
+                    )
+                    scheduled_at = (
+                        now
+                        if repeat_eligible
+                        else now
+                        + timedelta(
+                            seconds=(
+                                policy.warning_group_wait_seconds
+                                if notification_kind == "grouped"
+                                else 0
+                            )
+                        )
+                    )
                     operation = await self.command_store.submit_on_connection(
                         conn,
-                        repeated,
+                        queued_command,
                         authenticated_client_id=authenticated_client_id,
-                        next_attempt_at=now,
+                        next_attempt_at=scheduled_at,
                     )
                     await conn.execute(
                         """
                         INSERT INTO middleware_observability_notification_intents (
                           tenant_id,incident_id,operation_id,notification_class,
                           idempotency_key,scheduled_at
-                        ) VALUES ($1,$2,$3,'grouped',$4,$5)
+                        ) VALUES ($1,$2,$3,$4,$5,$6)
                         """,
                         policy.tenant_id,
                         incident_id,
                         str(operation.command_id),
-                        repeated.idempotency_key,
-                        now,
+                        notification_kind,
+                        queued_command.idempotency_key,
+                        scheduled_at,
                     )
-                    repeat_key = repeat_event_identity(request_key)
-                    repeat_event_id = await conn.fetchval(
+                    notification_event_type = (
+                        "notification_repeat"
+                        if repeat_eligible
+                        else "notification_activated"
+                    )
+                    notification_event_key = (
+                        repeat_event_identity(request_key)
+                        if repeat_eligible
+                        else activation_event_identity(request_key)
+                    )
+                    notification_event_id = await conn.fetchval(
                         """
                         INSERT INTO middleware_observability_incident_events (
                           tenant_id,incident_id,event_key,request_idempotency_key,
@@ -1613,14 +1738,15 @@ class PostgresIncidentStore:
                           source_deployment,operation_id,payload_sha256,safe_metadata,
                           occurred_at
                         ) VALUES (
-                          $1,$2,$3,$4,'notification_repeat',$5,$6,$7,$8,$9,$10,$11,
-                          $12::jsonb,$13
+                          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+                          $13::jsonb,$14
                         ) RETURNING id
                         """,
                         policy.tenant_id,
                         incident_id,
-                        repeat_key,
+                        notification_event_key,
                         request_key,
+                        notification_event_type,
                         previous["state"],
                         state,
                         actor_id,
@@ -1629,7 +1755,13 @@ class PostgresIncidentStore:
                         str(operation.command_id),
                         payload_digest,
                         json.dumps(
-                            {"repeat_of_transition": event_key},
+                            {
+                                (
+                                    "repeat_of_transition"
+                                    if repeat_eligible
+                                    else "activated_transition"
+                                ): event_key
+                            },
                             separators=(",", ":"),
                         ),
                         now,
@@ -1639,25 +1771,37 @@ class PostgresIncidentStore:
                         INSERT INTO middleware_observability_incident_audit (
                           tenant_id,incident_id,event_id,action,actor_id,
                           previous_state,new_state,correlation_id,safe_metadata
-                        ) VALUES ($1,$2,$3,'notification_repeat',$4,$5,$6,$7,$8::jsonb)
+                        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
                         """,
                         policy.tenant_id,
                         incident_id,
-                        repeat_event_id,
+                        notification_event_id,
+                        notification_event_type,
                         actor_id,
                         previous["state"],
                         state,
                         correlation_id,
                         json.dumps(
-                            {"repeat_of_transition": event_key},
+                            {
+                                (
+                                    "repeat_of_transition"
+                                    if repeat_eligible
+                                    else "activated_transition"
+                                ): event_key
+                            },
                             separators=(",", ":"),
                         ),
                     )
                     return IncidentIngestionResult(
                         incident=self._incident(row),
                         operation=operation,
-                        notification_status="queued",
-                        timeline_event_id=repeat_event_id,
+                        notification_status=(
+                            "scheduled"
+                            if activation_eligible
+                            and notification_kind == "grouped"
+                            else "queued"
+                        ),
+                        timeline_event_id=notification_event_id,
                         duplicate=False,
                     )
 

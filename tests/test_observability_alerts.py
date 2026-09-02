@@ -18,9 +18,17 @@ from app.commands import (
     MemoryCommandStore,
 )
 from app.config import Settings
-from app.observability_alert_contract import AlertmanagerWebhook, build_command
+from app.observability_alert_contract import (
+    AlertmanagerAlert,
+    AlertmanagerWebhook,
+    build_command,
+)
 from app.observability_alerts import AlertPolicy, create_app
-from app.observability_incidents import incident_identity
+from app.observability_incidents import (
+    IncidentService,
+    MemoryIncidentStore,
+    incident_identity,
+)
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
@@ -413,6 +421,74 @@ def test_alert_delivery_capability_defaults_fail_closed() -> None:
         assert capabilities.status_code == 200
         assert capabilities.json()["OBSERVABILITY_ALERT_EMAIL_DELIVERY"] is False
         assert capabilities.json()["direct_smtp_allowed"] is False
+
+
+def test_delivery_activation_queues_a_previously_state_only_warning() -> None:
+    async def scenario() -> None:
+        shared_runtime = runtime(active=True)
+        assert shared_runtime.commands is not None
+        store = MemoryIncidentStore(shared_runtime.commands)
+        disabled = IncidentService(
+            store=store,
+            commands=shared_runtime.commands,
+            policy=policy(),
+            delivery_enabled=False,
+        )
+        enabled = IncidentService(
+            store=store,
+            commands=shared_runtime.commands,
+            policy=policy(),
+            delivery_enabled=True,
+        )
+        value = webhook()["alerts"][0]
+        value["labels"]["severity"] = "warning"
+        item = AlertmanagerAlert.model_validate(value)
+        first = await disabled.ingest(
+            group_key=webhook()["groupKey"],
+            alert=item,
+            actor_id="service-account-alertmanager-service",
+            correlation_id="activation-disabled-correlation-0001",
+            source_deployment="alertmanager-test-1",
+            request_idempotency_key="activation-disabled-request-0001",
+        )
+        assert first.operation is None
+        assert first.notification_status == "disabled"
+
+        activated = await enabled.ingest(
+            group_key=webhook()["groupKey"],
+            alert=item,
+            actor_id="service-account-alertmanager-service",
+            correlation_id="activation-enabled-correlation-0001",
+            source_deployment="alertmanager-test-1",
+            request_idempotency_key="activation-enabled-request-0001",
+        )
+        assert activated.operation is not None
+        assert activated.notification_status == "scheduled"
+        assert activated.duplicate is False
+        replay = await enabled.ingest(
+            group_key=webhook()["groupKey"],
+            alert=item,
+            actor_id="service-account-alertmanager-service",
+            correlation_id="activation-enabled-correlation-0001",
+            source_deployment="alertmanager-test-1",
+            request_idempotency_key="activation-enabled-request-0001",
+        )
+        assert replay.operation is not None
+        assert replay.operation.command_id == activated.operation.command_id
+        assert replay.notification_status == "scheduled"
+        assert replay.duplicate is True
+        timeline = await store.list_timeline(
+            policy().tenant_id,
+            activated.incident.incident_id,
+            limit=10,
+            after_event_id=None,
+        )
+        assert [event.event_type for event in timeline] == [
+            "firing",
+            "notification_activated",
+        ]
+
+    asyncio.run(scenario())
 
 
 def test_incident_lifecycle_is_tenant_scoped_audited_and_idempotent() -> None:

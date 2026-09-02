@@ -62,9 +62,14 @@ notification schedule plus the repeat interval. Before that boundary the new
 transport identity is durably recorded as `notification_suppressed`; after it, a
 deterministic `notification_repeat` command, intent, timeline event, and audit
 entry commit atomically. Replaying either transport identity returns its original
-decision. Delivery remains disabled by default. When enabled later, the incident
-transaction creates a governed `observability.alert.email.send.v1` command, its
-command audit/outbox, and a notification intent. The provider adapter still
+decision, including whether a grouped notification is still scheduled or was
+queued immediately as a repeat. Delivery remains disabled by default. When
+enabled later, a firing incident that was previously recorded without a delivery
+intent is atomically given its first governed
+`observability.alert.email.send.v1` command, command audit/outbox, notification
+intent, and `notification_activated` timeline/audit evidence. Grouped warnings
+start their group wait at activation; immediate severities queue immediately.
+The provider adapter still
 requires read-back before authoritative completion. No direct SMTP path exists.
 If a warning resolves while its grouped notification is still waiting, the same
 transaction cancels the pending firing command and outbox record before creating

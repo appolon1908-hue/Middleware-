@@ -1,0 +1,73 @@
+name: Apply provider control completion on current main
+
+on:
+  push:
+    branches:
+      - chatgpt/provider-control-completion-20260902
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-provider-control-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out current-main feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: chatgpt/provider-control-completion-20260902
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Verify and three-way apply tested source patch
+        run: |
+          set -Eeuo pipefail
+          cat .remediation/patch.00 .remediation/patch.01 .remediation/patch.02 .remediation/patch.03 .remediation/patch.04 .remediation/patch.05 \
+            | base64 --decode > "$RUNNER_TEMP/middleware-remediation.patch.gz"
+          gzip -dc "$RUNNER_TEMP/middleware-remediation.patch.gz" > "$RUNNER_TEMP/middleware-remediation.patch"
+          echo "627000ec850a885cc12b4a5446cf157c7d4488301cef866dff3a38a3fe76160d  $RUNNER_TEMP/middleware-remediation.patch" | sha256sum -c -
+          git apply --3way --index "$RUNNER_TEMP/middleware-remediation.patch"
+          rm -rf .remediation
+          rm -f .github/workflows/apply-provider-control-completion.yml
+          git add -A
+          git diff --cached --check
+
+      - name: Regenerate exact runtime contracts on current main
+        run: |
+          set -Eeuo pipefail
+          python -m venv .venv-rebase
+          .venv-rebase/bin/python -m pip install --disable-pip-version-check --require-hashes -r requirements-test.txt
+          .venv-rebase/bin/python scripts/generate_api_contracts.py
+          git add contracts/platform/middleware-openapi.generated.json \
+                  contracts/platform/integration-fabric-api.v2.yaml \
+                  config/api-completion-matrix.yaml
+          git diff --cached --check
+
+      - name: Run complete locked source certification
+        run: |
+          set -Eeuo pipefail
+          bash scripts/run_ci.sh
+          git diff --check
+          git diff --cached --check
+
+      - name: Commit and push clean rebased source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          git config user.name "ChatGPT repository remediation"
+          git config user.email "noreply@openai.com"
+          git commit -m "feat: complete provider control contracts and safe operation retry"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/chatgpt/provider-control-completion-20260902"

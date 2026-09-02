@@ -111,6 +111,7 @@ async def test_email_unknown_outcome_reconciles_without_resubmission() -> None:
                     idempotency_key="email-idempotency-final",
                     capability="EMAIL_DELIVERY",
                     payload={"message_id": "message-final"},
+                    authenticated_client_id="test-client",
                 ),
                 id="test-final-email-command-unknown-outcome",
                 task_queue=TASK_QUEUE,

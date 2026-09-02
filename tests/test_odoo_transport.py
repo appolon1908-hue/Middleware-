@@ -451,6 +451,7 @@ def test_source_scoped_delivery_cannot_outrun_the_write_capability() -> None:
 
 def test_fully_configured_odoo_delivery_validates() -> None:
     settings = settings_for(
+        EXTERNAL_DELIVERY_ENABLED="true",
         ODOO_WRITE="true",
         FORM_ODOO_DELIVERY_ENABLED="true",
         ODOO_19_BASE_URL=BASE_URL,
@@ -464,6 +465,7 @@ def test_fully_configured_odoo_delivery_validates() -> None:
 
 def test_source_scoped_delivery_requires_the_matching_gate() -> None:
     settings = settings_for(
+        EXTERNAL_DELIVERY_ENABLED="true",
         ODOO_WRITE="true",
         CRAWLER_ODOO_DELIVERY_ENABLED="true",
         ODOO_19_BASE_URL=BASE_URL,
@@ -476,6 +478,7 @@ def test_source_scoped_delivery_requires_the_matching_gate() -> None:
 
 def test_per_tenant_secret_map_is_parsed_and_preferred() -> None:
     settings = settings_for(
+        EXTERNAL_DELIVERY_ENABLED="true",
         ODOO_WRITE="true",
         ODOO_19_BASE_URL=BASE_URL,
         ODOO_19_HMAC_SECRET=LONG_SECRET,

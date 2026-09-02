@@ -7,18 +7,20 @@ from uuid import uuid4
 import pytest
 from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 
-from app.commands import TEMPORAL_COMMAND_DESTINATION
+from app.commands import AUTHENTICATED_CLIENT_ID_KEY, TEMPORAL_COMMAND_DESTINATION
 from app.storage import OutboxRecord
 from app.temporal_transport import (
     TemporalCommandDispatcher,
     TemporalTransportError,
     command_workflow_id,
 )
+from app.temporal_workflows import CommandExecutionRequest
 
 
 def command_record() -> OutboxRecord:
     command_id = str(uuid4())
     payload = {
+        AUTHENTICATED_CLIENT_ID_KEY: "n8n-automation",
         "command_id": command_id,
         "command_type": "crm.contact.create.v1",
         "command_version": "1.0",
@@ -60,6 +62,7 @@ async def test_command_dispatch_uses_deterministic_exactly_once_workflow_identit
     assert len(client.calls) == 1
     _, request, options = client.calls[0]
     assert request.tenant_id == record.tenant_id
+    assert request.authenticated_client_id == "n8n-automation"
     assert options["id"] == command_workflow_id(
         record.tenant_id,
         record.payload["command_id"],
@@ -92,3 +95,31 @@ async def test_retry_dispatch_resumes_from_durable_queued_state() -> None:
     await dispatcher.dispatch(record)
 
     assert client.calls[0][1].resume_from_queued is True
+
+
+@pytest.mark.asyncio
+async def test_command_dispatch_rejects_missing_authenticated_client_provenance() -> None:
+    client = RecordingTemporalClient()
+    dispatcher = TemporalCommandDispatcher(client, "codestra-test-critical")  # type: ignore[arg-type]
+    record = command_record()
+    del record.payload[AUTHENTICATED_CLIENT_ID_KEY]
+    with pytest.raises(TemporalTransportError, match="client provenance"):
+        await dispatcher.dispatch(record)
+    assert client.calls == []
+
+
+def test_legacy_workflow_payload_deserializes_with_fail_closed_provenance() -> None:
+    request = CommandExecutionRequest(
+        command_id="command-legacy-1",
+        command_type="crm.lead.upsert",
+        command_version="1.0",
+        target="odoo-19",
+        tenant_id="tenant-1",
+        requested_by="user-1",
+        correlation_id="correlation-legacy-1",
+        idempotency_key="idempotency-legacy-1",
+        capability="ODOO_WRITE",
+        payload={"source_record_id": "lead-1"},
+    )
+
+    assert request.authenticated_client_id == ""

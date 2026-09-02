@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from .commands import CommandEnvelope
+from .commands import CommandCapabilityDisabled, CommandEnvelope
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .storage import StorageError
@@ -74,9 +74,15 @@ async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSON
     if not isinstance(subject, str) or not subject:
         raise AuthorizationError("token subject is required for commands")
     _validate_destination_contract(command)
+    if (
+        active.settings.umbrella_controls.get("N8N_EXTERNAL_PROVIDER_WRITES")
+        is not True
+    ):
+        raise CommandCapabilityDisabled("N8N_EXTERNAL_PROVIDER_WRITES is disabled")
     operation = await active.commands.submit(
         command,
         authenticated_subject=subject,
+        authenticated_client_id="n8n-automation",
     )
     status_code = 200 if operation.duplicate else 202
     headers = {

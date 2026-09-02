@@ -254,6 +254,7 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                 idempotency_key="idempotency-1",
                 capability="ODOO_WRITE",
                 payload={"contact_id": "contact-1"},
+                authenticated_client_id="test-client",
             )
             command = await environment.client.execute_workflow(
                 CommandExecutionWorkflow.run,
@@ -300,6 +301,7 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                     idempotency_key="email-idempotency-1",
                     capability="EMAIL_DELIVERY",
                     payload={"message_id": "message-1"},
+                    authenticated_client_id="test-client",
                 ),
                 id="test-email-command-unknown-outcome",
                 task_queue=TASK_QUEUE,
@@ -351,6 +353,7 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                     idempotency_key="sms-idempotency-1",
                     capability="SMS_DELIVERY",
                     payload={"message_id": "message-2"},
+                    authenticated_client_id="test-client",
                 ),
                 id="test-sms-command-unknown-outcome",
                 task_queue=TASK_QUEUE,

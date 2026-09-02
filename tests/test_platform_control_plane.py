@@ -126,15 +126,22 @@ def _body() -> dict[str, Any]:
 def test_legacy_n8n_control_plane_submit_and_status_remain_tenant_scoped(
     test_settings,
 ) -> None:
+    settings = replace(
+        test_settings,
+        umbrella_controls={
+            **test_settings.umbrella_controls,
+            "N8N_EXTERNAL_PROVIDER_WRITES": True,
+        },
+    )
     runtime = Runtime(
-        settings=test_settings,
+        settings=settings,
         inbox=MemoryInboxStore(),
         replay=MemoryReplayGuard(),
         tokens=N8nTokenVerifier(),
         commands=CommandService(MemoryCommandStore(), _policy()),
     )
     body = _body()
-    app = create_app(settings=test_settings, runtime=runtime)
+    app = create_app(settings=settings, runtime=runtime)
     with TestClient(app) as client:
         submitted = client.post(
             "/v1/integrations/n8n/commands",
@@ -176,6 +183,7 @@ def _request(command_type: str = "crm.lead.upsert") -> CommandExecutionRequest:
         idempotency_key="idem-platform-control-plane",
         capability="ODOO_WRITE",
         payload=_payload(),
+        authenticated_client_id="n8n-automation",
     )
 
 
@@ -183,6 +191,7 @@ def _adapter() -> OdooProviderAdapter:
     settings = SimpleNamespace(
         app_env="test",
         external_effects={"ODOO_WRITE": True},
+        umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
         odoo_source_delivery_enabled=lambda method: method == "submitted_by_person",
     )
     return OdooProviderAdapter(
@@ -198,6 +207,7 @@ def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
     settings = SimpleNamespace(
         app_env="test",
         external_effects={"ODOO_WRITE": False},
+        umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
         odoo_source_delivery_enabled=lambda method: False,
     )
     adapter = OdooProviderAdapter(settings, {})
@@ -205,10 +215,40 @@ def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
         adapter._require_active(_request())
 
 
+def test_odoo_adapter_rechecks_n8n_kill_switch_at_execution() -> None:
+    settings = SimpleNamespace(
+        app_env="test",
+        external_effects={"ODOO_WRITE": True},
+        umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": False},
+        odoo_source_delivery_enabled=lambda method: method == "submitted_by_person",
+    )
+    adapter = OdooProviderAdapter(settings, {})
+    with pytest.raises(
+        OdooProviderAdapterError,
+        match="N8N_EXTERNAL_PROVIDER_WRITES is disabled",
+    ):
+        adapter._require_active(_request())
+
+    adapter._require_active(
+        replace(_request(), authenticated_client_id="moneybee-backend")
+    )
+
+
+def test_odoo_adapter_rejects_legacy_workflow_without_client_provenance() -> None:
+    with pytest.raises(
+        OdooProviderAdapterError,
+        match="authenticated client provenance is missing or invalid",
+    ):
+        _adapter()._require_active(
+            replace(_request(), authenticated_client_id="")
+        )
+
+
 def test_odoo_adapter_enforces_canonical_source_gate_on_legacy_temporal_rows() -> None:
     settings = SimpleNamespace(
         app_env="test",
         external_effects={"ODOO_WRITE": True},
+        umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
         odoo_source_delivery_enabled=lambda method: method == "submitted_by_person",
     )
     adapter = OdooProviderAdapter(settings, {})
@@ -224,6 +264,7 @@ def test_odoo_readback_identity_validation_does_not_require_write_gate() -> None
     settings = SimpleNamespace(
         app_env="test",
         external_effects={"ODOO_WRITE": False},
+        umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
         odoo_source_delivery_enabled=lambda method: False,
     )
     adapter = OdooProviderAdapter(settings, {})
@@ -339,6 +380,7 @@ def test_odoo_hmac_matches_cross_repository_golden_vector() -> None:
     settings = SimpleNamespace(
         app_env="test",
         external_effects={"ODOO_WRITE": True},
+        umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
         odoo_source_delivery_enabled=lambda method: method == "submitted_by_person",
     )
     adapter = OdooProviderAdapter(
@@ -359,6 +401,7 @@ def test_odoo_hmac_matches_cross_repository_golden_vector() -> None:
         idempotency_key=document["idempotency_key"],
         capability=document["capability"],
         payload=document["payload"],
+        authenticated_client_id="n8n-automation",
     )
     body = adapter._canonical_body(document)
     assert body.decode("utf-8") == HMAC_VECTOR["body_utf8"]

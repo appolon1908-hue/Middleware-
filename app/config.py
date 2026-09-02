@@ -54,6 +54,25 @@ SUPPORTED_EXTERNAL_EFFECTS = frozenset(
     }
 )
 
+EXTERNAL_DELIVERY_EFFECTS = frozenset(
+    {
+        "ODOO_WRITE",
+        "FORM_ODOO_DELIVERY_ENABLED",
+        "CRAWLER_ODOO_DELIVERY_ENABLED",
+        "SCRAPPER_ODOO_DELIVERY_ENABLED",
+    }
+)
+
+# System-wide kill switches are a separate contract from implementation-level
+# effect gates.  They must never be inferred from the lower-level controls.
+UMBRELLA_CONTROL_NAMES = (
+    "LIVE_ADVERTISING_ENABLED",
+    "EXTERNAL_DELIVERY_ENABLED",
+    "SOCIAL_PUBLISHING_ENABLED",
+    "EXTERNAL_MODEL_CALLS_ENABLED",
+    "N8N_EXTERNAL_PROVIDER_WRITES",
+)
+
 
 def _int(
     env: Mapping[str, str],
@@ -149,6 +168,7 @@ class Settings:
     webhook_secrets: dict[str, bytes]
     outbox_dispatch_enabled: bool
     external_effects: dict[str, bool]
+    umbrella_controls: dict[str, bool]
     odoo_base_url: str | None = None
     odoo_default_hmac_secret: bytes = b""
     odoo_tenant_hmac_secrets: dict[str, bytes] = field(default_factory=dict)
@@ -195,6 +215,9 @@ class Settings:
                 "LIVE_EMAIL_DELIVERY",
                 "UNRESTRICTED_CRAWLING",
             )
+        }
+        umbrella_controls = {
+            name: _bool(source, name, False) for name in UMBRELLA_CONTROL_NAMES
         }
         odoo_tenant_secrets_raw = source.get("ODOO_19_TENANT_HMAC_SECRETS", "").strip()
         odoo_tenant_secrets: dict[str, bytes] = {}
@@ -344,6 +367,7 @@ class Settings:
             webhook_secrets=webhook_secrets,
             outbox_dispatch_enabled=_bool(source, "OUTBOX_DISPATCH_ENABLED", False),
             external_effects=effects,
+            umbrella_controls=umbrella_controls,
             odoo_base_url=(source.get("ODOO_19_BASE_URL", "").strip() or None),
             odoo_default_hmac_secret=source.get(
                 "ODOO_19_HMAC_SECRET", ""
@@ -378,6 +402,23 @@ class Settings:
             raise ConfigurationError(
                 "provider and business effects are not implemented by this runtime: "
                 + ", ".join(unsupported_enabled)
+            )
+        enabled_umbrella_controls = sorted(
+            name for name, value in self.umbrella_controls.items() if value
+        )
+        if self.app_env == "staging" and enabled_umbrella_controls:
+            raise ConfigurationError(
+                "staging umbrella controls must remain disabled: "
+                + ", ".join(enabled_umbrella_controls)
+            )
+        enabled_delivery_effects = sorted(enabled & EXTERNAL_DELIVERY_EFFECTS)
+        if (
+            enabled_delivery_effects
+            and self.umbrella_controls["EXTERNAL_DELIVERY_ENABLED"] is not True
+        ):
+            raise ConfigurationError(
+                "EXTERNAL_DELIVERY_ENABLED must be true before enabling: "
+                + ", ".join(enabled_delivery_effects)
             )
         self._validate_odoo_transport(enabled)
         if self.production_dialing != "DISABLED":
@@ -558,7 +599,10 @@ class Settings:
 
     @property
     def odoo_delivery_enabled(self) -> bool:
-        return bool(self.external_effects.get("ODOO_WRITE"))
+        return (
+            self.umbrella_controls.get("EXTERNAL_DELIVERY_ENABLED") is True
+            and self.external_effects.get("ODOO_WRITE") is True
+        )
 
     def odoo_secret_for(self, tenant_id: str) -> bytes:
         return self.odoo_tenant_hmac_secrets.get(

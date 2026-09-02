@@ -4848,8 +4848,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                title: Response Runtime Safety V1 Runtime Safety Get
+                $ref: '#/components/schemas/RuntimeSafetyReadback'
         '400':
           description: Invalid canonical request
         '401':
@@ -5892,6 +5891,165 @@ components:
       - action
       - reason
       title: ReconciliationResolution
+    RuntimeSafetyDispatch:
+      properties:
+        outbox_enabled:
+          type: boolean
+          title: Outbox Enabled
+        nats_mode:
+          type: string
+          enum:
+          - disabled
+          - isolated
+          - production
+          title: Nats Mode
+        temporal_worker_mode:
+          type: string
+          enum:
+          - disabled
+          - isolated
+          - production
+          title: Temporal Worker Mode
+      additionalProperties: false
+      type: object
+      required:
+      - outbox_enabled
+      - nats_mode
+      - temporal_worker_mode
+      title: RuntimeSafetyDispatch
+    RuntimeSafetyPersistence:
+      properties:
+        in_memory:
+          type: boolean
+          title: In Memory
+      additionalProperties: false
+      type: object
+      required:
+      - in_memory
+      title: RuntimeSafetyPersistence
+    RuntimeSafetyReadback:
+      properties:
+        schema_version:
+          type: string
+          const: '1.1'
+          title: Schema Version
+        service:
+          type: string
+          const: middleware-api
+          title: Service
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        runtime_profile_id:
+          type: string
+          minLength: 1
+          title: Runtime Profile Id
+        release:
+          $ref: '#/components/schemas/RuntimeSafetyRelease'
+        persistence:
+          $ref: '#/components/schemas/RuntimeSafetyPersistence'
+        dispatch:
+          $ref: '#/components/schemas/RuntimeSafetyDispatch'
+        external_effects:
+          additionalProperties:
+            type: boolean
+          type: object
+          minProperties: 1
+          title: External Effects
+        umbrella_controls:
+          $ref: '#/components/schemas/RuntimeSafetyUmbrellaControls'
+        production_dialing:
+          type: string
+          const: DISABLED
+          title: Production Dialing
+        production_activation_configured:
+          type: boolean
+          title: Production Activation Configured
+        provider_effects_disabled:
+          type: boolean
+          title: Provider Effects Disabled
+        all_external_effects_disabled:
+          type: boolean
+          title: All External Effects Disabled
+        staging_safe:
+          type: boolean
+          title: Staging Safe
+      additionalProperties: false
+      type: object
+      required:
+      - schema_version
+      - service
+      - environment
+      - runtime_profile_id
+      - release
+      - persistence
+      - dispatch
+      - external_effects
+      - umbrella_controls
+      - production_dialing
+      - production_activation_configured
+      - provider_effects_disabled
+      - all_external_effects_disabled
+      - staging_safe
+      title: RuntimeSafetyReadback
+      description: Machine-readable v1.1 response published by the runtime OpenAPI.
+    RuntimeSafetyRelease:
+      properties:
+        source_sha:
+          type: string
+          minLength: 1
+          title: Source Sha
+        image_digest:
+          type: string
+          minLength: 1
+          title: Image Digest
+        schema_head:
+          type: string
+          minLength: 1
+          title: Schema Head
+        build_time:
+          type: string
+          minLength: 1
+          title: Build Time
+      additionalProperties: false
+      type: object
+      required:
+      - source_sha
+      - image_digest
+      - schema_head
+      - build_time
+      title: RuntimeSafetyRelease
+    RuntimeSafetyUmbrellaControls:
+      properties:
+        LIVE_ADVERTISING_ENABLED:
+          type: boolean
+          title: Live Advertising Enabled
+        EXTERNAL_DELIVERY_ENABLED:
+          type: boolean
+          title: External Delivery Enabled
+        SOCIAL_PUBLISHING_ENABLED:
+          type: boolean
+          title: Social Publishing Enabled
+        EXTERNAL_MODEL_CALLS_ENABLED:
+          type: boolean
+          title: External Model Calls Enabled
+        N8N_EXTERNAL_PROVIDER_WRITES:
+          type: boolean
+          title: N8N External Provider Writes
+      additionalProperties: false
+      type: object
+      required:
+      - LIVE_ADVERTISING_ENABLED
+      - EXTERNAL_DELIVERY_ENABLED
+      - SOCIAL_PUBLISHING_ENABLED
+      - EXTERNAL_MODEL_CALLS_ENABLED
+      - N8N_EXTERNAL_PROVIDER_WRITES
+      title: RuntimeSafetyUmbrellaControls
     ValidationError:
       properties:
         loc:

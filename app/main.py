@@ -47,7 +47,7 @@ from .observability import (
     safe_traceparent,
 )
 from .operations_dashboard import router as operations_dashboard_router
-from .operations import router as operations_router
+from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
 from .security import SecurityError
@@ -644,7 +644,11 @@ def create_app(
 
     register_survey_routes(app)
 
-    @app.post("/v1/commands")
+    @app.post(
+        "/v1/commands",
+        response_model=OperationResponse,
+        responses={202: {"model": OperationResponse, "description": "Command accepted"}},
+    )
     async def submit_command(
         command: CommandEnvelope,
         request: Request,
@@ -706,7 +710,7 @@ def create_app(
         status_code = 200 if operation.duplicate else 202
         return JSONResponse(
             status_code=status_code,
-            content=operation.model_dump(mode="json"),
+            content=_operation_json(operation),
             headers={
                 "Location": f"/v1/operations/{operation.command_id}",
                 "X-Correlation-ID": operation.correlation_id,

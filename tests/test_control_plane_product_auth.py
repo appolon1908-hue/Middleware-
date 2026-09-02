@@ -157,7 +157,7 @@ def test_valid_moneybee_token_can_submit_crm_command(test_settings) -> None:
     with TestClient(create_app(settings=test_settings, runtime=_runtime(test_settings))) as client:
         response = client.post("/v1/commands", json=body, headers=_headers(body, token))
     assert response.status_code == 202, response.text
-    assert response.json()["state"] == "persisted"
+    assert response.json()["state"] == "RECEIVED"
 
 
 def test_n8n_umbrella_blocks_canonical_command_route(test_settings) -> None:

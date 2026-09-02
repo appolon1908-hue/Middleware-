@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .commands import CommandCapabilityDisabled, CommandEnvelope, OperationMutationRequest
 from .control_plane_auth import authorize_command, caller_for_authorization
-from .operations import OperationApiState, _mutation_context, _operation_json, list_operations as core_list_operations
+from .operations import OperationApiState, OperationResponse, _mutation_context, _operation_json, list_operations as core_list_operations
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .storage import StorageError
 
@@ -29,14 +29,14 @@ async def _submit(domain:str,command:CommandEnvelope,request:Request):
     if caller.client_id == "n8n-automation" and active.settings.umbrella_controls.get("N8N_EXTERNAL_PROVIDER_WRITES") is not True:
         raise CommandCapabilityDisabled("N8N_EXTERNAL_PROVIDER_WRITES is disabled")
     operation=await active.commands.submit(command,authenticated_subject=subject,authenticated_client_id=caller.client_id)
-    return JSONResponse(status_code=200 if operation.duplicate else 202,content=operation.model_dump(mode="json"),headers={"Location":f"/v1/{domain}/operations/{operation.command_id}","X-Correlation-ID":operation.correlation_id})
+    return JSONResponse(status_code=200 if operation.duplicate else 202,content=_operation_json(operation),headers={"Location":f"/v1/{domain}/operations/{operation.command_id}","X-Correlation-ID":operation.correlation_id})
 
 
 def _submit_handler(domain:str):
     async def handler(command:CommandEnvelope,request:Request): return await _submit(domain,command,request)
     return handler
 for _domain in ("odoo","crm","email","sms","telephony","social","marketing","ai"):
-    router.add_api_route(f"/v1/{_domain}/commands",_submit_handler(_domain),methods=["POST"],name=f"submit_{_domain}_command")
+    router.add_api_route(f"/v1/{_domain}/commands",_submit_handler(_domain),methods=["POST"],name=f"submit_{_domain}_command",response_model=OperationResponse,responses={202:{"model":OperationResponse,"description":"Command accepted"}})
 
 
 async def _get(domain:str,operation_id:UUID,request:Request):

@@ -2434,7 +2434,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2475,7 +2482,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2516,7 +2530,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2557,7 +2578,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2598,7 +2626,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2639,7 +2674,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2680,7 +2722,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -2721,7 +2770,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:
@@ -5183,7 +5239,14 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Invalid canonical request
           content:

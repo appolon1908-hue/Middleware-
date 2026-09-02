@@ -51,6 +51,7 @@
     "block_deletions": true,
     "enforce_for_administrators": true,
     "required_status_checks": [
+      "validate",
       "Validate middleware source head",
       "Validate middleware merge result",
       "docker-runtime-build",

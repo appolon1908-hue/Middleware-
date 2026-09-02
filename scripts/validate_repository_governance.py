@@ -23,6 +23,7 @@ RULESET_NAME = "middleware-main-production-authority"
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
+        "validate",
         "Validate middleware source head",
         "Validate middleware merge result",
         "docker-runtime-build",

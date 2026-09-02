@@ -441,3 +441,53 @@ jobs:
           DATABASE_URL: postgresql://middleware:middleware_ci_only@127.0.0.1:5432/middleware_test_synthetic
           REDIS_URL: redis://127.0.0.1:6379/15
         run: bash scripts/synthetic_acceptance_ci.sh
+
+  required-validation:
+    name: validate
+    if: always()
+    needs:
+      - source-head-validation
+      - merge-result-validation
+      - main-validation
+      - docker-runtime-build
+      - docker-test-build
+      - connector-runtime-build
+      - container-security
+      - runtime-integration
+      - nats-jetstream-integration
+      - temporal-workflow-integration
+      - synthetic-acceptance-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every event-applicable production gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SOURCE_HEAD: ${{ needs.source-head-validation.result }}
+          MERGE_RESULT: ${{ needs.merge-result-validation.result }}
+          MAIN_RESULT: ${{ needs.main-validation.result }}
+          DOCKER_RUNTIME: ${{ needs.docker-runtime-build.result }}
+          DOCKER_TEST: ${{ needs.docker-test-build.result }}
+          CONNECTOR_RUNTIME: ${{ needs.connector-runtime-build.result }}
+          CONTAINER_SECURITY: ${{ needs.container-security.result }}
+          POSTGRES_REDIS: ${{ needs.runtime-integration.result }}
+          NATS: ${{ needs.nats-jetstream-integration.result }}
+          TEMPORAL: ${{ needs.temporal-workflow-integration.result }}
+          SYNTHETIC: ${{ needs.synthetic-acceptance-e2e.result }}
+        run: |
+          set -Eeuo pipefail
+          for result in \
+            "$DOCKER_RUNTIME" "$DOCKER_TEST" "$CONNECTOR_RUNTIME" \
+            "$CONTAINER_SECURITY" "$POSTGRES_REDIS" "$NATS" \
+            "$TEMPORAL" "$SYNTHETIC"; do
+            test "$result" = success
+          done
+          if test "$EVENT_NAME" = pull_request; then
+            test "$SOURCE_HEAD" = success
+            test "$MERGE_RESULT" = success
+            test "$MAIN_RESULT" = skipped
+          else
+            test "$SOURCE_HEAD" = skipped
+            test "$MERGE_RESULT" = skipped
+            test "$MAIN_RESULT" = success
+          fi

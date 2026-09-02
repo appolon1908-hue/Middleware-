@@ -67,6 +67,7 @@ Require:
 - Linear history
 - Branch up to date before merge
 - Status checks:
+  - `validate` (aggregate fail-closed result)
   - `Validate middleware source head`
   - `Validate middleware merge result`
   - `docker-runtime-build`

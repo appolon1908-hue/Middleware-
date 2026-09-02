@@ -88,6 +88,15 @@ class ProviderOperationPolicyTests(unittest.TestCase):
         operation["providerClass"] = "email"
         self.assert_rejected(policy=policy)
 
+    def test_operation_command_binding_drift_is_rejected(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        operation = next(
+            item for item in policy["operations"]
+            if item["id"] == "marketing.campaign.request"
+        )
+        operation["target"] = "ai-provider"
+        self.assert_rejected(policy=policy)
+
     def test_operation_route_and_scope_swap_is_rejected(self) -> None:
         policy = copy.deepcopy(self.policy)
         email = next(item for item in policy["operations"] if item["id"] == "communication.email.request")

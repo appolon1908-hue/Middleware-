@@ -15,7 +15,9 @@ REQUIRED={
 "/v1/system/capabilities","/v1/system/safety-state","/v1/system/readiness","/v1/policy/effective","/v1/policy/decisions","/v1/reconciliation/operations","/v1/audit/events","/v1/providers/status",
 "/v1/integrations/n8n/operations","/v1/integrations/n8n/operations/{operation_id}/cancel","/v1/integrations/n8n/operations/{operation_id}/reconcile",
 "/v1/communication/messages","/v1/communication/messages/{messageId}",
-"/v1/email/commands","/v1/sms/commands","/v1/telephony/commands","/v1/social/commands","/v1/marketing/commands","/v1/ai/commands","/v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}","/webhooks/vicidial/call-result/{webhook_id}"}
+"/v1/email/commands","/v1/sms/commands","/v1/telephony/commands","/v1/social/commands","/v1/marketing/commands","/v1/ai/commands",
+"/api/v1/control/ai/inference-requests","/api/v1/control/communications/email","/api/v1/control/communications/sms","/api/v1/control/marketing/campaigns","/api/v1/control/social/publications",
+"/v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}","/webhooks/vicidial/call-result/{webhook_id}"}
 
 def _app(test_settings):
     commands=CommandService(MemoryCommandStore(),enabled_policy())

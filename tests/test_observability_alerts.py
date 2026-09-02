@@ -692,6 +692,15 @@ def test_status_cycles_and_rejects_stale_observations() -> None:
         assert detail.json()["state"] == "firing"
 
 
+def test_postgres_mutation_query_casts_conditional_parameters() -> None:
+    source = (
+        Path(__file__).resolve().parents[1] / "app/observability_incidents.py"
+    ).read_text(encoding="utf-8")
+    assert "THEN $5::timestamptz ELSE NULL::timestamptz END" in source
+    assert "THEN $6::text ELSE NULL::text END" in source
+    assert "updated_at=$5::timestamptz" in source
+
+
 def test_canonical_openapi_methods_match_runtime() -> None:
     runtime_app = app()
     documented = yaml.safe_load(

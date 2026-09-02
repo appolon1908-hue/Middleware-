@@ -292,6 +292,8 @@ class PostgresInboxStore:
             "recorded_at",
         },
         "middleware_operation_mutations": {"id", "tenant_id", "command_id", "action", "actor_id", "idempotency_key", "request_sha256", "response_status", "response_payload", "created_at"},
+        "middleware_control_mutations": {"id","tenant_id","resource_kind","resource_id","action","actor_id","api_version","idempotency_key","request_sha256","response_status","response_payload","created_at"},
+        "middleware_control_audit": {"id","tenant_id","resource_kind","resource_id","action","actor_id","reason","previous_state","new_state","metadata","created_at"},
     }
     REQUIRED_UDT_TYPES = {
         ("middleware_schema_migrations", "version"): "int4",
@@ -366,6 +368,29 @@ class PostgresInboxStore:
         ("middleware_operation_mutations", "response_status"): "int4",
         ("middleware_operation_mutations", "response_payload"): "jsonb",
         ("middleware_operation_mutations", "created_at"): "timestamptz",
+        ("middleware_control_mutations", "id"): "int8",
+        ("middleware_control_mutations", "tenant_id"): "text",
+        ("middleware_control_mutations", "resource_kind"): "text",
+        ("middleware_control_mutations", "resource_id"): "text",
+        ("middleware_control_mutations", "action"): "text",
+        ("middleware_control_mutations", "actor_id"): "text",
+        ("middleware_control_mutations", "api_version"): "text",
+        ("middleware_control_mutations", "idempotency_key"): "text",
+        ("middleware_control_mutations", "request_sha256"): "bpchar",
+        ("middleware_control_mutations", "response_status"): "int4",
+        ("middleware_control_mutations", "response_payload"): "jsonb",
+        ("middleware_control_mutations", "created_at"): "timestamptz",
+        ("middleware_control_audit", "id"): "int8",
+        ("middleware_control_audit", "tenant_id"): "text",
+        ("middleware_control_audit", "resource_kind"): "text",
+        ("middleware_control_audit", "resource_id"): "text",
+        ("middleware_control_audit", "action"): "text",
+        ("middleware_control_audit", "actor_id"): "text",
+        ("middleware_control_audit", "reason"): "text",
+        ("middleware_control_audit", "previous_state"): "text",
+        ("middleware_control_audit", "new_state"): "text",
+        ("middleware_control_audit", "metadata"): "jsonb",
+        ("middleware_control_audit", "created_at"): "timestamptz",
     }
     REQUIRED_KEYS = {
         ("middleware_schema_migrations", "PRIMARY KEY", ("version",)),
@@ -392,12 +417,17 @@ class PostgresInboxStore:
         ),
         ("middleware_operation_mutations", "PRIMARY KEY", ("id",)),
         ("middleware_operation_mutations", "UNIQUE", ("tenant_id", "command_id", "action", "actor_id", "idempotency_key")),
+        ("middleware_control_mutations", "PRIMARY KEY", ("id",)),
+        ("middleware_control_mutations", "UNIQUE", ("tenant_id","resource_kind","resource_id","action","actor_id","api_version","idempotency_key")),
+        ("middleware_control_audit", "PRIMARY KEY", ("id",)),
     }
     REQUIRED_TRIGGERS = {
         "middleware_event_ledger_immutable",
         "middleware_command_audit_immutable",
         "middleware_reconciliation_audit_immutable",
         "middleware_operation_mutations_immutable",
+        "middleware_control_mutations_immutable",
+        "middleware_control_audit_immutable",
     }
 
     def __init__(self, pool: asyncpg.Pool) -> None:

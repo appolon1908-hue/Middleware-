@@ -259,7 +259,6 @@ def create_app(
 
     @app.get("/readiness")
     @app.get("/ready")
-    @app.get("/readiness")
     async def ready(request: Request) -> JSONResponse:
         report = await request.app.state.runtime.readiness()
         request.app.state.observability.record_readiness(report.components)
@@ -334,29 +333,6 @@ def create_app(
             "build_time": resolved.build_time,
             "build_timestamp": resolved.build_time,
             "configuration_checksum": resolved.configuration_checksum,
-        }
-
-    @app.get("/dependencies")
-    async def dependencies(request: Request) -> JSONResponse:
-        report = await request.app.state.runtime.readiness()
-        return JSONResponse(
-            status_code=200 if report.ready else 503,
-            content={
-                "status": "ready" if report.ready else "not_ready",
-                "dependencies": report.components,
-                "checked_at": datetime.now(UTC).isoformat(),
-            },
-        )
-
-    @app.get("/capabilities")
-    async def capabilities() -> dict[str, object]:
-        return {
-            "service": "middleware-api",
-            "environment": resolved.app_env,
-            "capabilities": {
-                **dict(sorted(resolved.external_effects.items())),
-                "PRODUCTION_DIALING": resolved.production_dialing == "ENABLED",
-            },
         }
 
     @app.get("/v1/runtime/safety")

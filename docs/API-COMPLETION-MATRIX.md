@@ -1,17 +1,25 @@
 # Middleware API completion matrix
 
-This matrix is generated from the canonical FastAPI entrypoint and reviewed
-domain modules. `IMPLEMENTED` means executable behavior exists in the runtime;
-source-only documentation or an OpenAPI declaration is not sufficient.
+The authoritative inventory is `config/api-completion-matrix.yaml`. It is
+generated from the registered FastAPI runtime by
+`scripts/generate_api_contracts.py`; the same run writes the JSON OpenAPI and
+`contracts/platform/integration-fabric-api.v2.yaml`.
 
-The machine-readable authoritative matrix is
-`config/api-completion-matrix.yaml`. At the current checkpoint, the platform,
-command, tenant-scoped durable operation control, communication, and intake
-routes are implemented. Operation reads enforce each configured caller's
-`status_scope`; cancellation and reconciliation enforce that caller's
-`command_scope`. All require a bearer token for the `middleware-api` audience
-and a matching `X-Tenant-ID`; mutations additionally require
-`X-Correlation-ID`, `Idempotency-Key`, and `expected_version`. The remaining
-durability, policy, reconciliation administration, quarantine, adapter, and
-webhook groups are explicitly marked `MISSING` until their domain services,
-persistence, authorization, tests, and runtime registration are delivered.
+The inventory contains 114 registered method/path operations, classifies every
+entry as `IMPLEMENTED` or `DEPRECATED`, and contains no `UNKNOWN`, `PARTIAL`, or
+`MISSING` entry. Deprecated compatibility routes remain executable.
+
+Tenant-scoped reads validate a bearer token for the `middleware-api` audience,
+enforce the configured caller `status_scope`, and require the token tenant to
+match `X-Tenant-ID`. Mutations enforce `command_scope` and, where applicable,
+require `X-Correlation-ID`, `Idempotency-Key`, a safe reason, and
+`expected_version`.
+
+Inbox, outbox, command, operation, mutation, audit, and reconciliation state is
+PostgreSQL-backed. Provider webhooks enforce configured bearer identity, HMAC
+signature, timestamp tolerance, payload digest, replay protection, durable
+inbox storage, immutable event evidence, and transactional outbox insertion.
+
+All external-effect capabilities remain disabled. Live email, SMS, PSTN,
+social publishing, advertising, external model calls, and N8N provider writes
+are denied. `CALLS_PLACED` remains zero.

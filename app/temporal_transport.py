@@ -16,9 +16,9 @@ class TemporalTransportError(RuntimeError):
     """Raised before workflow start when durable intent violates its contract."""
 
 
-def command_workflow_id(tenant_id: str, command_id: str) -> str:
+def command_workflow_id(tenant_id: str, command_id: str, idempotency_key: str) -> str:
     identity = hashlib.sha256(
-        f"{tenant_id}\0{command_id}".encode("utf-8")
+        f"{tenant_id}\0{command_id}\0{idempotency_key}".encode("utf-8")
     ).hexdigest()
     return f"codestra-command-{identity}"
 
@@ -52,7 +52,10 @@ class TemporalCommandDispatcher:
                 "outbox idempotency key does not match the command envelope"
             )
 
-        request = CommandExecutionRequest(**command.model_dump(mode="json"))
+        request = CommandExecutionRequest(
+            **command.model_dump(mode="json"),
+            resume_from_queued=command.idempotency_key.startswith("operation-retry:"),
+        )
         try:
             await self.client.start_workflow(
                 CommandExecutionWorkflow.run,
@@ -60,6 +63,7 @@ class TemporalCommandDispatcher:
                 id=command_workflow_id(
                     command.tenant_id,
                     str(command.command_id),
+                    command.idempotency_key,
                 ),
                 task_queue=self.task_queue,
                 id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,

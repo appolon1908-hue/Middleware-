@@ -96,6 +96,7 @@ class CommandExecutionRequest:
     idempotency_key: str
     capability: str
     payload: dict[str, Any]
+    resume_from_queued: bool = False
 
 
 @dataclass(frozen=True)
@@ -297,15 +298,16 @@ class CommandExecutionWorkflow:
         _require_identity(request.command_id, "command_id")
         _require_identity(request.tenant_id, "tenant_id")
         actor = "temporal:codestra.command-execution.v1"
-        await _command_transition(
-            CommandTransitionRequest(
-                request.command_id,
-                request.tenant_id,
-                "queued",
-                actor,
-                "Temporal workflow accepted durable command intent",
+        if not request.resume_from_queued:
+            await _command_transition(
+                CommandTransitionRequest(
+                    request.command_id,
+                    request.tenant_id,
+                    "queued",
+                    actor,
+                    "Temporal workflow accepted durable command intent",
+                )
             )
-        )
         await _command_transition(
             CommandTransitionRequest(
                 request.command_id,

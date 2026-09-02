@@ -1227,6 +1227,56 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /v1/inbox/{record_id}/discard:
+    post:
+      tags:
+      - durable-control
+      summary: Inbox Discard
+      operationId: inbox_discard_v1_inbox__record_id__discard_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v1/outbox/{record_id}/cancel:
     post:
       tags:
@@ -1661,6 +1711,807 @@ paths:
           default: 50
           title: Limit
       - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/operations:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Operations List
+      operationId: operations_list_api_v1_operations_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - RECEIVED
+            - QUEUED
+            - SUBMITTED
+            - ACCEPTED
+            - UNKNOWN
+            - COMPLETED
+            - FAILED
+            - RECONCILIATION_REQUIRED
+            - DEAD_LETTERED
+            - CANCELLED
+            type: string
+          - type: 'null'
+          title: State
+      - name: command_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 180
+          - type: 'null'
+          title: Command Type
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/operations/{operation_id}:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Operation Detail
+      operationId: operation_detail_api_v1_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - canonical-compatibility
+      summary: Operation Cancel
+      operationId: operation_cancel_api_v1_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/operations/{operation_id}/retry:
+    post:
+      tags:
+      - canonical-compatibility
+      summary: Operation Retry
+      operationId: operation_retry_api_v1_operations__operation_id__retry_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationMutationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/inbox:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Inbox List
+      operationId: inbox_list_api_v1_inbox_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/inbox/{record_id}:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Inbox Detail
+      operationId: inbox_detail_api_v1_inbox__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/outbox:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Outbox List
+      operationId: outbox_list_api_v1_outbox_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/outbox/{record_id}:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Outbox Detail
+      operationId: outbox_detail_api_v1_outbox__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/policy/decisions:
+    post:
+      tags:
+      - canonical-compatibility
+      summary: Policy Decision
+      operationId: policy_decision_api_v1_policy_decisions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDecision'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /api/v1/reconciliation/operations:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Reconciliation List
+      operationId: reconciliation_list_api_v1_reconciliation_operations_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/reconciliation/operations/{record_id}:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Reconciliation Detail
+      operationId: reconciliation_detail_api_v1_reconciliation_operations__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/reconciliation/operations/{record_id}/resolve:
+    post:
+      tags:
+      - canonical-compatibility
+      summary: Reconciliation Resolve
+      operationId: reconciliation_resolve_api_v1_reconciliation_operations__record_id__resolve_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationResolution'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/quarantine/events:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Quarantine List
+      operationId: quarantine_list_api_v1_quarantine_events_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/quarantine/events/{record_id}:
+    get:
+      tags:
+      - canonical-compatibility
+      summary: Quarantine Detail
+      operationId: quarantine_detail_api_v1_quarantine_events__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/quarantine/events/{record_id}/release:
+    post:
+      tags:
+      - canonical-compatibility
+      summary: Quarantine Release
+      operationId: quarantine_release_api_v1_quarantine_events__record_id__release_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/quarantine/events/{record_id}/discard:
+    post:
+      tags:
+      - canonical-compatibility
+      summary: Quarantine Discard
+      operationId: quarantine_discard_api_v1_quarantine_events__record_id__discard_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - *id001
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -4542,6 +5393,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/n8n/results:
     post:
       summary: Ingress-N8N-Automation-Results
@@ -4570,6 +5425,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/vicidial/events:
     post:
       summary: Ingress-Vicidial-Adapter-Events
@@ -4598,6 +5457,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/telnexa/events:
     post:
       summary: Ingress-Telnexa-Gateway-Events
@@ -4626,6 +5489,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/klyrow/events:
     post:
       summary: Ingress-Klyrow-Gateway-Events
@@ -4654,6 +5521,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/kyqra/results:
     post:
       summary: Ingress-Kyqra-Gateway-Results
@@ -4682,6 +5553,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/kyqra/progress:
     post:
       summary: Ingress-Kyqra-Gateway-Progress
@@ -4710,6 +5585,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
   /api/v1/postly/events:
     post:
       summary: Ingress-Postly-Adapter-Events
@@ -4738,6 +5617,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
 components:
   schemas:
     CommandEnvelope:
@@ -4947,6 +5830,24 @@ components:
       - expected_version
       - reason
       title: OperationMutationRequest
+    PolicyDecision:
+      properties:
+        capability:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Capability
+        proposed_action:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Proposed Action
+      additionalProperties: false
+      type: object
+      required:
+      - capability
+      - proposed_action
+      title: PolicyDecision
     PolicyDecisionRequest:
       properties:
         capability:
@@ -4965,6 +5866,32 @@ components:
       - capability
       - proposed_action
       title: PolicyDecisionRequest
+    ReconciliationResolution:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1.0
+          title: Expected Version
+        action:
+          type: string
+          enum:
+          - retry
+          - complete
+          - dead_letter
+          title: Action
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - action
+      - reason
+      title: ReconciliationResolution
     ValidationError:
       properties:
         loc:

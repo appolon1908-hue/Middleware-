@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -62,6 +63,7 @@ async def test_command_dispatch_uses_deterministic_exactly_once_workflow_identit
     assert options["id"] == command_workflow_id(
         record.tenant_id,
         record.payload["command_id"],
+        record.idempotency_key,
     )
     assert options["id_reuse_policy"] is WorkflowIDReusePolicy.REJECT_DUPLICATE
     assert options["id_conflict_policy"] is WorkflowIDConflictPolicy.USE_EXISTING
@@ -76,3 +78,17 @@ async def test_command_dispatch_rejects_cross_tenant_outbox_payload() -> None:
     with pytest.raises(TemporalTransportError):
         await dispatcher.dispatch(record)
     assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_retry_dispatch_resumes_from_durable_queued_state() -> None:
+    client = RecordingTemporalClient()
+    dispatcher = TemporalCommandDispatcher(client, "codestra-test-critical")  # type: ignore[arg-type]
+    record = command_record()
+    retry_key = "operation-retry:" + "a" * 64
+    payload = {**record.payload, "idempotency_key": retry_key}
+    record = replace(record, idempotency_key=retry_key, payload=payload)
+
+    await dispatcher.dispatch(record)
+
+    assert client.calls[0][1].resume_from_queued is True

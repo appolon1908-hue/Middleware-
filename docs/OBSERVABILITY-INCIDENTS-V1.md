@@ -50,7 +50,9 @@ part of the semantic idempotency digest. Status cycles such as firing to silence
 to firing are retained, while observations at or before the latest persisted
 status evidence fail closed with `409` and cannot overwrite current state.
 Status evidence must also carry the exact `startsAt` of the incident's current
-occurrence, so a delayed snapshot cannot suppress a later recurrence. A
+occurrence, so a delayed snapshot cannot suppress a later recurrence. For a
+resolved occurrence, its persisted `endsAt` is also ordering evidence: a status
+snapshot observed at or before that instant cannot reopen the incident. A
 multi-item snapshot returns explicit per-item results and HTTP `207` when only
 part of the snapshot applies; single-item conflicts retain their canonical
 error status.
@@ -63,7 +65,9 @@ transport identity is durably recorded as `notification_suppressed`; after it, a
 deterministic `notification_repeat` command, intent, timeline event, and audit
 entry commit atomically. Replaying either transport identity returns its original
 decision, including whether a grouped notification is still scheduled or was
-queued immediately as a repeat. Delivery remains disabled by default. When
+queued immediately as a repeat. Suppression events derive that decision from the
+referenced notification operation's durable repeat event, so later replay cannot
+change `queued` back to `scheduled`. Delivery remains disabled by default. When
 enabled later, a firing incident that was previously recorded without a delivery
 intent is atomically given its first governed
 `observability.alert.email.send.v1` command, command audit/outbox, notification

@@ -862,9 +862,6 @@ class MemoryIncidentStore:
                 return replay[1].model_copy(update={"duplicate": True})
             incident_id = incident_identity(policy.tenant_id, item.fingerprint)
             key = (policy.tenant_id, incident_id)
-            latest_observed = self._status_observed.get(key)
-            if latest_observed is not None and observed_at <= latest_observed:
-                raise IncidentConflict("status observation is not newer than current evidence")
             previous = self._incidents.get(key)
             if previous is None or previous.group_key != item.group_key:
                 raise IncidentNotFound("status reconciliation incident was not found")
@@ -872,6 +869,16 @@ class MemoryIncidentStore:
                 raise IncidentConflict(
                     "status evidence does not match the current alert occurrence"
                 )
+            evidence_times = [
+                value
+                for value in (
+                    self._status_observed.get(key),
+                    previous.ends_at if previous.state == "resolved" else None,
+                )
+                if value is not None
+            ]
+            if evidence_times and observed_at <= max(evidence_times):
+                raise IncidentConflict("status observation is not newer than current evidence")
             state, event_type = next_incident_state(previous.state, item.state)
             now = datetime.now(UTC)
             incident = previous.model_copy(
@@ -1326,7 +1333,7 @@ class PostgresIncidentStore:
         incident_id: uuid.UUID,
         operation_id: uuid.UUID | str | None,
         notification_class: str | None,
-        notification_event_type: str | None,
+        notification_is_repeat: bool,
         timeline_event_id: int,
         notification_kind: str,
     ) -> IncidentIngestionResult:
@@ -1354,7 +1361,7 @@ class PostgresIncidentStore:
                 "scheduled"
                 if notification_class == "grouped"
                 and operation is not None
-                and notification_event_type != "notification_repeat"
+                and not notification_is_repeat
                 else "queued"
                 if operation is not None
                 else "state_only"
@@ -1485,6 +1492,13 @@ class PostgresIncidentStore:
                     """
                     SELECT e.incident_id,e.operation_id,e.payload_sha256,e.id,
                            e.event_type,ni.notification_class,
+                           EXISTS (
+                             SELECT 1
+                             FROM middleware_observability_incident_events ne
+                             WHERE ne.tenant_id=e.tenant_id
+                               AND ne.operation_id=e.operation_id
+                               AND ne.event_type='notification_repeat'
+                           ) AS notification_is_repeat,
                            e.event_key=$2 AS transition_match,
                            e.request_idempotency_key=$3 AS request_match
                     FROM middleware_observability_incident_events e
@@ -1516,7 +1530,7 @@ class PostgresIncidentStore:
                         incident_id=replay["incident_id"],
                         operation_id=replay["operation_id"],
                         notification_class=replay["notification_class"],
-                        notification_event_type=replay["event_type"],
+                        notification_is_repeat=replay["notification_is_repeat"],
                         timeline_event_id=replay["id"],
                         notification_kind=notification_kind,
                     )
@@ -1533,7 +1547,14 @@ class PostgresIncidentStore:
                     latest_notification = await conn.fetchrow(
                         """
                         SELECT ni.operation_id,ni.notification_class,ni.scheduled_at,
-                               e.id AS event_id,e.event_type
+                               e.id AS event_id,e.event_type,
+                               EXISTS (
+                                 SELECT 1
+                                 FROM middleware_observability_incident_events ne
+                                 WHERE ne.tenant_id=ni.tenant_id
+                                   AND ne.operation_id=ni.operation_id
+                                   AND ne.event_type='notification_repeat'
+                               ) AS notification_is_repeat
                         FROM middleware_observability_notification_intents ni
                         LEFT JOIN middleware_observability_incident_events e
                           ON e.tenant_id=ni.tenant_id
@@ -1569,7 +1590,7 @@ class PostgresIncidentStore:
                             incident_id=transition["incident_id"],
                             operation_id=replay["operation_id"],
                             notification_class=replay["notification_class"],
-                            notification_event_type=replay["event_type"],
+                            notification_is_repeat=replay["notification_is_repeat"],
                             timeline_event_id=(
                                 replay["event_id"]
                                 if latest_notification is not None
@@ -2058,7 +2079,17 @@ class PostgresIncidentStore:
                     policy.tenant_id,
                     incident_id,
                 )
-                if latest_observed is not None and observed_at <= latest_observed:
+                evidence_times = [
+                    value
+                    for value in (
+                        latest_observed,
+                        previous["ends_at"]
+                        if previous["state"] == "resolved"
+                        else None,
+                    )
+                    if value is not None
+                ]
+                if evidence_times and observed_at <= max(evidence_times):
                     raise IncidentConflict(
                         "status observation is not newer than current evidence"
                     )

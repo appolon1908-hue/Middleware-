@@ -681,6 +681,7 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
         )
         assert suppressed.status_code == 200
         assert suppressed.json()["operations"][0]["operation_id"] == first_operation
+        assert suppressed.json()["operations"][0]["notification_status"] == "scheduled"
 
         assert active_runtime.incidents is not None
         store = active_runtime.incidents.store
@@ -721,6 +722,7 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
         )
         assert replay.status_code == 200
         assert replay.json()["operations"][0]["operation_id"] == repeated_operation
+        assert replay.json()["operations"][0]["notification_status"] == "queued"
 
         incident_id = repeated.json()["operations"][0]["incident_id"]
         timeline = client.get(
@@ -744,6 +746,21 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
             repeated_operation,
             first_operation,
         ]
+
+        repeat_suppressed = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-third-0001"),
+        )
+        assert repeat_suppressed.status_code == 200
+        assert repeat_suppressed.json()["operations"][0]["notification_status"] == "queued"
+        repeat_suppressed_replay = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-repeat-third-0001"),
+        )
+        assert repeat_suppressed_replay.status_code == 200
+        assert repeat_suppressed_replay.json()["operations"][0]["notification_status"] == "queued"
 
 
 def test_warning_resolution_cancels_pending_grouped_notification() -> None:
@@ -866,6 +883,53 @@ def test_status_cycles_and_rejects_stale_observations() -> None:
             headers=headers("observability-operator", key="status-cycle-read-0001"),
         )
         assert detail.json()["state"] == "firing"
+
+
+def test_status_snapshot_before_resolved_end_cannot_reopen_incident() -> None:
+    value = webhook()
+    with TestClient(app()) as client:
+        accepted = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="status-order-firing-0001"),
+        )
+        incident_id = accepted.json()["operations"][0]["incident_id"]
+        resolved_value = copy.deepcopy(value)
+        resolved_value["status"] = "resolved"
+        resolved_value["alerts"][0]["status"] = "resolved"
+        resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="status-order-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+
+        stale_status = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json={
+                "observedAt": "2026-09-02T16:05:00Z",
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [
+                    {
+                        "groupKey": value["groupKey"],
+                        "fingerprint": value["alerts"][0]["fingerprint"],
+                        "startsAt": value["alerts"][0]["startsAt"],
+                        "state": "firing",
+                        "silencedBy": [],
+                        "inhibitedBy": [],
+                    }
+                ],
+            },
+            headers=headers(key="status-order-stale-0001"),
+        )
+        assert stale_status.status_code == 409
+        assert stale_status.json()["items"][0]["code"] == "incident_conflict"
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers("observability-operator", key="status-order-read-0001"),
+        )
+        assert detail.json()["state"] == "resolved"
 
 
 def test_status_snapshot_reports_partial_application_per_item() -> None:

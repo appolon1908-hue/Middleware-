@@ -476,6 +476,30 @@ async def test_warning_repeat_uses_persisted_schedule(
     assert replay.operation.command_id == repeated.operation.command_id
     assert replay.notification_status == "queued"
 
+    suppressed = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-repeat-correlation-0003",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-repeat-request-0003",
+    )
+    assert suppressed.operation is not None
+    assert suppressed.operation.command_id == repeated.operation.command_id
+    assert suppressed.notification_status == "queued"
+    suppressed_replay = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-repeat-correlation-0003",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-repeat-request-0003",
+    )
+    assert suppressed_replay.duplicate is True
+    assert suppressed_replay.operation is not None
+    assert suppressed_replay.operation.command_id == repeated.operation.command_id
+    assert suppressed_replay.notification_status == "queued"
+
     attempts = await incidents.store.list_notification_attempts(
         TENANT_ID,
         first.incident.incident_id,
@@ -561,6 +585,53 @@ async def test_warning_resolution_cancels_pending_grouped_outbox(
         "warning resolved before group wait elapsed"
     )
     assert cancelled_outbox is True
+
+
+@pytest.mark.asyncio
+async def test_status_snapshot_before_resolved_end_cannot_reopen_incident(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    firing_item = alert(fingerprint="incident-resolved-status-order-0001")
+    await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=firing_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-resolved-status-order-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-resolved-status-order-request-0001",
+    )
+    resolved_payload = firing_item.model_dump(mode="json", by_alias=True)
+    resolved_payload["status"] = "resolved"
+    resolved_payload["endsAt"] = "2026-09-02T16:10:00Z"
+    await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=AlertmanagerAlert.model_validate(resolved_payload),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-resolved-status-order-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-resolved-status-order-request-0002",
+    )
+
+    with pytest.raises(IncidentConflict):
+        await incidents.store.ingest_status(
+            policy=policy(),
+            item=AlertmanagerStatusItem.model_validate(
+                {
+                    "groupKey": GROUP_KEY,
+                    "fingerprint": firing_item.fingerprint,
+                    "startsAt": "2026-09-02T16:00:00Z",
+                    "state": "firing",
+                    "silencedBy": [],
+                    "inhibitedBy": [],
+                }
+            ),
+            actor_id=ACTOR_ID,
+            correlation_id="incident-resolved-status-order-correlation-0003",
+            source_deployment="alertmanager-disposable-ci",
+            request_idempotency_key="incident-resolved-status-order-request-0003",
+            observed_at=datetime(2026, 9, 2, 16, 5, tzinfo=UTC),
+        )
 
 
 @pytest.mark.asyncio

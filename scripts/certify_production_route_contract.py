@@ -12,9 +12,11 @@ import urllib.request
 
 
 COMMAND_PATH = "/v1/commands"
+OPERATION_COLLECTION_PATH = "/v1/operations"
 OPERATION_TEMPLATE = "/v1/operations/{command_id}"
 OPERATION_PROBE = "/v1/operations/00000000-0000-0000-0000-000000000000"
 LEGACY_COMMAND_PATH = "/v1/integrations/n8n/commands"
+LEGACY_OPERATION_COLLECTION_PATH = "/v1/integrations/n8n/operations"
 LEGACY_OPERATION_TEMPLATE = "/v1/integrations/n8n/operations/{command_id}"
 LEGACY_OPERATION_PROBE = (
     "/v1/integrations/n8n/operations/00000000-0000-0000-0000-000000000000"
@@ -127,11 +129,13 @@ def certify(
     assert "post" in paths[command_path]
     assert "get" in paths[operation_template]
     assert "post" in paths[VICIDIAL_PATH]
-    assert "/v1/operations" not in paths
-    assert "/v1/integrations/n8n/operations" not in paths
     if expect_operations_dashboard:
+        assert "get" in paths[OPERATION_COLLECTION_PATH]
         for path in OPERATIONS_DASHBOARD_PATHS:
             assert "get" in paths[path]
+    else:
+        assert OPERATION_COLLECTION_PATH not in paths
+        assert LEGACY_OPERATION_COLLECTION_PATH not in paths
 
     command = {
         "command_id": "00000000-0000-4000-8000-000000000001",

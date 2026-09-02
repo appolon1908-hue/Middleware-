@@ -1,0 +1,115 @@
+--- a/app/provider_control_api.py
++++ b/app/provider_control_api.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ import json
++import re
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Any
+@@ -111,7 +112,10 @@
+         def inspect(item: Any) -> None:
+             if isinstance(item, dict):
+                 for raw_key, nested in item.items():
+-                    key = str(raw_key).strip().lower()
++                    raw = str(raw_key).strip()
++                    key = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", raw)
++                    key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key)
++                    key = re.sub(r"[^A-Za-z0-9]+", "_", key).strip("_").lower()
+                     if key in SENSITIVE_PAYLOAD_KEYS or key.endswith(
+                         SENSITIVE_PAYLOAD_KEY_SUFFIXES
+                     ):
+--- a/app/commands.py
++++ b/app/commands.py
+@@ -476,7 +476,7 @@
+             # The retry envelope is explicitly marked resume_from_queued by the
+             # Temporal dispatcher. Persist the failed -> queued transition here so
+             # the workflow can safely continue with queued -> dispatching.
+-            updates = {"state": "queued"}
++            updates = {"state": "queued", "last_error": None}
+         now = datetime.now().astimezone()
+         updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
+         self._commands[key] = (digest, updated)
+@@ -896,6 +896,7 @@
+                            SET state='queued',
+                                resource_version=resource_version+1,
+                                queued_at=now(),
++                               last_error=NULL,
+                                updated_at=now()
+                            WHERE tenant_id=$1 AND command_id=$2
+                            RETURNING *""",
+--- a/tests/test_provider_control_api.py
++++ b/tests/test_provider_control_api.py
+@@ -191,17 +191,29 @@
+         settings=test_settings,
+         runtime=_runtime(test_settings, capabilities_enabled=True),
+     )
++    forbidden_keys = (
++        "provider_token",
++        "accessToken",
++        "clientSecret",
++        "api-key",
++        "refresh token",
++        "privateKey",
++    )
+     with TestClient(app) as client:
+-        response = client.post(
+-            spec.route,
+-            headers=_headers(spec),
+-            json={
+-                "operation_id": str(uuid4()),
+-                "payload": {"nested": {"provider_token": "must-not-enter-ledger"}},
+-            },
+-        )
+-    assert response.status_code == 400
+-    assert response.json()["error"]["code"] == "invalid_request"
++        for index, forbidden_key in enumerate(forbidden_keys):
++            response = client.post(
++                spec.route,
++                headers=_headers(
++                    spec,
++                    idempotency_key=f"credential-rejection-{index}",
++                ),
++                json={
++                    "operation_id": str(uuid4()),
++                    "payload": {"nested": {forbidden_key: "must-not-enter-ledger"}},
++                },
++            )
++            assert response.status_code == 400
++            assert response.json()["error"]["code"] == "invalid_request"
+ 
+ 
+ def test_ai_provider_control_allows_governance_token_budget(
+--- a/tests/test_operations.py
++++ b/tests/test_operations.py
+@@ -128,4 +128,5 @@
+ 
+     assert retried.state == "queued"
+     assert retried.resource_version == 2
++    assert retried.last_error is None
+     assert store._events[("tenant-1", command.command_id)][-1].new_state == "queued"
+--- a/tests/integration/test_postgres_redis.py
++++ b/tests/integration/test_postgres_redis.py
+@@ -541,13 +541,21 @@
+         reason="known_safe_failure",
+     )
+     assert retried.state == "queued" and retried.resource_version == 2
++    assert retried.last_error is None
+     async with pool.acquire() as conn:
++        persisted_last_error = await conn.fetchval(
++            """SELECT last_error FROM middleware_commands
++               WHERE tenant_id=$1 AND command_id=$2""",
++            command.tenant_id,
++            str(command.command_id),
++        )
+         row = await conn.fetchrow(
+             """SELECT event_type,payload,idempotency_key FROM middleware_outbox
+                WHERE tenant_id=$1 AND command_id=$2 AND idempotency_key LIKE 'operation-retry:%'""",
+             command.tenant_id,
+             str(command.command_id),
+         )
++    assert persisted_last_error is None
+     assert row is not None and row["event_type"] == command.command_type
+     retry_payload = json.loads(row["payload"])
+     assert retry_payload.pop("_authenticated_client_id") == "test-client"

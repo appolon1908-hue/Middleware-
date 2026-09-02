@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import uuid
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from typing import Any, Literal, Mapping
 
 from fastapi import FastAPI, Request
@@ -329,17 +328,21 @@ def create_app(
             event.operation_id,
         )
         require_alert_operation(operation)
+        if supplied_idempotency != event.event_id:
+            raise RequestValidationError(
+                "Idempotency-Key must equal the delivery event_id"
+            )
         envelope = EventEnvelope(
             event_id=event.event_id,
             event_type="codestra.observability.alert_delivery",
             event_version="1.0",
             occurred_at=event.occurred_at,
-            received_at=datetime.now(UTC),
+            received_at=event.occurred_at,
             source=DELIVERY_CLIENT_ID,
             tenant_id=active_policy.tenant_id,
-            correlation_id=correlation_id,
+            correlation_id=operation.correlation_id,
             causation_id=str(event.operation_id),
-            idempotency_key=supplied_idempotency,
+            idempotency_key=event.event_id,
             payload={**event.model_dump(mode="json"), "actor": actor},
             metadata={
                 "recipient_policy_id": active_policy.recipient_policy_id,

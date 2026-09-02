@@ -387,8 +387,15 @@ class Settings:
     def validate(self) -> None:
         if self.app_env not in {"development", "test", "staging", "production"}:
             raise ConfigurationError("APP_ENV is not recognized")
-        if self.issuer != "https://auth.codestra.co/realms/codestra":
-            raise ConfigurationError("KEYCLOAK_ISSUER must remain canonical")
+        expected_issuer = (
+            "https://auth-staging.codestra.co/realms/codestra"
+            if self.app_env == "staging"
+            else "https://auth.codestra.co/realms/codestra"
+        )
+        if self.issuer != expected_issuer:
+            raise ConfigurationError(
+                f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
+            )
         if self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
             raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
         if self.audience != "middleware-api":

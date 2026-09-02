@@ -296,6 +296,8 @@ def staging_env() -> dict[str, str]:
         "NATS_SUBJECT_PREFIX": "codestra.staging.events",
         "TEMPORAL_NAMESPACE": "codestra-staging",
         "TEMPORAL_TASK_QUEUE": "codestra-staging-critical",
+        "KEYCLOAK_ISSUER": "https://auth-staging.codestra.co/realms/codestra",
+        "KEYCLOAK_JWKS_URI": "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
         "APP_SOURCE_SHA": "a" * 40,
         "IMAGE_DIGEST": "sha256:" + "b" * 64,
         "BUILD_TIME": "2026-08-26T23:00:00Z",
@@ -323,6 +325,25 @@ def test_staging_requires_every_webhook_secret() -> None:
         env[name] = "x" * 32
     settings = Settings.from_env(env)
     settings.validate_all_webhook_secrets()
+
+
+def test_staging_rejects_production_identity_authority() -> None:
+    env = staging_env()
+    env["KEYCLOAK_ISSUER"] = "https://auth.codestra.co/realms/codestra"
+    env["KEYCLOAK_JWKS_URI"] = "https://auth.codestra.co/realms/codestra/protocol/openid-connect/certs"
+    with pytest.raises(ConfigurationError, match="staging identity authority"):
+        Settings.from_env(env)
+
+
+def test_production_rejects_staging_identity_authority() -> None:
+    with pytest.raises(ConfigurationError, match="production identity authority"):
+        Settings.from_env(
+            {
+                "APP_ENV": "production",
+                "KEYCLOAK_ISSUER": "https://auth-staging.codestra.co/realms/codestra",
+                "KEYCLOAK_JWKS_URI": "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
+            }
+        )
 
 
 def test_runtime_profiles_reject_cross_environment_resources_and_activation() -> None:

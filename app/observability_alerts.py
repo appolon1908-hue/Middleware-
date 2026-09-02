@@ -315,12 +315,12 @@ def create_app(
                     "status_url": (
                         f"/v1/observability/alerts/{operation.command_id}"
                         if operation
-                        else f"/v1/observability/incidents/{result.incident.incident_id}"
+                        else None
                     ),
                     "events_url": (
                         f"/v1/observability/alerts/{operation.command_id}/events"
                         if operation
-                        else f"/v1/observability/incidents/{result.incident.incident_id}/timeline"
+                        else None
                     ),
                 }
             )

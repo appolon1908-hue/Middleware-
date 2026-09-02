@@ -283,8 +283,8 @@ class AlertOperationView(BaseModel):
     operation_state: str
     notification_status: str
     duplicate: bool
-    status_url: str
-    events_url: str
+    status_url: str | None
+    events_url: str | None
 
 
 class AlertSubmissionResponse(BaseModel):
@@ -413,7 +413,9 @@ def text_body(
     alert: AlertmanagerAlert,
     correlation_id: str,
     incident_id: uuid.UUID,
+    first_seen_at: datetime | None = None,
 ) -> str:
+    first_seen = first_seen_at or alert.starts_at
     values = [
         f"State: {alert.status.upper()}",
         f"Severity: {alert.labels['severity']}",
@@ -424,7 +426,7 @@ def text_body(
         f"Incident ID: {incident_id}",
         f"Summary: {alert.annotations.get('summary', alert.labels['alertname'])}",
         f"Description: {alert.annotations.get('description', '')}",
-        f"First seen: {alert.starts_at.isoformat()}",
+        f"First seen: {first_seen.isoformat()}",
         f"Ended: {alert.ends_at.isoformat() if alert.status == 'resolved' else ''}",
         f"Fingerprint: {alert.fingerprint}",
         f"Runbook: {alert.annotations.get('runbook_url', '')}",
@@ -439,7 +441,9 @@ def html_body(
     alert: AlertmanagerAlert,
     correlation_id: str,
     incident_id: uuid.UUID,
+    first_seen_at: datetime | None = None,
 ) -> str:
+    first_seen = first_seen_at or alert.starts_at
     fields = {
         "State": alert.status.upper(),
         "Severity": alert.labels["severity"],
@@ -450,7 +454,7 @@ def html_body(
         "Incident ID": str(incident_id),
         "Summary": alert.annotations.get("summary", alert.labels["alertname"]),
         "Description": alert.annotations.get("description", ""),
-        "First seen": alert.starts_at.isoformat(),
+        "First seen": first_seen.isoformat(),
         "Ended": alert.ends_at.isoformat() if alert.status == "resolved" else "",
         "Fingerprint": alert.fingerprint,
         "Runbook": alert.annotations.get("runbook_url", ""),
@@ -480,7 +484,9 @@ def build_command(
     actor: str,
     correlation_id: str,
     incident_id: uuid.UUID,
+    first_seen_at: datetime | None = None,
 ) -> CommandEnvelope:
+    first_seen = first_seen_at or alert.starts_at
     idempotency_key = idempotency_identity(
         policy=policy,
         alert=alert,
@@ -509,8 +515,18 @@ def build_command(
             "reply_to": policy.reply_to,
             "content": {
                 "subject": subject(alert),
-                "text": text_body(alert, correlation_id, incident_id),
-                "html": html_body(alert, correlation_id, incident_id),
+                "text": text_body(
+                    alert,
+                    correlation_id,
+                    incident_id,
+                    first_seen,
+                ),
+                "html": html_body(
+                    alert,
+                    correlation_id,
+                    incident_id,
+                    first_seen,
+                ),
             },
             "classification": "operational-alert",
             "recipient_policy_id": policy.recipient_policy_id,
@@ -525,7 +541,7 @@ def build_command(
                 "host": alert.labels["host"],
                 "environment": alert.labels["environment"],
                 "codestra_business": alert.labels["codestra_business"],
-                "first_seen_at": alert.starts_at.isoformat(),
+                "first_seen_at": first_seen.isoformat(),
                 "starts_at": alert.starts_at.isoformat(),
                 "ends_at": alert.ends_at.isoformat(),
                 "generator_url": alert.generator_url,

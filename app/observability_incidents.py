@@ -487,6 +487,16 @@ class MemoryIncidentStore:
                 )
                 if repeat_eligible:
                     previous = self._incidents[key]
+                    command = build_command(
+                        policy=policy,
+                        alert=alert,
+                        group_key=group_key,
+                        receiver=policy.receiver,
+                        actor=actor_id,
+                        correlation_id=correlation_id,
+                        incident_id=incident_id,
+                        first_seen_at=previous.first_seen_at,
+                    )
                     repeated_command = repeat_command(command, request_key)
                     operation = await self.commands.store.submit(
                         repeated_command,
@@ -604,6 +614,18 @@ class MemoryIncidentStore:
             )
             operation = None
             if command is not None:
+                command = build_command(
+                    policy=policy,
+                    alert=alert,
+                    group_key=group_key,
+                    receiver=policy.receiver,
+                    actor=actor_id,
+                    correlation_id=correlation_id,
+                    incident_id=incident_id,
+                    first_seen_at=(
+                        previous.first_seen_at if previous else alert.starts_at
+                    ),
+                )
                 operation = await self.commands.store.submit(
                     command,
                     authenticated_client_id=authenticated_client_id,
@@ -887,8 +909,9 @@ class MemoryIncidentStore:
     ) -> list[NotificationAttemptView]:
         await self.get(tenant_id, incident_id)
         result: list[NotificationAttemptView] = []
-        for notification_id, operation_id, kind, scheduled_at in self._notifications.get(
-            (tenant_id, incident_id), []
+        notifications = self._notifications.get((tenant_id, incident_id), [])
+        for notification_id, operation_id, kind, scheduled_at in reversed(
+            notifications
         ):
             operation = await self.commands.get(tenant_id, operation_id)
             attempts = await self.commands.list_attempts(
@@ -906,7 +929,7 @@ class MemoryIncidentStore:
                         scheduled_at=scheduled_at,
                     )
                 )
-            for attempt in attempts:
+            for attempt in reversed(attempts):
                 result.append(
                     _attempt_view(notification_id, kind, scheduled_at, operation, attempt)
                 )
@@ -1414,6 +1437,16 @@ class PostgresIncidentStore:
                     )
                     if previous is None:
                         raise IncidentConflict("repeat incident projection is missing")
+                    command = build_command(
+                        policy=policy,
+                        alert=alert,
+                        group_key=group_key,
+                        receiver=policy.receiver,
+                        actor=actor_id,
+                        correlation_id=correlation_id,
+                        incident_id=incident_id,
+                        first_seen_at=previous["first_seen_at"],
+                    )
                     state, _ = next_incident_state(previous["state"], alert.status)
                     row = await conn.fetchrow(
                         """
@@ -1571,6 +1604,16 @@ class PostgresIncidentStore:
                 operation = None
                 scheduled_at = now
                 if command is not None:
+                    command = build_command(
+                        policy=policy,
+                        alert=alert,
+                        group_key=group_key,
+                        receiver=policy.receiver,
+                        actor=actor_id,
+                        correlation_id=correlation_id,
+                        incident_id=incident_id,
+                        first_seen_at=row["first_seen_at"],
+                    )
                     if notification_kind == "grouped":
                         scheduled_at += timedelta(
                             seconds=policy.warning_group_wait_seconds
@@ -2048,7 +2091,7 @@ class PostgresIncidentStore:
                 LEFT JOIN middleware_command_attempts a ON a.tenant_id=ni.tenant_id
                   AND a.command_id=ni.operation_id
                 WHERE ni.tenant_id=$1 AND ni.incident_id=$2
-                ORDER BY ni.id ASC,a.attempt_number ASC NULLS FIRST LIMIT $3
+                ORDER BY ni.id DESC,a.attempt_number DESC NULLS LAST LIMIT $3
                 """,
                 tenant_id,
                 incident_id,

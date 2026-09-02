@@ -287,6 +287,31 @@ def test_notification_content_contains_required_incident_evidence() -> None:
     assert "First seen:" in text
 
 
+def test_notification_content_can_preserve_persisted_first_seen_time() -> None:
+    parsed = AlertmanagerWebhook.model_validate(webhook())
+    alert = parsed.alerts[0]
+    incident_id = incident_identity(policy().tenant_id, alert.fingerprint)
+    persisted_first_seen = datetime(2026, 9, 1, 8, 30, tzinfo=UTC)
+    command = build_command(
+        policy=policy(),
+        alert=alert,
+        group_key=parsed.group_key,
+        receiver=parsed.receiver,
+        actor="service-account-alertmanager-service",
+        correlation_id="corr-observability-recurrence-0001",
+        incident_id=incident_id,
+        first_seen_at=persisted_first_seen,
+    )
+
+    assert command.payload["alert"]["first_seen_at"] == (
+        persisted_first_seen.isoformat()
+    )
+    assert command.payload["alert"]["starts_at"] == alert.starts_at.isoformat()
+    assert f"First seen: {persisted_first_seen.isoformat()}" in (
+        command.payload["content"]["text"]
+    )
+
+
 def test_invalid_later_alert_does_not_partially_persist_batch() -> None:
     value = webhook()
     denied = copy.deepcopy(value["alerts"][0])
@@ -381,6 +406,8 @@ def test_alert_delivery_capability_defaults_fail_closed() -> None:
         assert response.status_code == 202
         assert response.json()["operations"][0]["operation_id"] is None
         assert response.json()["operations"][0]["notification_status"] == "disabled"
+        assert response.json()["operations"][0]["status_url"] is None
+        assert response.json()["operations"][0]["events_url"] is None
         capabilities = client.get("/capabilities")
         assert capabilities.status_code == 200
         assert capabilities.json()["OBSERVABILITY_ALERT_EMAIL_DELIVERY"] is False
@@ -624,6 +651,18 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
             "firing",
             "notification_suppressed",
             "notification_repeat",
+        ]
+        attempts = client.get(
+            f"/v1/observability/incidents/{incident_id}/notification-attempts",
+            headers=headers(
+                "observability-operator",
+                key="warning-attempts-0001",
+            ),
+        )
+        assert attempts.status_code == 200
+        assert [item["operation_id"] for item in attempts.json()["items"]] == [
+            repeated_operation,
+            first_operation,
         ]
 
 

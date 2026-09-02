@@ -386,6 +386,15 @@ async def test_warning_repeat_uses_persisted_schedule(
     assert replay.operation is not None
     assert replay.operation.command_id == repeated.operation.command_id
 
+    attempts = await incidents.store.list_notification_attempts(
+        TENANT_ID,
+        first.incident.incident_id,
+        limit=1,
+    )
+    assert [item.operation_id for item in attempts] == [
+        repeated.operation.command_id
+    ]
+
     async with pool.acquire() as conn:
         assert (
             await conn.fetchval(
@@ -406,3 +415,48 @@ async def test_warning_repeat_uses_persisted_schedule(
             )
             == 1
         )
+
+
+@pytest.mark.asyncio
+async def test_recurrence_command_preserves_incident_first_seen_time(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    first_item = alert(fingerprint="incident-recurrence-0001")
+    first = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=first_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-recurrence-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-recurrence-request-0001",
+    )
+    assert first.operation is not None
+
+    recurrence_payload = first_item.model_dump(mode="json", by_alias=True)
+    recurrence_payload["startsAt"] = "2026-09-02T17:00:00Z"
+    recurrence_item = AlertmanagerAlert.model_validate(recurrence_payload)
+    recurrence = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=recurrence_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-recurrence-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-recurrence-request-0002",
+    )
+    assert recurrence.operation is not None
+
+    async with pool.acquire() as conn:
+        payload = await conn.fetchval(
+            "SELECT payload FROM middleware_commands "
+            "WHERE tenant_id=$1 AND command_id=$2",
+            TENANT_ID,
+            str(recurrence.operation.command_id),
+        )
+    if isinstance(payload, str):
+        import json
+
+        payload = json.loads(payload)
+    alert_payload = payload["payload"]["alert"]
+    assert alert_payload["first_seen_at"] == first_item.starts_at.isoformat()
+    assert alert_payload["starts_at"] == recurrence_item.starts_at.isoformat()

@@ -3,6 +3,7 @@
   "adapters": [
     {"id":"odoo-19","cell":"core-communications","repository":"appolon1908-hue/Odoo","command_prefixes":["crm.","odoo."],"direct_n8n":false},
     {"id":"klyrow-email","cell":"core-communications","repository":"appolon1908-hue/klyrow.com","command_prefixes":["email."],"direct_n8n":false},
+    {"id":"klyrow-alert-email","cell":"observability","repository":"appolon1908-hue/klyrow.com","command_prefixes":["observability.alert."],"direct_n8n":false},
     {"id":"telnexa-sms","cell":"core-communications","repository":"appolon1908-hue/telnexa","command_prefixes":["sms."],"direct_n8n":false},
     {"id":"postly-social","cell":"core-communications","repository":"appolon1908-hue/social.codestra.co","command_prefixes":["social."],"direct_n8n":false},
     {"id":"kyqra-crawler","cell":"core-communications","repository":"appolon1908-hue/kyqra-crawler","command_prefixes":["crawler."],"direct_n8n":false},

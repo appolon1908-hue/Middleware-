@@ -16,12 +16,72 @@ ROUTE = re.compile(r"^/api/v1/[a-z0-9][a-z0-9/_-]*$")
 EXPECTED_CALLERS = {"codestra-ai", "codestra-communication", "codestra-marketing", "codestra-social", "odoo-integration"}
 EXPECTED_PROVIDER_FLAGS = {"advertising": "LIVE_ADVERTISING_ENABLED", "ai": "EXTERNAL_MODEL_CALLS_ENABLED", "email": "LIVE_EMAIL_DELIVERY", "sms": "LIVE_SMS_DELIVERY", "social": "SOCIAL_PUBLISHING_ENABLED"}
 EXPECTED_OPERATIONS = {
-    "ai.inference.request": ("codestra-ai", "ai.inference.request", "/api/v1/control/ai/inference-requests", True, "transactional_outbox", "ai"),
-    "communication.email.request": ("codestra-communication", "communication.email.request", "/api/v1/control/communications/email", True, "transactional_outbox", "email"),
-    "communication.sms.request": ("codestra-communication", "communication.sms.request", "/api/v1/control/communications/sms", True, "transactional_outbox", "sms"),
-    "marketing.campaign.request": ("codestra-marketing", "marketing.campaign.request", "/api/v1/control/marketing/campaigns", True, "transactional_outbox", "advertising"),
-    "odoo.event.publish": ("odoo-integration", "odoo.events.publish", "/api/v1/odoo/events", False, "durable_inbox", "none"),
-    "social.publish.request": ("codestra-social", "social.publish.request", "/api/v1/control/social/publications", True, "transactional_outbox", "social"),
+    "ai.inference.request": (
+        "codestra-ai",
+        "ai.inference.request",
+        "/api/v1/control/ai/inference-requests",
+        True,
+        "transactional_outbox",
+        "ai",
+        "ai.inference.request.v1",
+        "ai-provider",
+        "EXTERNAL_MODEL_CALLS",
+    ),
+    "communication.email.request": (
+        "codestra-communication",
+        "communication.email.request",
+        "/api/v1/control/communications/email",
+        True,
+        "transactional_outbox",
+        "email",
+        "email.message.send.v1",
+        "klyrow-email",
+        "EMAIL_DELIVERY",
+    ),
+    "communication.sms.request": (
+        "codestra-communication",
+        "communication.sms.request",
+        "/api/v1/control/communications/sms",
+        True,
+        "transactional_outbox",
+        "sms",
+        "sms.message.send.v1",
+        "telnexa-sms",
+        "SMS_DELIVERY",
+    ),
+    "marketing.campaign.request": (
+        "codestra-marketing",
+        "marketing.campaign.request",
+        "/api/v1/control/marketing/campaigns",
+        True,
+        "transactional_outbox",
+        "advertising",
+        "marketing.campaign.activate.v1",
+        "marketing-provider",
+        "LIVE_ADVERTISING",
+    ),
+    "odoo.event.publish": (
+        "odoo-integration",
+        "odoo.events.publish",
+        "/api/v1/odoo/events",
+        False,
+        "durable_inbox",
+        "none",
+        None,
+        None,
+        None,
+    ),
+    "social.publish.request": (
+        "codestra-social",
+        "social.publish.request",
+        "/api/v1/control/social/publications",
+        True,
+        "transactional_outbox",
+        "social",
+        "social.publication.publish.v1",
+        "postly-social",
+        "SOCIAL_PUBLISH",
+    ),
 }
 EXPECTED_ADAPTERS = {
     "advertising": ("marketing-provider-adapter", "marketing.provider.dispatch", ("marketing.provider.status.read",)),
@@ -50,7 +110,18 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
         fail("operations must be a non-empty sorted list")
     callers, identifiers, routes = set(), set(), set()
     for operation in operations:
-        if set(operation) != {"id", "caller", "scope", "route", "externalEffect", "durability", "providerClass"}:
+        if set(operation) != {
+            "id",
+            "caller",
+            "scope",
+            "route",
+            "externalEffect",
+            "durability",
+            "providerClass",
+            "commandType",
+            "target",
+            "capability",
+        }:
             fail("operation fields invalid")
         identifier, route = operation["id"], operation["route"]
         if identifier in identifiers or not SCOPE.fullmatch(identifier):
@@ -60,9 +131,15 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
         if not SCOPE.fullmatch(operation["scope"]):
             fail(f"scope invalid: {operation['scope']}")
         exact_operation = (
-            operation["caller"], operation["scope"], operation["route"],
-            operation["externalEffect"], operation["durability"],
+            operation["caller"],
+            operation["scope"],
+            operation["route"],
+            operation["externalEffect"],
+            operation["durability"],
             operation["providerClass"],
+            operation["commandType"],
+            operation["target"],
+            operation["capability"],
         )
         if exact_operation != EXPECTED_OPERATIONS.get(identifier):
             fail(f"operation authority mismatch: {identifier}")
@@ -72,8 +149,19 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
                 fail(f"external effect bypasses transactional outbox: {identifier}")
             if operation["providerClass"] not in EXPECTED_PROVIDER_FLAGS:
                 fail(f"unapproved provider class: {identifier}")
-        elif operation["providerClass"] != "none":
-            fail(f"non-effectful operation names provider: {identifier}")
+            if not SCOPE.fullmatch(operation["commandType"]):
+                fail(f"external operation command type is invalid: {identifier}")
+            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", operation["target"]):
+                fail(f"external operation target is invalid: {identifier}")
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]+", operation["capability"]):
+                fail(f"external operation capability is invalid: {identifier}")
+        elif (
+            operation["providerClass"] != "none"
+            or operation["commandType"] is not None
+            or operation["target"] is not None
+            or operation["capability"] is not None
+        ):
+            fail(f"non-effectful operation contains provider command binding: {identifier}")
     if callers != EXPECTED_CALLERS:
         fail("caller coverage mismatch")
     if identifiers != set(EXPECTED_OPERATIONS):

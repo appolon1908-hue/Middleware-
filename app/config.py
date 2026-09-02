@@ -213,6 +213,13 @@ class Settings:
                 "SCRAPPER_EXECUTION_ENABLED",
                 "LIVE_SMS_DELIVERY",
                 "LIVE_EMAIL_DELIVERY",
+                "LIVE_PSTN_DIALING",
+                "EXTERNAL_DELIVERY_ENABLED",
+                "LIVE_ADVERTISING_ENABLED",
+                "SOCIAL_PUBLISHING_ENABLED",
+                "EXTERNAL_MODEL_CALLS_ENABLED",
+                "N8N_EXTERNAL_PROVIDER_WRITES",
+                "PROVISIONING_ENABLED",
                 "UNRESTRICTED_CRAWLING",
             )
         }
@@ -402,7 +409,9 @@ class Settings:
             raise ConfigurationError("MIDDLEWARE_AUDIENCE must be middleware-api")
         self._validate_environment_profile()
         enabled = {
-            name for name, value in self.external_effects.items() if value
+            name
+            for name, value in self.external_effects.items()
+            if value and name not in UMBRELLA_CONTROL_NAMES
         }
         unsupported_enabled = sorted(enabled - SUPPORTED_EXTERNAL_EFFECTS)
         if unsupported_enabled:

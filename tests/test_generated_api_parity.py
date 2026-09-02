@@ -21,3 +21,23 @@ def test_generated_contract_documents_mutation_headers():
     for path,method in (("/v1/inbox/{record_id}/quarantine","post"),("/v1/outbox/{record_id}/cancel","post"),("/v1/operations/{command_id}/cancel","post")):
         names={item["name"] for item in contract["paths"][path][method]["parameters"]}
         assert {"X-Tenant-ID","X-Correlation-ID","Idempotency-Key"}<=names
+
+
+def test_communication_success_responses_use_typed_schemas(test_settings):
+    schema = create_app(settings=test_settings).openapi()
+    expected = {
+        ("/v1/communication/messages", "post", "CommunicationMessage"),
+        ("/v1/communications/messages", "post", "CommunicationMessage"),
+        ("/v1/communications/messages", "get", "CommunicationMessagePage"),
+        ("/v1/communications/messages/{messageId}", "get", "CommunicationMessage"),
+        ("/v1/communications/messages/{messageId}/events", "get", "CommunicationEventPage"),
+        ("/v1/communications/messages/{messageId}/cancel", "post", "CommunicationMessage"),
+        ("/v1/communications/providers/health", "get", "ProviderHealthReport"),
+        ("/v1/communications/reputation", "get", "ProviderReputationReport"),
+        ("/v1/communications/usage", "get", "CommunicationUsageReport"),
+    }
+    for path, method, model in expected:
+        response = schema["paths"][path][method]["responses"]["200"]
+        assert response["content"]["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/{model}"
+        }

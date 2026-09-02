@@ -33,3 +33,20 @@ def test_operation_openapi_exposes_bounds_and_versioned_mutation_model(test_sett
     assert limit["schema"]["maximum"] == 100
     mutation = schema["components"]["schemas"]["OperationMutationRequest"]
     assert set(mutation["required"]) == {"expected_version", "reason"}
+
+
+def test_operation_success_responses_use_typed_schemas(test_settings) -> None:
+    schema = create_app(settings=test_settings).openapi()
+    expected = {
+        ("/v1/operations", "get", "OperationListResponse"),
+        ("/v1/operations/{command_id}", "get", "OperationResponse"),
+        ("/v1/operations/{command_id}/events", "get", "OperationEventListResponse"),
+        ("/v1/operations/{command_id}/attempts", "get", "OperationAttemptListResponse"),
+        ("/v1/operations/{command_id}/cancel", "post", "OperationResponse"),
+        ("/v1/operations/{command_id}/reconcile", "post", "OperationResponse"),
+    }
+    for path, method, model in expected:
+        response = schema["paths"][path][method]["responses"]["200"]
+        assert response["content"]["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/{model}"
+        }

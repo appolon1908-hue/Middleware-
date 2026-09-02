@@ -1,0 +1,60 @@
+name: Required protected-branch validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: required-validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove exact candidate identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'REQUIRED_VALIDATE_SHA=%s\n' "$EXPECTED_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Run complete fail-closed repository validation
+        run: bash scripts/run_ci.sh
+
+      - name: Prove generated API contracts and completion matrix are current
+        run: |
+          set -Eeuo pipefail
+          python scripts/generate_api_contracts.py --check
+          python - <<'PY'
+          import pathlib
+          import re
+
+          matrix = pathlib.Path("config/api-completion-matrix.yaml").read_text(
+              encoding="utf-8"
+          )
+          assert re.search(r"(?m)^classification_complete: true$", matrix)
+          assert re.search(r"(?m)^unknown_endpoints: 0$", matrix)
+          for state in ("MISSING", "PARTIAL", "UNKNOWN"):
+              assert f"runtime_state: {state}" not in matrix
+          print("REQUIRED_API_CONTRACT_VALIDATION=PASS")
+          PY

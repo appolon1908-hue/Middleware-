@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import Request
+from starlette.requests import ClientDisconnect
 
 from middleware.connector_sdk import parse_manifest
 
@@ -22,6 +24,65 @@ from .problems import ProblemError
 from .repository import ConnectorRepository
 
 _EVENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
+_LOG = structlog.get_logger(__name__)
+
+
+async def read_limited_body(
+    request: Request,
+    *,
+    maximum_bytes: int,
+    error_code: str,
+    error_title: str,
+    error_detail: str,
+) -> bytes:
+    """Consume a request incrementally and stop before an oversized body is buffered."""
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError as error:
+            raise ProblemError(
+                status=400,
+                code="CONTENT_LENGTH_INVALID",
+                title="Invalid Content-Length",
+                detail="Content-Length must be a non-negative integer.",
+            ) from error
+        if declared < 0:
+            raise ProblemError(
+                status=400,
+                code="CONTENT_LENGTH_INVALID",
+                title="Invalid Content-Length",
+                detail="Content-Length must be a non-negative integer.",
+            )
+        if declared > maximum_bytes:
+            raise ProblemError(
+                status=413,
+                code=error_code,
+                title=error_title,
+                detail=error_detail,
+            )
+
+    chunks: list[bytes] = []
+    consumed = 0
+    try:
+        async for chunk in request.stream():
+            consumed += len(chunk)
+            if consumed > maximum_bytes:
+                raise ProblemError(
+                    status=413,
+                    code=error_code,
+                    title=error_title,
+                    detail=error_detail,
+                )
+            chunks.append(chunk)
+    except ClientDisconnect as error:
+        raise ProblemError(
+            status=400,
+            code="REQUEST_BODY_DISCONNECTED",
+            title="Request body disconnected",
+            detail="The client disconnected before the request body was complete.",
+        ) from error
+    return b"".join(chunks)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,15 +203,14 @@ class WebhookIngressService:
                 detail="The webhook endpoint is not declared by the connector.",
             )
 
-        body = await request.body()
-        if len(body) > policy.maximum_body_bytes:
-            raise ProblemError(
-                status=413,
-                code="WEBHOOK_BODY_TOO_LARGE",
-                title="Webhook body too large",
-                detail="The webhook body exceeds the connector policy.",
-            )
         headers = self._headers(request)
+        body = await read_limited_body(
+            request,
+            maximum_bytes=policy.maximum_body_bytes,
+            error_code="WEBHOOK_BODY_TOO_LARGE",
+            error_title="Webhook body too large",
+            error_detail="The webhook body exceeds the connector policy.",
+        )
         try:
             signature = self._signature(headers[policy.signature_header.lower()])
             timestamp_text = headers[policy.timestamp_header.lower()]
@@ -209,7 +269,7 @@ class WebhookIngressService:
 
         tenant_id = str(ingress["tenant_id"])
         body_sha256 = hashlib.sha256(body).hexdigest()
-        reference = self.body_store.persist(
+        reference, body_created = self.body_store.persist_with_status(
             body,
             tenant_id=tenant_id,
             webhook_id=str(webhook_id),
@@ -218,15 +278,30 @@ class WebhookIngressService:
         correlation_id = UUID(
             str(getattr(request.state, "correlation_id", uuid4()))
         )
-        duplicate, inbox_id = self.repository.persist_verified_webhook(
-            ingress=ingress,
-            event_id=event_id,
-            body_sha256=body_sha256,
-            encrypted_body_reference=reference,
-            signature_version="codestra-hmac-sha256-v1",
-            correlation_id=correlation_id,
-            traceparent=request.headers.get("traceparent"),
-        )
+        try:
+            duplicate, inbox_id = self.repository.persist_verified_webhook(
+                ingress=ingress,
+                event_id=event_id,
+                body_sha256=body_sha256,
+                encrypted_body_reference=reference,
+                signature_version="codestra-hmac-sha256-v1",
+                correlation_id=correlation_id,
+                traceparent=request.headers.get("traceparent"),
+            )
+        except ProblemError as error:
+            # A semantic conflict proves that the accepted event key owns a
+            # different digest, so this newly-created file cannot be referenced
+            # by a concurrent successful delivery. For unknown database errors,
+            # retain the body for reconciliation instead of racing a commit.
+            if body_created and error.code == "WEBHOOK_SEMANTIC_CONFLICT":
+                try:
+                    self.body_store.remove(reference)
+                except OSError as cleanup_error:
+                    _LOG.error(
+                        "encrypted_webhook_body_cleanup_failed",
+                        error_type=type(cleanup_error).__name__,
+                    )
+            raise
         return 202, {
             "data": {
                 "inbox_id": str(inbox_id),

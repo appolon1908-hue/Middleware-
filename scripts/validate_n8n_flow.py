@@ -37,6 +37,8 @@ def main() -> None:
             "workflow.trigger",
         },
         ("n8n-automation", "middleware-api"): {
+            "middleware.request.forward",
+            "middleware.status.read",
             "workflow.result.publish",
         },
     }
@@ -51,6 +53,8 @@ def main() -> None:
         "klyrow-gateway",
         "kyqra-gateway",
         "postly-adapter",
+        "ai-provider-adapter",
+        "marketing-provider-adapter",
     }
     configured = set(document.get("prohibitedDirectTargets", {}).get("n8n-automation", []))
     if configured != direct_targets:

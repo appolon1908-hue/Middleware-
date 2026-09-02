@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 from urllib.parse import parse_qs, unquote, urlparse
@@ -40,6 +40,38 @@ def _bool(env: Mapping[str, str], name: str, default: bool = False) -> bool:
     if value in FALSE_VALUES:
         return False
     raise ConfigurationError(f"{name} must be an explicit boolean")
+
+
+# Effects this runtime actually implements. Anything else must stay off, so a
+# capability cannot be switched on before its handler exists.
+SUPPORTED_EXTERNAL_EFFECTS = frozenset(
+    {
+        "SEND_EVENTS",
+        "ODOO_WRITE",
+        "FORM_ODOO_DELIVERY_ENABLED",
+        "CRAWLER_ODOO_DELIVERY_ENABLED",
+        "SCRAPPER_ODOO_DELIVERY_ENABLED",
+    }
+)
+
+EXTERNAL_DELIVERY_EFFECTS = frozenset(
+    {
+        "ODOO_WRITE",
+        "FORM_ODOO_DELIVERY_ENABLED",
+        "CRAWLER_ODOO_DELIVERY_ENABLED",
+        "SCRAPPER_ODOO_DELIVERY_ENABLED",
+    }
+)
+
+# System-wide kill switches are a separate contract from implementation-level
+# effect gates.  They must never be inferred from the lower-level controls.
+UMBRELLA_CONTROL_NAMES = (
+    "LIVE_ADVERTISING_ENABLED",
+    "EXTERNAL_DELIVERY_ENABLED",
+    "SOCIAL_PUBLISHING_ENABLED",
+    "EXTERNAL_MODEL_CALLS_ENABLED",
+    "N8N_EXTERNAL_PROVIDER_WRITES",
+)
 
 
 def _int(
@@ -83,8 +115,8 @@ def _runtime_profiles() -> dict[str, dict[str, object]]:
     if value.get("schema_version") != "1.0":
         raise ConfigurationError("runtime profile registry version is unsupported")
     raw_profiles = value.get("profiles")
-    if not isinstance(raw_profiles, list) or len(raw_profiles) != 2:
-        raise ConfigurationError("runtime profile registry must declare two profiles")
+    if not isinstance(raw_profiles, list) or len(raw_profiles) < 2:
+        raise ConfigurationError("runtime profile registry must declare at least two profiles")
     profiles: dict[str, dict[str, object]] = {}
     for raw in raw_profiles:
         if not isinstance(raw, dict):
@@ -136,6 +168,13 @@ class Settings:
     webhook_secrets: dict[str, bytes]
     outbox_dispatch_enabled: bool
     external_effects: dict[str, bool]
+    umbrella_controls: dict[str, bool]
+    odoo_base_url: str | None = None
+    odoo_default_hmac_secret: bytes = b""
+    odoo_tenant_hmac_secrets: dict[str, bytes] = field(default_factory=dict)
+    odoo_timeout_seconds: int = 20
+    release_id: str = "unknown"
+    configuration_checksum: str = "unknown"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -177,6 +216,28 @@ class Settings:
                 "UNRESTRICTED_CRAWLING",
             )
         }
+        umbrella_controls = {
+            name: _bool(source, name, False) for name in UMBRELLA_CONTROL_NAMES
+        }
+        odoo_tenant_secrets_raw = source.get("ODOO_19_TENANT_HMAC_SECRETS", "").strip()
+        odoo_tenant_secrets: dict[str, bytes] = {}
+        if odoo_tenant_secrets_raw:
+            try:
+                decoded = json.loads(odoo_tenant_secrets_raw)
+            except ValueError as exc:
+                raise ConfigurationError(
+                    "ODOO_19_TENANT_HMAC_SECRETS must be a JSON object"
+                ) from exc
+            if not isinstance(decoded, dict) or not all(
+                isinstance(key, str) and isinstance(value, str) and key and value
+                for key, value in decoded.items()
+            ):
+                raise ConfigurationError(
+                    "ODOO_19_TENANT_HMAC_SECRETS must map tenant IDs to secrets"
+                )
+            odoo_tenant_secrets = {
+                key: value.encode("utf-8") for key, value in decoded.items()
+            }
         webhook_secrets = {
             producer: source.get(_secret_env_name(producer), "").encode("utf-8")
             for producer in WEBHOOK_PRODUCERS
@@ -191,9 +252,14 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0003_immutable_event_ledger",
+                "0009_observability_incidents",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
+            release_id=source.get("RELEASE_ID", "unknown").strip(),
+            configuration_checksum=source.get(
+                "CONFIGURATION_CHECKSUM",
+                "unknown",
+            ).strip(),
             issuer=issuer,
             jwks_uri=jwks,
             jwks_timeout_seconds=_int(
@@ -301,6 +367,19 @@ class Settings:
             webhook_secrets=webhook_secrets,
             outbox_dispatch_enabled=_bool(source, "OUTBOX_DISPATCH_ENABLED", False),
             external_effects=effects,
+            umbrella_controls=umbrella_controls,
+            odoo_base_url=(source.get("ODOO_19_BASE_URL", "").strip() or None),
+            odoo_default_hmac_secret=source.get(
+                "ODOO_19_HMAC_SECRET", ""
+            ).encode("utf-8"),
+            odoo_tenant_hmac_secrets=odoo_tenant_secrets,
+            odoo_timeout_seconds=_int(
+                source,
+                "ODOO_19_TIMEOUT_SECONDS",
+                20,
+                minimum=1,
+                maximum=120,
+            ),
         )
         settings.validate()
         return settings
@@ -308,8 +387,15 @@ class Settings:
     def validate(self) -> None:
         if self.app_env not in {"development", "test", "staging", "production"}:
             raise ConfigurationError("APP_ENV is not recognized")
-        if self.issuer != "https://auth.codestra.co/realms/codestra":
-            raise ConfigurationError("KEYCLOAK_ISSUER must remain canonical")
+        expected_issuer = (
+            "https://auth-staging.codestra.co/realms/codestra"
+            if self.app_env == "staging"
+            else "https://auth.codestra.co/realms/codestra"
+        )
+        if self.issuer != expected_issuer:
+            raise ConfigurationError(
+                f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
+            )
         if self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
             raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
         if self.audience != "middleware-api":
@@ -318,12 +404,30 @@ class Settings:
         enabled = {
             name for name, value in self.external_effects.items() if value
         }
-        unsupported_enabled = sorted(enabled - {"SEND_EVENTS"})
+        unsupported_enabled = sorted(enabled - SUPPORTED_EXTERNAL_EFFECTS)
         if unsupported_enabled:
             raise ConfigurationError(
                 "provider and business effects are not implemented by this runtime: "
                 + ", ".join(unsupported_enabled)
             )
+        enabled_umbrella_controls = sorted(
+            name for name, value in self.umbrella_controls.items() if value
+        )
+        if self.app_env == "staging" and enabled_umbrella_controls:
+            raise ConfigurationError(
+                "staging umbrella controls must remain disabled: "
+                + ", ".join(enabled_umbrella_controls)
+            )
+        enabled_delivery_effects = sorted(enabled & EXTERNAL_DELIVERY_EFFECTS)
+        if (
+            enabled_delivery_effects
+            and self.umbrella_controls["EXTERNAL_DELIVERY_ENABLED"] is not True
+        ):
+            raise ConfigurationError(
+                "EXTERNAL_DELIVERY_ENABLED must be true before enabling: "
+                + ", ".join(enabled_delivery_effects)
+            )
+        self._validate_odoo_transport(enabled)
         if self.production_dialing != "DISABLED":
             raise ConfigurationError(
                 "PRODUCTION_DIALING must remain DISABLED"
@@ -487,9 +591,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0003_immutable_event_ledger":
+        if self.schema_head != "0009_observability_incidents":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0003_immutable_event_ledger"
+                "SCHEMA_HEAD must be 0009_observability_incidents"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):
@@ -499,6 +603,54 @@ class Settings:
             if self.build_time in {"", "unknown"}:
                 raise ConfigurationError("BUILD_TIME is required in staging/production")
             self.validate_all_webhook_secrets()
+
+    @property
+    def odoo_delivery_enabled(self) -> bool:
+        return (
+            self.umbrella_controls.get("EXTERNAL_DELIVERY_ENABLED") is True
+            and self.external_effects.get("ODOO_WRITE") is True
+        )
+
+    def odoo_secret_for(self, tenant_id: str) -> bytes:
+        return self.odoo_tenant_hmac_secrets.get(
+            tenant_id, self.odoo_default_hmac_secret
+        )
+
+    def odoo_source_delivery_enabled(self, provenance_method: str) -> bool:
+        gate = {
+            "submitted_by_person": "FORM_ODOO_DELIVERY_ENABLED",
+            "crawler_discovery": "CRAWLER_ODOO_DELIVERY_ENABLED",
+            "scraper_import": "SCRAPPER_ODOO_DELIVERY_ENABLED",
+        }.get(provenance_method)
+        if gate is None:
+            return False
+        return self.odoo_delivery_enabled and bool(self.external_effects.get(gate))
+
+    def _validate_odoo_transport(self, enabled: set[str]) -> None:
+        source_scoped = {
+            name for name in enabled if name.endswith("_ODOO_DELIVERY_ENABLED")
+        }
+        if source_scoped and "ODOO_WRITE" not in enabled:
+            raise ConfigurationError(
+                "source-scoped Odoo delivery requires ODOO_WRITE: "
+                + ", ".join(sorted(source_scoped))
+            )
+        if "ODOO_WRITE" not in enabled:
+            return
+        if not self.odoo_base_url:
+            raise ConfigurationError("ODOO_19_BASE_URL is required to write to Odoo")
+        if not self.odoo_base_url.startswith("https://"):
+            raise ConfigurationError("ODOO_19_BASE_URL must be an HTTPS endpoint")
+        secrets = [self.odoo_default_hmac_secret, *self.odoo_tenant_hmac_secrets.values()]
+        if not any(secrets):
+            raise ConfigurationError(
+                "ODOO_19_HMAC_SECRET or ODOO_19_TENANT_HMAC_SECRETS is required "
+                "to write to Odoo"
+            )
+        if any(secret and len(secret) < 32 for secret in secrets):
+            raise ConfigurationError(
+                "Odoo signing secrets must be at least 32 bytes"
+            )
 
     def validate_all_webhook_secrets(self) -> None:
         for producer in WEBHOOK_PRODUCERS:
@@ -526,12 +678,11 @@ class Settings:
                 )
             return
         profiles = _runtime_profiles()
-        expected_id = f"codestra-middleware-{self.app_env}-v1"
-        if self.runtime_profile_id != expected_id:
+        profile = profiles.get(self.runtime_profile_id or "")
+        if profile is None:
             raise ConfigurationError(
-                f"RUNTIME_PROFILE_ID must be {expected_id}"
+                "RUNTIME_PROFILE_ID must select a registered runtime profile"
             )
-        profile = profiles.get(expected_id)
         if profile is None or profile.get("environment") != self.app_env:
             raise ConfigurationError("runtime profile does not match APP_ENV")
         self._validate_database_profile(profile["database"])
@@ -622,7 +773,11 @@ class Settings:
         try:
             parsed = urlparse(self.database_url or "")
             port = parsed.port
-            query = parse_qs(parsed.query, strict_parsing=True)
+            query = (
+                parse_qs(parsed.query, strict_parsing=True)
+                if parsed.query
+                else {}
+            )
         except ValueError as exc:
             raise ConfigurationError("DATABASE_URL is malformed") from exc
         if (
@@ -632,7 +787,11 @@ class Settings:
             or unquote(parsed.path.lstrip("/")) != raw_profile["name"]
             or unquote(parsed.username or "") != raw_profile["username"]
             or not parsed.password
-            or query != {"sslmode": [raw_profile["sslmode"]]}
+            or query != (
+                {"sslmode": [raw_profile["sslmode"]]}
+                if raw_profile.get("sslmode")
+                else {}
+            )
             or parsed.params
             or parsed.fragment
         ):

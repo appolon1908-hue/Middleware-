@@ -5,12 +5,14 @@ import json
 from pathlib import Path
 
 import pytest
+from starlette.requests import Request
 
 from codestra_connector_runtime.api.config import RuntimeSettings
 from codestra_connector_runtime.api.crypto import EncryptedBodyStore
 from codestra_connector_runtime.api.cursor import CursorCodec
 from codestra_connector_runtime.api.problems import ProblemError
 from codestra_connector_runtime.api.repository import _etag_version
+from codestra_connector_runtime.api.webhook_ingress import read_limited_body
 
 
 def test_cursor_is_signed_and_tamper_evident() -> None:
@@ -44,8 +46,8 @@ def test_encrypted_body_store_round_trip(tmp_path: Path) -> None:
         event_id="evt-1",
     )
     assert reference.startswith("file:")
-    encrypted = (tmp_path / "bodies" / reference.removeprefix("file:")).read_bytes()
-    assert body not in encrypted
+    encrypted_path = tmp_path / "bodies" / reference.removeprefix("file:")
+    assert body not in encrypted_path.read_bytes()
     assert store.read(
         reference,
         tenant_id="11111111-1111-4111-8111-111111111111",
@@ -53,6 +55,99 @@ def test_encrypted_body_store_round_trip(tmp_path: Path) -> None:
         event_id="evt-1",
         body_sha256=__import__("hashlib").sha256(body).hexdigest(),
     ) == body
+    store.remove(reference)
+    assert not encrypted_path.exists()
+
+
+def _streaming_request(
+    chunks: list[bytes],
+    *,
+    content_length: str | None = None,
+    disconnect: bool = False,
+) -> Request:
+    headers = []
+    if content_length is not None:
+        headers.append((b"content-length", content_length.encode("ascii")))
+    messages = [
+        {"type": "http.request", "body": chunk, "more_body": True}
+        for chunk in chunks
+    ]
+    messages.append(
+        {"type": "http.disconnect"}
+        if disconnect
+        else {"type": "http.request", "body": b"", "more_body": False}
+    )
+
+    async def receive():
+        return messages.pop(0)
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/example",
+            "headers": headers,
+            "scheme": "https",
+            "server": ("test", 443),
+            "client": ("test", 1234),
+            "query_string": b"",
+        },
+        receive,
+    )
+
+
+@pytest.mark.asyncio
+async def test_limited_body_accepts_exact_limit_without_content_length() -> None:
+    request = _streaming_request([b"ab", b"cd"])
+    assert await read_limited_body(
+        request,
+        maximum_bytes=4,
+        error_code="BODY_TOO_LARGE",
+        error_title="Too large",
+        error_detail="Too large.",
+    ) == b"abcd"
+
+
+@pytest.mark.asyncio
+async def test_limited_body_rejects_misleading_content_length_incrementally() -> None:
+    request = _streaming_request([b"abc", b"def"], content_length="1")
+    with pytest.raises(ProblemError, match="Too large") as captured:
+        await read_limited_body(
+            request,
+            maximum_bytes=4,
+            error_code="BODY_TOO_LARGE",
+            error_title="Too large",
+            error_detail="Too large.",
+        )
+    assert captured.value.status == 413
+
+
+@pytest.mark.asyncio
+async def test_limited_body_rejects_declared_oversize_before_streaming() -> None:
+    request = _streaming_request([b"a"], content_length="5")
+    with pytest.raises(ProblemError) as captured:
+        await read_limited_body(
+            request,
+            maximum_bytes=4,
+            error_code="BODY_TOO_LARGE",
+            error_title="Too large",
+            error_detail="Too large.",
+        )
+    assert captured.value.status == 413
+
+
+@pytest.mark.asyncio
+async def test_limited_body_rejects_disconnect() -> None:
+    request = _streaming_request([b"ab"], disconnect=True)
+    with pytest.raises(ProblemError) as captured:
+        await read_limited_body(
+            request,
+            maximum_bytes=4,
+            error_code="BODY_TOO_LARGE",
+            error_title="Too large",
+            error_detail="Too large.",
+        )
+    assert captured.value.code == "REQUEST_BODY_DISCONNECTED"
 
 
 def test_settings_are_fail_closed(tmp_path: Path) -> None:

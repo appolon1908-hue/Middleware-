@@ -61,6 +61,10 @@ def test_event_subject_is_domain_separated() -> None:
         "codestra.events",
         "codestra.odoo.contact_updated",
     ) == "codestra.events.odoo.contact_updated"
+    assert event_subject(
+        "codestra.events",
+        "codestra.events.call_disposition_updated",
+    ) == "codestra.events.call_disposition_updated"
     with pytest.raises(NatsTransportError):
         event_subject("codestra.events", "unscoped.event")
 

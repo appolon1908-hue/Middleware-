@@ -13,6 +13,7 @@ from app.runtime_safety import runtime_safety_readback
 from scripts.staging_synthetic_acceptance import (
     AcceptanceError,
     REQUIRED_EFFECT_CONTROLS,
+    REQUIRED_UMBRELLA_CONTROLS,
     WEBHOOK_PATH,
     build_signed_event,
     run,
@@ -48,6 +49,7 @@ def test_staging_safety_validator_accepts_exact_fail_closed_release(
         expected_image_digest=IMAGE_DIGEST,
     )
     assert set(accepted["external_effects"]) == REQUIRED_EFFECT_CONTROLS
+    assert set(accepted["umbrella_controls"]) == REQUIRED_UMBRELLA_CONTROLS
 
 
 @pytest.mark.parametrize(
@@ -57,6 +59,7 @@ def test_staging_safety_validator_accepts_exact_fail_closed_release(
         (("persistence", "in_memory"), True),
         (("dispatch", "outbox_enabled"), True),
         (("external_effects", "ODOO_WRITE"), True),
+        (("umbrella_controls", "EXTERNAL_DELIVERY_ENABLED"), True),
         (("production_activation_configured",), True),
         (("staging_safe",), False),
     ],

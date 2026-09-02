@@ -104,7 +104,8 @@ The access map deliberately records current source gaps instead of claiming live
 integration:
 
 - middleware API and worker implementation source is not yet imported;
-- Odoo adapter source is missing;
+- Odoo adapter source is present on both sides — the Odoo bridge add-on and
+  the Middleware delivery adapter — but runtime remains unverified;
 - the n8n repository does not yet contain workflow source;
 - VICIdial, Telnexa, Klyrow, and Kyqra have source but runtime remains unverified;
 - a Postly repository has not been confirmed;

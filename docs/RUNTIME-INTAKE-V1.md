@@ -41,7 +41,7 @@ not include tenant, event, idempotency, correlation, or payload values.
 `/v1/runtime/safety` requires the monitoring identity's `health.read` scope and
 returns only effective non-secret controls from the running process. The
 staging acceptance gate validates this response against
-`contracts/runtime-safety-readback.v1.schema.json` before it submits a
+`contracts/runtime-safety-readback.v1.1.schema.json` before it submits a
 synthetic event.
 
 Every HTTP response receives a validated or server-generated `X-Correlation-ID`.
@@ -73,7 +73,7 @@ PostgreSQL is the correctness boundary. `middleware_inbox` has unique constraint
 
 Redis is a short lease guard against concurrent duplicate processing. PostgreSQL remains authoritative if Redis state expires.
 
-Apply every numbered migration through `0003_immutable_event_ledger` before
+Apply every numbered migration through `0009_observability_incidents` before
 starting a non-test runtime.
 
 ## Outbox, JetStream, retry and DLQ

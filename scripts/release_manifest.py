@@ -14,7 +14,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -108,6 +108,7 @@ def _runtime_profile_ids(root: Path) -> list[str]:
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ReleaseManifestError("runtime profile identities cannot be loaded") from exc
     expected = [
+        "codestra-middleware-production-compose-v1",
         "codestra-middleware-production-v1",
         "codestra-middleware-staging-v1",
     ]
@@ -317,7 +318,11 @@ def validate_manifest(
         raise ReleaseManifestError("runtime migration head is invalid")
     _expect_constant(
         runtime["runtime_profile_ids"],
-        ["codestra-middleware-production-v1", "codestra-middleware-staging-v1"],
+        [
+            "codestra-middleware-production-compose-v1",
+            "codestra-middleware-production-v1",
+            "codestra-middleware-staging-v1",
+        ],
         "runtime.runtime_profile_ids",
     )
     _expect_constant(
@@ -353,7 +358,7 @@ def validate_manifest(
         parsed_time = datetime.fromisoformat(build["built_at"].removesuffix("Z") + "+00:00")
     except ValueError as exc:
         raise ReleaseManifestError("build.built_at is not a valid timestamp") from exc
-    if parsed_time.tzinfo != UTC:
+    if parsed_time.utcoffset() != timezone.utc.utcoffset(parsed_time):
         raise ReleaseManifestError("build.built_at must use UTC")
     _expect_constant(build["runner_image"], "ubuntu-24.04", "build.runner_image")
     _expect_constant(build["provenance"], "buildkit-mode-max", "build.provenance")

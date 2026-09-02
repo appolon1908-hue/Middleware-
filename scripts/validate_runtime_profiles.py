@@ -45,18 +45,26 @@ def main() -> int:
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     assert registry["schema_version"] == "1.0"
     profiles = {
-        item["environment"]: item for item in registry["profiles"]
+        item["profile_id"]: item for item in registry["profiles"]
     }
-    assert set(profiles) == {"staging", "production"}
+    assert set(profiles) == {
+        "codestra-middleware-staging-v1",
+        "codestra-middleware-production-v1",
+        "codestra-middleware-production-compose-v1",
+    }
 
-    staging = profiles["staging"]
-    production = profiles["production"]
+    staging = profiles["codestra-middleware-staging-v1"]
+    production = profiles["codestra-middleware-production-v1"]
+    compose = profiles["codestra-middleware-production-compose-v1"]
     assert staging["profile_id"] == "codestra-middleware-staging-v1"
     assert production["profile_id"] == "codestra-middleware-production-v1"
     assert staging["production_activation_allowed"] is False
     assert production["production_activation_allowed"] is True
+    assert compose["environment"] == "production"
+    assert compose["production_activation_allowed"] is False
 
-    for environment, profile in profiles.items():
+    for profile in (staging, production):
+        environment = profile["environment"]
         marker = f"middleware-{environment}"
         assert marker in profile["database"]["host"]
         assert environment in profile["database"]["name"]
@@ -79,6 +87,31 @@ def main() -> int:
         assert template["RUNTIME_PROFILE_ID"] == profile["profile_id"]
         assert all(template.get(flag) == "false" for flag in EFFECT_FLAGS)
         assert template["PRODUCTION_DIALING"] == "DISABLED"
+
+    compose_template = load_env(
+        ROOT / "config/environments/production-compose.runtime.env.example"
+    )
+    assert compose_template["APP_ENV"] == "production"
+    assert compose_template["RUNTIME_PROFILE_ID"] == compose["profile_id"]
+    assert compose["database"] == {
+        "scheme": "postgresql",
+        "host": "codestra-postgres-1",
+        "port": 5432,
+        "name": "codestra_middleware_appolon",
+        "username": "appolon_middleware_api",
+        "sslmode": None,
+    }
+    assert compose["redis"] == {
+        "scheme": "redis",
+        "host": "redis",
+        "port": 6379,
+        "database": 0,
+        "username": "middleware-service",
+    }
+    assert all(compose_template.get(flag) == "false" for flag in EFFECT_FLAGS)
+    assert compose_template["NATS_DISPATCH_MODE"] == "disabled"
+    assert compose_template["TEMPORAL_WORKER_MODE"] == "disabled"
+    assert compose_template["PRODUCTION_DIALING"] == "DISABLED"
 
     assert staging["database"] != production["database"]
     assert staging["redis"] != production["redis"]

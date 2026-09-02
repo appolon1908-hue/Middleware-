@@ -140,3 +140,51 @@ Before enabling a source:
 - dead-letter and replay tests;
 - backup/restore and rollback evidence;
 - explicit production approval.
+
+## Adapter implementation
+
+The delivery adapter is `app/odoo_transport.py`, registered as the
+`odoo-command` outbox destination. It is wired in `workers/run_outbox.py` only
+when `ODOO_WRITE` is enabled, so the handler is unreachable while the capability
+is closed.
+
+### Outcome discipline
+
+The outbox worker distinguishes three outcomes, and the adapter maps onto them
+deliberately:
+
+| Adapter behaviour | Worker action | When |
+| --- | --- | --- |
+| returns | complete | Odoo answered 200/201, or read-back confirmed the command |
+| raises `KnownSafeRetryError` | retry | connection never established, or read-back proved Odoo never recorded the command |
+| raises anything else | quarantine for reconciliation | definitive rejection, or an outcome that cannot be confirmed |
+
+A timeout is never a failure. It is an unknown outcome, resolved by reading the
+command back from `GET /codestra/middleware/v1/commands/<id>/status` before any
+retry is permitted. If reconciliation is itself unreachable, the row stays
+quarantined rather than being retried blind.
+
+A 4xx from Odoo is a definitive rejection and is quarantined for an operator
+rather than retried, because replaying it cannot change the outcome.
+
+### Configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `ODOO_WRITE` | Master capability. Off by default; the handler is not registered while off |
+| `ODOO_19_BASE_URL` | HTTPS base URL of the Odoo bridge |
+| `ODOO_19_HMAC_SECRET` | Default signing secret, minimum 32 bytes |
+| `ODOO_19_TENANT_HMAC_SECRETS` | JSON object mapping tenant ID to secret; preferred over the default |
+| `ODOO_19_TIMEOUT_SECONDS` | Request timeout, 1-120, default 20 |
+
+Enabling `FORM_ODOO_DELIVERY_ENABLED`, `CRAWLER_ODOO_DELIVERY_ENABLED`, or
+`SCRAPPER_ODOO_DELIVERY_ENABLED` without `ODOO_WRITE` is refused at startup, so
+a source cannot outrun the capability that carries it.
+
+### Known divergence
+
+`contracts/connector.schema.json` permits only OIDC authentication methods, but
+the deployed Odoo bridge authenticates with an HMAC-signed canonical string. The
+adapter implements what the bridge actually enforces. Reconciling the connector
+registry with that reality is a separate cross-repository decision and has not
+been made here.

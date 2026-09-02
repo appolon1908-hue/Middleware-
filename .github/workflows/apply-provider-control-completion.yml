@@ -55,7 +55,7 @@ jobs:
           set -Eeuo pipefail
           python -m venv .venv-rebase
           .venv-rebase/bin/python -m pip install --disable-pip-version-check --require-hashes -r requirements-test.txt
-          .venv-rebase/bin/python scripts/generate_api_contracts.py
+          PYTHONPATH=. .venv-rebase/bin/python scripts/generate_api_contracts.py
           git add contracts/platform/middleware-openapi.generated.json \
                   contracts/platform/integration-fabric-api.v2.yaml \
                   config/api-completion-matrix.yaml

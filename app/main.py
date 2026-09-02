@@ -755,6 +755,53 @@ def create_app(
     for webhook_route in WEBHOOK_ROUTES:
         register(webhook_route)
 
+    generated_openapi = app.openapi
+
+    def canonical_openapi() -> dict:
+        schema = generated_openapi()
+        canonical_error = {
+            "type": "object",
+            "required": ["error"],
+            "properties": {
+                "error": {
+                    "type": "object",
+                    "required": ["code", "message", "correlation_id", "retryable", "details"],
+                    "properties": {
+                        "code": {"type": "string"},
+                        "message": {"type": "string"},
+                        "correlation_id": {"type": "string"},
+                        "retryable": {"type": "boolean"},
+                        "details": {"type": "object"},
+                    },
+                }
+            },
+        }
+        automatic_validation = {
+            "description": "Validation Error",
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+                }
+            },
+        }
+        for path_item in schema.get("paths", {}).values():
+            for operation in path_item.values():
+                if not isinstance(operation, dict):
+                    continue
+                responses = operation.get("responses", {})
+                if responses.get("422") != automatic_validation:
+                    continue
+                responses.pop("422")
+                invalid = responses.setdefault(
+                    "400", {"description": "Invalid canonical request"}
+                )
+                invalid["content"] = {
+                    "application/json": {"schema": canonical_error}
+                }
+        return schema
+
+    app.openapi = canonical_openapi
+
     return app
 
 

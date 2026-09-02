@@ -34,14 +34,34 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: &id002
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
         '401':
           description: Authentication failed
         '403':
@@ -50,6 +70,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -66,7 +88,7 @@ paths:
           type: string
           minLength: 1
           maxLength: 128
-      - &id002
+      - &id003
         name: X-Correlation-ID
         in: header
         required: true
@@ -74,7 +96,7 @@ paths:
           type: string
           minLength: 1
           maxLength: 180
-      - &id003
+      - &id004
         name: Idempotency-Key
         in: header
         required: true
@@ -106,14 +128,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -122,6 +141,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -338,14 +359,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -354,6 +372,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -517,14 +537,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationListResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -533,6 +550,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -561,14 +580,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -577,6 +593,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -622,14 +640,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationEventListResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -638,6 +653,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -683,14 +700,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationAttemptListResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -699,6 +713,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -720,8 +736,8 @@ paths:
           format: uuid
           title: Command Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -735,14 +751,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -751,6 +764,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -772,8 +787,8 @@ paths:
           format: uuid
           title: Command Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -787,14 +802,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -803,6 +815,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -840,14 +854,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -856,6 +867,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -893,14 +906,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -909,6 +919,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -935,14 +947,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -951,6 +960,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -977,14 +988,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -993,6 +1001,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1019,14 +1029,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1035,6 +1042,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1061,14 +1070,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1077,6 +1083,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1097,8 +1105,8 @@ paths:
           type: string
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1111,14 +1119,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1127,6 +1132,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1147,8 +1154,8 @@ paths:
           type: string
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1161,14 +1168,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1177,6 +1181,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1197,8 +1203,8 @@ paths:
           type: string
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1211,14 +1217,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1227,6 +1230,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1247,8 +1252,8 @@ paths:
           type: string
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1261,14 +1266,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1277,6 +1279,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1297,8 +1301,8 @@ paths:
           type: integer
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1311,14 +1315,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1327,6 +1328,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1347,8 +1350,8 @@ paths:
           type: integer
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1361,14 +1364,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1377,6 +1377,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1397,8 +1399,8 @@ paths:
           type: integer
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1411,14 +1413,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1427,6 +1426,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1447,8 +1448,8 @@ paths:
           type: integer
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1461,14 +1462,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1477,6 +1475,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1629,14 +1629,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1645,6 +1642,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1653,8 +1652,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/reconciliation/operations:
     get:
       tags:
@@ -1678,14 +1677,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1694,6 +1690,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1723,14 +1721,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1739,6 +1734,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1805,14 +1802,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1821,6 +1815,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1848,14 +1844,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1864,6 +1857,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1885,8 +1880,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1899,14 +1894,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1915,6 +1907,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -1936,8 +1930,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1950,14 +1944,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -1966,6 +1957,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2003,14 +1996,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2019,6 +2009,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2045,14 +2037,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2061,6 +2050,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2098,14 +2089,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2114,6 +2102,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2140,14 +2130,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2156,6 +2143,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2180,14 +2169,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2196,6 +2182,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2204,8 +2192,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/reconciliation/operations:
     get:
       tags:
@@ -2237,14 +2225,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2253,6 +2238,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2279,14 +2266,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2295,6 +2279,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2315,8 +2301,8 @@ paths:
           type: integer
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -2329,14 +2315,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2345,6 +2328,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2382,14 +2367,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2398,6 +2380,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2424,14 +2408,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2440,6 +2421,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2460,8 +2443,8 @@ paths:
           type: string
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -2474,14 +2457,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2490,6 +2470,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2510,8 +2492,8 @@ paths:
           type: string
           title: Record Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -2524,14 +2506,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2540,6 +2519,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2564,14 +2545,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2580,6 +2558,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2588,8 +2568,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/crm/commands:
     post:
       tags:
@@ -2608,14 +2588,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2624,6 +2601,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2632,8 +2611,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/email/commands:
     post:
       tags:
@@ -2652,14 +2631,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2668,6 +2644,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2676,8 +2654,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/sms/commands:
     post:
       tags:
@@ -2696,14 +2674,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2712,6 +2687,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2720,8 +2697,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/telephony/commands:
     post:
       tags:
@@ -2740,14 +2717,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2756,6 +2730,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2764,8 +2740,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/social/commands:
     post:
       tags:
@@ -2784,14 +2760,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2800,6 +2773,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2808,8 +2783,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/marketing/commands:
     post:
       tags:
@@ -2828,14 +2803,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2844,6 +2816,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2852,8 +2826,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/ai/commands:
     post:
       tags:
@@ -2872,14 +2846,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2888,6 +2859,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2896,8 +2869,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/odoo/operations/{operation_id}:
     get:
       tags:
@@ -2919,14 +2892,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2935,6 +2905,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -2962,14 +2934,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -2978,6 +2947,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3005,14 +2976,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3021,6 +2989,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3048,14 +3018,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3064,6 +3031,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3091,14 +3060,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3107,6 +3073,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3134,14 +3102,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3150,6 +3115,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3177,14 +3144,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3193,6 +3157,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3220,14 +3186,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3236,6 +3199,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3513,8 +3478,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3527,14 +3492,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3543,6 +3505,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3564,8 +3528,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3578,14 +3542,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3594,6 +3555,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3615,8 +3578,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3629,14 +3592,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3645,6 +3605,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3666,8 +3628,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3680,14 +3642,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3696,6 +3655,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3717,8 +3678,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3731,14 +3692,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3747,6 +3705,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3768,8 +3728,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3782,14 +3742,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3798,6 +3755,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3819,8 +3778,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3833,14 +3792,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3849,6 +3805,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3870,8 +3828,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3884,14 +3842,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3900,6 +3855,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3921,8 +3878,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3935,14 +3892,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -3951,6 +3905,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -3972,8 +3928,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -3986,14 +3942,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4002,6 +3955,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4023,8 +3978,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -4037,14 +3992,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4053,6 +4005,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4074,8 +4028,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -4088,14 +4042,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4104,6 +4055,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4166,14 +4119,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4182,6 +4132,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4203,8 +4155,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -4217,14 +4169,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4233,6 +4182,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4254,8 +4205,8 @@ paths:
           format: uuid
           title: Operation Id
       - *id001
-      - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -4268,14 +4219,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4284,6 +4232,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4405,14 +4355,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4421,6 +4368,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4429,8 +4378,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/odoo/mappings/validate:
     post:
       tags:
@@ -4450,14 +4399,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4466,6 +4412,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4474,8 +4422,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}:
     post:
       tags:
@@ -4507,14 +4455,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4523,6 +4468,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4548,14 +4495,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4564,6 +4508,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4589,14 +4535,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4605,6 +4548,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4630,14 +4575,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4646,6 +4588,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4926,14 +4870,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationMessage'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4942,6 +4883,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4950,8 +4893,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/communication/messages:
     post:
       summary: Create Communication Message
@@ -4975,14 +4918,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationMessage'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -4991,6 +4931,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -4999,8 +4941,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /v1/communications/messages/{messageId}:
     get:
       summary: Get Communication Message
@@ -5021,14 +4963,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationMessage'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -5037,6 +4976,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -5063,14 +5004,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationMessage'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -5079,6 +5017,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -5105,14 +5045,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationEventPage'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -5121,6 +5058,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -5140,8 +5079,8 @@ paths:
           format: uuid
           title: Messageid
       - *id001
-      - *id002
       - *id003
+      - *id004
       responses:
         '200':
           description: Successful Response
@@ -5155,14 +5094,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommunicationMessage'
           description: Accepted
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -5171,6 +5107,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -5301,14 +5239,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommunicationUsageReport'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -5317,6 +5252,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -5395,14 +5332,11 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -5411,6 +5345,8 @@ paths:
           description: Resource not found
         '409':
           description: Version, state, or idempotency conflict
+        '422':
+          description: Request cannot be processed
         '429':
           description: Rate limited
         '503':
@@ -5419,8 +5355,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/odoo/events:
     post:
       summary: Ingress-Odoo-Integration-Events
@@ -5451,8 +5387,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/n8n/results:
     post:
       summary: Ingress-N8N-Automation-Results
@@ -5483,8 +5419,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/vicidial/events:
     post:
       summary: Ingress-Vicidial-Adapter-Events
@@ -5515,8 +5451,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/telnexa/events:
     post:
       summary: Ingress-Telnexa-Gateway-Events
@@ -5547,8 +5483,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/klyrow/events:
     post:
       summary: Ingress-Klyrow-Gateway-Events
@@ -5579,8 +5515,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/kyqra/results:
     post:
       summary: Ingress-Kyqra-Gateway-Results
@@ -5611,8 +5547,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/kyqra/progress:
     post:
       summary: Ingress-Kyqra-Gateway-Progress
@@ -5643,8 +5579,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
   /api/v1/postly/events:
     post:
       summary: Ingress-Postly-Adapter-Events
@@ -5675,8 +5611,8 @@ paths:
       - bearerAuth: []
       parameters:
       - *id001
-      - *id002
       - *id003
+      - *id004
 components:
   schemas:
     CommandEnvelope:

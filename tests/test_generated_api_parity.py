@@ -51,3 +51,6 @@ def test_communication_usage_query_timestamps_are_validated(test_settings):
         "from": {"anyOf": [{"format": "date-time", "type": "string"}, {"type": "null"}], "title": "From"},
         "to": {"anyOf": [{"format": "date-time", "type": "string"}, {"type": "null"}], "title": "To"},
     }
+    responses = schema["paths"]["/v1/communications/usage"]["get"]["responses"]
+    assert "422" not in responses
+    assert responses["400"]["content"]["application/json"]["schema"]["required"] == ["error"]

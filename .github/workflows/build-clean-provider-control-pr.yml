@@ -51,17 +51,22 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          # Newer main owns the umbrella controls. Keep one canonical copy of
-          # each assignment while rejecting contradictory duplicates.
+          def replace_once(path: Path, old: str, new: str, label: str) -> None:
+              text = path.read_text(encoding="utf-8")
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"{label} drifted")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
           roots = [Path("config/runtime.env.example")]
           roots.extend(sorted(Path("config").glob("**/*.env.example")))
           for path in dict.fromkeys(roots):
               if not path.is_file():
                   continue
-              lines = path.read_text(encoding="utf-8").splitlines()
               seen: dict[str, str] = {}
               output: list[str] = []
-              for line in lines:
+              for line in path.read_text(encoding="utf-8").splitlines():
                   stripped = line.strip()
                   if not stripped or stripped.startswith("#") or "=" not in line:
                       output.append(line)
@@ -78,116 +83,37 @@ jobs:
                   output.append(line)
               path.write_text("\n".join(output) + "\n", encoding="utf-8")
 
-          # Umbrella controls are kill switches, not provider implementations.
-          # Exclude them from the unsupported-provider set, then let the
-          # dedicated staging and delivery checks enforce them fail closed.
-          config_path = Path("app/config.py")
-          config = config_path.read_text(encoding="utf-8")
-          old_enabled = '''        enabled = {
-              name for name, value in self.external_effects.items() if value
-          }
-  '''
-          new_enabled = '''        enabled = {
-              name
-              for name, value in self.external_effects.items()
-              if value and name not in UMBRELLA_CONTROL_NAMES
-          }
-  '''
-          if new_enabled not in config:
-              if old_enabled not in config:
-                  raise SystemExit("external-effect validation block drifted")
-              config = config.replace(old_enabled, new_enabled, 1)
-              config_path.write_text(config, encoding="utf-8")
-
-          # Provider-control requests must preserve verified azp provenance.
-          provider_path = Path("app/provider_control_api.py")
-          provider = provider_path.read_text(encoding="utf-8")
-          old_subject = '''    subject = claims.get("sub")
-      if not isinstance(subject, str) or not subject.strip():
-          raise AuthorizationError("machine token subject is required")
-  
-      command = CommandEnvelope(
-  '''
-          new_subject = '''    subject = claims.get("sub")
-      if not isinstance(subject, str) or not subject.strip():
-          raise AuthorizationError("machine token subject is required")
-      authenticated_client_id = claims.get("azp")
-      if (
-          not isinstance(authenticated_client_id, str)
-          or authenticated_client_id != spec.caller_client_id
-      ):
-          raise AuthorizationError("verified machine client identity is required")
-  
-      command = CommandEnvelope(
-  '''
-          if new_subject not in provider:
-              if old_subject not in provider:
-                  raise SystemExit("provider-control subject block drifted")
-              provider = provider.replace(old_subject, new_subject, 1)
-          old_submit = '''    operation = await active.commands.submit(
-          command,
-          authenticated_subject=subject,
-      )
-  '''
-          new_submit = '''    operation = await active.commands.submit(
-          command,
-          authenticated_subject=subject,
-          authenticated_client_id=authenticated_client_id,
-      )
-  '''
-          if new_submit not in provider:
-              if old_submit not in provider:
-                  raise SystemExit("provider-control submit block drifted")
-              provider = provider.replace(old_submit, new_submit, 1)
-          provider_path.write_text(provider, encoding="utf-8")
-
-          # Direct store tests must supply the trusted client identity required
-          # by the merged command authority.
-          operations_path = Path("tests/test_operations.py")
-          operations = operations_path.read_text(encoding="utf-8")
-          old_direct = "    asyncio.run(store.submit(command))\n"
-          new_direct = '''    asyncio.run(
-          store.submit(
-              command,
-              authenticated_client_id="n8n-automation",
+          replace_once(
+              Path("app/config.py"),
+              "        enabled = {\n            name for name, value in self.external_effects.items() if value\n        }\n",
+              "        enabled = {\n            name\n            for name, value in self.external_effects.items()\n            if value and name not in UMBRELLA_CONTROL_NAMES\n        }\n",
+              "external-effect validation block",
           )
-      )
-  '''
-          if new_direct not in operations:
-              if old_direct not in operations:
-                  raise SystemExit("retry test submit block drifted")
-              operations = operations.replace(old_direct, new_direct, 1)
-              operations_path.write_text(operations, encoding="utf-8")
 
-          # Prove the verified client identity reaches durable audit evidence.
-          provider_test_path = Path("tests/test_provider_control_api.py")
-          provider_test = provider_test_path.read_text(encoding="utf-8")
-          old_assertion = '''            assert stored.requested_by == spec.caller_client_id
-  
-              replay = client.post(spec.route, headers=headers, json=body)
-  '''
-          new_assertion = '''            assert stored.requested_by == spec.caller_client_id
-              events = asyncio.run(
-                  runtime.commands.list_events(  # type: ignore[union-attr]
-                      "tenant-1",
-                      operation_id,
-                      limit=10,
-                  )
-              )
-              assert (
-                  events[0].safe_metadata["authenticated_client_id"]
-                  == spec.caller_client_id
-              )
-  
-              replay = client.post(spec.route, headers=headers, json=body)
-  '''
-          if new_assertion not in provider_test:
-              if old_assertion not in provider_test:
-                  raise SystemExit("provider-control provenance assertion drifted")
-              provider_test_path.write_text(
-                  provider_test.replace(old_assertion, new_assertion, 1),
-                  encoding="utf-8",
-              )
+          replace_once(
+              Path("app/provider_control_api.py"),
+              "    subject = claims.get(\"sub\")\n    if not isinstance(subject, str) or not subject.strip():\n        raise AuthorizationError(\"machine token subject is required\")\n\n    command = CommandEnvelope(\n",
+              "    subject = claims.get(\"sub\")\n    if not isinstance(subject, str) or not subject.strip():\n        raise AuthorizationError(\"machine token subject is required\")\n    authenticated_client_id = claims.get(\"azp\")\n    if (\n        not isinstance(authenticated_client_id, str)\n        or authenticated_client_id != spec.caller_client_id\n    ):\n        raise AuthorizationError(\"verified machine client identity is required\")\n\n    command = CommandEnvelope(\n",
+              "provider-control subject block",
+          )
+          replace_once(
+              Path("app/provider_control_api.py"),
+              "    operation = await active.commands.submit(\n        command,\n        authenticated_subject=subject,\n    )\n",
+              "    operation = await active.commands.submit(\n        command,\n        authenticated_subject=subject,\n        authenticated_client_id=authenticated_client_id,\n    )\n",
+              "provider-control submit block",
+          )
+          replace_once(
+              Path("tests/test_operations.py"),
+              "    asyncio.run(store.submit(command))\n",
+              "    asyncio.run(\n        store.submit(\n            command,\n            authenticated_client_id=\"n8n-automation\",\n        )\n    )\n",
+              "retry test submit block",
+          )
+          replace_once(
+              Path("tests/test_provider_control_api.py"),
+              "            assert stored.requested_by == spec.caller_client_id\n\n            replay = client.post(spec.route, headers=headers, json=body)\n",
+              "            assert stored.requested_by == spec.caller_client_id\n            events = asyncio.run(\n                runtime.commands.list_events(  # type: ignore[union-attr]\n                    \"tenant-1\",\n                    operation_id,\n                    limit=10,\n                )\n            )\n            assert (\n                events[0].safe_metadata[\"authenticated_client_id\"]\n                == spec.caller_client_id\n            )\n\n            replay = client.post(spec.route, headers=headers, json=body)\n",
+              "provider-control provenance assertion",
+          )
           PY
           rm -f .github/workflows/build-clean-provider-control-pr.yml
           git add -A

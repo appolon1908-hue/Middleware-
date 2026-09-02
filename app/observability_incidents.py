@@ -612,6 +612,34 @@ class MemoryIncidentStore:
                 previous.state if previous else None,
                 alert.status,
             )
+            if (
+                alert.status == "resolved"
+                and notification_kind == "grouped"
+                and previous is not None
+            ):
+                for _, operation_id, kind, scheduled_at in self._notifications.get(
+                    key, []
+                ):
+                    if kind != "grouped" or scheduled_at <= now:
+                        continue
+                    pending = await self.commands.store.get(
+                        policy.tenant_id,
+                        operation_id,
+                    )
+                    if pending.state not in {"persisted", "queued"}:
+                        continue
+                    await self.commands.store.mutate_operation(
+                        policy.tenant_id,
+                        operation_id,
+                        action="cancel",
+                        actor_id=actor_id,
+                        idempotency_key=(
+                            "incident-group-wait-cancel-v1:"
+                            f"{incident_id}:{operation_id}"
+                        ),
+                        expected_version=pending.resource_version,
+                        reason="warning resolved before group wait elapsed",
+                    )
             operation = None
             if command is not None:
                 command = build_command(
@@ -752,6 +780,10 @@ class MemoryIncidentStore:
             previous = self._incidents.get(key)
             if previous is None or previous.group_key != item.group_key:
                 raise IncidentNotFound("status reconciliation incident was not found")
+            if previous.starts_at != item.starts_at:
+                raise IncidentConflict(
+                    "status evidence does not match the current alert occurrence"
+                )
             state, event_type = next_incident_state(previous.state, item.state)
             now = datetime.now(UTC)
             incident = previous.model_copy(
@@ -1242,6 +1274,94 @@ class PostgresIncidentStore:
             duplicate=True,
         )
 
+    async def _cancel_pending_grouped_notifications(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        tenant_id: str,
+        incident_id: uuid.UUID,
+        actor_id: str,
+        now: datetime,
+    ) -> None:
+        pending = await conn.fetch(
+            """
+            SELECT ni.operation_id,c.state AS previous_state,
+                   c.resource_version,o.id AS outbox_id
+            FROM middleware_observability_notification_intents ni
+            JOIN middleware_commands c ON c.tenant_id=ni.tenant_id
+              AND c.command_id=ni.operation_id
+            JOIN middleware_outbox o ON o.tenant_id=ni.tenant_id
+              AND o.command_id=ni.operation_id
+            WHERE ni.tenant_id=$1 AND ni.incident_id=$2
+              AND ni.notification_class='grouped' AND ni.scheduled_at>$3
+              AND c.state IN ('persisted','queued')
+              AND o.next_attempt_at>$3 AND o.completed_at IS NULL
+              AND o.dead_lettered_at IS NULL
+              AND o.reconciliation_required_at IS NULL
+              AND o.cancelled_at IS NULL
+              AND (o.lease_owner IS NULL OR o.lease_until<=$3)
+            ORDER BY ni.id,o.id
+            FOR UPDATE OF c,o
+            """,
+            tenant_id,
+            incident_id,
+            now,
+        )
+        updated_commands: set[str] = set()
+        for row in pending:
+            operation_id = row["operation_id"]
+            if operation_id not in updated_commands:
+                updated = await conn.fetchrow(
+                    """
+                    UPDATE middleware_commands SET state='cancelled',
+                      resource_version=resource_version+1,cancelled_at=$3,
+                      cancellation_reason=$4,updated_at=$3
+                    WHERE tenant_id=$1 AND command_id=$2
+                      AND state IN ('persisted','queued')
+                    RETURNING resource_version
+                    """,
+                    tenant_id,
+                    operation_id,
+                    now,
+                    "warning resolved before group wait elapsed",
+                )
+                if updated is not None:
+                    await conn.execute(
+                        """
+                        INSERT INTO middleware_command_audit (
+                          tenant_id,command_id,previous_state,new_state,
+                          actor_id,reason,metadata
+                        ) VALUES ($1,$2,$3,'cancelled',$4,$5,$6::jsonb)
+                        """,
+                        tenant_id,
+                        operation_id,
+                        row["previous_state"],
+                        actor_id,
+                        "warning resolved before group wait elapsed",
+                        json.dumps(
+                            {
+                                "action": "incident_group_wait_cancel",
+                                "incident_id": str(incident_id),
+                                "resource_version": updated["resource_version"],
+                            },
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ),
+                    )
+                    updated_commands.add(operation_id)
+            await conn.execute(
+                """
+                UPDATE middleware_outbox SET cancelled_at=$2,
+                  lease_owner=NULL,lease_until=NULL
+                WHERE id=$1 AND completed_at IS NULL
+                  AND dead_lettered_at IS NULL
+                  AND reconciliation_required_at IS NULL
+                  AND cancelled_at IS NULL
+                """,
+                row["outbox_id"],
+                now,
+            )
+
     async def ingest(
         self,
         *,
@@ -1550,6 +1670,18 @@ class PostgresIncidentStore:
                 previous_state = previous["state"] if previous else None
                 state, event_type = next_incident_state(previous_state, alert.status)
                 now = datetime.now(UTC)
+                if (
+                    alert.status == "resolved"
+                    and notification_kind == "grouped"
+                    and previous is not None
+                ):
+                    await self._cancel_pending_grouped_notifications(
+                        conn,
+                        tenant_id=policy.tenant_id,
+                        incident_id=incident_id,
+                        actor_id=actor_id,
+                        now=now,
+                    )
                 row = await conn.fetchrow(
                     """
                     INSERT INTO middleware_observability_incidents (
@@ -1764,6 +1896,10 @@ class PostgresIncidentStore:
                 )
                 if previous is None or previous["group_key"] != item.group_key:
                     raise IncidentNotFound("status reconciliation incident was not found")
+                if previous["starts_at"] != item.starts_at:
+                    raise IncidentConflict(
+                        "status evidence does not match the current alert occurrence"
+                    )
                 latest_observed = await conn.fetchval(
                     """
                     SELECT max(occurred_at)

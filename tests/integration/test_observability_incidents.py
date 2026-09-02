@@ -246,6 +246,25 @@ async def test_incident_command_and_notification_commit_atomically(
                 {
                     "groupKey": GROUP_KEY,
                     "fingerprint": item.fingerprint,
+                    "startsAt": "2026-09-02T15:00:00Z",
+                    "state": "silenced",
+                    "silencedBy": ["old-occurrence-silence-1"],
+                    "inhibitedBy": [],
+                }
+            ),
+            actor_id=ACTOR_ID,
+            correlation_id="incident-correlation-status-old-occurrence",
+            source_deployment="alertmanager-disposable-ci",
+            request_idempotency_key="incident-status-request-old-occurrence",
+            observed_at=datetime(2026, 9, 2, 16, 3, tzinfo=UTC),
+        )
+    with pytest.raises(IncidentConflict):
+        await incidents.store.ingest_status(
+            policy=policy(),
+            item=AlertmanagerStatusItem.model_validate(
+                {
+                    "groupKey": GROUP_KEY,
+                    "fingerprint": item.fingerprint,
                     "startsAt": "2026-09-02T16:00:00Z",
                     "state": "silenced",
                     "silencedBy": ["stale-silence-1"],
@@ -415,6 +434,62 @@ async def test_warning_repeat_uses_persisted_schedule(
             )
             == 1
         )
+
+
+@pytest.mark.asyncio
+async def test_warning_resolution_cancels_pending_grouped_outbox(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    firing_item = alert(
+        fingerprint="incident-warning-group-wait-0001",
+        severity="warning",
+    )
+    firing = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=firing_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-group-wait-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-group-wait-request-0001",
+    )
+    assert firing.operation is not None
+    assert firing.notification_status == "scheduled"
+
+    resolved_payload = firing_item.model_dump(mode="json", by_alias=True)
+    resolved_payload["status"] = "resolved"
+    resolved_payload["endsAt"] = "2026-09-02T16:02:00Z"
+    resolved_item = AlertmanagerAlert.model_validate(resolved_payload)
+    resolved = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=resolved_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-warning-group-wait-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-warning-group-wait-request-0002",
+    )
+    assert resolved.operation is not None
+    assert resolved.operation.command_id != firing.operation.command_id
+
+    async with pool.acquire() as conn:
+        command = await conn.fetchrow(
+            "SELECT state,cancellation_reason FROM middleware_commands "
+            "WHERE tenant_id=$1 AND command_id=$2",
+            TENANT_ID,
+            str(firing.operation.command_id),
+        )
+        cancelled_outbox = await conn.fetchval(
+            "SELECT cancelled_at IS NOT NULL FROM middleware_outbox "
+            "WHERE tenant_id=$1 AND command_id=$2",
+            TENANT_ID,
+            str(firing.operation.command_id),
+        )
+    assert command is not None
+    assert command["state"] == "cancelled"
+    assert command["cancellation_reason"] == (
+        "warning resolved before group wait elapsed"
+    )
+    assert cancelled_outbox is True
 
 
 @pytest.mark.asyncio

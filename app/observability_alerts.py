@@ -404,20 +404,42 @@ def create_app(
                 "status sourceDeployment must match X-Source-Deployment"
             )
         items = []
+        failures: list[CommandError] = []
         for item in snapshot.items:
-            incident = await request.app.state.runtime.incidents.store.ingest_status(
-                policy=active_policy,
-                item=item,
-                actor_id=actor,
-                correlation_id=correlation_id,
-                source_deployment=deployment,
-                request_idempotency_key=supplied_idempotency,
-                observed_at=snapshot.observed_at,
+            try:
+                incident = (
+                    await request.app.state.runtime.incidents.store.ingest_status(
+                        policy=active_policy,
+                        item=item,
+                        actor_id=actor,
+                        correlation_id=correlation_id,
+                        source_deployment=deployment,
+                        request_idempotency_key=supplied_idempotency,
+                        observed_at=snapshot.observed_at,
+                    )
+                )
+            except CommandError as exc:
+                failures.append(exc)
+                items.append(
+                    {
+                        "fingerprint": item.fingerprint,
+                        "result_status": "rejected",
+                        "code": exc.code,
+                        "message": str(exc),
+                        "retryable": exc.retryable,
+                    }
+                )
+                continue
+            value = incident.model_dump(mode="json")
+            value["result_status"] = (
+                "duplicate" if incident.duplicate else "applied"
             )
-            items.append(incident.model_dump(mode="json"))
+            items.append(value)
             request.app.state.metrics["status_sync"] += 1
+        if len(snapshot.items) == 1 and failures:
+            raise failures[0]
         return JSONResponse(
-            status_code=200,
+            status_code=207 if failures else 200,
             content={"items": items},
             headers={"X-Correlation-ID": correlation_id},
         )

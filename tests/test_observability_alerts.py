@@ -5,6 +5,7 @@ import copy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import jwt
 import yaml
@@ -666,6 +667,53 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
         ]
 
 
+def test_warning_resolution_cancels_pending_grouped_notification() -> None:
+    value = webhook()
+    value["alerts"][0]["labels"]["severity"] = "warning"
+    active_runtime = runtime()
+    runtime_app = create_app(
+        settings=settings(),
+        runtime=active_runtime,
+        policy=policy(),
+        env={
+            "OBSERVABILITY_ALERT_EMAIL_DELIVERY": "true",
+            "OBSERVABILITY_ALERT_ACTIVATION_ID": "CHG-TEST-OBS-ALERT-01",
+        },
+    )
+    with TestClient(runtime_app) as client:
+        firing = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-group-wait-firing-0001"),
+        )
+        assert firing.status_code == 202
+        firing_operation = firing.json()["operations"][0]["operation_id"]
+
+        resolved_value = copy.deepcopy(value)
+        resolved_value["status"] = "resolved"
+        resolved_value["alerts"][0]["status"] = "resolved"
+        resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:02:00Z"
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="warning-group-wait-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        assert resolved.json()["operations"][0]["operation_id"] != firing_operation
+
+    assert active_runtime.commands is not None
+    cancelled = asyncio.run(
+        active_runtime.commands.get(
+            "codestra-platform",
+            UUID(firing_operation),
+        )
+    )
+    assert cancelled.state == "cancelled"
+    assert cancelled.cancellation_reason == (
+        "warning resolved before group wait elapsed"
+    )
+
+
 def test_status_cycles_and_rejects_stale_observations() -> None:
     value = webhook()
     with TestClient(app()) as client:
@@ -708,6 +756,16 @@ def test_status_cycles_and_rejects_stale_observations() -> None:
         assert firing.status_code == 200
         assert firing.json()["items"][0]["state"] == "firing"
 
+        wrong_occurrence = status_payload("2026-09-02T16:05:00Z", "silenced")
+        wrong_occurrence["items"][0]["startsAt"] = "2026-09-02T15:00:00Z"
+        rejected_occurrence = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=wrong_occurrence,
+            headers=headers(key="status-cycle-old-occurrence-0001"),
+        )
+        assert rejected_occurrence.status_code == 409
+        assert rejected_occurrence.json()["code"] == "incident_conflict"
+
         stale = client.post(
             "/v1/integrations/alertmanager/status-events",
             json=status_payload("2026-09-02T16:01:00Z", "silenced"),
@@ -729,6 +787,48 @@ def test_status_cycles_and_rejects_stale_observations() -> None:
             headers=headers("observability-operator", key="status-cycle-read-0001"),
         )
         assert detail.json()["state"] == "firing"
+
+
+def test_status_snapshot_reports_partial_application_per_item() -> None:
+    value = webhook()
+    with TestClient(app()) as client:
+        accepted = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="status-partial-alert-0001"),
+        )
+        incident_id = accepted.json()["operations"][0]["incident_id"]
+        valid = {
+            "groupKey": value["groupKey"],
+            "fingerprint": value["alerts"][0]["fingerprint"],
+            "startsAt": value["alerts"][0]["startsAt"],
+            "state": "silenced",
+            "silencedBy": ["silence-partial-1"],
+            "inhibitedBy": [],
+        }
+        missing = copy.deepcopy(valid)
+        missing["fingerprint"] = "missing-partial-incident"
+        response = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json={
+                "observedAt": "2026-09-02T16:10:00Z",
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [valid, missing],
+            },
+            headers=headers(key="status-partial-snapshot-0001"),
+        )
+        assert response.status_code == 207
+        assert [item["result_status"] for item in response.json()["items"]] == [
+            "applied",
+            "rejected",
+        ]
+        assert response.json()["items"][1]["code"] == "incident_not_found"
+
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers("observability-operator", key="status-partial-read-0001"),
+        )
+        assert detail.json()["state"] == "silenced"
 
 
 def test_postgres_mutation_query_casts_conditional_parameters() -> None:

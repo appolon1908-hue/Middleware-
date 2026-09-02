@@ -49,6 +49,11 @@ the source observation time in the immutable timeline. The observation time is
 part of the semantic idempotency digest. Status cycles such as firing to silenced
 to firing are retained, while observations at or before the latest persisted
 status evidence fail closed with `409` and cannot overwrite current state.
+Status evidence must also carry the exact `startsAt` of the incident's current
+occurrence, so a delayed snapshot cannot suppress a later recurrence. A
+multi-item snapshot returns explicit per-item results and HTTP `207` when only
+part of the snapshot applies; single-item conflicts retain their canonical
+error status.
 
 Notification policy is deterministic: critical/high are immediate, warning is
 grouped after 300 seconds with a 14,400-second repeat contract, and info is
@@ -61,6 +66,10 @@ decision. Delivery remains disabled by default. When enabled later, the incident
 transaction creates a governed `observability.alert.email.send.v1` command, its
 command audit/outbox, and a notification intent. The provider adapter still
 requires read-back before authoritative completion. No direct SMTP path exists.
+If a warning resolves while its grouped notification is still waiting, the same
+transaction cancels the pending firing command and outbox record before creating
+the resolved intent. This prevents a stale firing notification from being
+dispatched after resolution while preserving cancellation audit evidence.
 
 ## Persistence and atomicity
 

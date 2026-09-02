@@ -49,6 +49,7 @@ paths:
             schema: {$ref: '#/components/schemas/AlertmanagerStatusSnapshot'}
       responses:
         '200': {description: Status transitions were persisted idempotently}
+        '207': {description: Per-item results for a partially applied status snapshot}
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}

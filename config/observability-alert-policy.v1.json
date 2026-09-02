@@ -15,7 +15,7 @@
     "critical",
     "warning"
   ],
-  "max_alerts_per_request": 20,
+  "max_alerts_per_request": 1,
   "max_body_bytes": 131072,
   "normal_delivery_path": "middleware-klyrow-adapter",
   "direct_smtp_allowed": false,

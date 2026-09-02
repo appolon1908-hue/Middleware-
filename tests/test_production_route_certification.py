@@ -4,10 +4,11 @@ from pathlib import Path
 
 def test_certification_uses_parameterized_operation_and_exact_provider_route():
     assert certification.COMMAND_PATH == "/v1/commands"
+    assert certification.OPERATION_COLLECTION_PATH == "/v1/operations"
     assert certification.OPERATION_TEMPLATE == "/v1/operations/{command_id}"
     assert certification.OPERATION_PROBE.endswith("00000000-0000-0000-0000-000000000000")
     assert certification.VICIDIAL_PATH == "/api/v1/vicidial/events"
-    assert certification.OPERATION_PROBE != "/v1/operations"
+    assert certification.OPERATION_PROBE != certification.OPERATION_COLLECTION_PATH
     assert "/v1/operations-dashboard/overview" in certification.OPERATIONS_DASHBOARD_PATHS
     assert "/v1/operations-dashboard/tenants/{tenant_id}" in certification.OPERATIONS_DASHBOARD_PATHS
 
@@ -23,10 +24,17 @@ def test_certification_rejects_unregistered_or_open_responses():
     )
 
 
-def test_dashboard_route_certification_is_explicit_for_the_new_image():
+def test_dashboard_and_generated_contract_certification_are_explicit():
     assert certification.certify.__kwdefaults__ == {
         "expect_operations_dashboard": False,
+        "contract_file": None,
     }
+
+
+def test_generated_contract_loader_requires_an_openapi_paths_object(tmp_path):
+    contract = tmp_path / "openapi.json"
+    contract.write_text('{"openapi":"3.1.0","paths":{}}', encoding="utf-8")
+    assert certification.load_contract(str(contract))["paths"] == {}
 
 
 def test_middleware_independently_enforces_complete_machine_identity_contract():

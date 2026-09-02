@@ -1,0 +1,242 @@
+name: Build clean provider-control completion branch
+
+on:
+  push:
+    branches:
+      - chatgpt/provider-control-runtime-v2-20260902
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-clean-provider-control-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out exact current-main branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: chatgpt/provider-control-runtime-v2-20260902
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Apply net provider-control production diff
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD^)" = "454d7d659cbb95e5e21443c5d6bb7794ddfe2880"
+          git diff --binary \
+            5d830ab1c3629447a873b45dca19a043adea78e0 \
+            abbae5a7075ae4a260da562eb7136f6171703a25 \
+            -- . \
+            ':(exclude).github/workflows/**' \
+            ':(exclude)config/test-skip-register.v1.json' \
+            > "$RUNNER_TEMP/provider-control.patch"
+          test -s "$RUNNER_TEMP/provider-control.patch"
+          git apply --3way --index "$RUNNER_TEMP/provider-control.patch"
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+      - name: Reconcile current identity and umbrella-safety authorities
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # Newer main owns the umbrella controls. Keep one canonical copy of
+          # each assignment while rejecting contradictory duplicates.
+          roots = [Path("config/runtime.env.example")]
+          roots.extend(sorted(Path("config").glob("**/*.env.example")))
+          for path in dict.fromkeys(roots):
+              if not path.is_file():
+                  continue
+              lines = path.read_text(encoding="utf-8").splitlines()
+              seen: dict[str, str] = {}
+              output: list[str] = []
+              for line in lines:
+                  stripped = line.strip()
+                  if not stripped or stripped.startswith("#") or "=" not in line:
+                      output.append(line)
+                      continue
+                  key, value = line.split("=", 1)
+                  key = key.strip()
+                  if key in seen:
+                      if seen[key] != value:
+                          raise SystemExit(
+                              f"conflicting duplicate environment key {key} in {path}"
+                          )
+                      continue
+                  seen[key] = value
+                  output.append(line)
+              path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
+          # Umbrella controls are kill switches, not provider implementations.
+          # Exclude them from the unsupported-provider set, then let the
+          # dedicated staging and delivery checks enforce them fail closed.
+          config_path = Path("app/config.py")
+          config = config_path.read_text(encoding="utf-8")
+          old_enabled = '''        enabled = {
+              name for name, value in self.external_effects.items() if value
+          }
+  '''
+          new_enabled = '''        enabled = {
+              name
+              for name, value in self.external_effects.items()
+              if value and name not in UMBRELLA_CONTROL_NAMES
+          }
+  '''
+          if new_enabled not in config:
+              if old_enabled not in config:
+                  raise SystemExit("external-effect validation block drifted")
+              config = config.replace(old_enabled, new_enabled, 1)
+              config_path.write_text(config, encoding="utf-8")
+
+          # Provider-control requests must preserve verified azp provenance.
+          provider_path = Path("app/provider_control_api.py")
+          provider = provider_path.read_text(encoding="utf-8")
+          old_subject = '''    subject = claims.get("sub")
+      if not isinstance(subject, str) or not subject.strip():
+          raise AuthorizationError("machine token subject is required")
+  
+      command = CommandEnvelope(
+  '''
+          new_subject = '''    subject = claims.get("sub")
+      if not isinstance(subject, str) or not subject.strip():
+          raise AuthorizationError("machine token subject is required")
+      authenticated_client_id = claims.get("azp")
+      if (
+          not isinstance(authenticated_client_id, str)
+          or authenticated_client_id != spec.caller_client_id
+      ):
+          raise AuthorizationError("verified machine client identity is required")
+  
+      command = CommandEnvelope(
+  '''
+          if new_subject not in provider:
+              if old_subject not in provider:
+                  raise SystemExit("provider-control subject block drifted")
+              provider = provider.replace(old_subject, new_subject, 1)
+          old_submit = '''    operation = await active.commands.submit(
+          command,
+          authenticated_subject=subject,
+      )
+  '''
+          new_submit = '''    operation = await active.commands.submit(
+          command,
+          authenticated_subject=subject,
+          authenticated_client_id=authenticated_client_id,
+      )
+  '''
+          if new_submit not in provider:
+              if old_submit not in provider:
+                  raise SystemExit("provider-control submit block drifted")
+              provider = provider.replace(old_submit, new_submit, 1)
+          provider_path.write_text(provider, encoding="utf-8")
+
+          # Direct store tests must supply the trusted client identity required
+          # by the merged command authority.
+          operations_path = Path("tests/test_operations.py")
+          operations = operations_path.read_text(encoding="utf-8")
+          old_direct = "    asyncio.run(store.submit(command))\n"
+          new_direct = '''    asyncio.run(
+          store.submit(
+              command,
+              authenticated_client_id="n8n-automation",
+          )
+      )
+  '''
+          if new_direct not in operations:
+              if old_direct not in operations:
+                  raise SystemExit("retry test submit block drifted")
+              operations = operations.replace(old_direct, new_direct, 1)
+              operations_path.write_text(operations, encoding="utf-8")
+
+          # Prove the verified client identity reaches durable audit evidence.
+          provider_test_path = Path("tests/test_provider_control_api.py")
+          provider_test = provider_test_path.read_text(encoding="utf-8")
+          old_assertion = '''            assert stored.requested_by == spec.caller_client_id
+  
+              replay = client.post(spec.route, headers=headers, json=body)
+  '''
+          new_assertion = '''            assert stored.requested_by == spec.caller_client_id
+              events = asyncio.run(
+                  runtime.commands.list_events(  # type: ignore[union-attr]
+                      "tenant-1",
+                      operation_id,
+                      limit=10,
+                  )
+              )
+              assert (
+                  events[0].safe_metadata["authenticated_client_id"]
+                  == spec.caller_client_id
+              )
+  
+              replay = client.post(spec.route, headers=headers, json=body)
+  '''
+          if new_assertion not in provider_test:
+              if old_assertion not in provider_test:
+                  raise SystemExit("provider-control provenance assertion drifted")
+              provider_test_path.write_text(
+                  provider_test.replace(old_assertion, new_assertion, 1),
+                  encoding="utf-8",
+              )
+          PY
+          rm -f .github/workflows/build-clean-provider-control-pr.yml
+          git add -A
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --cached --check
+
+      - name: Install exact locked test dependencies
+        run: |
+          set -Eeuo pipefail
+          python -m venv .venv-clean-pr
+          .venv-clean-pr/bin/python -m pip install --disable-pip-version-check --no-input --quiet --upgrade pip
+          .venv-clean-pr/bin/python -m pip install --disable-pip-version-check --no-input --quiet --require-hashes -r requirements-test.txt
+
+      - name: Regenerate exact source contracts
+        run: |
+          set -Eeuo pipefail
+          PYTHONPATH=. .venv-clean-pr/bin/python scripts/generate_api_contracts.py
+          git add contracts/platform/integration-fabric-api.v2.yaml \
+                  contracts/platform/middleware-openapi.generated.json \
+                  config/api-completion-matrix.yaml
+          git diff --cached --check
+
+      - name: Run focused merged-authority regressions
+        run: |
+          set -Eeuo pipefail
+          .venv-clean-pr/bin/python scripts/validate_staging_intake_observability_contract.py
+          .venv-clean-pr/bin/python -m pytest -q \
+            tests/test_odoo_transport.py \
+            tests/test_security.py \
+            tests/test_runtime.py \
+            tests/test_operations.py \
+            tests/test_temporal_transport.py \
+            tests/test_provider_control_api.py \
+            tests/test_authority_compatibility.py
+
+      - name: Run complete locked source certification
+        run: |
+          set -Eeuo pipefail
+          bash scripts/run_ci.sh
+          git diff --check
+          git diff --cached --check
+
+      - name: Commit and push clean current-main source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          git config user.name "ChatGPT repository remediation"
+          git config user.email "noreply@openai.com"
+          git commit -m "feat: complete provider control runtime on current main"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/chatgpt/provider-control-runtime-v2-20260902"

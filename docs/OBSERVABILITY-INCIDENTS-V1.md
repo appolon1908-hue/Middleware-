@@ -53,7 +53,13 @@ Status evidence must also carry the exact `startsAt` of the incident's current
 occurrence, so a delayed snapshot cannot suppress a later recurrence. For a
 resolved occurrence, its persisted `endsAt` is also ordering evidence: a status
 snapshot observed at or before that instant cannot reopen the incident. A
-multi-item snapshot returns explicit per-item results and HTTP `207` when only
+webhook transition whose `startsAt` predates the persisted occurrence is also
+rejected before replay or projection mutation, so a delayed resolved or firing
+webhook cannot replace a newer recurrence. PostgreSQL status events retain the
+original sanitized response projection; retrying an older status request after
+a newer status has applied therefore returns the original result without
+rewinding the current projection. A multi-item snapshot returns explicit
+per-item results and HTTP `207` when only
 part of the snapshot applies; single-item conflicts retain their canonical
 error status.
 
@@ -67,7 +73,12 @@ entry commit atomically. Replaying either transport identity returns its origina
 decision, including whether a grouped notification is still scheduled or was
 queued immediately as a repeat. Suppression events derive that decision from the
 referenced notification operation's durable repeat event, so later replay cannot
-change `queued` back to `scheduled`. Delivery remains disabled by default. When
+change `queued` back to `scheduled`. When
+the current projection is resolved, acknowledged, inhibited, or silenced, a
+delayed firing transport cannot activate or repeat a warning notification.
+Status suppression/resolution and operator resolution cancel any still-pending
+group-wait command and outbox record in the same transaction. Delivery remains
+disabled by default. When
 enabled later, a firing incident that was previously recorded without a delivery
 intent is atomically given its first governed
 `observability.alert.email.send.v1` command, command audit/outbox, notification

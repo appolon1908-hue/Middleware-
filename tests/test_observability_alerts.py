@@ -810,6 +810,155 @@ def test_warning_resolution_cancels_pending_grouped_notification() -> None:
     )
 
 
+def test_status_suppression_cancels_group_wait_and_blocks_delayed_repeat() -> None:
+    value = webhook()
+    value["alerts"][0]["labels"]["severity"] = "warning"
+    active_runtime = runtime()
+    runtime_app = create_app(
+        settings=settings(),
+        runtime=active_runtime,
+        policy=policy(),
+        env={
+            "OBSERVABILITY_ALERT_EMAIL_DELIVERY": "true",
+            "OBSERVABILITY_ALERT_ACTIVATION_ID": "CHG-TEST-OBS-ALERT-01",
+        },
+    )
+    with TestClient(runtime_app) as client:
+        firing = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-status-firing-0001"),
+        )
+        assert firing.status_code == 202
+        incident_id = firing.json()["operations"][0]["incident_id"]
+        operation_id = firing.json()["operations"][0]["operation_id"]
+        snapshot = {
+            "observedAt": "2026-09-02T16:01:00Z",
+            "sourceDeployment": "alertmanager-test-1",
+            "items": [
+                {
+                    "groupKey": value["groupKey"],
+                    "fingerprint": value["alerts"][0]["fingerprint"],
+                    "startsAt": value["alerts"][0]["startsAt"],
+                    "state": "silenced",
+                    "silencedBy": ["silence-group-wait-1"],
+                    "inhibitedBy": [],
+                }
+            ],
+        }
+        silenced = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=snapshot,
+            headers=headers(key="warning-status-silenced-0001"),
+        )
+        assert silenced.status_code == 200
+        assert silenced.json()["items"][0]["state"] == "silenced"
+
+        assert active_runtime.incidents is not None
+        store = active_runtime.incidents.store
+        notification_key = next(iter(store._notifications))  # type: ignore[attr-defined]
+        notification = store._notifications[notification_key][0]  # type: ignore[attr-defined]
+        store._notifications[notification_key][0] = (  # type: ignore[attr-defined]
+            notification[0],
+            notification[1],
+            notification[2],
+            datetime.now(UTC) - timedelta(seconds=14_401),
+        )
+        delayed = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-status-delayed-firing-0001"),
+        )
+        assert delayed.status_code == 200
+        assert delayed.json()["operations"][0]["operation_id"] == operation_id
+        assert len(store._notifications[notification_key]) == 1  # type: ignore[attr-defined]
+
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers("observability-operator", key="warning-status-read-0001"),
+        )
+        assert detail.json()["state"] == "silenced"
+
+    assert active_runtime.commands is not None
+    cancelled = asyncio.run(
+        active_runtime.commands.get("codestra-platform", UUID(operation_id))
+    )
+    assert cancelled.state == "cancelled"
+
+
+def test_operator_resolution_cancels_pending_group_wait() -> None:
+    value = webhook()
+    value["alerts"][0]["labels"]["severity"] = "warning"
+    active_runtime = runtime()
+    runtime_app = create_app(
+        settings=settings(),
+        runtime=active_runtime,
+        policy=policy(),
+        env={
+            "OBSERVABILITY_ALERT_EMAIL_DELIVERY": "true",
+            "OBSERVABILITY_ALERT_ACTIVATION_ID": "CHG-TEST-OBS-ALERT-01",
+        },
+    )
+    with TestClient(runtime_app) as client:
+        firing = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="warning-operator-firing-0001"),
+        )
+        operation_id = firing.json()["operations"][0]["operation_id"]
+        incident_id = firing.json()["operations"][0]["incident_id"]
+        resolved = client.post(
+            f"/v1/observability/incidents/{incident_id}/resolve",
+            json={"expected_version": 1, "reason": "operator verified recovery"},
+            headers=headers(
+                "observability-operator", key="warning-operator-resolve-0001"
+            ),
+        )
+        assert resolved.status_code == 200
+        assert resolved.json()["state"] == "resolved"
+
+    assert active_runtime.commands is not None
+    cancelled = asyncio.run(
+        active_runtime.commands.get("codestra-platform", UUID(operation_id))
+    )
+    assert cancelled.state == "cancelled"
+    assert cancelled.cancellation_reason == (
+        "warning was resolved before group wait elapsed"
+    )
+
+
+def test_delayed_webhook_cannot_replace_a_newer_alert_occurrence() -> None:
+    first_value = webhook()
+    newer_value = copy.deepcopy(first_value)
+    newer_value["alerts"][0]["startsAt"] = "2026-09-02T17:00:00Z"
+    with TestClient(app()) as client:
+        first = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=first_value,
+            headers=headers(key="occurrence-first-0001"),
+        )
+        assert first.status_code == 202
+        incident_id = first.json()["operations"][0]["incident_id"]
+        newer = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=newer_value,
+            headers=headers(key="occurrence-newer-0001"),
+        )
+        assert newer.status_code == 202
+        delayed = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=first_value,
+            headers=headers(key="occurrence-delayed-0001"),
+        )
+        assert delayed.status_code == 409
+        assert delayed.json()["code"] == "incident_conflict"
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers("observability-operator", key="occurrence-read-0001"),
+        )
+        assert detail.json()["starts_at"] == "2026-09-02T17:00:00Z"
+
+
 def test_status_cycles_and_rejects_stale_observations() -> None:
     value = webhook()
     with TestClient(app()) as client:

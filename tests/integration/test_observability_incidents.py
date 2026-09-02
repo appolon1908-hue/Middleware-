@@ -677,3 +677,223 @@ async def test_recurrence_command_preserves_incident_first_seen_time(
     alert_payload = payload["payload"]["alert"]
     assert alert_payload["first_seen_at"] == first_item.starts_at.isoformat()
     assert alert_payload["starts_at"] == recurrence_item.starts_at.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_status_replay_returns_its_original_projection(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    item = alert(fingerprint="incident-status-replay-0001")
+    await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-replay-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-replay-alert-0001",
+    )
+    silenced_item = AlertmanagerStatusItem.model_validate(
+        {
+            "groupKey": GROUP_KEY,
+            "fingerprint": item.fingerprint,
+            "startsAt": "2026-09-02T16:00:00Z",
+            "state": "silenced",
+            "silencedBy": ["disposable-silence-replay-1"],
+            "inhibitedBy": [],
+        }
+    )
+    silenced = await incidents.store.ingest_status(
+        policy=policy(),
+        item=silenced_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-replay-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-replay-request-0001",
+        observed_at=datetime(2026, 9, 2, 16, 1, tzinfo=UTC),
+    )
+    firing = await incidents.store.ingest_status(
+        policy=policy(),
+        item=AlertmanagerStatusItem.model_validate(
+            {
+                "groupKey": GROUP_KEY,
+                "fingerprint": item.fingerprint,
+                "startsAt": "2026-09-02T16:00:00Z",
+                "state": "firing",
+                "silencedBy": [],
+                "inhibitedBy": [],
+            }
+        ),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-replay-correlation-0003",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-replay-request-0002",
+        observed_at=datetime(2026, 9, 2, 16, 2, tzinfo=UTC),
+    )
+    replay = await incidents.store.ingest_status(
+        policy=policy(),
+        item=silenced_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-replay-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-replay-request-0001",
+        observed_at=datetime(2026, 9, 2, 16, 1, tzinfo=UTC),
+    )
+    assert silenced.state == "silenced"
+    assert firing.state == "firing"
+    assert replay.state == "silenced"
+    assert replay.resource_version == silenced.resource_version
+    assert replay.duplicate is True
+    current = await incidents.store.get(TENANT_ID, firing.incident_id)
+    assert current.state == "firing"
+    assert current.resource_version == firing.resource_version
+
+
+@pytest.mark.asyncio
+async def test_status_suppression_cancels_group_wait_and_blocks_repeat(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    item = alert(fingerprint="incident-status-group-wait-0001", severity="warning")
+    first = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-group-wait-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-group-wait-alert-0001",
+    )
+    assert first.operation is not None
+    silenced = await incidents.store.ingest_status(
+        policy=policy(),
+        item=AlertmanagerStatusItem.model_validate(
+            {
+                "groupKey": GROUP_KEY,
+                "fingerprint": item.fingerprint,
+                "startsAt": "2026-09-02T16:00:00Z",
+                "state": "silenced",
+                "silencedBy": ["disposable-silence-group-wait-1"],
+                "inhibitedBy": [],
+            }
+        ),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-group-wait-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-group-wait-request-0001",
+        observed_at=datetime(2026, 9, 2, 16, 1, tzinfo=UTC),
+    )
+    assert silenced.state == "silenced"
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """UPDATE middleware_observability_notification_intents
+               SET scheduled_at=now() - interval '14401 seconds'
+               WHERE tenant_id=$1 AND incident_id=$2""",
+            TENANT_ID,
+            first.incident.incident_id,
+        )
+    delayed = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-status-group-wait-correlation-0003",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-status-group-wait-alert-0002",
+    )
+    assert delayed.incident.state == "silenced"
+    assert delayed.operation is not None
+    assert delayed.operation.command_id == first.operation.command_id
+    assert delayed.operation.state == "cancelled"
+    async with pool.acquire() as conn:
+        assert await conn.fetchval(
+            "SELECT count(*) FROM middleware_observability_notification_intents WHERE tenant_id=$1 AND incident_id=$2",
+            TENANT_ID,
+            first.incident.incident_id,
+        ) == 1
+        assert await conn.fetchval(
+            "SELECT cancelled_at IS NOT NULL FROM middleware_outbox WHERE tenant_id=$1 AND command_id=$2",
+            TENANT_ID,
+            str(first.operation.command_id),
+        ) is True
+
+
+@pytest.mark.asyncio
+async def test_operator_resolution_cancels_group_wait_outbox(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    item = alert(fingerprint="incident-operator-group-wait-0001", severity="warning")
+    first = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-operator-group-wait-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-operator-group-wait-alert-0001",
+    )
+    assert first.operation is not None
+    resolved = await incidents.store.mutate(
+        TENANT_ID,
+        first.incident.incident_id,
+        action="resolve",
+        actor_id="service-account-observability-operator",
+        correlation_id="incident-operator-group-wait-correlation-0002",
+        idempotency_key="incident-operator-group-wait-resolve-0001",
+        expected_version=first.incident.resource_version,
+        reason="operator verified recovery",
+    )
+    assert resolved.state == "resolved"
+    async with pool.acquire() as conn:
+        command = await conn.fetchrow(
+            "SELECT state,cancellation_reason FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+            TENANT_ID,
+            str(first.operation.command_id),
+        )
+        outbox_cancelled = await conn.fetchval(
+            "SELECT cancelled_at IS NOT NULL FROM middleware_outbox WHERE tenant_id=$1 AND command_id=$2",
+            TENANT_ID,
+            str(first.operation.command_id),
+        )
+    assert command["state"] == "cancelled"
+    assert command["cancellation_reason"] == (
+        "warning was resolved before group wait elapsed"
+    )
+    assert outbox_cancelled is True
+
+
+@pytest.mark.asyncio
+async def test_delayed_webhook_cannot_replace_newer_occurrence(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    first_item = alert(fingerprint="incident-delayed-occurrence-0001")
+    first = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=first_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-delayed-occurrence-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-delayed-occurrence-request-0001",
+    )
+    newer_payload = first_item.model_dump(mode="json", by_alias=True)
+    newer_payload["startsAt"] = "2026-09-02T17:00:00Z"
+    newer_item = AlertmanagerAlert.model_validate(newer_payload)
+    newer = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=newer_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-delayed-occurrence-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-delayed-occurrence-request-0002",
+    )
+    with pytest.raises(IncidentConflict):
+        await incidents.ingest(
+            group_key=GROUP_KEY,
+            alert=first_item,
+            actor_id=ACTOR_ID,
+            correlation_id="incident-delayed-occurrence-correlation-0003",
+            source_deployment="alertmanager-disposable-ci",
+            request_idempotency_key="incident-delayed-occurrence-request-0003",
+        )
+    current = await incidents.store.get(TENANT_ID, first.incident.incident_id)
+    assert current.starts_at == newer_item.starts_at
+    assert current.resource_version == newer.incident.resource_version

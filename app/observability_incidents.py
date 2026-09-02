@@ -426,6 +426,36 @@ class MemoryIncidentStore:
         self._events.setdefault((incident.tenant_id, incident.incident_id), []).append(event)
         return event
 
+    async def _cancel_pending_grouped_notifications(
+        self,
+        *,
+        tenant_id: str,
+        incident_id: uuid.UUID,
+        actor_id: str,
+        now: datetime,
+        reason: str,
+    ) -> None:
+        for _, operation_id, kind, scheduled_at in self._notifications.get(
+            (tenant_id, incident_id), []
+        ):
+            if kind != "grouped" or scheduled_at <= now:
+                continue
+            pending = await self.commands.store.get(tenant_id, operation_id)
+            if pending.state not in {"persisted", "queued"}:
+                continue
+            await self.commands.store.mutate_operation(
+                tenant_id,
+                operation_id,
+                action="cancel",
+                actor_id=actor_id,
+                idempotency_key=(
+                    "incident-group-wait-cancel-v1:"
+                    f"{incident_id}:{operation_id}"
+                ),
+                expected_version=pending.resource_version,
+                reason=reason,
+            )
+
     async def ingest(
         self,
         *,
@@ -448,6 +478,16 @@ class MemoryIncidentStore:
             {"group_key": group_key, "alert": alert.model_dump(mode="json")}
         )
         async with self._lock:
+            incident_id = incident_identity(policy.tenant_id, alert.fingerprint)
+            key = (policy.tenant_id, incident_id)
+            current_projection = self._incidents.get(key)
+            if (
+                current_projection is not None
+                and alert.starts_at < current_projection.starts_at
+            ):
+                raise IncidentConflict(
+                    "alert transition predates the current alert occurrence"
+                )
             transition_replay = self._event_replays.get(
                 f"{policy.tenant_id}:{event_key}"
             )
@@ -479,13 +519,13 @@ class MemoryIncidentStore:
                         "alert transition identity was reused with different content"
                     )
                 now = datetime.now(UTC)
-                incident_id = incident_identity(policy.tenant_id, alert.fingerprint)
-                key = (policy.tenant_id, incident_id)
                 notifications = self._notifications.get(key, [])
                 if (
                     alert.status == "firing"
                     and command is not None
                     and not notifications
+                    and current_projection is not None
+                    and current_projection.state == "firing"
                 ):
                     previous = self._incidents[key]
                     command = build_command(
@@ -569,6 +609,8 @@ class MemoryIncidentStore:
                     and notification_kind == "grouped"
                     and command is not None
                     and notifications
+                    and current_projection is not None
+                    and current_projection.state == "firing"
                     and now
                     >= max(item[3] for item in notifications)
                     + timedelta(seconds=policy.warning_repeat_interval_seconds)
@@ -643,10 +685,11 @@ class MemoryIncidentStore:
                     return result
 
                 value = transition_replay[1]
+                current_incident = self._incidents[key]
                 replay_result = value.model_copy(
                     update={
                         "duplicate": True,
-                        "incident": value.incident.model_copy(
+                        "incident": current_incident.model_copy(
                             update={"duplicate": True}
                         ),
                         "operation": (
@@ -693,8 +736,6 @@ class MemoryIncidentStore:
                 return replay_result
 
             now = datetime.now(UTC)
-            incident_id = incident_identity(policy.tenant_id, alert.fingerprint)
-            key = (policy.tenant_id, incident_id)
             previous = self._incidents.get(key)
             state, event_type = next_incident_state(
                 previous.state if previous else None,
@@ -705,29 +746,13 @@ class MemoryIncidentStore:
                 and notification_kind == "grouped"
                 and previous is not None
             ):
-                for _, operation_id, kind, scheduled_at in self._notifications.get(
-                    key, []
-                ):
-                    if kind != "grouped" or scheduled_at <= now:
-                        continue
-                    pending = await self.commands.store.get(
-                        policy.tenant_id,
-                        operation_id,
-                    )
-                    if pending.state not in {"persisted", "queued"}:
-                        continue
-                    await self.commands.store.mutate_operation(
-                        policy.tenant_id,
-                        operation_id,
-                        action="cancel",
-                        actor_id=actor_id,
-                        idempotency_key=(
-                            "incident-group-wait-cancel-v1:"
-                            f"{incident_id}:{operation_id}"
-                        ),
-                        expected_version=pending.resource_version,
-                        reason="warning resolved before group wait elapsed",
-                    )
+                await self._cancel_pending_grouped_notifications(
+                    tenant_id=policy.tenant_id,
+                    incident_id=incident_id,
+                    actor_id=actor_id,
+                    now=now,
+                    reason="warning resolved before group wait elapsed",
+                )
             operation = None
             if command is not None:
                 command = build_command(
@@ -881,6 +906,14 @@ class MemoryIncidentStore:
                 raise IncidentConflict("status observation is not newer than current evidence")
             state, event_type = next_incident_state(previous.state, item.state)
             now = datetime.now(UTC)
+            if item.state in {"resolved", "silenced", "inhibited"}:
+                await self._cancel_pending_grouped_notifications(
+                    tenant_id=policy.tenant_id,
+                    incident_id=incident_id,
+                    actor_id=actor_id,
+                    now=now,
+                    reason="warning left firing state before group wait elapsed",
+                )
             incident = previous.model_copy(
                 update={
                     "state": state,
@@ -1000,6 +1033,14 @@ class MemoryIncidentStore:
                 "resolve": "resolved",
                 "reopen": "firing",
             }[action]
+            if action == "resolve":
+                await self._cancel_pending_grouped_notifications(
+                    tenant_id=tenant_id,
+                    incident_id=incident_id,
+                    actor_id=actor_id,
+                    now=now,
+                    reason="warning was resolved before group wait elapsed",
+                )
             incident = previous.model_copy(
                 update={
                     "state": state,
@@ -1380,6 +1421,7 @@ class PostgresIncidentStore:
         incident_id: uuid.UUID,
         actor_id: str,
         now: datetime,
+        reason: str,
     ) -> None:
         pending = await conn.fetch(
             """
@@ -1421,7 +1463,7 @@ class PostgresIncidentStore:
                     tenant_id,
                     operation_id,
                     now,
-                    "warning resolved before group wait elapsed",
+                    reason,
                 )
                 if updated is not None:
                     await conn.execute(
@@ -1435,7 +1477,7 @@ class PostgresIncidentStore:
                         operation_id,
                         row["previous_state"],
                         actor_id,
-                        "warning resolved before group wait elapsed",
+                        reason,
                         json.dumps(
                             {
                                 "action": "incident_group_wait_cancel",
@@ -1488,6 +1530,19 @@ class PostgresIncidentStore:
                     "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
                     f"{policy.tenant_id}:{alert.fingerprint}",
                 )
+                current_projection = await conn.fetchrow(
+                    """SELECT * FROM middleware_observability_incidents
+                       WHERE tenant_id=$1 AND incident_id=$2 FOR UPDATE""",
+                    policy.tenant_id,
+                    incident_id,
+                )
+                if (
+                    current_projection is not None
+                    and alert.starts_at < current_projection["starts_at"]
+                ):
+                    raise IncidentConflict(
+                        "alert transition predates the current alert occurrence"
+                    )
                 replays = await conn.fetch(
                     """
                     SELECT e.incident_id,e.operation_id,e.payload_sha256,e.id,
@@ -1570,12 +1625,16 @@ class PostgresIncidentStore:
                         alert.status == "firing"
                         and command is not None
                         and latest_notification is None
+                        and current_projection is not None
+                        and current_projection["state"] == "firing"
                     )
                     repeat_eligible = (
                         alert.status == "firing"
                         and notification_kind == "grouped"
                         and command is not None
                         and latest_notification is not None
+                        and current_projection is not None
+                        and current_projection["state"] == "firing"
                         and now
                         >= latest_notification["scheduled_at"]
                         + timedelta(
@@ -1830,12 +1889,7 @@ class PostgresIncidentStore:
                         duplicate=False,
                     )
 
-                previous = await conn.fetchrow(
-                    """SELECT * FROM middleware_observability_incidents
-                       WHERE tenant_id=$1 AND incident_id=$2 FOR UPDATE""",
-                    policy.tenant_id,
-                    incident_id,
-                )
+                previous = current_projection
                 previous_state = previous["state"] if previous else None
                 state, event_type = next_incident_state(previous_state, alert.status)
                 now = datetime.now(UTC)
@@ -1850,6 +1904,7 @@ class PostgresIncidentStore:
                         incident_id=incident_id,
                         actor_id=actor_id,
                         now=now,
+                        reason="warning resolved before group wait elapsed",
                     )
                 row = await conn.fetchrow(
                     """
@@ -2032,7 +2087,7 @@ class PostgresIncidentStore:
                     f"{policy.tenant_id}:{item.fingerprint}",
                 )
                 replays = await conn.fetch(
-                    """SELECT id,incident_id,payload_sha256
+                    """SELECT id,incident_id,payload_sha256,safe_metadata
                        FROM middleware_observability_incident_events
                        WHERE tenant_id=$1
                          AND (event_key=$2 OR request_idempotency_key=$3)
@@ -2049,14 +2104,15 @@ class PostgresIncidentStore:
                             "status identities disagree or contain different content"
                         )
                     replay = replays[0]
-                    row = await conn.fetchrow(
-                        """SELECT * FROM middleware_observability_incidents
-                           WHERE tenant_id=$1 AND incident_id=$2""",
-                        policy.tenant_id,
-                        replay["incident_id"],
+                    metadata = self._json(replay["safe_metadata"])
+                    response_payload = metadata.get("response_payload")
+                    if not isinstance(response_payload, dict):
+                        raise IncidentConflict(
+                            "status replay response evidence is missing"
+                        )
+                    return IncidentRecord.model_validate(response_payload).model_copy(
+                        update={"duplicate": True}
                     )
-                    assert row is not None
-                    return self._incident(row, duplicate=True)
                 previous = await conn.fetchrow(
                     """SELECT * FROM middleware_observability_incidents
                        WHERE tenant_id=$1 AND incident_id=$2 FOR UPDATE""",
@@ -2095,6 +2151,15 @@ class PostgresIncidentStore:
                     )
                 state, event_type = next_incident_state(previous["state"], item.state)
                 now = datetime.now(UTC)
+                if item.state in {"resolved", "silenced", "inhibited"}:
+                    await self._cancel_pending_grouped_notifications(
+                        conn,
+                        tenant_id=policy.tenant_id,
+                        incident_id=incident_id,
+                        actor_id=actor_id,
+                        now=now,
+                        reason="warning left firing state before group wait elapsed",
+                    )
                 row = await conn.fetchrow(
                     """
                     UPDATE middleware_observability_incidents SET
@@ -2114,6 +2179,7 @@ class PostgresIncidentStore:
                     correlation_id,
                 )
                 assert row is not None
+                incident = self._incident(row)
                 event_id = await conn.fetchval(
                     """
                     INSERT INTO middleware_observability_incident_events (
@@ -2140,6 +2206,7 @@ class PostgresIncidentStore:
                             "silenced_by": sorted(item.silenced_by),
                             "inhibited_by": sorted(item.inhibited_by),
                             "status_source": "alertmanager-status",
+                            "response_payload": incident.model_dump(mode="json"),
                         },
                         separators=(",", ":"),
                     ),
@@ -2159,7 +2226,7 @@ class PostgresIncidentStore:
                     state,
                     correlation_id,
                 )
-                return self._incident(row)
+                return incident
 
     async def get(self, tenant_id: str, incident_id: uuid.UUID) -> IncidentRecord:
         async with self.pool.acquire() as conn:
@@ -2305,6 +2372,15 @@ class PostgresIncidentStore:
                     "reopen": "firing",
                 }[action]
                 now = datetime.now(UTC)
+                if action == "resolve":
+                    await self._cancel_pending_grouped_notifications(
+                        conn,
+                        tenant_id=tenant_id,
+                        incident_id=incident_id,
+                        actor_id=actor_id,
+                        now=now,
+                        reason="warning was resolved before group wait elapsed",
+                    )
                 row = await conn.fetchrow(
                     """
                     UPDATE middleware_observability_incidents SET

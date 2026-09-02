@@ -11,7 +11,7 @@ import asyncpg
 from .models import EventEnvelope, IngressResult
 
 
-RUNTIME_SCHEMA_VERSION = 5
+RUNTIME_SCHEMA_VERSION = 6
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
@@ -294,6 +294,7 @@ class PostgresInboxStore:
         "middleware_operation_mutations": {"id", "tenant_id", "command_id", "action", "actor_id", "idempotency_key", "request_sha256", "response_status", "response_payload", "created_at"},
         "middleware_control_mutations": {"id","tenant_id","resource_kind","resource_id","action","actor_id","api_version","idempotency_key","request_sha256","response_status","response_payload","created_at"},
         "middleware_control_audit": {"id","tenant_id","resource_kind","resource_id","action","actor_id","reason","previous_state","new_state","metadata","created_at"},
+        "middleware_outbox_attempt_events": {"id","outbox_id","tenant_id","attempt_number","event_type","worker_id","safe_error_code","created_at"},
     }
     REQUIRED_UDT_TYPES = {
         ("middleware_schema_migrations", "version"): "int4",
@@ -391,6 +392,14 @@ class PostgresInboxStore:
         ("middleware_control_audit", "new_state"): "text",
         ("middleware_control_audit", "metadata"): "jsonb",
         ("middleware_control_audit", "created_at"): "timestamptz",
+        ("middleware_outbox_attempt_events", "id"): "int8",
+        ("middleware_outbox_attempt_events", "outbox_id"): "int8",
+        ("middleware_outbox_attempt_events", "tenant_id"): "text",
+        ("middleware_outbox_attempt_events", "attempt_number"): "int4",
+        ("middleware_outbox_attempt_events", "event_type"): "text",
+        ("middleware_outbox_attempt_events", "worker_id"): "text",
+        ("middleware_outbox_attempt_events", "safe_error_code"): "text",
+        ("middleware_outbox_attempt_events", "created_at"): "timestamptz",
     }
     REQUIRED_KEYS = {
         ("middleware_schema_migrations", "PRIMARY KEY", ("version",)),
@@ -420,6 +429,7 @@ class PostgresInboxStore:
         ("middleware_control_mutations", "PRIMARY KEY", ("id",)),
         ("middleware_control_mutations", "UNIQUE", ("tenant_id","resource_kind","resource_id","action","actor_id","api_version","idempotency_key")),
         ("middleware_control_audit", "PRIMARY KEY", ("id",)),
+        ("middleware_outbox_attempt_events", "PRIMARY KEY", ("id",)),
     }
     REQUIRED_TRIGGERS = {
         "middleware_event_ledger_immutable",
@@ -428,6 +438,7 @@ class PostgresInboxStore:
         "middleware_operation_mutations_immutable",
         "middleware_control_mutations_immutable",
         "middleware_control_audit_immutable",
+        "middleware_outbox_attempt_events_immutable",
     }
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -816,6 +827,8 @@ class PostgresOutboxStore:
                     lease_seconds,
                     max_attempts,
                 )
+                if row:
+                    await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id) VALUES($1,$2,$3,'claimed',$4)",row["id"],row["tenant_id"],row["attempt_count"],worker_id)
         if not row:
             return None
         raw_payload = row["payload"]
@@ -832,17 +845,20 @@ class PostgresOutboxStore:
 
     async def complete(self, record_id: int, *, worker_id: str) -> None:
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
+          async with conn.transaction():
+            row = await conn.fetchrow(
                 """
                 UPDATE middleware_outbox
                 SET completed_at=now(), lease_owner=NULL, lease_until=NULL, last_error=NULL
                 WHERE id=$1 AND lease_owner=$2 AND reconciliation_required_at IS NULL
+                RETURNING tenant_id,attempt_count
                 """,
                 record_id,
                 worker_id,
             )
-            if result != "UPDATE 1":
+            if row is None:
                 raise StorageError("outbox lease ownership lost before completion")
+            await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id) VALUES($1,$2,$3,'completed',$4)",record_id,row["tenant_id"],row["attempt_count"],worker_id)
 
     async def quarantine_unknown_outcome(
         self,
@@ -858,27 +874,24 @@ class PostgresOutboxStore:
             raise ValueError("lease_seconds must be positive")
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
-                """
-                UPDATE middleware_outbox
-                SET last_error=$3,
-                    reconciliation_required_at=now(),
-                    lease_until=now() + ($4 * interval '1 second')
-                WHERE id=$1
-                  AND lease_owner=$2
-                  AND lease_until IS NOT NULL
-                  AND lease_until > now()
-                  AND completed_at IS NULL
-                  AND dead_lettered_at IS NULL
-                  AND reconciliation_required_at IS NULL
-                """,
-                record_id,
-                worker_id,
-                safe_error,
-                lease_seconds,
-            )
-            if result != "UPDATE 1":
-                raise StorageError("outbox lease ownership lost before reconciliation quarantine")
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    UPDATE middleware_outbox
+                    SET last_error=$3,
+                        reconciliation_required_at=now(),
+                        lease_until=now() + ($4 * interval '1 second')
+                    WHERE id=$1 AND lease_owner=$2 AND lease_until IS NOT NULL
+                      AND lease_until > now() AND completed_at IS NULL
+                      AND dead_lettered_at IS NULL
+                      AND reconciliation_required_at IS NULL
+                    RETURNING tenant_id,attempt_count
+                    """,
+                    record_id, worker_id, safe_error, lease_seconds,
+                )
+                if row is None:
+                    raise StorageError("outbox lease ownership lost before reconciliation quarantine")
+                await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id,safe_error_code) VALUES($1,$2,$3,'unknown_outcome',$4,'unknown_provider_outcome')",record_id,row["tenant_id"],row["attempt_count"],worker_id)
 
     async def renew_active_dispatch(
         self,
@@ -1052,7 +1065,8 @@ class PostgresOutboxStore:
             raise ValueError("max_attempts must be positive")
         safe_error = error[:2048]
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
+            async with conn.transaction():
+                row = await conn.fetchrow(
                 """
                 UPDATE middleware_outbox
                 SET last_error=$3,
@@ -1069,11 +1083,13 @@ class PostgresOutboxStore:
                 WHERE id=$1
                   AND lease_owner=$2
                   AND reconciliation_required_at IS NULL
+                RETURNING tenant_id,attempt_count
                 """,
-                record_id,
-                worker_id,
-                safe_error,
-                max_attempts,
-            )
-            if result != "UPDATE 1":
-                raise StorageError("outbox lease ownership lost before retry transition")
+                    record_id,
+                    worker_id,
+                    safe_error,
+                    max_attempts,
+                )
+                if row is None:
+                    raise StorageError("outbox lease ownership lost before retry transition")
+                await conn.execute("INSERT INTO middleware_outbox_attempt_events(outbox_id,tenant_id,attempt_number,event_type,worker_id,safe_error_code) VALUES($1,$2,$3,'failed',$4,'delivery_failed')",record_id,row["tenant_id"],row["attempt_count"],worker_id)

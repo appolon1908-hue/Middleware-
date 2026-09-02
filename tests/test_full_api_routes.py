@@ -10,7 +10,7 @@ from app.contracts import ROUTE_BY_PATH
 
 REQUIRED={
 "/v1/inbox","/v1/inbox/{record_id}","/v1/inbox/{record_id}/events","/v1/inbox/{record_id}/reprocess","/v1/inbox/{record_id}/quarantine","/v1/inbox/{record_id}/release",
-"/v1/outbox","/v1/outbox/{record_id}","/v1/outbox/{record_id}/attempts","/v1/outbox/{record_id}/cancel","/v1/outbox/{record_id}/retry",
+"/v1/outbox","/v1/outbox/{record_id}","/v1/outbox/{record_id}/attempts","/v1/outbox/{record_id}/cancel","/v1/outbox/{record_id}/retry","/v1/outbox/{record_id}/reconcile","/v1/reconciliation/operations/{record_id}/request",
 "/v1/system/capabilities","/v1/system/safety-state","/v1/system/readiness","/v1/policy/effective","/v1/policy/decisions","/v1/reconciliation/operations","/v1/audit/events","/v1/providers/status",
 "/v1/integrations/n8n/operations","/v1/integrations/n8n/operations/{operation_id}/cancel","/v1/integrations/n8n/operations/{operation_id}/reconcile",
 "/v1/email/commands","/v1/sms/commands","/v1/telephony/commands","/v1/social/commands","/v1/marketing/commands","/v1/ai/commands","/v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}","/webhooks/vicidial/call-result/{webhook_id}"}

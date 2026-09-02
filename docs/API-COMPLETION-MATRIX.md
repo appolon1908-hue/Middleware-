@@ -5,7 +5,7 @@ generated from the registered FastAPI runtime by
 `scripts/generate_api_contracts.py`; the same run writes the JSON OpenAPI and
 `contracts/platform/integration-fabric-api.v2.yaml`.
 
-The inventory contains 114 registered method/path operations, classifies every
+The inventory contains 116 registered method/path operations, classifies every
 entry as `IMPLEMENTED` or `DEPRECATED`, and contains no `UNKNOWN`, `PARTIAL`, or
 `MISSING` entry. Deprecated compatibility routes remain executable.
 

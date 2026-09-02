@@ -67,6 +67,7 @@ async def pool() -> asyncpg.Pool:
         for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
     ]
     async with pool.acquire() as conn:
+        await conn.execute("DROP TABLE IF EXISTS middleware_outbox_attempt_events CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_control_mutations CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_control_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_operation_mutations CASCADE")
@@ -478,6 +479,13 @@ async def test_outbox_claim_carries_idempotency_and_skip_locked(pool: asyncpg.Po
     assert len(claimed) == 1
     assert claimed[0].idempotency_key == "delivery-idem-1"
     assert claimed[0].attempt_count == 1
+    owner="worker-a" if one is not None else "worker-b"
+    await store.complete(claimed[0].id,worker_id=owner)
+    async with pool.acquire() as conn:
+        events=await conn.fetch("SELECT event_type,attempt_number FROM middleware_outbox_attempt_events WHERE outbox_id=$1 ORDER BY id",claimed[0].id)
+        assert [(row["event_type"],row["attempt_number"]) for row in events]==[("claimed",1),("completed",1)]
+        with pytest.raises(asyncpg.PostgresError):
+            await conn.execute("DELETE FROM middleware_outbox_attempt_events WHERE outbox_id=$1",claimed[0].id)
 
 
 @pytest.mark.asyncio

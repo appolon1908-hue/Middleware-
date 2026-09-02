@@ -539,6 +539,12 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: outbox
   method: POST
+  path: /v1/outbox/{record_id}/reconcile
+  canonical_operation_id: outbox_reconcile_v1_outbox__record_id__reconcile_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: outbox
+  method: POST
   path: /v1/outbox/{record_id}/retry
   canonical_operation_id: outbox_retry_v1_outbox__record_id__retry_post
   implementation_file: registered FastAPI runtime
@@ -565,6 +571,12 @@ operations:
   method: GET
   path: /v1/reconciliation/operations
   canonical_operation_id: reconciliation_list_v1_reconciliation_operations_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: reconciliation
+  method: POST
+  path: /v1/reconciliation/operations/{record_id}/request
+  canonical_operation_id: outbox_reconcile_v1_reconciliation_operations__record_id__request_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: runtime

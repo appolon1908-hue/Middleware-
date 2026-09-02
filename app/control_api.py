@@ -104,7 +104,7 @@ async def inbox_events(record_id:str,request:Request):
 @router.get("/v1/outbox/{record_id}/attempts")
 async def outbox_attempts(record_id:int,request:Request):
     tenant=await _auth(request); row=await _detail(request,"outbox",str(record_id)); pool=_pool(request)
-    async with pool.acquire() as conn: audit=await conn.fetch("SELECT id,action,operator_id,reason,attempt_count,created_at FROM middleware_reconciliation_audit WHERE tenant_id=$1 AND outbox_id=$2 ORDER BY created_at,id",tenant,record_id)
+    async with pool.acquire() as conn: audit=await conn.fetch("SELECT id AS attempt_event_id,attempt_number,event_type,worker_id,safe_error_code,created_at FROM middleware_outbox_attempt_events WHERE tenant_id=$1 AND outbox_id=$2 ORDER BY attempt_number,id",tenant,record_id)
     return {"items":[dict(r) for r in audit],"attempt_count":row["attempt_count"],"next_cursor":None}
 
 
@@ -131,19 +131,29 @@ async def _mutate(request:Request,kind:str,rid:str,action:str,body:ControlMutati
             elif action=="release": sql="UPDATE middleware_inbox SET released_at=now(),quarantined_at=NULL,quarantine_reason=NULL,status='accepted',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
             else: sql="UPDATE middleware_inbox SET reprocess_requested_at=now(),status='accepted',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
         else:
-            if row["completed_at"] or row["dead_lettered_at"]:
+            if row["completed_at"] or row["dead_lettered_at"] or row["cancelled_at"]:
                 from .commands import CommandConflict
                 raise CommandConflict("outbox record is terminal")
+            if row["reconciliation_required_at"]:
+                from .commands import CommandConflict
+                raise CommandConflict("ambiguous delivery requires reconciliation")
             if action=="cancel": sql="UPDATE middleware_outbox SET cancelled_at=now(),lease_owner=NULL,lease_until=NULL,resource_version=resource_version+1 WHERE tenant_id=$1 AND id=$2 AND (lease_until IS NULL OR lease_until<now()) RETURNING *"
+            elif action=="reconcile": sql="UPDATE middleware_outbox SET reconciliation_required_at=now(),lease_owner=NULL,lease_until=NULL,resource_version=resource_version+1,last_error='manual reconciliation requested' WHERE tenant_id=$1 AND id=$2 AND (lease_until IS NULL OR lease_until<now()) RETURNING *"
             else:
-                if row["reconciliation_required_at"]:
+                if row["attempt_count"]>=8:
                     from .commands import CommandConflict
-                    raise CommandConflict("ambiguous delivery requires reconciliation")
+                    raise CommandConflict("outbox retry limit is exhausted")
                 sql="UPDATE middleware_outbox SET next_attempt_at=now(),lease_owner=NULL,lease_until=NULL,resource_version=resource_version+1 WHERE tenant_id=$1 AND id=$2 AND (lease_until IS NULL OR lease_until<now()) RETURNING *"
         updated=await conn.fetchrow(sql,tenant,key,body.reason) if "$3" in sql else await conn.fetchrow(sql,tenant,key)
         if not updated:
             from .commands import CommandConflict
             raise CommandConflict("resource has an active lease")
+        if kind=="inbox" and action=="quarantine":
+            await conn.execute("UPDATE middleware_outbox SET cancelled_at=now(),resource_version=resource_version+1 WHERE tenant_id=$1 AND idempotency_key=$2 AND completed_at IS NULL AND lease_owner IS NULL",tenant,row["idempotency_key"])
+        elif kind=="inbox" and action in {"release","reprocess"}:
+            work_key=f"inbox:{action}:{rid}:v{updated['resource_version']}"
+            await conn.execute("""INSERT INTO middleware_outbox(tenant_id,destination,event_type,payload,idempotency_key)
+              VALUES($1,$2,$3,$4::jsonb,$5) ON CONFLICT DO NOTHING""",tenant,"nats-jetstream",f"inbox.{action}.requested",json.dumps({"event_id":rid,"action":action}),work_key)
         payload=_safe_inbox(updated) if kind=="inbox" else _safe_outbox(updated); new=payload["status"] if kind=="inbox" else payload["state"]
         await conn.execute("INSERT INTO middleware_control_audit(tenant_id,resource_kind,resource_id,action,actor_id,reason,previous_state,new_state,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",tenant,kind,rid,action,actor,body.reason,previous,new,json.dumps({"resource_version":updated["resource_version"]}))
         await conn.execute("INSERT INTO middleware_control_mutations(tenant_id,resource_kind,resource_id,action,actor_id,idempotency_key,request_sha256,response_status,response_payload) VALUES($1,$2,$3,$4,$5,$6,$7,200,$8::jsonb)",tenant,kind,rid,action,actor,idem,digest,json.dumps(payload,default=str))
@@ -160,6 +170,9 @@ async def inbox_release(record_id:str,body:ControlMutation,request:Request): ret
 async def outbox_cancel(record_id:int,body:ControlMutation,request:Request): return await _mutate(request,"outbox",str(record_id),"cancel",body)
 @router.post("/v1/outbox/{record_id}/retry")
 async def outbox_retry(record_id:int,body:ControlMutation,request:Request): return await _mutate(request,"outbox",str(record_id),"retry",body)
+@router.post("/v1/outbox/{record_id}/reconcile")
+@router.post("/v1/reconciliation/operations/{record_id}/request")
+async def outbox_reconcile(record_id:int,body:ControlMutation,request:Request): return await _mutate(request,"outbox",str(record_id),"reconcile",body)
 
 
 def _capabilities(request:Request):

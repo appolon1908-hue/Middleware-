@@ -28,6 +28,7 @@ async def pool() -> asyncpg.Pool:
         for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
     ]
     async with pool.acquire() as conn:
+        await conn.execute("DROP TABLE IF EXISTS middleware_outbox_attempt_events CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_control_mutations CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_control_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_operation_mutations CASCADE")

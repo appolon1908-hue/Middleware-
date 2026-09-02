@@ -1025,7 +1025,7 @@ class PostgresCommandStore:
                     """,
                     list(self.REQUIRED_TRIGGERS),
                 )
-            if head != 5:
+            if head != 6:
                 return False
             observed_columns = {
                 table: set() for table in self.REQUIRED_COLUMNS

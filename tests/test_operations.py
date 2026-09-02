@@ -128,4 +128,5 @@ def test_retry_mutation_queues_before_temporal_resume(test_settings) -> None:
 
     assert retried.state == "queued"
     assert retried.resource_version == 2
+    assert retried.last_error is None
     assert store._events[("tenant-1", command.command_id)][-1].new_state == "queued"

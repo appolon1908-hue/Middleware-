@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -111,7 +112,10 @@ class ProviderControlRequest(BaseModel):
         def inspect(item: Any) -> None:
             if isinstance(item, dict):
                 for raw_key, nested in item.items():
-                    key = str(raw_key).strip().lower()
+                    raw = str(raw_key).strip()
+                    key = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", raw)
+                    key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key)
+                    key = re.sub(r"[^A-Za-z0-9]+", "_", key).strip("_").lower()
                     if key in SENSITIVE_PAYLOAD_KEYS or key.endswith(
                         SENSITIVE_PAYLOAD_KEY_SUFFIXES
                     ):

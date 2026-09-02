@@ -194,17 +194,29 @@ def test_provider_control_payload_cannot_carry_provider_credentials(
         settings=test_settings,
         runtime=_runtime(test_settings, capabilities_enabled=True),
     )
+    forbidden_keys = (
+        "provider_token",
+        "accessToken",
+        "clientSecret",
+        "api-key",
+        "refresh token",
+        "privateKey",
+    )
     with TestClient(app) as client:
-        response = client.post(
-            spec.route,
-            headers=_headers(spec),
-            json={
-                "operation_id": str(uuid4()),
-                "payload": {"nested": {"provider_token": "must-not-enter-ledger"}},
-            },
-        )
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "invalid_request"
+        for index, forbidden_key in enumerate(forbidden_keys):
+            response = client.post(
+                spec.route,
+                headers=_headers(
+                    spec,
+                    idempotency_key=f"credential-rejection-{index}",
+                ),
+                json={
+                    "operation_id": str(uuid4()),
+                    "payload": {"nested": {forbidden_key: "must-not-enter-ledger"}},
+                },
+            )
+            assert response.status_code == 400
+            assert response.json()["error"]["code"] == "invalid_request"
 
 
 def test_ai_provider_control_allows_governance_token_budget(

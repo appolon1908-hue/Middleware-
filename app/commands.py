@@ -476,7 +476,7 @@ class MemoryCommandStore:
             # The retry envelope is explicitly marked resume_from_queued by the
             # Temporal dispatcher. Persist the failed -> queued transition here so
             # the workflow can safely continue with queued -> dispatching.
-            updates = {"state": "queued"}
+            updates = {"state": "queued", "last_error": None}
         now = datetime.now().astimezone()
         updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
         self._commands[key] = (digest, updated)
@@ -896,6 +896,7 @@ class PostgresCommandStore:
                            SET state='queued',
                                resource_version=resource_version+1,
                                queued_at=now(),
+                               last_error=NULL,
                                updated_at=now()
                            WHERE tenant_id=$1 AND command_id=$2
                            RETURNING *""",

@@ -56,6 +56,7 @@ def main() -> None:
         + (ROOT / "app/observability_alert_contract.py").read_text(
             encoding="utf-8"
         )
+        + (ROOT / "app/observability_incidents.py").read_text(encoding="utf-8")
     )
     adapter_source = (ROOT / "app/klyrow_alert_adapter.py").read_text(
         encoding="utf-8"
@@ -77,8 +78,21 @@ def main() -> None:
             fail(f"policy field drifted: {key}")
     if policy.get("allowed_environments") != ["production"]:
         fail("only production is allowed by the checked-in alert policy")
-    if set(policy.get("allowed_severities", [])) != {"critical", "warning"}:
+    if set(policy.get("allowed_severities", [])) != {
+        "critical",
+        "high",
+        "warning",
+        "info",
+    }:
         fail("alert severity allowlist drifted")
+    if policy.get("immediate_severities") != ["critical", "high"]:
+        fail("critical/high immediate-delivery policy drifted")
+    if policy.get("grouped_severities") != ["warning"]:
+        fail("warning grouping policy drifted")
+    if policy.get("state_only_severities") != ["info"]:
+        fail("informational state-only policy drifted")
+    if policy.get("warning_repeat_interval_seconds") != 14400:
+        fail("warning repeat interval drifted")
     if capabilities.get("OBSERVABILITY_ALERT_EMAIL_DELIVERY") is not False:
         fail("alert capability must default false")
     if any(value is not False for value in capabilities.values()):
@@ -99,6 +113,16 @@ def main() -> None:
         fail("Klyrow delivery-event scope drifted")
     if adapter_caller.get("allowed_targets") != ["klyrow-alert-email"]:
         fail("Klyrow delivery-event target drifted")
+
+    operator = callers.get("observability-operator", {})
+    if operator.get("command_scope") != "observability.incidents.write":
+        fail("observability operator write scope drifted")
+    if operator.get("status_scope") != "observability.incidents.read":
+        fail("observability operator read scope drifted")
+    if operator.get("connector_commands_allowed") is not False:
+        fail("observability operator must not receive connector authority")
+    if operator.get("allowed_command_prefixes") or operator.get("allowed_targets"):
+        fail("observability operator connector authority must remain empty")
 
     command = next(
         (item for item in commands if item.get("prefix") == "observability.alert."),
@@ -133,10 +157,19 @@ def main() -> None:
         "/version",
         "/capabilities",
         "/v1/integrations/alertmanager/events",
+        "/v1/integrations/alertmanager/status-events",
         "/v1/observability/alerts",
         "/v1/observability/alerts/{operation_id}",
         "/v1/observability/alerts/{operation_id}/events",
+        "/v1/observability/incidents",
+        "/v1/observability/incidents/{incident_id}",
+        "/v1/observability/incidents/{incident_id}/timeline",
+        "/v1/observability/incidents/{incident_id}/notification-attempts",
+        "/v1/observability/incidents/{incident_id}/acknowledge",
+        "/v1/observability/incidents/{incident_id}/resolve",
+        "/v1/observability/incidents/{incident_id}/reopen",
         "/v1/observability/alert-delivery-events",
+        "/metrics",
     }
     if contract_paths != required_paths:
         fail("OpenAPI route inventory drifted")
@@ -162,9 +195,26 @@ def main() -> None:
         "recipient_policy_id",
         "direct_smtp_allowed",
         'authoritative_completion": "provider-readback"',
+        "PostgresIncidentStore",
+        "request_idempotency_key",
+        "X-Source-Deployment",
     )
     if any(marker not in api_source for marker in required_markers):
         fail("alert API implementation marker is missing")
+    migration = (ROOT / "migrations/0009_observability_incidents.sql").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "middleware_observability_incidents",
+        "middleware_observability_incident_events",
+        "middleware_observability_incident_audit",
+        "middleware_observability_notification_intents",
+        "middleware_observability_incident_mutations",
+        "request_idempotency_key",
+        "REFERENCES middleware_commands(tenant_id,command_id)",
+    ):
+        if marker not in migration:
+            fail(f"incident migration marker missing: {marker}")
     for marker in (
         'MESSAGE_PATH = "/v1/email/messages"',
         'MESSAGE_STATUS_PATH = "/v1/email/messages/{message_id}"',

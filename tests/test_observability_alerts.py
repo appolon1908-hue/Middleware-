@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import copy
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import jwt
+import yaml
 from fastapi.testclient import TestClient
 
 from app.commands import (
@@ -15,8 +17,9 @@ from app.commands import (
     MemoryCommandStore,
 )
 from app.config import Settings
-from app.observability_alert_contract import AlertmanagerWebhook
+from app.observability_alert_contract import AlertmanagerWebhook, build_command
 from app.observability_alerts import AlertPolicy, create_app
+from app.observability_incidents import incident_identity
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
 from app.storage import MemoryInboxStore
@@ -61,6 +64,11 @@ def policy() -> AlertPolicy:
             "reply_to": "appolon@codestra.co",
             "allowed_environments": ["test"],
             "allowed_severities": ["critical", "warning"],
+            "immediate_severities": ["critical"],
+            "grouped_severities": ["warning"],
+            "state_only_severities": [],
+            "warning_group_wait_seconds": 300,
+            "warning_repeat_interval_seconds": 14400,
             "max_alerts_per_request": 20,
             "max_body_bytes": 131072,
             "normal_delivery_path": "middleware-klyrow-adapter",
@@ -132,6 +140,7 @@ def webhook() -> dict[str, Any]:
                     "environment": "test",
                     "host": "37.27.128.39",
                     "owner": "codestra-observability",
+                    "codestra_business": "platform",
                     "release_id": "obs-test-1",
                 },
                 "annotations": {
@@ -164,6 +173,7 @@ def headers(
         "X-Tenant-ID": "codestra-platform",
         "X-Correlation-ID": "corr-observability-alert-0001",
         "Idempotency-Key": key,
+        "X-Source-Deployment": "alertmanager-test-1",
     }
 
 
@@ -255,6 +265,28 @@ def test_annotation_urls_are_sanitized_before_command_creation() -> None:
     )
 
 
+def test_notification_content_contains_required_incident_evidence() -> None:
+    parsed = AlertmanagerWebhook.model_validate(webhook())
+    alert = parsed.alerts[0]
+    incident_id = incident_identity(policy().tenant_id, alert.fingerprint)
+    command = build_command(
+        policy=policy(),
+        alert=alert,
+        group_key=parsed.group_key,
+        receiver=parsed.receiver,
+        actor="service-account-alertmanager-service",
+        correlation_id="corr-observability-alert-0001",
+        incident_id=incident_id,
+    )
+    assert command.payload["alert"]["incident_id"] == str(incident_id)
+    assert command.payload["alert"]["codestra_business"] == "platform"
+    assert command.payload["alert"]["first_seen_at"] == alert.starts_at.isoformat()
+    text = command.payload["content"]["text"]
+    assert f"Incident ID: {incident_id}" in text
+    assert "Business: platform" in text
+    assert "First seen:" in text
+
+
 def test_invalid_later_alert_does_not_partially_persist_batch() -> None:
     value = webhook()
     denied = copy.deepcopy(value["alerts"][0])
@@ -309,7 +341,7 @@ def test_same_identity_with_changed_payload_is_a_conflict() -> None:
             headers=headers(),
         )
         assert second.status_code == 409
-        assert second.json()["code"] == "command_conflict"
+        assert second.json()["code"] == "incident_conflict"
 
 
 def test_sensitive_annotations_are_rejected() -> None:
@@ -325,6 +357,20 @@ def test_sensitive_annotations_are_rejected() -> None:
         assert response.json()["code"] == "invalid_request"
 
 
+def test_missing_business_label_and_runbook_are_rejected() -> None:
+    value = webhook()
+    del value["alerts"][0]["labels"]["codestra_business"]
+    del value["alerts"][0]["annotations"]["runbook_url"]
+    with TestClient(app()) as client:
+        response = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="missing-required-alert-fields-0001"),
+        )
+        assert response.status_code == 400
+        assert response.json()["code"] == "invalid_request"
+
+
 def test_alert_delivery_capability_defaults_fail_closed() -> None:
     with TestClient(app(active=False)) as client:
         response = client.post(
@@ -332,12 +378,194 @@ def test_alert_delivery_capability_defaults_fail_closed() -> None:
             json=webhook(),
             headers=headers(),
         )
-        assert response.status_code == 403
-        assert response.json()["code"] == "capability_disabled"
+        assert response.status_code == 202
+        assert response.json()["operations"][0]["operation_id"] is None
+        assert response.json()["operations"][0]["notification_status"] == "disabled"
         capabilities = client.get("/capabilities")
         assert capabilities.status_code == 200
         assert capabilities.json()["OBSERVABILITY_ALERT_EMAIL_DELIVERY"] is False
         assert capabilities.json()["direct_smtp_allowed"] is False
+
+
+def test_incident_lifecycle_is_tenant_scoped_audited_and_idempotent() -> None:
+    with TestClient(app()) as client:
+        accepted = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=headers(),
+        )
+        incident_id = accepted.json()["operations"][0]["incident_id"]
+        operator_headers = headers(
+            "observability-operator",
+            key="incident-acknowledge-0001",
+        )
+
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=operator_headers,
+        )
+        assert detail.status_code == 200
+        assert detail.json()["state"] == "firing"
+        assert detail.json()["resource_version"] == 1
+
+        listing = client.get(
+            "/v1/observability/incidents?state=firing&severity=critical&limit=1",
+            headers=operator_headers,
+        )
+        assert listing.status_code == 200
+        assert [item["incident_id"] for item in listing.json()["items"]] == [
+            incident_id
+        ]
+
+        acknowledged = client.post(
+            f"/v1/observability/incidents/{incident_id}/acknowledge",
+            json={"expected_version": 1, "reason": "operator accepted incident"},
+            headers=operator_headers,
+        )
+        assert acknowledged.status_code == 200
+        assert acknowledged.json()["state"] == "acknowledged"
+        assert acknowledged.json()["resource_version"] == 2
+
+        replay = client.post(
+            f"/v1/observability/incidents/{incident_id}/acknowledge",
+            json={"expected_version": 1, "reason": "operator accepted incident"},
+            headers=operator_headers,
+        )
+        assert replay.status_code == 200
+        assert replay.json()["duplicate"] is True
+        assert replay.json()["resource_version"] == 2
+
+        resolve_headers = headers(
+            "observability-operator",
+            key="incident-resolve-0001",
+        )
+        resolved = client.post(
+            f"/v1/observability/incidents/{incident_id}/resolve",
+            json={"expected_version": 2, "reason": "operator verified recovery"},
+            headers=resolve_headers,
+        )
+        assert resolved.status_code == 200
+        assert resolved.json()["state"] == "resolved"
+
+        reopen_headers = headers(
+            "observability-operator",
+            key="incident-reopen-0001",
+        )
+        reopened = client.post(
+            f"/v1/observability/incidents/{incident_id}/reopen",
+            json={"expected_version": 3, "reason": "signal returned"},
+            headers=reopen_headers,
+        )
+        assert reopened.status_code == 200
+        assert reopened.json()["state"] == "firing"
+        assert reopened.json()["resource_version"] == 4
+
+        timeline = client.get(
+            f"/v1/observability/incidents/{incident_id}/timeline",
+            headers=operator_headers,
+        )
+        assert timeline.status_code == 200
+        assert [item["event_type"] for item in timeline.json()["items"]] == [
+            "firing",
+            "acknowledge",
+            "resolve",
+            "reopen",
+        ]
+
+        attempts = client.get(
+            f"/v1/observability/incidents/{incident_id}/notification-attempts",
+            headers=operator_headers,
+        )
+        assert attempts.status_code == 200
+        assert attempts.json()["items"][0]["operation_state"] == "persisted"
+
+
+def test_authenticated_status_snapshot_records_silenced_state() -> None:
+    with TestClient(app()) as client:
+        accepted = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=headers(),
+        )
+        incident_id = accepted.json()["operations"][0]["incident_id"]
+        value = webhook()
+        snapshot = {
+            "observedAt": "2026-09-02T16:01:00Z",
+            "sourceDeployment": "alertmanager-test-1",
+            "items": [
+                {
+                    "groupKey": value["groupKey"],
+                    "fingerprint": value["alerts"][0]["fingerprint"],
+                    "startsAt": value["alerts"][0]["startsAt"],
+                    "state": "silenced",
+                    "silencedBy": ["silence-123"],
+                    "inhibitedBy": [],
+                }
+            ],
+        }
+        status_headers = headers(key="alertmanager-status-snapshot-0001")
+        response = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json=snapshot,
+            headers=status_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["items"][0]["state"] == "silenced"
+
+        operator_headers = headers(
+            "observability-operator",
+            key="incident-status-read-0001",
+        )
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=operator_headers,
+        )
+        assert detail.json()["state"] == "silenced"
+
+
+def test_transition_identity_does_not_depend_on_transport_key() -> None:
+    with TestClient(app()) as client:
+        first = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=headers(key="transport-key-first-0001"),
+        )
+        second = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=headers(key="transport-key-second-0001"),
+        )
+        assert first.status_code == 202
+        assert second.status_code == 200
+        assert second.json()["operations"][0]["duplicate"] is True
+        assert (
+            second.json()["operations"][0]["incident_id"]
+            == first.json()["operations"][0]["incident_id"]
+        )
+
+
+def test_canonical_openapi_methods_match_runtime() -> None:
+    runtime_app = app()
+    documented = yaml.safe_load(
+        Path("contracts/observability/alert-api.v1.openapi.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    http_methods = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
+    runtime_methods = {
+        (route.path, method)
+        for route in runtime_app.routes
+        if route.path != "/openapi.json"
+        for method in route.methods
+        if method in http_methods
+    }
+    documented_methods = {
+        (path, method.upper())
+        for path, path_item in documented["paths"].items()
+        for method in path_item
+        if method.upper() in http_methods
+    }
+    assert runtime_methods == documented_methods
 
 
 def test_delivery_callback_uses_durable_inbox_and_is_replay_safe() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .commands import (
     CommandPolicyRegistry,
@@ -15,6 +16,9 @@ from .config import Settings
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
 from .storage import InboxStore, MemoryInboxStore, PostgresInboxStore
+
+if TYPE_CHECKING:
+    from .observability_incidents import IncidentService
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,7 @@ class Runtime:
     tokens: TokenVerifier
     commands: CommandService | None = None
     communications: CommunicationsService | None = None
+    incidents: IncidentService | None = None
 
     async def readiness(self) -> ReadinessReport:
         checks: dict[str, Awaitable[bool] | None] = {
@@ -50,6 +55,9 @@ class Runtime:
             checks["command_store"] = None
         checks["communications_store"] = (
             self.communications.store.ready() if self.communications is not None else None
+        )
+        checks["incident_store"] = (
+            self.incidents.store.ready() if self.incidents is not None else None
         )
 
         async def bounded(check: Awaitable[bool] | None) -> str:
@@ -79,6 +87,8 @@ class Runtime:
             await self.communications.store.close()
         if self.commands is not None:
             await self.commands.store.close()
+        if self.incidents is not None:
+            await self.incidents.store.close()
 
 
 async def build_runtime(settings: Settings) -> Runtime:

@@ -151,7 +151,7 @@ jobs:
           set -Eeuo pipefail
           cosign sign --yes \
             --annotations "codestra.source_sha=$RELEASE_SOURCE_SHA" \
-            --annotations "codestra.schema_head=0008_durable_communications" \
+            --annotations "codestra.schema_head=0009_observability_incidents" \
             "$RELEASE_IMAGE_REFERENCE"
           cosign attest --yes \
             --predicate "$RELEASE_SBOM_PATH" \

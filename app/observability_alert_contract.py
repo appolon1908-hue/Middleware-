@@ -25,6 +25,7 @@ COMMAND_TARGET = "klyrow-alert-email"
 COMMAND_CAPABILITY = "OBSERVABILITY_ALERT_EMAIL_DELIVERY"
 ALERTMANAGER_CLIENT_ID = "alertmanager-service"
 DELIVERY_CLIENT_ID = "klyrow-alert-adapter"
+OPERATOR_CLIENT_ID = "observability-operator"
 
 SAFE_LABELS = frozenset(
     {
@@ -73,6 +74,11 @@ class AlertPolicy(BaseModel):
     reply_to: str = Field(min_length=3, max_length=320)
     allowed_environments: list[str] = Field(min_length=1, max_length=4)
     allowed_severities: list[str] = Field(min_length=1, max_length=8)
+    immediate_severities: list[str] = Field(max_length=4)
+    grouped_severities: list[str] = Field(max_length=4)
+    state_only_severities: list[str] = Field(max_length=4)
+    warning_group_wait_seconds: int = Field(ge=30, le=3_600)
+    warning_repeat_interval_seconds: int = Field(ge=900, le=86_400)
     max_alerts_per_request: int = Field(ge=1, le=100)
     max_body_bytes: int = Field(ge=4_096, le=1_048_576)
     normal_delivery_path: Literal["middleware-klyrow-adapter"]
@@ -91,7 +97,13 @@ class AlertPolicy(BaseModel):
             raise ValueError("policy email address is invalid")
         return candidate
 
-    @field_validator("allowed_environments", "allowed_severities")
+    @field_validator(
+        "allowed_environments",
+        "allowed_severities",
+        "immediate_severities",
+        "grouped_severities",
+        "state_only_severities",
+    )
     @classmethod
     def normalize_unique_values(cls, value: list[str]) -> list[str]:
         normalized = [item.strip().lower() for item in value]
@@ -100,6 +112,21 @@ class AlertPolicy(BaseModel):
         if len(set(normalized)) != len(normalized):
             raise ValueError("policy values must be unique")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_severity_classes(self) -> "AlertPolicy":
+        classes = (
+            set(self.immediate_severities),
+            set(self.grouped_severities),
+            set(self.state_only_severities),
+        )
+        if any(left & right for index, left in enumerate(classes) for right in classes[index + 1 :]):
+            raise ValueError("alert severity classes must be disjoint")
+        if set().union(*classes) != set(self.allowed_severities):
+            raise ValueError("every allowed severity must have exactly one delivery class")
+        if self.warning_repeat_interval_seconds <= self.warning_group_wait_seconds:
+            raise ValueError("warning repeat interval must exceed the group wait")
+        return self
 
 
 class AlertmanagerAlert(BaseModel):
@@ -151,10 +178,25 @@ class AlertmanagerAlert(BaseModel):
 
     @model_validator(mode="after")
     def require_core_labels(self) -> "AlertmanagerAlert":
-        required = {"alertname", "severity", "service", "environment", "host"}
+        required = {
+            "alertname",
+            "severity",
+            "service",
+            "environment",
+            "host",
+            "codestra_business",
+            "owner",
+        }
         missing = sorted(required - set(self.labels))
         if missing:
             raise ValueError("alert is missing required labels: " + ", ".join(missing))
+        required_annotations = {"summary", "description", "runbook_url"}
+        missing_annotations = sorted(required_annotations - set(self.annotations))
+        if missing_annotations:
+            raise ValueError(
+                "alert is missing required annotations: "
+                + ", ".join(missing_annotations)
+            )
         if self.status == "resolved" and self.ends_at <= self.starts_at:
             raise ValueError("resolved alert endsAt must follow startsAt")
         return self
@@ -234,10 +276,12 @@ class AlertDeliveryEvent(BaseModel):
 
 
 class AlertOperationView(BaseModel):
-    operation_id: uuid.UUID
+    incident_id: uuid.UUID
+    operation_id: uuid.UUID | None
     alert_fingerprint: str
     alert_state: Literal["firing", "resolved"]
     operation_state: str
+    notification_status: str
     duplicate: bool
     status_url: str
     events_url: str
@@ -339,13 +383,13 @@ def idempotency_identity(
     *,
     policy: AlertPolicy,
     alert: AlertmanagerAlert,
+    group_key: str,
     receiver: str,
-    request_idempotency_key: str,
 ) -> str:
     canonical = "\n".join(
         (
             "codestra-observability-alert-v1",
-            request_idempotency_key,
+            group_key,
             alert.fingerprint,
             alert.status,
             receiver,
@@ -365,16 +409,22 @@ def subject(alert: AlertmanagerAlert) -> str:
     )[:998]
 
 
-def text_body(alert: AlertmanagerAlert, correlation_id: str) -> str:
+def text_body(
+    alert: AlertmanagerAlert,
+    correlation_id: str,
+    incident_id: uuid.UUID,
+) -> str:
     values = [
         f"State: {alert.status.upper()}",
         f"Severity: {alert.labels['severity']}",
         f"Environment: {alert.labels['environment']}",
+        f"Business: {alert.labels['codestra_business']}",
         f"Service: {alert.labels['service']}",
         f"Host: {alert.labels['host']}",
+        f"Incident ID: {incident_id}",
         f"Summary: {alert.annotations.get('summary', alert.labels['alertname'])}",
         f"Description: {alert.annotations.get('description', '')}",
-        f"Started: {alert.starts_at.isoformat()}",
+        f"First seen: {alert.starts_at.isoformat()}",
         f"Ended: {alert.ends_at.isoformat() if alert.status == 'resolved' else ''}",
         f"Fingerprint: {alert.fingerprint}",
         f"Runbook: {alert.annotations.get('runbook_url', '')}",
@@ -385,16 +435,22 @@ def text_body(alert: AlertmanagerAlert, correlation_id: str) -> str:
     return "\n".join(values)
 
 
-def html_body(alert: AlertmanagerAlert, correlation_id: str) -> str:
+def html_body(
+    alert: AlertmanagerAlert,
+    correlation_id: str,
+    incident_id: uuid.UUID,
+) -> str:
     fields = {
         "State": alert.status.upper(),
         "Severity": alert.labels["severity"],
         "Environment": alert.labels["environment"],
+        "Business": alert.labels["codestra_business"],
         "Service": alert.labels["service"],
         "Host": alert.labels["host"],
+        "Incident ID": str(incident_id),
         "Summary": alert.annotations.get("summary", alert.labels["alertname"]),
         "Description": alert.annotations.get("description", ""),
-        "Started": alert.starts_at.isoformat(),
+        "First seen": alert.starts_at.isoformat(),
         "Ended": alert.ends_at.isoformat() if alert.status == "resolved" else "",
         "Fingerprint": alert.fingerprint,
         "Runbook": alert.annotations.get("runbook_url", ""),
@@ -419,16 +475,17 @@ def build_command(
     *,
     policy: AlertPolicy,
     alert: AlertmanagerAlert,
+    group_key: str,
     receiver: str,
     actor: str,
     correlation_id: str,
-    request_idempotency_key: str,
+    incident_id: uuid.UUID,
 ) -> CommandEnvelope:
     idempotency_key = idempotency_identity(
         policy=policy,
         alert=alert,
+        group_key=group_key,
         receiver=receiver,
-        request_idempotency_key=request_idempotency_key,
     )
     command_id = uuid.uuid5(
         uuid.NAMESPACE_URL,
@@ -452,19 +509,23 @@ def build_command(
             "reply_to": policy.reply_to,
             "content": {
                 "subject": subject(alert),
-                "text": text_body(alert, correlation_id),
-                "html": html_body(alert, correlation_id),
+                "text": text_body(alert, correlation_id, incident_id),
+                "html": html_body(alert, correlation_id, incident_id),
             },
             "classification": "operational-alert",
             "recipient_policy_id": policy.recipient_policy_id,
             "sender_policy_id": policy.sender_policy_id,
             "alert": {
+                "incident_id": str(incident_id),
+                "group_key": group_key,
                 "fingerprint": alert.fingerprint,
                 "state": alert.status,
                 "severity": alert.labels["severity"],
                 "service": alert.labels["service"],
                 "host": alert.labels["host"],
                 "environment": alert.labels["environment"],
+                "codestra_business": alert.labels["codestra_business"],
+                "first_seen_at": alert.starts_at.isoformat(),
                 "starts_at": alert.starts_at.isoformat(),
                 "ends_at": alert.ends_at.isoformat(),
                 "generator_url": alert.generator_url,
@@ -478,12 +539,17 @@ def build_command(
 def operation_view(
     operation: CommandOperation,
     alert: AlertmanagerAlert,
+    *,
+    incident_id: uuid.UUID,
+    notification_status: str,
 ) -> AlertOperationView:
     return AlertOperationView(
+        incident_id=incident_id,
         operation_id=operation.command_id,
         alert_fingerprint=alert.fingerprint,
         alert_state=alert.status,
         operation_state=operation.state,
+        notification_status=notification_status,
         duplicate=operation.duplicate,
         status_url=f"/v1/observability/alerts/{operation.command_id}",
         events_url=f"/v1/observability/alerts/{operation.command_id}/events",

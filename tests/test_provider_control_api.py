@@ -191,3 +191,33 @@ def test_provider_control_payload_cannot_carry_provider_credentials(
         )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_request"
+
+
+def test_ai_provider_control_allows_governance_token_budget(
+    test_settings,
+) -> None:
+    spec = next(
+        item for item in PROVIDER_CONTROL_SPECS
+        if item.operation_id == "ai.inference.request"
+    )
+    app = create_app(
+        settings=test_settings,
+        runtime=_runtime(test_settings, capabilities_enabled=True),
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            spec.route,
+            headers=_headers(spec),
+            json={
+                "operation_id": str(uuid4()),
+                "payload": {
+                    "resource_reference": "ai-request-1",
+                    "task_type": "document.summary",
+                    "schema_version": "1.0",
+                    "token_budget": 2_000,
+                    "max_tokens": 500,
+                },
+            },
+        )
+    assert response.status_code == 202, response.text
+    assert response.json()["external_effect_dispatched"] is False

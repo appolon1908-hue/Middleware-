@@ -37,6 +37,15 @@ SENSITIVE_PAYLOAD_KEYS = frozenset(
         "token",
     }
 )
+SENSITIVE_PAYLOAD_KEY_SUFFIXES = (
+    "_api_key",
+    "_credential",
+    "_credentials",
+    "_password",
+    "_private_key",
+    "_secret",
+    "_token",
+)
 
 
 @dataclass(frozen=True)
@@ -103,9 +112,8 @@ class ProviderControlRequest(BaseModel):
             if isinstance(item, dict):
                 for raw_key, nested in item.items():
                     key = str(raw_key).strip().lower()
-                    if key in SENSITIVE_PAYLOAD_KEYS or any(
-                        marker in key
-                        for marker in ("password", "private_key", "secret", "token")
+                    if key in SENSITIVE_PAYLOAD_KEYS or key.endswith(
+                        SENSITIVE_PAYLOAD_KEY_SUFFIXES
                     ):
                         raise ValueError(
                             "provider credentials and secret material are forbidden"

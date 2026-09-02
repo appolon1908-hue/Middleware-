@@ -54,3 +54,23 @@ def test_communication_usage_query_timestamps_are_validated(test_settings):
     responses = schema["paths"]["/v1/communications/usage"]["get"]["responses"]
     assert "422" not in responses
     assert responses["400"]["content"]["application/json"]["schema"]["required"] == ["error"]
+
+
+def test_webhook_business_422_responses_remain_documented(test_settings):
+    schema = create_app(settings=test_settings).openapi()
+    webhook_operations = [
+        operation
+        for item in schema["paths"].values()
+        for method, operation in item.items()
+        if method == "post"
+        and (
+            str(operation.get("operationId", "")).startswith("ingress_")
+            or "webhook" in str(operation.get("operationId", ""))
+            or str(operation.get("operationId", "")).startswith("crm_event_")
+        )
+    ]
+    assert webhook_operations
+    for operation in webhook_operations:
+        response = operation["responses"]["422"]
+        assert response["description"] == "Event type is not allowed for this webhook"
+        assert response["content"]["application/json"]["schema"]["required"] == ["error"]

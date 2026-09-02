@@ -52,6 +52,8 @@ from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
 from .security import SecurityError
 from .service import (
+    CANONICAL_ERROR_SCHEMA,
+    EVENT_TYPE_422_RESPONSE,
     IngressError,
     PayloadTooLargeError,
     ReplayConflictError,
@@ -59,6 +61,7 @@ from .service import (
 )
 from .storage import ReplayConflict, StorageError
 from .survey_routes import register_survey_routes
+
 
 
 def _correlation_id(request: Request) -> str:
@@ -750,6 +753,7 @@ def create_app(
             ingress,
             methods=["POST"],
             name=f"ingress-{route.producer_client_id}-{route.path.rsplit('/', 1)[-1]}",
+            responses={422: EVENT_TYPE_422_RESPONSE},
         )
 
     for webhook_route in WEBHOOK_ROUTES:
@@ -759,23 +763,6 @@ def create_app(
 
     def canonical_openapi() -> dict:
         schema = generated_openapi()
-        canonical_error = {
-            "type": "object",
-            "required": ["error"],
-            "properties": {
-                "error": {
-                    "type": "object",
-                    "required": ["code", "message", "correlation_id", "retryable", "details"],
-                    "properties": {
-                        "code": {"type": "string"},
-                        "message": {"type": "string"},
-                        "correlation_id": {"type": "string"},
-                        "retryable": {"type": "boolean"},
-                        "details": {"type": "object"},
-                    },
-                }
-            },
-        }
         automatic_validation = {
             "description": "Validation Error",
             "content": {
@@ -796,7 +783,7 @@ def create_app(
                     "400", {"description": "Invalid canonical request"}
                 )
                 invalid["content"] = {
-                    "application/json": {"schema": canonical_error}
+                    "application/json": {"schema": CANONICAL_ERROR_SCHEMA}
                 }
         return schema
 

@@ -4257,11 +4257,36 @@ paths:
           content:
             application/json:
               schema: {}
-        '400':
-          description: Invalid canonical request
+        '422':
+          description: Event type is not allowed for this webhook
           content:
             application/json:
-              schema: *id002
+              schema:
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+        '400':
+          description: Invalid canonical request
         '401':
           description: Authentication failed
         '403':
@@ -4295,11 +4320,36 @@ paths:
           content:
             application/json:
               schema: {}
-        '400':
-          description: Invalid canonical request
+        '422':
+          description: Event type is not allowed for this webhook
           content:
             application/json:
-              schema: *id002
+              schema:
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+        '400':
+          description: Invalid canonical request
         '401':
           description: Authentication failed
         '403':
@@ -4333,11 +4383,36 @@ paths:
           content:
             application/json:
               schema: {}
-        '400':
-          description: Invalid canonical request
+        '422':
+          description: Event type is not allowed for this webhook
           content:
             application/json:
-              schema: *id002
+              schema:
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+        '400':
+          description: Invalid canonical request
         '401':
           description: Authentication failed
         '403':
@@ -4371,11 +4446,36 @@ paths:
           content:
             application/json:
               schema: {}
-        '400':
-          description: Invalid canonical request
+        '422':
+          description: Event type is not allowed for this webhook
           content:
             application/json:
-              schema: *id002
+              schema:
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+        '400':
+          description: Invalid canonical request
         '401':
           description: Authentication failed
         '403':
@@ -5117,6 +5217,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5147,6 +5275,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5177,6 +5333,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5207,6 +5391,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5237,6 +5449,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5267,6 +5507,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5297,6 +5565,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':
@@ -5327,6 +5623,34 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Event type is not allowed for this webhook
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                type: object
+                required:
+                - error
         '400':
           description: Invalid canonical request
         '401':

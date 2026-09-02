@@ -9,7 +9,7 @@ dependencies.
 
 | Marker / dependency | Unit-suite behavior | Authoritative CI execution |
 |---|---|---|
-| `RUNTIME_INTEGRATION_TESTS=1` with PostgreSQL and Redis | skipped without disposable URLs | `Disposable PostgreSQL Redis integration` and `Synthetic no-effect acceptance E2E` |
+| `RUNTIME_INTEGRATION_TESTS=1` with PostgreSQL and Redis | runtime, incident, and synthetic tests are skipped without disposable URLs | `Disposable PostgreSQL Redis integration` and `Synthetic no-effect acceptance E2E` |
 | `NATS_INTEGRATION_TESTS=1` with disposable JetStream | skipped without isolated NATS | `Disposable NATS JetStream integration` |
 | Temporal test server | skipped without isolated Temporal | `Temporal critical workflow integration` |
 | Connector-runtime PostgreSQL contract | skipped without connector test database | `Connector storage v1` |

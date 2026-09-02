@@ -21,6 +21,7 @@ class ControlPlaneCaller:
     status_scope: str
     allowed_command_prefixes: tuple[str, ...]
     allowed_targets: frozenset[str]
+    connector_commands_allowed: bool
     compatibility_only: bool
 
 
@@ -54,20 +55,28 @@ def _build_callers() -> dict[str, ControlPlaneCaller]:
             raise RuntimeError("invalid control-plane caller entry")
         prefixes = item.get("allowed_command_prefixes")
         targets = item.get("allowed_targets")
-        if not isinstance(prefixes, list) or not prefixes or not all(
+        commands_allowed = item.get("connector_commands_allowed", True)
+        if not isinstance(commands_allowed, bool):
+            raise RuntimeError(f"{client_id}: connector command policy is invalid")
+        if not isinstance(prefixes, list) or not all(
             isinstance(value, str) and value for value in prefixes
         ):
             raise RuntimeError(f"{client_id}: command prefix policy is invalid")
-        if not isinstance(targets, list) or not targets or not all(
+        if not isinstance(targets, list) or not all(
             isinstance(value, str) and value for value in targets
         ):
             raise RuntimeError(f"{client_id}: target policy is invalid")
+        if commands_allowed and (not prefixes or not targets):
+            raise RuntimeError(f"{client_id}: connector command authority is empty")
+        if not commands_allowed and (prefixes or targets):
+            raise RuntimeError(f"{client_id}: read/operator-only caller has connector authority")
         result[client_id] = ControlPlaneCaller(
             client_id=client_id,
             command_scope=str(item["command_scope"]),
             status_scope=str(item["status_scope"]),
             allowed_command_prefixes=tuple(prefixes),
             allowed_targets=frozenset(targets),
+            connector_commands_allowed=commands_allowed,
             compatibility_only=item.get("compatibility_only") is True,
         )
     return result
@@ -109,6 +118,8 @@ def caller_for_authorization(authorization: str) -> ControlPlaneCaller:
 
 
 def authorize_command(caller: ControlPlaneCaller, *, command_type: str, target: str) -> None:
+    if not caller.connector_commands_allowed:
+        raise AuthorizationError("caller has no connector command authority")
     if target not in caller.allowed_targets:
         raise AuthorizationError("command target is not authorized for caller")
     if not any(command_type.startswith(prefix) for prefix in caller.allowed_command_prefixes):

@@ -79,6 +79,14 @@
       ],
       "compatibility_only": false
     },
+    "observability-operator": {
+      "command_scope": "observability.incidents.write",
+      "status_scope": "observability.incidents.read",
+      "connector_commands_allowed": false,
+      "allowed_command_prefixes": [],
+      "allowed_targets": [],
+      "compatibility_only": false
+    },
     "moneybee-backend": {
       "command_scope": "moneybee.middleware.command.write",
       "status_scope": "moneybee.middleware.status.read",

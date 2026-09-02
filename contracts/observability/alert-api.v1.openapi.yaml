@@ -18,6 +18,7 @@ paths:
         - {$ref: '#/components/parameters/TenantId'}
         - {$ref: '#/components/parameters/CorrelationId'}
         - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/SourceDeployment'}
       requestBody:
         required: true
         content:
@@ -31,6 +32,28 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /v1/integrations/alertmanager/status-events:
+    post:
+      operationId: reconcileAlertmanagerStatus
+      summary: Persist authenticated Alertmanager v2 suppression state
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/SourceDeployment'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AlertmanagerStatusSnapshot'}
+      responses:
+        '200': {description: Status transitions were persisted idempotently}
+        '207': {description: Per-item results for a partially applied status snapshot}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
   /health:
     get:
       operationId: healthObservabilityAlerts
@@ -61,6 +84,12 @@ paths:
       security: []
       responses:
         '200': {description: Non-secret effective alert policy}
+  /metrics:
+    get:
+      operationId: metricsObservabilityAlerts
+      security: []
+      responses:
+        '200': {description: Bounded Prometheus metrics}
   /v1/observability/alerts:
     post:
       operationId: submitObservabilityAlert
@@ -71,6 +100,7 @@ paths:
         - {$ref: '#/components/parameters/TenantId'}
         - {$ref: '#/components/parameters/CorrelationId'}
         - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/SourceDeployment'}
       requestBody:
         required: true
         content:
@@ -110,6 +140,100 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+  /v1/observability/incidents:
+    get:
+      operationId: listObservabilityIncidents
+      summary: List tenant-scoped incidents with bounded keyset pagination
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {name: state, in: query, schema: {$ref: '#/components/schemas/IncidentState'}}
+        - {name: severity, in: query, schema: {type: string, minLength: 1, maxLength: 64}}
+        - {name: service, in: query, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: cursor, in: query, schema: {type: string, maxLength: 512}}
+      responses:
+        '200': {description: Bounded incident page}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /v1/observability/incidents/{incident_id}:
+    get:
+      operationId: getObservabilityIncident
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IncidentId'}
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      responses:
+        '200': {description: Incident projection}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /v1/observability/incidents/{incident_id}/timeline:
+    get:
+      operationId: listObservabilityIncidentTimeline
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IncidentId'}
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 100}}
+        - {name: after_event_id, in: query, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: Append-only incident timeline}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /v1/observability/incidents/{incident_id}/notification-attempts:
+    get:
+      operationId: listObservabilityNotificationAttempts
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/IncidentId'}
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 100}}
+      responses:
+        '200': {description: Durable delivery attempts and reconciliation state}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /v1/observability/incidents/{incident_id}/acknowledge:
+    post:
+      operationId: acknowledgeObservabilityIncident
+      security: [{bearerAuth: []}]
+      parameters: &incidentMutationParameters
+        - {$ref: '#/components/parameters/IncidentId'}
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody: &incidentMutationBody
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IncidentMutation'}
+      responses: &incidentMutationResponses
+        '200': {description: Idempotent incident transition}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /v1/observability/incidents/{incident_id}/resolve:
+    post:
+      operationId: resolveObservabilityIncident
+      security: [{bearerAuth: []}]
+      parameters: *incidentMutationParameters
+      requestBody: *incidentMutationBody
+      responses: *incidentMutationResponses
+  /v1/observability/incidents/{incident_id}/reopen:
+    post:
+      operationId: reopenObservabilityIncident
+      security: [{bearerAuth: []}]
+      parameters: *incidentMutationParameters
+      requestBody: *incidentMutationBody
+      responses: *incidentMutationResponses
   /v1/observability/alert-delivery-events:
     post:
       operationId: acceptObservabilityAlertDeliveryEvent
@@ -153,8 +277,18 @@ components:
       in: header
       required: true
       schema: {type: string, minLength: 8, maxLength: 180}
+    SourceDeployment:
+      name: X-Source-Deployment
+      in: header
+      required: true
+      schema: {type: string, minLength: 3, maxLength: 128}
     OperationId:
       name: operation_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IncidentId:
+      name: incident_id
       in: path
       required: true
       schema: {type: string, format: uuid}
@@ -203,6 +337,41 @@ components:
           minItems: 1
           maxItems: 1
           items: {$ref: '#/components/schemas/Alert'}
+    AlertmanagerStatusSnapshot:
+      type: object
+      additionalProperties: false
+      required: [observedAt, sourceDeployment, items]
+      properties:
+        observedAt: {type: string, format: date-time}
+        sourceDeployment: {type: string, minLength: 3, maxLength: 128}
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [groupKey, fingerprint, startsAt, state, silencedBy, inhibitedBy]
+            properties:
+              groupKey: {type: string, minLength: 1, maxLength: 2048}
+              fingerprint: {type: string, minLength: 1, maxLength: 128}
+              startsAt: {type: string, format: date-time}
+              state: {$ref: '#/components/schemas/StatusState'}
+              silencedBy: {type: array, maxItems: 32, items: {type: string, maxLength: 128}}
+              inhibitedBy: {type: array, maxItems: 32, items: {type: string, maxLength: 128}}
+    IncidentState:
+      type: string
+      enum: [firing, acknowledged, resolved, inhibited, silenced]
+    StatusState:
+      type: string
+      enum: [firing, resolved, inhibited, silenced]
+    IncidentMutation:
+      type: object
+      additionalProperties: false
+      required: [expected_version, reason]
+      properties:
+        expected_version: {type: integer, minimum: 1}
+        reason: {type: string, minLength: 1, maxLength: 500}
     Alert:
       type: object
       additionalProperties: false
@@ -211,9 +380,12 @@ components:
         status: {enum: [firing, resolved]}
         labels:
           type: object
-          required: [alertname, severity, service, environment, host]
+          required: [alertname, severity, service, environment, host, codestra_business, owner]
           additionalProperties: {type: string}
-        annotations: {type: object, additionalProperties: {type: string}}
+        annotations:
+          type: object
+          required: [summary, description, runbook_url]
+          additionalProperties: {type: string}
         startsAt: {type: string, format: date-time}
         endsAt: {type: string, format: date-time}
         generatorURL: {type: string, format: uri, maxLength: 2048}

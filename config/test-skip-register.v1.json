@@ -27,6 +27,11 @@
       "required_job": "Disposable PostgreSQL Redis integration"
     },
     {
+      "path": "tests/integration/test_observability_incidents.py",
+      "gate": "RUNTIME_INTEGRATION_TESTS",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
       "path": "tests/integration/test_synthetic_acceptance.py",
       "gate": "RUNTIME_INTEGRATION_TESTS",
       "required_job": "Synthetic no-effect acceptance E2E"

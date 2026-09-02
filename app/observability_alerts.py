@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Literal, Mapping
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from .commands import CommandError
+from .commands import MemoryCommandStore, PostgresCommandStore
 from .config import Settings
 from .control_plane_auth import caller_for_authorization
 from .models import EventEnvelope
@@ -19,15 +21,25 @@ from .observability_alert_contract import (
     COMMAND_CAPABILITY,
     DELIVERY_CLIENT_ID,
     IDEMPOTENCY_RE,
+    OPERATOR_CLIENT_ID,
     AlertDeliveryEvent,
     AlertPolicy,
     AlertSubmissionResponse,
     AlertmanagerWebhook,
     activation_enabled,
-    build_command,
     load_policy,
-    operation_view,
     require_alert_operation,
+)
+from .observability_incidents import (
+    AlertmanagerStatusSnapshot,
+    IncidentConflict,
+    IncidentMutationRequest,
+    IncidentService,
+    IncidentState,
+    MemoryIncidentStore,
+    PostgresIncidentStore,
+    decode_cursor,
+    encode_cursor,
 )
 from .runtime import Runtime, build_runtime
 from .security import (
@@ -37,6 +49,9 @@ from .security import (
     authorize_tenant,
 )
 from .storage import StorageError, canonical_payload_sha256
+
+
+SOURCE_DEPLOYMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{2,127}$")
 
 
 async def read_bounded_json(request: Request, *, maximum: int) -> bytes:
@@ -92,6 +107,13 @@ async def authorize(
     return subject, correlation_id
 
 
+def source_deployment(request: Request) -> str:
+    value = request.headers.get("X-Source-Deployment", "").strip()
+    if not SOURCE_DEPLOYMENT_RE.fullmatch(value):
+        raise RequestValidationError("X-Source-Deployment is required and malformed")
+    return value
+
+
 def problem(
     error: Exception,
     request: Request,
@@ -129,6 +151,18 @@ def create_app(
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
         active.commands.policies.capabilities[COMMAND_CAPABILITY] = delivery_enabled
+        if isinstance(active.commands.store, MemoryCommandStore):
+            incident_store = MemoryIncidentStore(active.commands)
+        elif isinstance(active.commands.store, PostgresCommandStore):
+            incident_store = PostgresIncidentStore(active.commands)
+        else:
+            raise StorageError("incident ledger is unavailable")
+        active.incidents = IncidentService(
+            store=incident_store,
+            commands=active.commands,
+            policy=active_policy,
+            delivery_enabled=delivery_enabled,
+        )
         app.state.runtime = active
         try:
             yield
@@ -143,6 +177,7 @@ def create_app(
         docs_url=None,
         redoc_url=None,
     )
+    app.state.metrics = {"ingested": 0, "duplicates": 0, "status_sync": 0}
 
     @app.exception_handler(SecurityError)
     async def security_error(request: Request, exc: SecurityError) -> JSONResponse:
@@ -209,6 +244,23 @@ def create_app(
             "sender_policy_id": active_policy.sender_policy_id,
         }
 
+    @app.get("/metrics", response_class=Response)
+    async def metrics(request: Request) -> Response:
+        values = request.app.state.metrics
+        body = "\n".join(
+            (
+                "# HELP codestra_observability_incident_events_total Durable incident events accepted by kind.",
+                "# TYPE codestra_observability_incident_events_total counter",
+                f'codestra_observability_incident_events_total{{result="accepted"}} {values["ingested"]}',
+                f'codestra_observability_incident_events_total{{result="duplicate"}} {values["duplicates"]}',
+                "# HELP codestra_observability_status_sync_total Alertmanager status records accepted.",
+                "# TYPE codestra_observability_status_sync_total counter",
+                f'codestra_observability_status_sync_total {values["status_sync"]}',
+                "",
+            )
+        )
+        return Response(content=body, media_type="text/plain; version=0.0.4")
+
     @app.post("/v1/integrations/alertmanager/events")
     @app.post("/v1/observability/alerts", deprecated=True)
     async def submit_alerts(request: Request) -> JSONResponse:
@@ -222,6 +274,7 @@ def create_app(
         if not IDEMPOTENCY_RE.fullmatch(supplied_idempotency):
             raise RequestValidationError("Idempotency-Key is required and malformed")
         raw = await read_bounded_json(request, maximum=active_policy.max_body_bytes)
+        deployment = source_deployment(request)
         try:
             webhook = AlertmanagerWebhook.model_validate_json(raw)
         except ValidationError as exc:
@@ -239,20 +292,38 @@ def create_app(
 
         operations = []
         for alert in webhook.alerts:
-            command = build_command(
-                policy=active_policy,
+            result = await request.app.state.runtime.incidents.ingest(
+                group_key=webhook.group_key,
                 alert=alert,
-                receiver=webhook.receiver,
-                actor=actor,
+                actor_id=actor,
                 correlation_id=correlation_id,
+                source_deployment=deployment,
                 request_idempotency_key=supplied_idempotency,
             )
-            operation = await request.app.state.runtime.commands.submit(
-                command,
-                authenticated_subject=actor,
-                authenticated_client_id=ALERTMANAGER_CLIENT_ID,
+            metric = "duplicates" if result.duplicate else "ingested"
+            request.app.state.metrics[metric] += 1
+            operation = result.operation
+            operations.append(
+                {
+                    "incident_id": result.incident.incident_id,
+                    "operation_id": operation.command_id if operation else None,
+                    "alert_fingerprint": alert.fingerprint,
+                    "alert_state": alert.status,
+                    "operation_state": operation.state if operation else "not_created",
+                    "notification_status": result.notification_status,
+                    "duplicate": result.duplicate,
+                    "status_url": (
+                        f"/v1/observability/alerts/{operation.command_id}"
+                        if operation
+                        else None
+                    ),
+                    "events_url": (
+                        f"/v1/observability/alerts/{operation.command_id}/events"
+                        if operation
+                        else None
+                    ),
+                }
             )
-            operations.append(operation_view(operation, alert))
 
         response = AlertSubmissionResponse(
             policy_id=active_policy.policy_id,
@@ -260,7 +331,7 @@ def create_app(
             sender_policy_id=active_policy.sender_policy_id,
             operations=operations,
         )
-        duplicate = all(item.duplicate for item in operations)
+        duplicate = all(item["duplicate"] for item in operations)
         return JSONResponse(
             status_code=200 if duplicate else 202,
             content=response.model_dump(mode="json"),
@@ -310,6 +381,227 @@ def create_app(
             content={"items": [event.model_dump(mode="json") for event in events]},
             headers={"X-Correlation-ID": correlation_id},
         )
+
+    @app.post("/v1/integrations/alertmanager/status-events")
+    async def accept_alertmanager_status(request: Request) -> JSONResponse:
+        actor, correlation_id = await authorize(
+            request,
+            expected_client_id=ALERTMANAGER_CLIENT_ID,
+            scope_kind="command",
+            policy=active_policy,
+        )
+        supplied_idempotency = request.headers.get("Idempotency-Key", "").strip()
+        if not IDEMPOTENCY_RE.fullmatch(supplied_idempotency):
+            raise RequestValidationError("Idempotency-Key is required and malformed")
+        raw = await read_bounded_json(request, maximum=active_policy.max_body_bytes)
+        try:
+            snapshot = AlertmanagerStatusSnapshot.model_validate_json(raw)
+        except ValidationError as exc:
+            raise RequestValidationError("Alertmanager status payload is invalid") from exc
+        deployment = source_deployment(request)
+        if snapshot.source_deployment != deployment:
+            raise RequestValidationError(
+                "status sourceDeployment must match X-Source-Deployment"
+            )
+        items = []
+        failures: list[CommandError] = []
+        for item in snapshot.items:
+            try:
+                incident = (
+                    await request.app.state.runtime.incidents.store.ingest_status(
+                        policy=active_policy,
+                        item=item,
+                        actor_id=actor,
+                        correlation_id=correlation_id,
+                        source_deployment=deployment,
+                        request_idempotency_key=supplied_idempotency,
+                        observed_at=snapshot.observed_at,
+                    )
+                )
+            except CommandError as exc:
+                failures.append(exc)
+                items.append(
+                    {
+                        "fingerprint": item.fingerprint,
+                        "result_status": "rejected",
+                        "code": exc.code,
+                        "message": str(exc),
+                        "retryable": exc.retryable,
+                    }
+                )
+                continue
+            value = incident.model_dump(mode="json")
+            value["result_status"] = (
+                "duplicate" if incident.duplicate else "applied"
+            )
+            items.append(value)
+            request.app.state.metrics["status_sync"] += 1
+        if len(snapshot.items) == 1 and failures:
+            raise failures[0]
+        return JSONResponse(
+            status_code=207 if failures else 200,
+            content={"items": items},
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    @app.get("/v1/observability/incidents")
+    async def list_incidents(
+        request: Request,
+        state: IncidentState | None = Query(default=None),
+        severity: str | None = Query(default=None, min_length=1, max_length=64),
+        service: str | None = Query(default=None, min_length=1, max_length=128),
+        limit: int = Query(default=50, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+    ) -> JSONResponse:
+        _, correlation_id = await authorize(
+            request,
+            expected_client_id=OPERATOR_CLIENT_ID,
+            scope_kind="status",
+            policy=active_policy,
+        )
+        try:
+            position = decode_cursor(cursor)
+        except IncidentConflict as exc:
+            raise RequestValidationError(str(exc)) from exc
+        rows = await request.app.state.runtime.incidents.store.list_incidents(
+            active_policy.tenant_id,
+            limit=limit + 1,
+            position=position,
+            state=state,
+            severity=severity,
+            service=service,
+        )
+        more = len(rows) > limit
+        page = rows[:limit]
+        next_cursor = (
+            encode_cursor(page[-1].updated_at, page[-1].incident_id)
+            if more and page
+            else None
+        )
+        return JSONResponse(
+            content={
+                "items": [item.model_dump(mode="json") for item in page],
+                "next_cursor": next_cursor,
+            },
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    @app.get("/v1/observability/incidents/{incident_id}")
+    async def get_incident(
+        incident_id: uuid.UUID,
+        request: Request,
+    ) -> JSONResponse:
+        _, correlation_id = await authorize(
+            request,
+            expected_client_id=OPERATOR_CLIENT_ID,
+            scope_kind="status",
+            policy=active_policy,
+        )
+        incident = await request.app.state.runtime.incidents.store.get(
+            active_policy.tenant_id, incident_id
+        )
+        return JSONResponse(
+            content=incident.model_dump(mode="json"),
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    @app.get("/v1/observability/incidents/{incident_id}/timeline")
+    async def get_incident_timeline(
+        incident_id: uuid.UUID,
+        request: Request,
+        limit: int = Query(default=100, ge=1, le=100),
+        after_event_id: int | None = Query(default=None, ge=1),
+    ) -> JSONResponse:
+        _, correlation_id = await authorize(
+            request,
+            expected_client_id=OPERATOR_CLIENT_ID,
+            scope_kind="status",
+            policy=active_policy,
+        )
+        rows = await request.app.state.runtime.incidents.store.list_timeline(
+            active_policy.tenant_id,
+            incident_id,
+            limit=limit,
+            after_event_id=after_event_id,
+        )
+        return JSONResponse(
+            content={"items": [item.model_dump(mode="json") for item in rows]},
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    @app.get("/v1/observability/incidents/{incident_id}/notification-attempts")
+    async def get_incident_notification_attempts(
+        incident_id: uuid.UUID,
+        request: Request,
+        limit: int = Query(default=100, ge=1, le=100),
+    ) -> JSONResponse:
+        _, correlation_id = await authorize(
+            request,
+            expected_client_id=OPERATOR_CLIENT_ID,
+            scope_kind="status",
+            policy=active_policy,
+        )
+        rows = await request.app.state.runtime.incidents.store.list_notification_attempts(
+            active_policy.tenant_id,
+            incident_id,
+            limit=limit,
+        )
+        return JSONResponse(
+            content={"items": [item.model_dump(mode="json") for item in rows]},
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    async def mutate_incident(
+        incident_id: uuid.UUID,
+        request: Request,
+        action: Literal["acknowledge", "resolve", "reopen"],
+    ) -> JSONResponse:
+        actor, correlation_id = await authorize(
+            request,
+            expected_client_id=OPERATOR_CLIENT_ID,
+            scope_kind="command",
+            policy=active_policy,
+        )
+        supplied_idempotency = request.headers.get("Idempotency-Key", "").strip()
+        if not IDEMPOTENCY_RE.fullmatch(supplied_idempotency):
+            raise RequestValidationError("Idempotency-Key is required and malformed")
+        raw = await read_bounded_json(request, maximum=16_384)
+        try:
+            mutation = IncidentMutationRequest.model_validate_json(raw)
+        except ValidationError as exc:
+            raise RequestValidationError("incident mutation is invalid") from exc
+        incident = await request.app.state.runtime.incidents.store.mutate(
+            active_policy.tenant_id,
+            incident_id,
+            action=action,
+            actor_id=actor,
+            correlation_id=correlation_id,
+            idempotency_key=supplied_idempotency,
+            expected_version=mutation.expected_version,
+            reason=mutation.reason,
+        )
+        return JSONResponse(
+            content=incident.model_dump(mode="json"),
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    @app.post("/v1/observability/incidents/{incident_id}/acknowledge")
+    async def acknowledge_incident(
+        incident_id: uuid.UUID, request: Request
+    ) -> JSONResponse:
+        return await mutate_incident(incident_id, request, "acknowledge")
+
+    @app.post("/v1/observability/incidents/{incident_id}/resolve")
+    async def resolve_incident(
+        incident_id: uuid.UUID, request: Request
+    ) -> JSONResponse:
+        return await mutate_incident(incident_id, request, "resolve")
+
+    @app.post("/v1/observability/incidents/{incident_id}/reopen")
+    async def reopen_incident(
+        incident_id: uuid.UUID, request: Request
+    ) -> JSONResponse:
+        return await mutate_incident(incident_id, request, "reopen")
 
     @app.post("/v1/observability/alert-delivery-events")
     async def accept_delivery_event(request: Request) -> JSONResponse:

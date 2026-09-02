@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -126,15 +127,27 @@ async def policy_decision(body: PolicyDecision, request: Request):
 
 
 @router.get("/reconciliation/operations")
-async def reconciliation_list(request: Request, limit: int = Query(50, ge=1, le=100)):
+async def reconciliation_list(request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None):
     tenant = await _auth(request)
+    decoded = _decode_cursor(cursor, "reconciliation")
+    try:
+        position = (datetime.fromisoformat(decoded[0]), int(decoded[1])) if decoded else None
+    except (TypeError, ValueError) as exc:
+        raise RequestValidationError("cursor is malformed") from exc
     async with _pool(request).acquire() as conn:
         rows = await conn.fetch(
-            "SELECT * FROM middleware_outbox WHERE tenant_id=$1 AND reconciliation_required_at IS NOT NULL ORDER BY reconciliation_required_at,id LIMIT $2",
+            """SELECT * FROM middleware_outbox WHERE tenant_id=$1
+               AND reconciliation_required_at IS NOT NULL
+               AND ($2::timestamptz IS NULL OR (reconciliation_required_at,id) > ($2,$3))
+               ORDER BY reconciliation_required_at,id LIMIT $4""",
             tenant,
-            limit,
+            position[0] if position else None,
+            position[1] if position else None,
+            limit + 1,
         )
-    return {"items": [_safe_outbox(row) for row in rows], "next_cursor": None}
+    items = rows[:limit]
+    next_cursor = _encode_cursor("reconciliation", [items[-1]["reconciliation_required_at"].isoformat(), items[-1]["id"]]) if len(rows) > limit else None
+    return {"items": [_safe_outbox(row) for row in items], "next_cursor": next_cursor}
 
 
 @router.get("/reconciliation/operations/{record_id}")
@@ -216,15 +229,27 @@ async def reconciliation_resolve(record_id: int, body: ReconciliationResolution,
 
 
 @router.get("/quarantine/events")
-async def quarantine_list(request: Request, limit: int = Query(50, ge=1, le=100)):
+async def quarantine_list(request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None):
     tenant = await _auth(request)
+    decoded = _decode_cursor(cursor, "quarantine")
+    try:
+        position = (datetime.fromisoformat(decoded[0]), str(decoded[1])) if decoded else None
+    except (TypeError, ValueError) as exc:
+        raise RequestValidationError("cursor is malformed") from exc
     async with _pool(request).acquire() as conn:
         rows = await conn.fetch(
-            "SELECT * FROM middleware_inbox WHERE tenant_id=$1 AND quarantined_at IS NOT NULL ORDER BY quarantined_at,event_id LIMIT $2",
+            """SELECT * FROM middleware_inbox WHERE tenant_id=$1 AND quarantined_at IS NOT NULL
+               AND discarded_at IS NULL
+               AND ($2::timestamptz IS NULL OR (quarantined_at,event_id) > ($2,$3))
+               ORDER BY quarantined_at,event_id LIMIT $4""",
             tenant,
-            limit,
+            position[0] if position else None,
+            position[1] if position else None,
+            limit + 1,
         )
-    return {"items": [_safe_inbox(row) for row in rows], "next_cursor": None}
+    items = rows[:limit]
+    next_cursor = _encode_cursor("quarantine", [items[-1]["quarantined_at"].isoformat(), items[-1]["event_id"]]) if len(rows) > limit else None
+    return {"items": [_safe_inbox(row) for row in items], "next_cursor": next_cursor}
 
 
 @router.get("/quarantine/events/{record_id}")

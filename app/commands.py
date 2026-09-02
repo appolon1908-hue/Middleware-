@@ -804,11 +804,13 @@ class PostgresCommandStore:
                 else:
                     if previous != "failed": raise CommandConflict("operation is not safely retryable")
                     new_state = "queued"
+                    work_key = "operation-retry:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
+                    retry_envelope = json.loads(current["payload"]) if isinstance(current["payload"], str) else dict(current["payload"])
+                    retry_envelope["idempotency_key"] = work_key
                     row = await conn.fetchrow("""UPDATE middleware_commands SET state='queued', resource_version=resource_version+1,
                         last_error=NULL, queued_at=now(), updated_at=now() WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id))
-                    work_key = "operation-retry:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
                     await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
-                        VALUES ($1,$2,$3,'operation.retry.v1',$4::jsonb,$5) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, json.dumps({"command_id": str(command_id), "action": "retry", "reason": reason}), work_key)
+                        VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, current["command_type"], json.dumps(retry_envelope), work_key)
                 assert row is not None
                 await conn.execute("""INSERT INTO middleware_command_audit (tenant_id, command_id, previous_state, new_state, actor_id, reason, metadata)
                     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)""", tenant_id, str(command_id), previous, new_state, actor_id, reason, json.dumps({"action": action, "resource_version": row["resource_version"]}))

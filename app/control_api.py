@@ -125,11 +125,14 @@ async def _mutate(request:Request,kind:str,rid:str,action:str,body:ControlMutati
         if row["resource_version"]!=body.expected_version:
             from .commands import CommandConflict
             raise CommandConflict("expected_version is stale")
+        if kind=="inbox" and row["discarded_at"] is not None:
+            from .commands import CommandConflict
+            raise CommandConflict("discarded inbox evidence is terminal")
         previous=row["status"] if kind=="inbox" else _safe_outbox(row)["state"]
         if kind=="inbox":
             if action=="quarantine": sql="UPDATE middleware_inbox SET quarantined_at=now(),quarantine_reason=$3,status='rejected',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
             elif action=="release": sql="UPDATE middleware_inbox SET released_at=now(),quarantined_at=NULL,quarantine_reason=NULL,status='accepted',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
-            elif action=="discard": sql="UPDATE middleware_inbox SET discarded_at=now(),discard_reason=$3,status='rejected',processed_at=COALESCE(processed_at,now()),resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 AND quarantined_at IS NOT NULL RETURNING *"
+            elif action=="discard": sql="UPDATE middleware_inbox SET discarded_at=now(),discard_reason=$3,quarantined_at=NULL,quarantine_reason=NULL,status='rejected',processed_at=COALESCE(processed_at,now()),resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 AND quarantined_at IS NOT NULL RETURNING *"
             else: sql="UPDATE middleware_inbox SET reprocess_requested_at=now(),status='accepted',resource_version=resource_version+1 WHERE tenant_id=$1 AND event_id=$2 RETURNING *"
         else:
             if row["completed_at"] or row["dead_lettered_at"] or row["cancelled_at"]:

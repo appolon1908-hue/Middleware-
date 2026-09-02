@@ -424,6 +424,50 @@ async def test_postgres_operation_reads_and_cancel_are_tenant_isolated_and_atomi
             await conn.execute("DELETE FROM middleware_operation_mutations WHERE tenant_id=$1", "tenant-operation")
 
 
+@pytest.mark.asyncio
+async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(pool: asyncpg.Pool) -> None:
+    store = PostgresCommandStore(pool)
+    command = CommandEnvelope.model_validate({
+        "command_id": "00000000-0000-4000-8000-000000000003",
+        "command_type": "crm.contact.create.v1", "command_version": "1.0",
+        "target": "odoo-19", "tenant_id": "tenant-operation-retry", "requested_by": "user-1",
+        "correlation_id": "correlation-operation-3", "idempotency_key": "idempotency-operation-3",
+        "capability": "ODOO_WRITE", "payload": {"contact_id": "contact-3"},
+    })
+    await store.submit(command)
+    for state in ("queued", "dispatching", "failed"):
+        await store.transition(
+            command.tenant_id,
+            command.command_id,
+            new_state=state,
+            actor_id="temporal:test",
+            reason=f"verified transition to {state}",
+        )
+
+    retried = await store.mutate_operation(
+        command.tenant_id,
+        command.command_id,
+        action="retry",
+        actor_id="user-1",
+        idempotency_key="retry-mutation-3",
+        expected_version=1,
+        reason="known_safe_failure",
+    )
+    assert retried.state == "queued" and retried.resource_version == 2
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT event_type,payload,idempotency_key FROM middleware_outbox
+               WHERE tenant_id=$1 AND command_id=$2 AND idempotency_key LIKE 'operation-retry:%'""",
+            command.tenant_id,
+            str(command.command_id),
+        )
+    assert row is not None and row["event_type"] == command.command_type
+    retry_envelope = CommandEnvelope.model_validate(json.loads(row["payload"]))
+    assert retry_envelope.command_id == command.command_id
+    assert retry_envelope.idempotency_key == row["idempotency_key"]
+    assert retry_envelope.payload == command.payload
+
+
 async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:
     async with pool.acquire() as conn:
         return await conn.fetchval(

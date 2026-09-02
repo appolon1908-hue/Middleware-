@@ -62,6 +62,7 @@ async def test_command_dispatch_uses_deterministic_exactly_once_workflow_identit
     assert options["id"] == command_workflow_id(
         record.tenant_id,
         record.payload["command_id"],
+        record.idempotency_key,
     )
     assert options["id_reuse_policy"] is WorkflowIDReusePolicy.REJECT_DUPLICATE
     assert options["id_conflict_policy"] is WorkflowIDConflictPolicy.USE_EXISTING

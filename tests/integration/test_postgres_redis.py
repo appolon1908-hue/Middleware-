@@ -556,6 +556,9 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
     assert retry_envelope.idempotency_key == row["idempotency_key"]
     assert retry_envelope.payload == command.payload
 
+    # The dispatcher marks operation-retry envelopes as resume_from_queued, so
+    # the durable mutation must already have completed failed -> queued.
+
 
 async def insert_outbox(pool: asyncpg.Pool, idempotency_key: str) -> int:
     async with pool.acquire() as conn:

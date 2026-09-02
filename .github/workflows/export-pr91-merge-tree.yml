@@ -1,0 +1,40 @@
+name: Export PR91 merge-result tree
+
+on:
+  push:
+    branches:
+      - chatgpt/pr91-merge-tree-export-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out export branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Export exact merge-result parent
+        run: |
+          set -Eeuo pipefail
+          target="$(git rev-parse HEAD^)"
+          test "$target" = "e58c43c33e47beaf5f625233cfeb78d6175319c9"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/pr91-merge-${target}.tar.gz" "$target"
+          sha256sum "$RUNNER_TEMP/pr91-merge-${target}.tar.gz" > "$RUNNER_TEMP/pr91-merge-${target}.tar.gz.sha256"
+
+      - name: Upload merge-result source
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr91-merge-tree-e58c43c33e47beaf5f625233cfeb78d6175319c9
+          path: |
+            ${{ runner.temp }}/pr91-merge-e58c43c33e47beaf5f625233cfeb78d6175319c9.tar.gz
+            ${{ runner.temp }}/pr91-merge-e58c43c33e47beaf5f625233cfeb78d6175319c9.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

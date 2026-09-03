@@ -25,6 +25,7 @@ from .repository import ConnectorRepository
 
 _EVENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
 _LOG = structlog.get_logger(__name__)
+_BODY_RECONCILIATION_GRACE_SECONDS = 300
 
 
 async def read_limited_body(
@@ -166,6 +167,61 @@ class WebhookIngressService:
             ) from error
         return candidate.lower()
 
+    def reconcile_pending_bodies(
+        self,
+        *,
+        grace_seconds: int = _BODY_RECONCILIATION_GRACE_SECONDS,
+        now: float | None = None,
+    ) -> dict[str, int]:
+        """Resolve durable body claims without racing active deliveries."""
+        records, invalid = self.body_store.scan_pending_records(
+            older_than_seconds=grace_seconds,
+            now=now,
+        )
+        result = {
+            "examined": len(records),
+            "retained": 0,
+            "removed": 0,
+            "deferred": 0,
+            "invalid": invalid,
+        }
+        for record in records:
+            try:
+                state = self.repository.webhook_body_reference_state(
+                    tenant_id=UUID(record.tenant_id),
+                    webhook_id=UUID(record.webhook_id),
+                    event_id=record.event_id,
+                    body_sha256=record.body_sha256,
+                    encrypted_body_reference=record.reference,
+                )
+            except Exception as error:
+                result["deferred"] += 1
+                _LOG.warning(
+                    "encrypted_webhook_body_reconciliation_deferred",
+                    error_type=type(error).__name__,
+                )
+                continue
+            try:
+                if state == "accepted":
+                    self.body_store.mark_accepted(record.reference)
+                    result["retained"] += 1
+                elif state in {"rejected", "unreferenced"}:
+                    self.body_store.discard_pending(record.reference)
+                    result["removed"] += 1
+                else:
+                    result["deferred"] += 1
+                    _LOG.error(
+                        "encrypted_webhook_body_reconciliation_state_invalid",
+                        state=state,
+                    )
+            except OSError as error:
+                result["deferred"] += 1
+                _LOG.warning(
+                    "encrypted_webhook_body_cleanup_retry_required",
+                    error_type=type(error).__name__,
+                )
+        return result
+
     async def accept(
         self,
         request: Request,
@@ -180,6 +236,12 @@ class WebhookIngressService:
                 code="WEBHOOK_INGRESS_DISABLED",
                 title="Webhook ingress disabled",
                 detail="Webhook ingress is disabled by runtime policy.",
+            )
+        reconciliation = self.reconcile_pending_bodies()
+        if reconciliation["deferred"] or reconciliation["invalid"]:
+            _LOG.warning(
+                "encrypted_webhook_body_reconciliation_incomplete",
+                **reconciliation,
             )
         ingress = self.repository.resolve_ingress_webhook(
             connector_id=connector_id,
@@ -289,19 +351,34 @@ class WebhookIngressService:
                 traceparent=request.headers.get("traceparent"),
             )
         except ProblemError as error:
-            # A semantic conflict proves that the accepted event key owns a
-            # different digest, so this newly-created file cannot be referenced
-            # by a concurrent successful delivery. For unknown database errors,
-            # retain the body for reconciliation instead of racing a commit.
-            if body_created and error.code == "WEBHOOK_SEMANTIC_CONFLICT":
+            if error.code == "WEBHOOK_SEMANTIC_CONFLICT":
                 try:
-                    self.body_store.remove(reference)
+                    self.body_store.discard_pending(reference)
                 except OSError as cleanup_error:
                     _LOG.error(
-                        "encrypted_webhook_body_cleanup_failed",
+                        "encrypted_webhook_body_cleanup_retry_required",
                         error_type=type(cleanup_error).__name__,
+                        body_created=body_created,
                     )
             raise
+        except Exception as error:
+            # The durable record survives a rollback, lost response, or
+            # process error. Reconciliation decides retain versus delete.
+            _LOG.warning(
+                "encrypted_webhook_body_outcome_deferred",
+                error_type=type(error).__name__,
+                body_created=body_created,
+            )
+            raise
+        else:
+            try:
+                self.body_store.mark_accepted(reference)
+            except OSError as cleanup_error:
+                # Acceptance is durable; retry only journal cleanup.
+                _LOG.warning(
+                    "encrypted_webhook_body_acceptance_cleanup_deferred",
+                    error_type=type(cleanup_error).__name__,
+                )
         return 202, {
             "data": {
                 "inbox_id": str(inbox_id),

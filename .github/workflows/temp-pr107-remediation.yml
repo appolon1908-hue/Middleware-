@@ -1,0 +1,78 @@
+name: Temporary PR 107 manifest assertion remediation
+
+on:
+  push:
+    branches:
+      - feat/provider-control-staging-auth-20260903
+    paths:
+      - .pr107-remediation-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/provider-control-staging-auth-20260903
+          fetch-depth: 1
+
+      - name: Update manifest inventory assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_connector_sdk_v1.py")
+          source = path.read_text(encoding="utf-8")
+          before = '''            {
+                "beyvra-nonfinancial",
+                "klyrow-alert-email",
+                "klyrow-email",
+                "kyqra-crawler",
+                "odoo-19",
+                "postly-social",
+                "provisioning-service",
+                "telnexa-sms",
+                "vicidial-restricted",
+            },'''
+          after = '''            {
+                "ai-provider",
+                "beyvra-nonfinancial",
+                "klyrow-alert-email",
+                "klyrow-email",
+                "kyqra-crawler",
+                "marketing-provider",
+                "odoo-19",
+                "postly-social",
+                "provisioning-service",
+                "telnexa-sms",
+                "vicidial-restricted",
+            },'''
+          if source.count(before) != 1:
+              raise SystemExit("expected manifest assertion was not found exactly once")
+          path.write_text(source.replace(before, after), encoding="utf-8")
+          PY
+          git diff --check
+
+      - name: Run focused connector regression
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+
+      - name: Install and test
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes -r requirements-test.txt
+          python -m unittest -v tests.test_connector_sdk_v1.ConnectorSdkStandardsTests.test_manifests_are_disabled_and_non_overlapping
+
+      - name: Commit remediation and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/test_connector_sdk_v1.py
+          git rm .pr107-remediation-trigger
+          git rm .github/workflows/temp-pr107-remediation.yml
+          git commit -m "test(connectors): include disabled provider manifests"
+          git push origin HEAD:feat/provider-control-staging-auth-20260903

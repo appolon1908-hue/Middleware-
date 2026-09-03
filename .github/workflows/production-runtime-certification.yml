@@ -28,7 +28,7 @@ jobs:
     name: Deploy and certify exact immutable production canary
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    environment: production
+    environment: production-runtime-certification
 
     env:
       DEPLOY_HOST: 65.109.65.169

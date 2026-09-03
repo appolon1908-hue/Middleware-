@@ -168,7 +168,7 @@ def validate_source(root: Path = ROOT) -> None:
         "github.event.comment.user.id == 275410064",
         "github.event.comment.author_association == 'OWNER'",
         "github.event.comment.body == '/deploy-middleware-production-readonly v1'",
-        "environment: production",
+        "environment: production-runtime-certification",
         "MIDDLEWARE_DEPLOY_HOST",
         "MIDDLEWARE_DEPLOY_SSH_KEY",
         "MIDDLEWARE_DEPLOY_HOST_KEY",

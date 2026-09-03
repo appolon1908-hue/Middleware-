@@ -19,7 +19,14 @@ def wrap_dedent_assignment(
     next_marker: str,
     prefix: str,
 ) -> str:
-    assignment_start = value.index(f"{variable} =")
+    line_anchor = f"\n{variable} ="
+    try:
+        assignment_start = value.index(line_anchor) + 1
+    except ValueError:
+        if value.startswith(f"{variable} ="):
+            assignment_start = 0
+        else:
+            raise SystemExit(f"cannot locate assignment for {variable}") from None
     marker_start = value.index(next_marker, assignment_start)
     segment = value[assignment_start:marker_start]
     call_start = segment.index("textwrap.dedent(")

@@ -83,10 +83,16 @@ Require:
 - Apply to administrators
 - No bypass actors
 
-Set required approvals to zero for now because the repository has one owner and
-GitHub does not allow an author to approve their own pull request. Exact-head
-automated gates remain mandatory; adding a reviewer later is optional and must
-not become a production-promotion dependency.
+Require one approving review. The repository is no longer single-owner: a second
+collaborator holds write access and already reviews pull requests, so requiring
+an independent approval no longer deadlocks an author who cannot approve their
+own pull request. Exact-head automated gates remain mandatory and are not
+replaced by the human approval; the approval is an additional gate in front of
+`main`, not a substitute for any required check.
+
+Do not enable required code-owner review while `CODEOWNERS` resolves every path
+to the sole repository owner: an owner-authored pull request could then never be
+approved.
 
 ## Security and analysis
 

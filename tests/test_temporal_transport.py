@@ -10,11 +10,13 @@ from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 from app.commands import AUTHENTICATED_CLIENT_ID_KEY, TEMPORAL_COMMAND_DESTINATION
 from app.storage import OutboxRecord
 from app.temporal_transport import (
+    RECONCILIATION_EVENT_TYPE,
     TemporalCommandDispatcher,
     TemporalTransportError,
     command_workflow_id,
+    reconciliation_workflow_id,
 )
-from app.temporal_workflows import CommandExecutionRequest
+from app.temporal_workflows import CommandExecutionRequest, ReconciliationRequest
 
 
 def command_record() -> OutboxRecord:
@@ -39,6 +41,23 @@ def command_record() -> OutboxRecord:
         event_type="crm.contact.create.v1",
         idempotency_key="idempotency-123",
         payload=payload,
+        attempt_count=1,
+    )
+
+
+def reconciliation_record() -> OutboxRecord:
+    command_id = str(uuid4())
+    return OutboxRecord(
+        id=2,
+        tenant_id="tenant-1",
+        destination=TEMPORAL_COMMAND_DESTINATION,
+        event_type=RECONCILIATION_EVENT_TYPE,
+        idempotency_key="operation-reconcile:" + "a" * 64,
+        payload={
+            "command_id": command_id,
+            "action": "reconcile",
+            "reason": "operator requested authoritative provider readback",
+        },
         attempt_count=1,
     )
 
@@ -70,6 +89,60 @@ async def test_command_dispatch_uses_deterministic_exactly_once_workflow_identit
     )
     assert options["id_reuse_policy"] is WorkflowIDReusePolicy.REJECT_DUPLICATE
     assert options["id_conflict_policy"] is WorkflowIDConflictPolicy.USE_EXISTING
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_dispatch_uses_supported_dedicated_workflow_request() -> None:
+    client = RecordingTemporalClient()
+    dispatcher = TemporalCommandDispatcher(client, "codestra-test-critical")  # type: ignore[arg-type]
+    record = reconciliation_record()
+
+    await dispatcher.dispatch(record)
+
+    assert len(client.calls) == 1
+    _, request, options = client.calls[0]
+    assert isinstance(request, ReconciliationRequest)
+    assert request.operation_id == record.payload["command_id"]
+    assert request.tenant_id == record.tenant_id
+    assert request.reason == record.payload["reason"]
+    assert options["id"] == reconciliation_workflow_id(
+        record.tenant_id,
+        record.payload["command_id"],
+        record.idempotency_key,
+    )
+    assert options["id_reuse_policy"] is WorkflowIDReusePolicy.REJECT_DUPLICATE
+    assert options["id_conflict_policy"] is WorkflowIDConflictPolicy.USE_EXISTING
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload_update", "idempotency_key", "message"),
+    [
+        ({"action": "retry"}, None, "unsupported action"),
+        ({"reason": ""}, None, "invalid safe reason"),
+        ({"command_id": ""}, None, "invalid operation identity"),
+        ({"unexpected": True}, None, "versioned contract"),
+        ({}, "wrong-prefix", "invalid idempotency identity"),
+    ],
+)
+async def test_reconciliation_dispatch_fails_closed_on_invalid_intent(
+    payload_update: dict[str, Any],
+    idempotency_key: str | None,
+    message: str,
+) -> None:
+    client = RecordingTemporalClient()
+    dispatcher = TemporalCommandDispatcher(client, "codestra-test-critical")  # type: ignore[arg-type]
+    record = reconciliation_record()
+    payload = {**record.payload, **payload_update}
+    record = replace(
+        record,
+        payload=payload,
+        idempotency_key=idempotency_key or record.idempotency_key,
+    )
+
+    with pytest.raises(TemporalTransportError, match=message):
+        await dispatcher.dispatch(record)
+    assert client.calls == []
 
 
 @pytest.mark.asyncio

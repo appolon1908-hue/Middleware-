@@ -1,3 +1,5 @@
+"""Codestra Middleware application package and deterministic route registry."""
+
 __all__ = ["create_app"]
 
 

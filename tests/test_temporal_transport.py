@@ -62,6 +62,11 @@ def reconciliation_record() -> OutboxRecord:
     )
 
 
+async def trusted_reconciliation_command_id(record: OutboxRecord) -> str | None:
+    value = record.payload.get("command_id")
+    return value if isinstance(value, str) else None
+
+
 class RecordingTemporalClient:
     def __init__(self) -> None:
         self.calls: list[tuple[Any, Any, dict[str, Any]]] = []
@@ -94,7 +99,11 @@ async def test_command_dispatch_uses_deterministic_exactly_once_workflow_identit
 @pytest.mark.asyncio
 async def test_reconciliation_dispatch_uses_supported_dedicated_workflow_request() -> None:
     client = RecordingTemporalClient()
-    dispatcher = TemporalCommandDispatcher(client, "codestra-test-critical")  # type: ignore[arg-type]
+    dispatcher = TemporalCommandDispatcher(  # type: ignore[arg-type]
+        client,
+        "codestra-test-critical",
+        reconciliation_command_id_lookup=trusted_reconciliation_command_id,
+    )
     record = reconciliation_record()
 
     await dispatcher.dispatch(record)
@@ -112,6 +121,40 @@ async def test_reconciliation_dispatch_uses_supported_dedicated_workflow_request
     )
     assert options["id_reuse_policy"] is WorkflowIDReusePolicy.REJECT_DUPLICATE
     assert options["id_conflict_policy"] is WorkflowIDConflictPolicy.USE_EXISTING
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_dispatch_requires_durable_outbox_identity_lookup() -> None:
+    client = RecordingTemporalClient()
+    dispatcher = TemporalCommandDispatcher(client, "codestra-test-critical")  # type: ignore[arg-type]
+
+    with pytest.raises(TemporalTransportError, match="identity verification"):
+        await dispatcher.dispatch(reconciliation_record())
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_dispatch_rejects_payload_command_identity_mismatch() -> None:
+    client = RecordingTemporalClient()
+    record = reconciliation_record()
+    trusted_command_id = str(record.payload["command_id"])
+    tampered = replace(
+        record,
+        payload={**record.payload, "command_id": str(uuid4())},
+    )
+
+    async def lookup(_record: OutboxRecord) -> str | None:
+        return trusted_command_id
+
+    dispatcher = TemporalCommandDispatcher(  # type: ignore[arg-type]
+        client,
+        "codestra-test-critical",
+        reconciliation_command_id_lookup=lookup,
+    )
+
+    with pytest.raises(TemporalTransportError, match="durable outbox command"):
+        await dispatcher.dispatch(tampered)
+    assert client.calls == []
 
 
 @pytest.mark.asyncio

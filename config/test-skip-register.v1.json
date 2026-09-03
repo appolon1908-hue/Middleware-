@@ -1,8 +1,13 @@
 {
   "schema_version": "1.0",
   "baseline": {
-    "commit": "99eb1d57ea9a64c9f6bf7dce0fb5f026fb66acc2",
+<<<<<<< HEAD
+    "commit": "3f95d771667b2a5e29f9cbd589d8309f2201bdd7",
     "passed": 473,
+=======
+    "commit": "3f95d771667b2a5e29f9cbd589d8309f2201bdd7",
+    "passed": 473,
+>>>>>>> feat/telnexa-sms-provider-adapter
     "skipped": 45
   },
   "registered_files": [

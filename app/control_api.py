@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from .capability_resolution import effective_capability_enabled
 from .control_plane_auth import caller_for_authorization
 from .runtime_safety import runtime_safety_readback
 from .security import RequestValidationError, authorize_tenant
@@ -220,7 +221,7 @@ class PolicyDecisionRequest(BaseModel):
 
 @router.post("/v1/policy/decisions")
 async def policy_decision(body:PolicyDecisionRequest,request:Request):
-    await _auth(request,mutation=True); caps=_capabilities(request); runtime=caps["runtime"]; enabled=runtime.get(body.capability) is True
+    await _auth(request,mutation=True); caps=_capabilities(request); enabled=effective_capability_enabled(caps,body.capability)
     return {"decision":"ALLOW" if enabled else "DENY","capability":body.capability,"proposed_action":body.proposed_action,"external_effects":False,"reason":"capability_enabled" if enabled else "fail_closed"}
 
 @router.get("/v1/reconciliation/operations")

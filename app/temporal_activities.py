@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 from collections.abc import Mapping
 from typing import Any, Protocol
@@ -14,6 +15,7 @@ from .commands import (
     CommandEnvelope,
     CommandNotFound,
     PostgresCommandStore,
+    authenticated_command_digest,
 )
 from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
@@ -161,49 +163,12 @@ class CommandLedgerWorkflowActivities:
                 type="ProviderReadbackError",
             ) from exc
 
-    async def _load_reconciliation_command(
-        self,
+    @staticmethod
+    def _validated_reconciliation_command(
+        row: Mapping[str, Any],
         request: ReconciliationRequest,
-    ) -> tuple[CommandExecutionRequest | None, ActivityResult | None]:
-        try:
-            operation_id = UUID(request.operation_id)
-        except ValueError as exc:
-            raise ApplicationError(
-                "reconciliation operation_id is invalid",
-                non_retryable=True,
-                type="ReconciliationRejected",
-            ) from exc
-
-        async with self.store.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT * FROM middleware_commands
-                WHERE tenant_id=$1 AND command_id=$2
-                """,
-                request.tenant_id,
-                str(operation_id),
-            )
-        if row is None:
-            raise ApplicationError(
-                "reconciliation operation was not found",
-                non_retryable=True,
-                type="ReconciliationRejected",
-            )
-        if row["state"] == "completed":
-            operation = await self.store.get(request.tenant_id, operation_id)
-            return None, ActivityResult(
-                status="completed",
-                detail="provider read-back was already durably reconciled",
-                provider_operation_id=operation.provider_operation_id,
-                readback_evidence=operation.readback_evidence,
-            )
-        if row["state"] != "reconciliation_required":
-            raise ApplicationError(
-                "operation is not awaiting reconciliation",
-                non_retryable=True,
-                type="ReconciliationRejected",
-            )
-
+        operation_id: UUID,
+    ) -> tuple[CommandExecutionRequest, str]:
         durable = row["payload"]
         if isinstance(durable, str):
             try:
@@ -242,18 +207,85 @@ class CommandLedgerWorkflowActivities:
                 non_retryable=True,
                 type="ReconciliationRejected",
             )
+
+        expected_digest = authenticated_command_digest(
+            command,
+            authenticated_client_id,
+        )
+        persisted_digest = row.get("payload_sha256")
+        if (
+            not isinstance(persisted_digest, str)
+            or not hmac.compare_digest(persisted_digest, expected_digest)
+        ):
+            raise ApplicationError(
+                "durable command payload digest does not match submission evidence",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+
         return (
             CommandExecutionRequest(
                 **command.model_dump(mode="json"),
                 authenticated_client_id=authenticated_client_id,
             ),
-            None,
+            expected_digest,
         )
+
+    async def _load_reconciliation_command(
+        self,
+        request: ReconciliationRequest,
+    ) -> tuple[CommandExecutionRequest | None, ActivityResult | None, str | None]:
+        try:
+            operation_id = UUID(request.operation_id)
+        except ValueError as exc:
+            raise ApplicationError(
+                "reconciliation operation_id is invalid",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            ) from exc
+
+        async with self.store.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT * FROM middleware_commands
+                WHERE tenant_id=$1 AND command_id=$2
+                """,
+                request.tenant_id,
+                str(operation_id),
+            )
+        if row is None:
+            raise ApplicationError(
+                "reconciliation operation was not found",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+        if row["state"] == "completed":
+            operation = await self.store.get(request.tenant_id, operation_id)
+            return None, ActivityResult(
+                status="completed",
+                detail="provider read-back was already durably reconciled",
+                provider_operation_id=operation.provider_operation_id,
+                readback_evidence=operation.readback_evidence,
+            ), None
+        if row["state"] != "reconciliation_required":
+            raise ApplicationError(
+                "operation is not awaiting reconciliation",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+
+        command, payload_digest = self._validated_reconciliation_command(
+            row,
+            request,
+            operation_id,
+        )
+        return command, None, payload_digest
 
     async def _persist_reconciliation_result(
         self,
         request: ReconciliationRequest,
         result: ActivityResult,
+        expected_payload_sha256: str,
     ) -> ActivityResult:
         if result.status not in {"matched", "mismatch"}:
             raise ApplicationError(
@@ -299,6 +331,29 @@ class CommandLedgerWorkflowActivities:
                 if current["state"] != "reconciliation_required":
                     raise ApplicationError(
                         "operation is no longer awaiting reconciliation",
+                        non_retryable=True,
+                        type="ReconciliationRejected",
+                    )
+
+                try:
+                    operation_id = UUID(request.operation_id)
+                except ValueError as exc:
+                    raise ApplicationError(
+                        "reconciliation operation_id is invalid",
+                        non_retryable=True,
+                        type="ReconciliationRejected",
+                    ) from exc
+                _, current_payload_sha256 = self._validated_reconciliation_command(
+                    current,
+                    request,
+                    operation_id,
+                )
+                if not hmac.compare_digest(
+                    current_payload_sha256,
+                    expected_payload_sha256,
+                ):
+                    raise ApplicationError(
+                        "durable command changed during provider reconciliation",
                         non_retryable=True,
                         type="ReconciliationRejected",
                     )
@@ -401,12 +456,19 @@ class CommandLedgerWorkflowActivities:
         self,
         request: ReconciliationRequest,
     ) -> ActivityResult:
-        command, completed = await self._load_reconciliation_command(request)
+        command, completed, payload_sha256 = await self._load_reconciliation_command(
+            request
+        )
         if completed is not None:
             return completed
         assert command is not None
+        assert payload_sha256 is not None
         result = await self.readback_command(command)
-        return await self._persist_reconciliation_result(request, result)
+        return await self._persist_reconciliation_result(
+            request,
+            result,
+            payload_sha256,
+        )
 
     def registered(self) -> tuple[Any, ...]:
         return (

@@ -1,0 +1,39 @@
+name: Temporary automation v2 exact-source export
+
+on:
+  push:
+    branches:
+      - feature/automation-v2-production-certification-20260903
+    paths:
+      - .automation-v2-export-trigger
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/automation-v2-production-certification-20260903
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove and package exact source
+        run: |
+          set -Eeuo pipefail
+          printf 'EXPORTED_SOURCE_SHA=%s\n' "$(git rev-parse HEAD)"
+          tar \
+            --exclude=.git \
+            -C "$GITHUB_WORKSPACE" \
+            -czf "$RUNNER_TEMP/automation-v2-source.tar.gz" .
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: automation-v2-source-${{ github.sha }}
+          path: ${{ runner.temp }}/automation-v2-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1

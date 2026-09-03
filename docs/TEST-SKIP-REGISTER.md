@@ -1,7 +1,7 @@
 # Test skip register
 
-Baseline observed on `main` at `83d41e37227ca6c852366b649d8d038d07112c7e`:
-**442 passed, 45 skipped**.
+Baseline observed on `main` at `d364b641832062d17c652e05e5db6f97002ebddb`:
+**456 passed, 45 skipped**.
 
 The counts are the unit-suite result reported by the `Validate middleware source
 head`, `Validate middleware merge result` and `docker-test-build` jobs of

@@ -19,6 +19,10 @@ from .commands import (
 )
 from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
+from .telnexa_provider_adapter import (
+    TelnexaProviderAdapterError,
+    TelnexaSmsAdapter,
+)
 from .provider_canary import provider_evidence_digest
 from .temporal_workflows import (
     ActivityResult,
@@ -91,10 +95,12 @@ class CommandLedgerWorkflowActivities:
         store: PostgresCommandStore,
         odoo: OdooProviderAdapter | None = None,
         klyrow_alert: KlyrowAlertAdapter | None = None,
+        telnexa_sms: TelnexaSmsAdapter | None = None,
     ) -> None:
         self.store = store
         self.odoo = odoo
         self.klyrow_alert = klyrow_alert
+        self.telnexa_sms = telnexa_sms
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -129,6 +135,8 @@ class CommandLedgerWorkflowActivities:
             return self.odoo
         if request.target == "klyrow-alert-email" and self.klyrow_alert is not None:
             return self.klyrow_alert
+        if request.target == "telnexa-sms" and self.telnexa_sms is not None:
+            return self.telnexa_sms
         raise ApplicationError(
             "no production provider adapter is activated for this command",
             non_retryable=True,
@@ -143,7 +151,11 @@ class CommandLedgerWorkflowActivities:
         adapter = self._adapter(request)
         try:
             return await adapter.execute(request)
-        except (OdooProviderAdapterError, KlyrowAlertAdapterError) as exc:
+        except (
+            OdooProviderAdapterError,
+            KlyrowAlertAdapterError,
+            TelnexaProviderAdapterError,
+        ) as exc:
             raise ApplicationError(
                 str(exc),
                 type="ProviderAdapterError",
@@ -157,7 +169,11 @@ class CommandLedgerWorkflowActivities:
         adapter = self._adapter(request)
         try:
             return await adapter.readback(request)
-        except (OdooProviderAdapterError, KlyrowAlertAdapterError) as exc:
+        except (
+            OdooProviderAdapterError,
+            KlyrowAlertAdapterError,
+            TelnexaProviderAdapterError,
+        ) as exc:
             raise ApplicationError(
                 str(exc),
                 type="ProviderReadbackError",

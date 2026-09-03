@@ -27,37 +27,32 @@ jobs:
 
           path = Path("tests/test_connector_sdk_v1.py")
           source = path.read_text(encoding="utf-8")
-          before = '''            {
-                "beyvra-nonfinancial",
-                "klyrow-alert-email",
-                "klyrow-email",
-                "kyqra-crawler",
-                "odoo-19",
-                "postly-social",
-                "provisioning-service",
-                "telnexa-sms",
-                "vicidial-restricted",
-            },'''
-          after = '''            {
-                "ai-provider",
-                "beyvra-nonfinancial",
-                "klyrow-alert-email",
-                "klyrow-email",
-                "kyqra-crawler",
-                "marketing-provider",
-                "odoo-19",
-                "postly-social",
-                "provisioning-service",
-                "telnexa-sms",
-                "vicidial-restricted",
-            },'''
-          if source.count(before) != 1:
-              raise SystemExit("expected manifest assertion was not found exactly once")
-          path.write_text(source.replace(before, after), encoding="utf-8")
+          start_marker = "    def test_manifests_are_disabled_and_non_overlapping(self) -> None:\n"
+          end_marker = "        self.assertEqual(\n            self.registry.validate_global_invariants(),\n"
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          block = source[start:end]
+          additions = {
+              '                "beyvra-nonfinancial",\n': (
+                  '                "ai-provider",\n'
+                  '                "beyvra-nonfinancial",\n'
+              ),
+              '                "odoo-19",\n': (
+                  '                "marketing-provider",\n'
+                  '                "odoo-19",\n'
+              ),
+          }
+          for marker, replacement in additions.items():
+              if replacement.splitlines()[0].strip() in block:
+                  continue
+              if block.count(marker) != 1:
+                  raise SystemExit(f"manifest marker not found exactly once: {marker!r}")
+              block = block.replace(marker, replacement, 1)
+          path.write_text(source[:start] + block + source[end:], encoding="utf-8")
           PY
           git diff --check
 
-      - name: Run focused connector regression
+      - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.13"

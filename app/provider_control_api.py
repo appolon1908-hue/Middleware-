@@ -11,8 +11,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .commands import CommandEnvelope
+from .commands import CommandEnvelope, CommandNotFound
 from .control_api import router
+from .control_plane_auth import caller_for_authorization
 from .operations import OperationResponse, _operation_json
 from .security import (
     AuthorizationError,
@@ -23,6 +24,7 @@ from .storage import StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "provider-operation-policy.json"
+PROVIDER_IDENTITY_PROBE_ROUTE = "/api/v1/control/identity-probes/{probe_id}"
 
 # Separator-insensitive normalization matching the Connector SDK's canonical
 # secret-key rules. Governance controls such as token_budget and max_tokens are
@@ -128,6 +130,25 @@ def _load_specs() -> tuple[ProviderControlSpec, ...]:
 
 
 PROVIDER_CONTROL_SPECS = _load_specs()
+
+
+def _identity_probe_scopes(
+    specs: tuple[ProviderControlSpec, ...],
+) -> dict[str, str]:
+    """Select one deterministic existing grant for each provider caller.
+
+    The probe consumes an already-required provider submission scope but exposes
+    no operation data and never enters the command ledger. Provider callers are
+    separately denied access to the generic operation-read surface.
+    """
+
+    result: dict[str, str] = {}
+    for spec in specs:
+        result.setdefault(spec.caller_client_id, spec.required_scope)
+    return result
+
+
+PROVIDER_IDENTITY_PROBE_SCOPES = _identity_probe_scopes(PROVIDER_CONTROL_SPECS)
 
 
 class ProviderControlRequest(BaseModel):
@@ -252,9 +273,59 @@ def _handler(spec: ProviderControlSpec):
     return handler
 
 
-# Provider-control is part of the durable control surface. app.__init__ imports
-# this module before app.main imports control_api.router, so the existing router
-# is extended without a second application-registration authority.
+@router.get(
+    PROVIDER_IDENTITY_PROBE_ROUTE,
+    name="provider_control_identity_probe",
+    summary="Verify one provider-control machine identity without reading data",
+    tags=["provider-control"],
+    status_code=404,
+    responses={
+        404: {
+            "description": (
+                "Identity and tenant authorization succeeded; the random probe "
+                "resource intentionally does not exist"
+            )
+        }
+    },
+)
+async def provider_control_identity_probe(
+    probe_id: UUID,
+    request: Request,
+) -> None:
+    """Authenticate a provider caller and then terminate with deterministic 404.
+
+    This route does not access the command ledger, provider adapters, or any
+    tenant resource. It exists solely for protected staging identity evidence.
+    """
+
+    del probe_id
+    active = request.app.state.runtime
+    tenant_id = _required_header(request, "X-Tenant-ID", minimum=1, maximum=128)
+    _required_header(request, "X-Correlation-ID", minimum=8, maximum=180)
+    authorization = request.headers.get("Authorization", "")
+    caller = caller_for_authorization(authorization)
+    required_scope = PROVIDER_IDENTITY_PROBE_SCOPES.get(caller.client_id)
+    if required_scope is None:
+        raise AuthorizationError(
+            "caller is not authorized for the provider-control identity probe"
+        )
+    claims = await active.tokens.verify(
+        authorization,
+        expected_client_id=caller.client_id,
+        required_scope=required_scope,
+    )
+    authorize_tenant(claims, tenant_id)
+    subject = claims.get("sub")
+    if not isinstance(subject, str) or not subject.strip():
+        raise AuthorizationError("machine token subject is required")
+    if claims.get("azp") != caller.client_id:
+        raise AuthorizationError("verified machine client identity is required")
+    raise CommandNotFound("provider-control identity probe was not found")
+
+
+# app.main imports this module before including control_api.router, so the
+# existing durable-control router is extended without package-import side
+# effects or a second application-registration authority.
 for _spec in PROVIDER_CONTROL_SPECS:
     router.add_api_route(
         _spec.route,

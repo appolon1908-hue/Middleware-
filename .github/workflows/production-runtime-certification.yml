@@ -312,12 +312,21 @@ jobs:
             -o ServerAliveInterval=15
             -o ServerAliveCountMax=3
           )
+          scp_options=(
+            -i "$SSH_KEY_FILE"
+            -P "$DEPLOY_PORT"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE"
+            -o ConnectTimeout=15
+          )
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           bundle_name="middleware-production-$RELEASE_ID-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
           remote_bundle="/home/middleware-deploy/incoming/$bundle_name"
           ssh "${ssh_options[@]}" "$remote" \
             'set -eu; test "$(id -un)" = middleware-deploy; install -d -m 0700 "$HOME/incoming"; command -v sudo >/dev/null'
-          scp "${ssh_options[@]}" "$BUNDLE_ARCHIVE" "$remote:$remote_bundle"
+          scp "${scp_options[@]}" "$BUNDLE_ARCHIVE" "$remote:$remote_bundle"
           ssh "${ssh_options[@]}" "$remote" "chmod 0600 '$remote_bundle'"
 
           response_file="$RUNNER_TEMP/server-response.txt"
@@ -357,7 +366,7 @@ jobs:
           [[ "$evidence_remote" == /home/middleware-deploy/incoming/* && "$evidence_remote" != *".."* ]]
           [[ "$evidence_sha256" =~ ^sha256:[0-9a-f]{64}$ ]]
           evidence_local="$RUNNER_TEMP/middleware-production-certification.tar.gz"
-          scp "${ssh_options[@]}" "$remote:$evidence_remote" "$evidence_local"
+          scp "${scp_options[@]}" "$remote:$evidence_remote" "$evidence_local"
           ssh "${ssh_options[@]}" "$remote" "rm -f '$evidence_remote'" || true
           python3 scripts/validate_production_runtime_deployment.py evidence \
             --archive "$evidence_local" \

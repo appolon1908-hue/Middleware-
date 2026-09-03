@@ -174,10 +174,21 @@ def validate_source(root: Path = ROOT) -> None:
         "MIDDLEWARE_DEPLOY_HOST_KEY",
         "StrictHostKeyChecking=yes",
         "UserKnownHostsFile=",
+        "ssh_options=(",
+        "scp_options=(",
+        '-p "$DEPLOY_PORT"',
+        '-P "$DEPLOY_PORT"',
+        'scp "${scp_options[@]}" "$BUNDLE_ARCHIVE"',
+        'scp "${scp_options[@]}" "$remote:$evidence_remote"',
         "codestra-middleware-deploy",
     ):
         require(item in workflow, f"workflow requirement missing: {item}")
-    for item in ("ssh-keyscan", "appleboy/ssh-action", "StrictHostKeyChecking=no"):
+    for item in (
+        "ssh-keyscan",
+        "appleboy/ssh-action",
+        "StrictHostKeyChecking=no",
+        'scp "${ssh_options[@]}"',
+    ):
         require(item not in workflow, f"workflow contains unsafe SSH behavior: {item}")
     uses = re.findall(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)", workflow)
     require(uses, "workflow must use pinned actions")

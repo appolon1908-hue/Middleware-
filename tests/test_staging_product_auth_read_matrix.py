@@ -62,6 +62,7 @@ def test_source_performs_only_token_post_and_operation_gets() -> None:
     assert source.count('method="GET"') == 1
     assert "grant_type" in source and "client_credentials" in source
     assert "/v1/commands" not in source
+    assert "/api/v1/control/identity-probes/{operation_id}" in source
     assert "provider_calls" in source
     assert '"command_posts": 0' in source
     assert '"business_mutations": 0' in source
@@ -112,6 +113,7 @@ def test_provider_callers_cannot_use_generic_mutation_authority() -> None:
         caller = policy["callers"][client_id]
         assert caller["connector_commands_allowed"] is False
         assert caller["command_scope"].endswith(".denied")
+        assert caller["status_scope"].endswith(".denied")
         assert caller["allowed_command_prefixes"] == []
         assert caller["allowed_targets"] == []
         assert caller["staging_auth_matrix"] is True

@@ -111,10 +111,11 @@ def _load_policy() -> dict[str, MatrixClient]:
             raise MatrixError(f"{client_id}: status scope is missing")
         is_provider = client_id in provider_scopes
         if is_provider:
-            if status_scope not in provider_scopes[client_id]:
+            if status_scope != "provider-control.operations.read.denied":
                 raise MatrixError(
-                    f"{client_id}: read probe scope is not bound to its provider operation"
+                    f"{client_id}: generic operation read scope must remain denied"
                 )
+            status_scope = sorted(provider_scopes[client_id])[0]
             if raw.get("connector_commands_allowed") is not False:
                 raise MatrixError(
                     f"{client_id}: provider caller has generic connector authority"
@@ -315,6 +316,7 @@ def _operation_get(
     operation_id: uuid.UUID,
     authorization: str | None,
     tenant_id: str,
+    provider_control: bool = False,
     forwarded_authorization: str | None = None,
 ) -> httpx.Response:
     headers = {
@@ -328,7 +330,11 @@ def _operation_get(
         headers["X-Forwarded-Authorization"] = forwarded_authorization
     return client.request(
         method="GET",
-        url=f"{gateway_base_url}/v1/operations/{operation_id}",
+        url=(
+            f"{gateway_base_url}/api/v1/control/identity-probes/{operation_id}"
+            if provider_control
+            else f"{gateway_base_url}/v1/operations/{operation_id}"
+        ),
         headers=headers,
     )
 
@@ -527,6 +533,7 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=operation_id,
                         authorization=f"Bearer {token}",
                         tenant_id=tenant_id,
+                        provider_control=matrix_client.provider_control,
                     ),
                 )
             )
@@ -541,6 +548,7 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=operation_id,
                         authorization=f"Bearer {tamper_signature(token)}",
                         tenant_id=tenant_id,
+                        provider_control=matrix_client.provider_control,
                     ),
                 )
             )
@@ -555,6 +563,7 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=operation_id,
                         authorization=f"Bearer {token}",
                         tenant_id="matrix-mismatch-" + uuid.uuid4().hex,
+                        provider_control=matrix_client.provider_control,
                     ),
                 )
             )
@@ -584,7 +593,10 @@ def run() -> tuple[dict[str, Any], Path]:
         "environment": "staging",
         "source_sha": source_sha,
         "image_digest": image_digest,
-        "route": "/v1/operations/{command_id}",
+        "routes": {
+            "standard": "/v1/operations/{command_id}",
+            "provider_control": "/api/v1/control/identity-probes/{probe_id}",
+        },
         "route_matrix_sha256": policy_digest,
         "generated_at": datetime.now(UTC).isoformat(),
         "clients": clients_evidence,

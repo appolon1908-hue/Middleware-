@@ -22,6 +22,12 @@ operations:
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: control
+  method: GET
+  path: /api/v1/control/identity-probes/{probe_id}
+  canonical_operation_id: provider_control_identity_probe_api_v1_control_identity_probes__probe_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
   method: POST
   path: /api/v1/control/marketing/campaigns
   canonical_operation_id: provider_control_marketing_campaign_request_api_v1_control_marketing_campaigns_post

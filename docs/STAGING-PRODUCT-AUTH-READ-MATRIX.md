@@ -7,7 +7,7 @@
 The harness performs only two network operation classes:
 
 1. OAuth 2.0 Client Credentials token issuance at the explicitly supplied staging token endpoint.
-2. `GET /v1/operations/{command_id}` using a freshly generated random UUID.
+2. One read-only `GET` using a freshly generated random UUID: regular callers use `/v1/operations/{command_id}`, while provider-control callers use `/api/v1/control/identity-probes/{probe_id}` so they never receive tenant-wide operation-read authority.
 
 A valid bearer must receive tenant-scoped `404` for that deliberately nonexistent operation. That result proves that the original token passed cryptographic verification, exact issuer/audience/`azp`/scope checks, and tenant authorization before the read reached the durable command ledger.
 

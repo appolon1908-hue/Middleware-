@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a syntactically checked, indentation-corrected copy of the one-shot builder."""
+"""Write a syntactically checked, execution-ready copy of the one-shot builder."""
 
 from __future__ import annotations
 
@@ -45,31 +45,19 @@ def wrap_dedent_assignment(
 
 
 transformations = (
-    (
-        "reconciliation_method",
-        "if ingress.count(method_anchor) != 1:",
-        "    ",
-    ),
+    ("reconciliation_method", "if ingress.count(method_anchor) != 1:", "    "),
     (
         "enabled_anchor",
         "enabled_replacement = enabled_anchor + textwrap.dedent(",
         "        ",
     ),
-    (
-        "enabled_replacement",
-        "if ingress.count(enabled_anchor) != 1:",
-        "        ",
-    ),
+    ("enabled_replacement", "if ingress.count(enabled_anchor) != 1:", "        "),
     (
         "replacement",
         "ingress = ingress[:start] + replacement + ingress[end:]",
         "        ",
     ),
-    (
-        "repository_method",
-        "if repository.count(repository_anchor) != 1:",
-        "    ",
-    ),
+    ("repository_method", "if repository.count(repository_anchor) != 1:", "    "),
     (
         "service_anchor",
         "service_replacement = service_anchor + textwrap.dedent(",
@@ -99,6 +87,34 @@ for variable, marker, prefix in transformations:
         next_marker=marker,
         prefix=prefix,
     )
+
+dependency_anchor = '''run(
+    "python",
+    "-m",
+    "pip",
+    "install",
+    "--disable-pip-version-check",
+    "--require-hashes",
+    "-r",
+    "requirements-test.txt",
+)
+'''
+dependency_replacement = '''run(
+    "python",
+    "-m",
+    "pip",
+    "install",
+    "--disable-pip-version-check",
+    "--require-hashes",
+    "-r",
+    "requirements-test.txt",
+    "-r",
+    "requirements-connector-runtime.txt",
+)
+'''
+if text.count(dependency_anchor) != 1:
+    raise SystemExit("hashed dependency installation anchor changed")
+text = text.replace(dependency_anchor, dependency_replacement, 1)
 
 compile(text, str(DESTINATION), "exec")
 DESTINATION.write_text(text, encoding="utf-8")

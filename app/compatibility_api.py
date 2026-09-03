@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from .capability_resolution import effective_capability_enabled
 from .commands import CommandConflict, OperationMutationRequest
 from .control_api import ControlMutation, _auth, _detail, _list, _mutate, _pool, _safe_inbox, _safe_outbox
 from .operations import OperationApiState, _context, _decode_cursor, _encode_cursor, _mutation_context, _operation_json
@@ -116,7 +117,10 @@ async def policy_decision(body: PolicyDecision, request: Request):
     from .control_api import _capabilities
 
     await _auth(request, mutation=True)
-    enabled = _capabilities(request).get(body.capability) is True
+    enabled = effective_capability_enabled(
+        _capabilities(request),
+        body.capability,
+    )
     return {
         "decision": "ALLOW" if enabled else "DENY",
         "capability": body.capability,

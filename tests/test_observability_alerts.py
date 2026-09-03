@@ -1159,6 +1159,42 @@ def test_newer_firing_status_reopens_ended_occurrence_for_matching_webhook() -> 
         assert matching.json()["operations"][0]["incident_id"] == incident_id
 
 
+def test_operator_reopen_clears_ended_occurrence_for_matching_webhook() -> None:
+    firing_value = webhook()
+    resolved_value = copy.deepcopy(firing_value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="operator-reopen-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+
+        reopened = client.post(
+            f"/v1/observability/incidents/{incident_id}/reopen",
+            json={"expected_version": 1, "reason": "operator verified recurrence"},
+            headers=headers(
+                "observability-operator",
+                key="operator-reopen-mutation-0001",
+            ),
+        )
+        assert reopened.status_code == 200
+        assert reopened.json()["state"] == "firing"
+        assert reopened.json()["ends_at"] is None
+
+        matching = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=firing_value,
+            headers=headers(key="operator-reopen-webhook-0001"),
+        )
+        assert matching.status_code == 202
+        assert matching.json()["operations"][0]["incident_id"] == incident_id
+
+
 def test_status_snapshot_reports_partial_application_per_item() -> None:
     value = webhook()
     with TestClient(app()) as client:

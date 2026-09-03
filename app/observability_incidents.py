@@ -1072,6 +1072,7 @@ class MemoryIncidentStore:
                     "acknowledged_at": now if action == "acknowledge" else None,
                     "acknowledged_by": actor_id if action == "acknowledge" else None,
                     "resolved_at": now if action == "resolve" else None,
+                    "ends_at": None if action == "reopen" else previous.ends_at,
                     "correlation_id": correlation_id,
                     "resource_version": previous.resource_version + 1,
                     "updated_at": now,
@@ -2422,6 +2423,8 @@ class PostgresIncidentStore:
                         THEN $6::text ELSE NULL::text END,
                       resolved_at=CASE WHEN $4::text='resolve'
                         THEN $5::timestamptz ELSE NULL::timestamptz END,
+                      ends_at=CASE WHEN $4::text='reopen'
+                        THEN NULL::timestamptz ELSE ends_at END,
                       correlation_id=$7::text,
                       resource_version=resource_version+1,
                       updated_at=$5::timestamptz

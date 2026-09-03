@@ -686,6 +686,49 @@ async def test_newer_status_reopens_ended_occurrence_for_webhook(
 
 
 @pytest.mark.asyncio
+async def test_operator_reopen_clears_ended_occurrence_for_webhook(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    firing_item = alert(fingerprint="incident-operator-reopen-0001")
+    resolved_payload = firing_item.model_dump(mode="json", by_alias=True)
+    resolved_payload["status"] = "resolved"
+    resolved_payload["endsAt"] = "2026-09-02T16:10:00Z"
+    resolved = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=AlertmanagerAlert.model_validate(resolved_payload),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-operator-reopen-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-operator-reopen-request-0001",
+    )
+
+    reopened = await incidents.store.mutate(
+        TENANT_ID,
+        resolved.incident.incident_id,
+        action="reopen",
+        actor_id="service-account-observability-operator",
+        correlation_id="incident-operator-reopen-correlation-0002",
+        idempotency_key="incident-operator-reopen-mutation-0001",
+        expected_version=resolved.incident.resource_version,
+        reason="operator verified recurrence",
+    )
+    assert reopened.state == "firing"
+    assert reopened.ends_at is None
+
+    matching = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=firing_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-operator-reopen-correlation-0003",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-operator-reopen-request-0002",
+    )
+    assert matching.incident.incident_id == resolved.incident.incident_id
+    assert matching.incident.state == "firing"
+
+
+@pytest.mark.asyncio
 async def test_recurrence_command_preserves_incident_first_seen_time(
     pool: asyncpg.Pool,
 ) -> None:

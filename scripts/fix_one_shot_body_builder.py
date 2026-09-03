@@ -32,11 +32,7 @@ def wrap_dedent_assignment(
     call_start = segment.index("textwrap.dedent(")
     if "textwrap.indent(textwrap.dedent(" in segment:
         raise SystemExit(f"{variable} is already normalized")
-    segment = (
-        segment[:call_start]
-        + "textwrap.indent("
-        + segment[call_start:]
-    )
+    segment = segment[:call_start] + "textwrap.indent(" + segment[call_start:]
     close = segment.rfind(")")
     if close < 0 or segment[close + 1 :].strip():
         raise SystemExit(f"cannot locate the closing dedent call for {variable}")
@@ -108,6 +104,16 @@ dependency_replacement = '''run(
     "--require-hashes",
     "-r",
     "requirements-test.txt",
+)
+run(
+    "python",
+    "-m",
+    "pip",
+    "install",
+    "--disable-pip-version-check",
+    "--require-hashes",
+    "--target",
+    "/tmp/connector-runtime-deps",
     "-r",
     "requirements-connector-runtime.txt",
 )
@@ -115,6 +121,20 @@ dependency_replacement = '''run(
 if text.count(dependency_anchor) != 1:
     raise SystemExit("hashed dependency installation anchor changed")
 text = text.replace(dependency_anchor, dependency_replacement, 1)
+
+pythonpath_anchor = '''test_env["PYTHONPATH"] = (
+    "services/connector-runtime/src:"
+    + test_env.get("PYTHONPATH", "")
+)
+'''
+pythonpath_replacement = '''test_env["PYTHONPATH"] = (
+    "/tmp/connector-runtime-deps:services/connector-runtime/src:"
+    + test_env.get("PYTHONPATH", "")
+)
+'''
+if text.count(pythonpath_anchor) != 1:
+    raise SystemExit("connector test PYTHONPATH anchor changed")
+text = text.replace(pythonpath_anchor, pythonpath_replacement, 1)
 
 compile(text, str(DESTINATION), "exec")
 DESTINATION.write_text(text, encoding="utf-8")

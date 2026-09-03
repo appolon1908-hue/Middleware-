@@ -206,6 +206,13 @@ async def lifespan(app: FastAPI):
         body_store=body_store,
         secrets=EnvironmentSecretResolver(),
     )
+    initial_reconciliation = (
+        app.state.webhook_ingress.reconcile_pending_bodies()
+    )
+    logger.info(
+        "encrypted_webhook_body_reconciliation_completed",
+        **initial_reconciliation,
+    )
     try:
         yield
     finally:
@@ -296,6 +303,14 @@ def create_app() -> FastAPI:
             ready = False
         else:
             checks["body_encryption_key"] = "pass"
+        reconciliation = (
+            request.app.state.webhook_ingress.reconcile_pending_bodies()
+        )
+        if reconciliation["deferred"] or reconciliation["invalid"]:
+            checks["body_reconciliation"] = "fail"
+            ready = False
+        else:
+            checks["body_reconciliation"] = "pass"
         status = 200 if ready else 503
         return _response(
             status=status,

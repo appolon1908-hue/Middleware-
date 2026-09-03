@@ -52,6 +52,7 @@ SUPPORTED_EXTERNAL_EFFECTS = frozenset(
         "CRAWLER_ODOO_DELIVERY_ENABLED",
         "SCRAPPER_ODOO_DELIVERY_ENABLED",
         "SMS_DELIVERY_ENABLED",
+        "EMAIL_DELIVERY_ENABLED",
     }
 )
 
@@ -62,6 +63,7 @@ EXTERNAL_DELIVERY_EFFECTS = frozenset(
         "CRAWLER_ODOO_DELIVERY_ENABLED",
         "SCRAPPER_ODOO_DELIVERY_ENABLED",
         "SMS_DELIVERY_ENABLED",
+        "EMAIL_DELIVERY_ENABLED",
     }
 )
 
@@ -653,6 +655,14 @@ class Settings:
             raise ConfigurationError(
                 "Odoo signing secrets must be at least 32 bytes"
             )
+
+    @property
+    def email_delivery_enabled(self) -> bool:
+        """True only when the effect gate and its umbrella switch are both on."""
+        return bool(
+            self.external_effects.get("EMAIL_DELIVERY_ENABLED")
+            and self.umbrella_controls.get("EXTERNAL_DELIVERY_ENABLED")
+        )
 
     @property
     def sms_delivery_enabled(self) -> bool:

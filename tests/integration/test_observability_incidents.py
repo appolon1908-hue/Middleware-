@@ -686,6 +686,90 @@ async def test_newer_status_reopens_ended_occurrence_for_webhook(
 
 
 @pytest.mark.asyncio
+async def test_newer_firing_status_clears_end_evidence_while_acknowledged(
+    pool: asyncpg.Pool,
+) -> None:
+    _, incidents = services(pool)
+    firing_item = alert(fingerprint="incident-acknowledged-status-reopen-0001")
+    resolved_payload = firing_item.model_dump(mode="json", by_alias=True)
+    resolved_payload["status"] = "resolved"
+    resolved_payload["endsAt"] = "2026-09-02T16:10:00Z"
+    resolved = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=AlertmanagerAlert.model_validate(resolved_payload),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-ack-status-correlation-0001",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-ack-status-request-0001",
+    )
+
+    silenced = await incidents.store.ingest_status(
+        policy=policy(),
+        item=AlertmanagerStatusItem.model_validate(
+            {
+                "groupKey": GROUP_KEY,
+                "fingerprint": firing_item.fingerprint,
+                "startsAt": "2026-09-02T16:00:00Z",
+                "state": "silenced",
+                "silencedBy": ["incident-ack-status-silence-1"],
+                "inhibitedBy": [],
+            }
+        ),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-ack-status-correlation-0002",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-ack-status-request-0002",
+        observed_at=datetime(2026, 9, 2, 16, 11, tzinfo=UTC),
+    )
+    assert silenced.ends_at is not None
+
+    acknowledged = await incidents.store.mutate(
+        TENANT_ID,
+        resolved.incident.incident_id,
+        action="acknowledge",
+        actor_id="service-account-observability-operator",
+        correlation_id="incident-ack-status-correlation-0003",
+        idempotency_key="incident-ack-status-mutation-0001",
+        expected_version=silenced.resource_version,
+        reason="operator owns recurrence",
+    )
+    assert acknowledged.state == "acknowledged"
+    assert acknowledged.ends_at is not None
+
+    authoritative_firing = await incidents.store.ingest_status(
+        policy=policy(),
+        item=AlertmanagerStatusItem.model_validate(
+            {
+                "groupKey": GROUP_KEY,
+                "fingerprint": firing_item.fingerprint,
+                "startsAt": "2026-09-02T16:00:00Z",
+                "state": "firing",
+                "silencedBy": [],
+                "inhibitedBy": [],
+            }
+        ),
+        actor_id=ACTOR_ID,
+        correlation_id="incident-ack-status-correlation-0004",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-ack-status-request-0003",
+        observed_at=datetime(2026, 9, 2, 16, 12, tzinfo=UTC),
+    )
+    assert authoritative_firing.state == "acknowledged"
+    assert authoritative_firing.ends_at is None
+
+    matching = await incidents.ingest(
+        group_key=GROUP_KEY,
+        alert=firing_item,
+        actor_id=ACTOR_ID,
+        correlation_id="incident-ack-status-correlation-0005",
+        source_deployment="alertmanager-disposable-ci",
+        request_idempotency_key="incident-ack-status-request-0004",
+    )
+    assert matching.incident.incident_id == resolved.incident.incident_id
+    assert matching.incident.state == "acknowledged"
+
+
+@pytest.mark.asyncio
 async def test_operator_reopen_clears_ended_occurrence_for_webhook(
     pool: asyncpg.Pool,
 ) -> None:

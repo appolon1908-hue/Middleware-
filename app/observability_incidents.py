@@ -941,7 +941,7 @@ class MemoryIncidentStore:
                     # matching webhook can subsequently create the governed
                     # notification command without looking like a delayed
                     # pre-resolution replay.
-                    "ends_at": None if state == "firing" else previous.ends_at,
+                    "ends_at": None if item.state == "firing" else previous.ends_at,
                     "last_seen_at": now,
                     "source_deployment": source_deployment,
                     "correlation_id": correlation_id,
@@ -2194,7 +2194,7 @@ class PostgresIncidentStore:
                     """
                     UPDATE middleware_observability_incidents SET
                       state=$3::text, last_seen_at=$4::timestamptz,
-                      ends_at=CASE WHEN $3::text='firing'
+                      ends_at=CASE WHEN $7::text='firing'
                         THEN NULL::timestamptz ELSE ends_at END,
                       resolved_at=CASE WHEN $3::text='resolved'
                         THEN $4::timestamptz ELSE NULL::timestamptz END,
@@ -2209,6 +2209,7 @@ class PostgresIncidentStore:
                     now,
                     source_deployment,
                     correlation_id,
+                    item.state,
                 )
                 assert row is not None
                 incident = self._incident(row)

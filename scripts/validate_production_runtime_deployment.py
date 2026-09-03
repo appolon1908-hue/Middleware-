@@ -51,7 +51,7 @@ def validate_source(root: Path = ROOT) -> None:
         CONTROLLER_PATH = root / "deploy/production/server/codestra-middleware-deploy"
         BACKUP_PATH = root / "deploy/production/server/codestra-middleware-backup"
         INSTALL_PATH = root / "deploy/production/server/install-restricted-command.sh"
-        WORKFLOW_PATH = root / ".github/workflows/production-runtime-certification.yml"
+        WORKFLOW_PATH = root / ".github/workflows/middleware-runtime-certification.yml"
     for path in (
         CONTRACT_PATH,
         COMPOSE_PATH,
@@ -168,7 +168,7 @@ def validate_source(root: Path = ROOT) -> None:
         "github.event.comment.user.id == 275410064",
         "github.event.comment.author_association == 'OWNER'",
         "github.event.comment.body == '/deploy-middleware-production-readonly v1'",
-        "environment: production-runtime-certification",
+        "environment: middleware-runtime-certification",
         "MIDDLEWARE_DEPLOY_HOST",
         "MIDDLEWARE_DEPLOY_SSH_KEY",
         "MIDDLEWARE_DEPLOY_HOST_KEY",

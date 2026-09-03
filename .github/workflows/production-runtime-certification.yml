@@ -12,7 +12,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: middleware-production-runtime-certification
+  group: middleware-middleware-runtime-certification
   cancel-in-progress: false
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
     name: Deploy and certify exact immutable production canary
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    environment: production-runtime-certification
+    environment: middleware-runtime-certification
 
     env:
       DEPLOY_HOST: 65.109.65.169

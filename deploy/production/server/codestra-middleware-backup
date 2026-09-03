@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+CONFIG_FILE="${CODESTRA_MIDDLEWARE_DEPLOY_CONFIG:-/etc/codestra-middleware/deploy.conf}"
+
+fail() {
+  printf 'BACKUP_STATUS=FAIL\n' >&2
+  exit 1
+}
+
+config_value() {
+  local key="$1"
+  local value
+  value="$(
+    awk -F= -v wanted="$key" '
+      /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+      $1 == wanted {
+        sub(/^[^=]*=/, "")
+        print
+        found = 1
+      }
+      END {
+        if (!found) exit 1
+      }
+    ' "$CONFIG_FILE"
+  )" || return 1
+  [[ "$value" != *$'\n'* ]] || return 1
+  printf '%s' "$value"
+}
+
+[[ "$(id -u)" -eq 0 ]] || fail
+[[ -f "$CONFIG_FILE" && ! -L "$CONFIG_FILE" ]] || fail
+[[ "$(stat -c '%u' "$CONFIG_FILE")" -eq 0 ]] || fail
+if find "$CONFIG_FILE" -perm /077 -print -quit | grep -q .; then
+  fail
+fi
+
+POSTGRES_CONTAINER="$(config_value POSTGRES_CONTAINER)" || fail
+POSTGRES_DATABASE="$(config_value POSTGRES_DATABASE)" || fail
+BACKUP_DIR="$(config_value BACKUP_DIR)" || fail
+
+[[ "$POSTGRES_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || fail
+[[ "$POSTGRES_DATABASE" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]] || fail
+[[ "$BACKUP_DIR" == /var/backups/codestra-middleware* ]] || fail
+[[ "$BACKUP_DIR" != *".."* && "$BACKUP_DIR" != *$'\n'* ]] || fail
+
+container_status="$(docker inspect "$POSTGRES_CONTAINER" --format '{{.State.Status}}' 2>/dev/null || true)"
+[[ "$container_status" == "running" ]] || fail
+
+install -d -m 0700 -o root -g root "$BACKUP_DIR"
+timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+final_path="$BACKUP_DIR/middleware-${timestamp}.dump"
+temporary_path="$(mktemp "$BACKUP_DIR/.middleware-${timestamp}.XXXXXX.dump")"
+trap 'rm -f "$temporary_path"' EXIT
+
+docker exec -u postgres "$POSTGRES_CONTAINER" \
+  pg_dump \
+    --format=custom \
+    --compress=9 \
+    --no-owner \
+    --no-acl \
+    --dbname="$POSTGRES_DATABASE" \
+  >"$temporary_path"
+
+[[ -s "$temporary_path" ]] || fail
+docker exec -i -u postgres "$POSTGRES_CONTAINER" \
+  pg_restore --list - \
+  <"$temporary_path" \
+  >/dev/null
+
+chmod 0600 "$temporary_path"
+mv -f "$temporary_path" "$final_path"
+trap - EXIT
+
+digest="sha256:$(sha256sum "$final_path" | awk '{print $1}')"
+[[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail
+
+printf 'BACKUP_STATUS=PASS\n'
+printf 'BACKUP_REFERENCE=%s\n' "$final_path"
+printf 'BACKUP_SHA256=%s\n' "$digest"

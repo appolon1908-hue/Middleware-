@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from typing import Any, Protocol
 from uuid import UUID
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from .commands import CommandConflict, CommandNotFound, PostgresCommandStore
+from .commands import (
+    AUTHENTICATED_CLIENT_ID_KEY,
+    CommandConflict,
+    CommandEnvelope,
+    CommandNotFound,
+    PostgresCommandStore,
+)
 from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
+from .provider_canary import provider_evidence_digest
 from .temporal_workflows import (
     ActivityResult,
     CommandExecutionRequest,
@@ -39,10 +48,6 @@ class FailClosedWorkflowActivities:
             type="CapabilityDisabled",
         )
 
-    @activity.defn(name="reconcile_operation")
-    async def reconcile_operation(self, request: ReconciliationRequest) -> Any:
-        raise self._blocked("reconcile_operation")
-
     @activity.defn(name="dispatch_delayed_callback")
     async def dispatch_delayed_callback(self, request: DelayedCallbackRequest) -> Any:
         raise self._blocked("dispatch_delayed_callback")
@@ -69,7 +74,6 @@ class FailClosedWorkflowActivities:
 
     def registered(self) -> tuple[Any, ...]:
         return (
-            self.reconcile_operation,
             self.dispatch_delayed_callback,
             self.provision_identity,
             self.provision_product,
@@ -157,9 +161,257 @@ class CommandLedgerWorkflowActivities:
                 type="ProviderReadbackError",
             ) from exc
 
+    async def _load_reconciliation_command(
+        self,
+        request: ReconciliationRequest,
+    ) -> tuple[CommandExecutionRequest | None, ActivityResult | None]:
+        try:
+            operation_id = UUID(request.operation_id)
+        except ValueError as exc:
+            raise ApplicationError(
+                "reconciliation operation_id is invalid",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            ) from exc
+
+        async with self.store.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT * FROM middleware_commands
+                WHERE tenant_id=$1 AND command_id=$2
+                """,
+                request.tenant_id,
+                str(operation_id),
+            )
+        if row is None:
+            raise ApplicationError(
+                "reconciliation operation was not found",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+        if row["state"] == "completed":
+            operation = await self.store.get(request.tenant_id, operation_id)
+            return None, ActivityResult(
+                status="completed",
+                detail="provider read-back was already durably reconciled",
+                provider_operation_id=operation.provider_operation_id,
+                readback_evidence=operation.readback_evidence,
+            )
+        if row["state"] != "reconciliation_required":
+            raise ApplicationError(
+                "operation is not awaiting reconciliation",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+
+        durable = row["payload"]
+        if isinstance(durable, str):
+            try:
+                durable = json.loads(durable)
+            except ValueError as exc:
+                raise ApplicationError(
+                    "durable command payload is invalid JSON",
+                    non_retryable=True,
+                    type="ReconciliationRejected",
+                ) from exc
+        if not isinstance(durable, Mapping):
+            raise ApplicationError(
+                "durable command payload is malformed",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+        value = dict(durable)
+        authenticated_client_id = value.pop(AUTHENTICATED_CLIENT_ID_KEY, None)
+        if not isinstance(authenticated_client_id, str) or not authenticated_client_id:
+            raise ApplicationError(
+                "durable command is missing authenticated client provenance",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+        try:
+            command = CommandEnvelope.model_validate(value)
+        except Exception as exc:
+            raise ApplicationError(
+                "durable command does not match the canonical envelope",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            ) from exc
+        if command.command_id != operation_id or command.tenant_id != request.tenant_id:
+            raise ApplicationError(
+                "reconciliation identity does not match the durable command",
+                non_retryable=True,
+                type="ReconciliationRejected",
+            )
+        return (
+            CommandExecutionRequest(
+                **command.model_dump(mode="json"),
+                authenticated_client_id=authenticated_client_id,
+            ),
+            None,
+        )
+
+    async def _persist_reconciliation_result(
+        self,
+        request: ReconciliationRequest,
+        result: ActivityResult,
+    ) -> ActivityResult:
+        if result.status not in {"matched", "mismatch"}:
+            raise ApplicationError(
+                "provider read-back returned an unsupported status",
+                non_retryable=True,
+                type="ProviderReadbackContractError",
+            )
+        safe_detail = result.detail[:2048]
+        provider_operation_id = result.provider_operation_id or request.operation_id
+        evidence = result.readback_evidence or {
+            "schema_version": "1.0",
+            "status": result.status,
+            "provider_operation_id": provider_operation_id,
+        }
+        evidence_digest = provider_evidence_digest(evidence)
+        actor = "temporal:codestra.reconciliation.v1"
+        matched = result.status == "matched"
+
+        async with self.store.pool.acquire() as conn:
+            async with conn.transaction():
+                current = await conn.fetchrow(
+                    """
+                    SELECT * FROM middleware_commands
+                    WHERE tenant_id=$1 AND command_id=$2
+                    FOR UPDATE
+                    """,
+                    request.tenant_id,
+                    request.operation_id,
+                )
+                if current is None:
+                    raise ApplicationError(
+                        "reconciliation operation was not found",
+                        non_retryable=True,
+                        type="ReconciliationRejected",
+                    )
+                if current["state"] == "completed" and matched:
+                    return ActivityResult(
+                        status="completed",
+                        detail="provider read-back was already durably reconciled",
+                        provider_operation_id=current["provider_operation_id"],
+                        readback_evidence=evidence,
+                    )
+                if current["state"] != "reconciliation_required":
+                    raise ApplicationError(
+                        "operation is no longer awaiting reconciliation",
+                        non_retryable=True,
+                        type="ReconciliationRejected",
+                    )
+
+                next_state = "completed" if matched else "reconciliation_required"
+                if matched:
+                    row = await conn.fetchrow(
+                        """
+                        UPDATE middleware_commands
+                        SET state='completed',
+                            provider_operation_id=COALESCE($3, provider_operation_id),
+                            last_error=NULL,
+                            completed_at=now(),
+                            updated_at=now(),
+                            resource_version=resource_version+1
+                        WHERE tenant_id=$1 AND command_id=$2
+                        RETURNING *
+                        """,
+                        request.tenant_id,
+                        request.operation_id,
+                        provider_operation_id,
+                    )
+                else:
+                    row = await conn.fetchrow(
+                        """
+                        UPDATE middleware_commands
+                        SET provider_operation_id=COALESCE($3, provider_operation_id),
+                            last_error=$4,
+                            reconciliation_reason=$4,
+                            updated_at=now(),
+                            resource_version=resource_version+1
+                        WHERE tenant_id=$1 AND command_id=$2
+                        RETURNING *
+                        """,
+                        request.tenant_id,
+                        request.operation_id,
+                        provider_operation_id,
+                        safe_detail,
+                    )
+                assert row is not None
+                metadata = json.dumps(
+                    {
+                        "provider_operation_id": provider_operation_id,
+                        "readback_evidence_sha256": evidence_digest,
+                        "reconciliation_status": result.status,
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO middleware_command_audit (
+                        tenant_id, command_id, previous_state, new_state,
+                        actor_id, reason, metadata
+                    ) VALUES ($1,$2,'reconciliation_required',$3,$4,$5,$6::jsonb)
+                    """,
+                    request.tenant_id,
+                    request.operation_id,
+                    next_state,
+                    actor,
+                    safe_detail,
+                    metadata,
+                )
+                await conn.execute(
+                    """
+                    UPDATE middleware_command_attempts
+                    SET state=$3,
+                        provider_operation_id=COALESCE($4, provider_operation_id),
+                        result_payload=$5::jsonb,
+                        error_code=CASE
+                            WHEN $3='reconciliation_required'
+                            THEN 'provider_readback_mismatch' ELSE NULL
+                        END,
+                        error_detail=CASE
+                            WHEN $3='reconciliation_required' THEN $6 ELSE NULL
+                        END,
+                        finished_at=now()
+                    WHERE id=(
+                        SELECT id FROM middleware_command_attempts
+                        WHERE tenant_id=$1 AND command_id=$2
+                        ORDER BY attempt_number DESC LIMIT 1
+                    )
+                    """,
+                    request.tenant_id,
+                    request.operation_id,
+                    next_state,
+                    provider_operation_id,
+                    json.dumps(evidence, separators=(",", ":"), sort_keys=True),
+                    safe_detail,
+                )
+        return ActivityResult(
+            status=next_state,
+            detail=safe_detail,
+            provider_operation_id=provider_operation_id,
+            readback_evidence=evidence,
+        )
+
+    @activity.defn(name="reconcile_operation")
+    async def reconcile_operation(
+        self,
+        request: ReconciliationRequest,
+    ) -> ActivityResult:
+        command, completed = await self._load_reconciliation_command(request)
+        if completed is not None:
+            return completed
+        assert command is not None
+        result = await self.readback_command(command)
+        return await self._persist_reconciliation_result(request, result)
+
     def registered(self) -> tuple[Any, ...]:
         return (
             self.record_command_transition,
             self.execute_command,
             self.readback_command,
+            self.reconcile_operation,
         )

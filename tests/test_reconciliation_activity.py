@@ -9,7 +9,11 @@ from uuid import uuid4
 import pytest
 from temporalio.exceptions import ApplicationError
 
-from app.commands import AUTHENTICATED_CLIENT_ID_KEY
+from app.commands import (
+    AUTHENTICATED_CLIENT_ID_KEY,
+    CommandEnvelope,
+    authenticated_command_digest,
+)
 from app.temporal_activities import (
     CommandLedgerWorkflowActivities,
     FailClosedWorkflowActivities,
@@ -96,9 +100,24 @@ class FakeAdapter:
         return self.result
 
 
+class MutatingReadbackAdapter(FakeAdapter):
+    def __init__(self, result: ActivityResult, row: dict[str, Any]) -> None:
+        super().__init__(result)
+        self.row = row
+
+    async def readback(self, request):
+        self.requests.append(request)
+        payload = json.loads(self.row["payload"])
+        payload["requested_by"] = "tampered-during-readback"
+        self.row["payload"] = json.dumps(payload)
+        self.row["payload_sha256"] = "0" * 64
+        return self.result
+
+
 def durable_row(*, state: str = "reconciliation_required") -> dict[str, Any]:
     command_id = str(uuid4())
-    payload = {
+    authenticated_client_id = "test-client"
+    public_payload = {
         "command_id": command_id,
         "command_type": "crm.contact.create.v1",
         "command_version": "1.0",
@@ -109,13 +128,21 @@ def durable_row(*, state: str = "reconciliation_required") -> dict[str, Any]:
         "idempotency_key": "idempotency-123",
         "capability": "ODOO_WRITE",
         "payload": {"contact_id": "contact-1"},
-        AUTHENTICATED_CLIENT_ID_KEY: "test-client",
+    }
+    command = CommandEnvelope.model_validate(public_payload)
+    payload = {
+        **public_payload,
+        AUTHENTICATED_CLIENT_ID_KEY: authenticated_client_id,
     }
     return {
         "command_id": command_id,
         "tenant_id": "tenant-1",
         "state": state,
         "payload": json.dumps(payload),
+        "payload_sha256": authenticated_command_digest(
+            command,
+            authenticated_client_id,
+        ),
         "provider_operation_id": None,
         "last_error": "outcome unknown",
         "reconciliation_reason": "operator requested readback",
@@ -215,6 +242,59 @@ async def test_missing_durable_client_provenance_fails_closed() -> None:
                 reason="operator requested authoritative readback",
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_tampered_durable_payload_digest_fails_before_provider_readback() -> None:
+    row = durable_row()
+    payload = json.loads(row["payload"])
+    payload["requested_by"] = "tampered-before-readback"
+    row["payload"] = json.dumps(payload)
+    adapter = FakeAdapter(ActivityResult("matched", "must not run"))
+    activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
+        FakeStore(row),
+        odoo=adapter,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ApplicationError, match="payload digest"):
+        await activities.reconcile_operation(
+            ReconciliationRequest(
+                operation_id=row["command_id"],
+                tenant_id=row["tenant_id"],
+                reason="operator requested authoritative readback",
+            )
+        )
+    assert adapter.requests == []
+
+
+@pytest.mark.asyncio
+async def test_command_change_during_readback_cannot_complete_operation() -> None:
+    row = durable_row()
+    store = FakeStore(row)
+    adapter = MutatingReadbackAdapter(
+        ActivityResult(
+            status="matched",
+            detail="provider identity matched",
+            provider_operation_id=row["command_id"],
+        ),
+        store.pool.connection.row,
+    )
+    activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
+        store,
+        odoo=adapter,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ApplicationError, match="payload digest"):
+        await activities.reconcile_operation(
+            ReconciliationRequest(
+                operation_id=row["command_id"],
+                tenant_id=row["tenant_id"],
+                reason="operator requested authoritative readback",
+            )
+        )
+    assert store.pool.connection.row["state"] == "reconciliation_required"
+    assert store.pool.connection.row["resource_version"] == 1
+    assert len(adapter.requests) == 1
 
 
 def test_fail_closed_registry_no_longer_shadows_reconciliation_activity() -> None:

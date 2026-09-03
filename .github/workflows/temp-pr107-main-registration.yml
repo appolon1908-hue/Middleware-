@@ -1,0 +1,52 @@
+name: Temporary PR 107 route registration repair
+
+on:
+  push:
+    branches:
+      - feat/provider-control-staging-auth-20260903
+    paths:
+      - .pr107-main-registration-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/provider-control-staging-auth-20260903
+          fetch-depth: 1
+
+      - name: Register provider routes in the web application
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/main.py")
+          source = path.read_text(encoding="utf-8")
+          marker = "from .control_api import router as control_api_router\n"
+          replacement = (
+              "from . import provider_control_api as _provider_control_api  # noqa: F401\n"
+              + marker
+          )
+          if replacement in source:
+              raise SystemExit("provider route registration already present")
+          if source.count(marker) != 1:
+              raise SystemExit("control router import was not found exactly once")
+          path.write_text(source.replace(marker, replacement, 1), encoding="utf-8")
+          PY
+          git diff --check
+          python -m compileall -q app
+
+      - name: Commit repair and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/main.py
+          git rm .pr107-main-registration-trigger
+          git rm .github/workflows/temp-pr107-main-registration.yml
+          git commit -m "fix(routes): register provider control in web runtime"
+          git push origin HEAD:feat/provider-control-staging-auth-20260903

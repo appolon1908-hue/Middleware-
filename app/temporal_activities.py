@@ -20,6 +20,11 @@ from .commands import (
 from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .klyrow_email_adapter import KlyrowEmailAdapter, KlyrowEmailAdapterError
+from .postly_social_adapter import (
+    PostlySocialAdapter,
+    PostlySocialAdapterError,
+    PostlySocialUnknownOutcomeError,
+)
 from .telnexa_provider_adapter import (
     TelnexaProviderAdapterError,
     TelnexaSmsAdapter,
@@ -98,12 +103,14 @@ class CommandLedgerWorkflowActivities:
         klyrow_alert: KlyrowAlertAdapter | None = None,
         telnexa_sms: TelnexaSmsAdapter | None = None,
         klyrow_email: KlyrowEmailAdapter | None = None,
+        postly_social: PostlySocialAdapter | None = None,
     ) -> None:
         self.store = store
         self.odoo = odoo
         self.klyrow_alert = klyrow_alert
         self.telnexa_sms = telnexa_sms
         self.klyrow_email = klyrow_email
+        self.postly_social = postly_social
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -142,6 +149,8 @@ class CommandLedgerWorkflowActivities:
             return self.telnexa_sms
         if request.target == "klyrow-email" and self.klyrow_email is not None:
             return self.klyrow_email
+        if request.target == "postly-social" and self.postly_social is not None:
+            return self.postly_social
         raise ApplicationError(
             "no production provider adapter is activated for this command",
             non_retryable=True,
@@ -156,11 +165,21 @@ class CommandLedgerWorkflowActivities:
         adapter = self._adapter(request)
         try:
             return await adapter.execute(request)
+        except PostlySocialUnknownOutcomeError as exc:
+            # Postly has no idempotency key. Retrying an ambiguous publish
+            # could put a second post on a real account, so this outcome must
+            # reach an operator instead of the retry policy.
+            raise ApplicationError(
+                str(exc),
+                non_retryable=True,
+                type="ProviderOutcomeUnknown",
+            ) from exc
         except (
             OdooProviderAdapterError,
             KlyrowAlertAdapterError,
             TelnexaProviderAdapterError,
             KlyrowEmailAdapterError,
+            PostlySocialAdapterError,
         ) as exc:
             raise ApplicationError(
                 str(exc),
@@ -180,6 +199,7 @@ class CommandLedgerWorkflowActivities:
             KlyrowAlertAdapterError,
             TelnexaProviderAdapterError,
             KlyrowEmailAdapterError,
+            PostlySocialAdapterError,
         ) as exc:
             raise ApplicationError(
                 str(exc),

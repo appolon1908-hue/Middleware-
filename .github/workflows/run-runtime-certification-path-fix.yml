@@ -1,0 +1,66 @@
+name: Run runtime certification path fix
+
+on:
+  push:
+    branches:
+      - deploy/middleware-production-certification-v2-20260903
+    paths:
+      - ".github/workflows/run-runtime-certification-path-fix.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: run-runtime-certification-path-fix
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor == 'appolon1908-hue'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact patch trigger
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Correct validator path and validate
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REF_NAME" = "deploy/middleware-production-certification-v2-20260903"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          python3 .automation/patch_runtime_certification_environment_name.py
+          python3 .automation/fix_runtime_certification_workflow_path.py
+          ! grep -F 'environment: production' .github/workflows/production-runtime-certification.yml
+          grep -F 'environment: middleware-runtime-certification' .github/workflows/production-runtime-certification.yml
+          grep -F 'WORKFLOW_PATH = ROOT / ".github/workflows/production-runtime-certification.yml"' scripts/validate_production_runtime_deployment.py
+          python3 scripts/validate_production_runtime_deployment.py source
+          python3 -m py_compile scripts/validate_production_runtime_deployment.py tests/test_production_runtime_deployment.py
+          bash -n deploy/production/server/codestra-middleware-deploy
+          bash -n deploy/production/server/codestra-middleware-backup
+          bash -n deploy/production/server/install-restricted-command.sh
+
+      - name: Create final clean commit
+        run: |
+          set -Eeuo pipefail
+          rm -f .automation/patch_runtime_certification_environment_name.py
+          rm -f .automation/fix_runtime_certification_workflow_path.py
+          rm -f .github/workflows/run-runtime-environment-rename.yml
+          rm -f .github/workflows/run-runtime-certification-path-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(governance): use a dedicated runtime certification environment"
+          patch_sha="$(git rev-parse HEAD)"
+          printf 'PATCH_COMMIT_SHA=%s\n' "$patch_sha"
+          printf 'PATCH_COMMIT_SHA=%s\n' "$patch_sha" >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          push_exit=$?
+          set -e
+          printf 'PATCH_PUSH_EXIT=%s\n' "$push_exit"

@@ -30,6 +30,7 @@ from .communications import (
     ProviderReputationReport,
 )
 from .contracts import WEBHOOK_ROUTES, WebhookRoute
+from . import provider_control_api as _provider_control_api  # noqa: F401
 from .control_api import router as control_api_router
 from .compatibility_api import router as compatibility_api_router
 from .domain_api import router as domain_api_router

@@ -1,0 +1,111 @@
+{
+  "deployment": {
+    "command": "/usr/local/sbin/codestra-middleware-deploy",
+    "compose_project": "codestra-middleware-production",
+    "compose_service": "middleware-api",
+    "environment": "production",
+    "expected_host": "65.109.65.169",
+    "image_repository": "ghcr.io/appolon1908-hue/codestra-middleware",
+    "mode": "READ_ONLY_CANARY",
+    "restricted_user": "middleware-deploy",
+    "schema_head": "0009_observability_incidents",
+    "server_role": "CODESTRA_APPLICATION_SERVER_A",
+    "source_ref": "refs/heads/main"
+  },
+  "github_environment_secrets": [
+    "MIDDLEWARE_DEPLOY_HOST",
+    "MIDDLEWARE_DEPLOY_PORT",
+    "MIDDLEWARE_DEPLOY_USER",
+    "MIDDLEWARE_DEPLOY_SSH_KEY",
+    "MIDDLEWARE_DEPLOY_HOST_KEY",
+    "MIDDLEWARE_GHCR_READ_TOKEN"
+  ],
+  "request": {
+    "arguments": [
+      "--source-sha",
+      "--image-reference",
+      "--release-run-id",
+      "--mode",
+      "--registry-token-stdin"
+    ],
+    "forbidden_inputs": [
+      "application_credentials",
+      "database_password",
+      "redis_password",
+      "provider_credentials",
+      "private_tls_material"
+    ],
+    "stdin": "GHCR_READ_TOKEN_ONLY"
+  },
+  "response": {
+    "fixed_values": {
+      "BACKUP_STATUS": "PASS",
+      "BUSINESS_WRITES_ENABLED": "NO",
+      "CALLS_PLACED": "0",
+      "CAPABILITIES_STATUS": "PASS",
+      "COMPOSE_PROJECT": "codestra-middleware-production",
+      "COMPOSE_SERVICE": "middleware-api",
+      "CONTAINER_HEALTH": "healthy",
+      "CONTAINER_STATUS": "running",
+      "DEPLOYMENT_CONTRACT_VERSION": "1.0",
+      "DEPLOYMENT_MODE": "READ_ONLY_CANARY",
+      "DEPLOYMENT_STATUS": "PASS",
+      "EXTERNAL_EFFECTS_ENABLED": "NONE",
+      "HEALTH_STATUS": "PASS",
+      "MIGRATION_HEAD": "0009_observability_incidents",
+      "MIGRATION_STATUS": "PASS",
+      "READINESS_STATUS": "PASS",
+      "ROLLBACK_READY": "PASS",
+      "SERVER_ROLE": "CODESTRA_APPLICATION_SERVER_A",
+      "VERSION_STATUS": "PASS"
+    },
+    "format": "NEWLINE_DELIMITED_KEY_VALUE",
+    "required_keys": [
+      "DEPLOYMENT_CONTRACT_VERSION",
+      "DEPLOYMENT_STATUS",
+      "DEPLOYMENT_MODE",
+      "SERVER_ROLE",
+      "DEPLOYED_AT",
+      "SOURCE_SHA",
+      "IMAGE_REFERENCE",
+      "IMAGE_DIGEST",
+      "RELEASE_RUN_ID",
+      "COMPOSE_PROJECT",
+      "COMPOSE_SERVICE",
+      "BACKUP_STATUS",
+      "BACKUP_REFERENCE",
+      "BACKUP_SHA256",
+      "MIGRATION_STATUS",
+      "MIGRATION_HEAD",
+      "CONTAINER_STATUS",
+      "CONTAINER_HEALTH",
+      "HEALTH_STATUS",
+      "READINESS_STATUS",
+      "VERSION_STATUS",
+      "VERSION_SOURCE_SHA",
+      "VERSION_IMAGE_DIGEST",
+      "VERSION_SCHEMA_HEAD",
+      "CAPABILITIES_STATUS",
+      "BUSINESS_WRITES_ENABLED",
+      "EXTERNAL_EFFECTS_ENABLED",
+      "CALLS_PLACED",
+      "ROLLBACK_READY",
+      "PREVIOUS_IMAGE_REFERENCE",
+      "CONFIGURATION_CHECKSUM"
+    ]
+  },
+  "safety": {
+    "broad_compose_down_allowed": false,
+    "business_writes_enabled": false,
+    "docker_prune_allowed": false,
+    "external_effects_enabled": false,
+    "force_push_allowed": false,
+    "mutable_image_tags_allowed": false,
+    "outbox_worker_started": false,
+    "production_dialing": "DISABLED",
+    "server_source_writes_to_github": false,
+    "service_scoped_compose_only": true,
+    "unrestricted_sudo_allowed": false
+  },
+  "schema_version": "1.0"
+}

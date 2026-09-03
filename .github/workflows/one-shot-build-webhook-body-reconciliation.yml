@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/one-shot-build-webhook-body-reconciliation.yml
       - scripts/one_shot_build_webhook_body_reconciliation.py
+      - scripts/fix_one_shot_body_builder.py
 
 permissions:
   contents: write
@@ -33,4 +34,6 @@ jobs:
           python-version: '3.13'
 
       - name: Build, test, and publish current-main remediation
-        run: python scripts/one_shot_build_webhook_body_reconciliation.py
+        run: |
+          python scripts/fix_one_shot_body_builder.py /tmp/body-reconciliation-builder.py
+          python /tmp/body-reconciliation-builder.py

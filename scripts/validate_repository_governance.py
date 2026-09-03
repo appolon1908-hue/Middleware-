@@ -132,9 +132,10 @@ def validate_source_policy() -> dict[str, Any]:
         "enforce_for_administrators",
     ):
         require(rules.get(key) is True, f"{key} must remain true")
+    approvals = rules.get("required_approvals")
     require(
-        rules.get("required_approvals") == 0,
-        "single-owner source gate must not self-deadlock",
+        isinstance(approvals, int) and not isinstance(approvals, bool) and approvals >= 1,
+        "default branch must require at least one independent human approval",
     )
     require_exact_strings(
         rules.get("required_status_checks"),

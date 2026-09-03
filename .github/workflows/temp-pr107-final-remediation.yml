@@ -76,31 +76,23 @@ jobs:
               raise SystemExit("operation probe URL was not found exactly once")
           source = source.replace(before, after)
 
-          before = '''                        authorization=f"Bearer {token}",
-                                  tenant_id=tenant_id,
-                              ),
-          '''
-          after = '''                        authorization=f"Bearer {token}",
-                                  tenant_id=tenant_id,
-                                  provider_control=matrix_client.provider_control,
-                              ),
-          '''
-          if source.count(before) != 2:
-              raise SystemExit("expected two provider-aware bearer probes")
-          source = source.replace(before, after)
+          marker = "                        tenant_id=tenant_id,\n"
+          replacement = (
+              marker
+              + "                        provider_control=matrix_client.provider_control,\n"
+          )
+          if source.count(marker) != 2:
+              raise SystemExit("expected two provider-aware same-tenant probes")
+          source = source.replace(marker, replacement)
 
-          before = '''                        authorization=f"Bearer {token}",
-                                  tenant_id="matrix-mismatch-" + uuid.uuid4().hex,
-                              ),
-          '''
-          after = '''                        authorization=f"Bearer {token}",
-                                  tenant_id="matrix-mismatch-" + uuid.uuid4().hex,
-                                  provider_control=matrix_client.provider_control,
-                              ),
-          '''
-          if source.count(before) != 1:
+          marker = '                        tenant_id="matrix-mismatch-" + uuid.uuid4().hex,\n'
+          replacement = (
+              marker
+              + "                        provider_control=matrix_client.provider_control,\n"
+          )
+          if source.count(marker) != 1:
               raise SystemExit("tenant-mismatch probe was not found exactly once")
-          source = source.replace(before, after)
+          source = source.replace(marker, replacement)
 
           before = '        "route": "/v1/operations/{command_id}",\n'
           after = '''        "routes": {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from temporalio.client import Client
@@ -22,6 +23,10 @@ from .temporal_workflows import (
 
 
 RECONCILIATION_EVENT_TYPE = "operation.reconcile.v1"
+ReconciliationCommandIdentityLookup = Callable[
+    [OutboxRecord],
+    Awaitable[str | None],
+]
 
 
 class TemporalTransportError(RuntimeError):
@@ -50,6 +55,7 @@ def reconciliation_workflow_id(
 class TemporalCommandDispatcher:
     client: Client
     task_queue: str
+    reconciliation_command_id_lookup: ReconciliationCommandIdentityLookup | None = None
 
     async def _start_reconciliation(self, record: OutboxRecord) -> None:
         payload = dict(record.payload)
@@ -79,6 +85,24 @@ class TemporalCommandDispatcher:
         if not record.idempotency_key.startswith("operation-reconcile:"):
             raise TemporalTransportError(
                 "reconciliation outbox payload has an invalid idempotency identity"
+            )
+        if self.reconciliation_command_id_lookup is None:
+            raise TemporalTransportError(
+                "reconciliation dispatch is missing durable outbox identity verification"
+            )
+        try:
+            trusted_command_id = await self.reconciliation_command_id_lookup(record)
+        except Exception as exc:
+            raise TemporalTransportError(
+                "reconciliation outbox identity could not be verified"
+            ) from exc
+        if not isinstance(trusted_command_id, str) or not trusted_command_id:
+            raise TemporalTransportError(
+                "reconciliation outbox has no durable command identity"
+            )
+        if operation_id != trusted_command_id:
+            raise TemporalTransportError(
+                "reconciliation payload identity does not match the durable outbox command"
             )
 
         request = ReconciliationRequest(

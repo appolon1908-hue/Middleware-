@@ -94,7 +94,8 @@ def test_provider_policy_external_routes_are_registered_exactly(test_settings) -
     assert expected <= set(app.openapi()["paths"])
     for route in expected:
         operation = app.openapi()["paths"][route]["post"]
-        assert operation["tags"] == ["provider-control"]
+        assert "provider-control" in operation["tags"]
+        assert "durable-control" in operation["tags"]
         for status in ("200", "202"):
             response = operation["responses"][status]
             assert response["content"]["application/json"]["schema"] == {

@@ -279,10 +279,12 @@ class ConnectorSdkStandardsTests(unittest.TestCase):
         self.assertEqual(
             {record.manifest.connector_id for record in self.records},
             {
+                "ai-provider",
                 "beyvra-nonfinancial",
                 "klyrow-alert-email",
                 "klyrow-email",
                 "kyqra-crawler",
+                "marketing-provider",
                 "odoo-19",
                 "postly-social",
                 "provisioning-service",

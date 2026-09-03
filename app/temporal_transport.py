@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from temporalio.client import Client
@@ -13,7 +14,19 @@ from .commands import (
     TEMPORAL_COMMAND_DESTINATION,
 )
 from .storage import OutboxRecord
-from .temporal_workflows import CommandExecutionRequest, CommandExecutionWorkflow
+from .temporal_workflows import (
+    CommandExecutionRequest,
+    CommandExecutionWorkflow,
+    ReconciliationRequest,
+    ReconciliationWorkflow,
+)
+
+
+RECONCILIATION_EVENT_TYPE = "operation.reconcile.v1"
+ReconciliationCommandIdentityLookup = Callable[
+    [OutboxRecord],
+    Awaitable[str | None],
+]
 
 
 class TemporalTransportError(RuntimeError):
@@ -27,16 +40,101 @@ def command_workflow_id(tenant_id: str, command_id: str, idempotency_key: str) -
     return f"codestra-command-{identity}"
 
 
+def reconciliation_workflow_id(
+    tenant_id: str,
+    operation_id: str,
+    idempotency_key: str,
+) -> str:
+    identity = hashlib.sha256(
+        f"{tenant_id}\0{operation_id}\0{idempotency_key}".encode("utf-8")
+    ).hexdigest()
+    return f"codestra-reconciliation-{identity}"
+
+
 @dataclass(slots=True)
 class TemporalCommandDispatcher:
     client: Client
     task_queue: str
+    reconciliation_command_id_lookup: ReconciliationCommandIdentityLookup | None = None
+
+    async def _start_reconciliation(self, record: OutboxRecord) -> None:
+        payload = dict(record.payload)
+        if set(payload) != {"command_id", "action", "reason"}:
+            raise TemporalTransportError(
+                "reconciliation outbox payload does not match its versioned contract"
+            )
+        operation_id = payload.get("command_id")
+        action = payload.get("action")
+        reason = payload.get("reason")
+        if (
+            not isinstance(operation_id, str)
+            or not operation_id
+            or len(operation_id) > 180
+        ):
+            raise TemporalTransportError(
+                "reconciliation outbox payload has an invalid operation identity"
+            )
+        if action != "reconcile":
+            raise TemporalTransportError(
+                "reconciliation outbox payload has an unsupported action"
+            )
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
+            raise TemporalTransportError(
+                "reconciliation outbox payload has an invalid safe reason"
+            )
+        if not record.idempotency_key.startswith("operation-reconcile:"):
+            raise TemporalTransportError(
+                "reconciliation outbox payload has an invalid idempotency identity"
+            )
+        if self.reconciliation_command_id_lookup is None:
+            raise TemporalTransportError(
+                "reconciliation dispatch is missing durable outbox identity verification"
+            )
+        try:
+            trusted_command_id = await self.reconciliation_command_id_lookup(record)
+        except Exception as exc:
+            raise TemporalTransportError(
+                "reconciliation outbox identity could not be verified"
+            ) from exc
+        if not isinstance(trusted_command_id, str) or not trusted_command_id:
+            raise TemporalTransportError(
+                "reconciliation outbox has no durable command identity"
+            )
+        if operation_id != trusted_command_id:
+            raise TemporalTransportError(
+                "reconciliation payload identity does not match the durable outbox command"
+            )
+
+        request = ReconciliationRequest(
+            operation_id=operation_id,
+            tenant_id=record.tenant_id,
+            reason=reason,
+        )
+        try:
+            await self.client.start_workflow(
+                ReconciliationWorkflow.run,
+                request,
+                id=reconciliation_workflow_id(
+                    record.tenant_id,
+                    operation_id,
+                    record.idempotency_key,
+                ),
+                task_queue=self.task_queue,
+                id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+                id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
+            )
+        except WorkflowAlreadyStartedError:
+            return
 
     async def dispatch(self, record: OutboxRecord) -> None:
         if record.destination != TEMPORAL_COMMAND_DESTINATION:
             raise TemporalTransportError(
                 "outbox row targets an unsupported Temporal destination"
             )
+        if record.event_type == RECONCILIATION_EVENT_TYPE:
+            await self._start_reconciliation(record)
+            return
+
         durable_payload = dict(record.payload)
         authenticated_client_id = durable_payload.pop(
             AUTHENTICATED_CLIENT_ID_KEY,

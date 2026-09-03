@@ -43,7 +43,7 @@ def policy() -> dict:
         },
         "default_branch_ruleset": {
             "enforcement": "active",
-            "required_approvals": 0,
+            "required_approvals": 1,
             "dismiss_stale_reviews": True,
             "require_review_thread_resolution": True,
             "require_branch_up_to_date": True,
@@ -96,7 +96,7 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     }
     pull_request = rules["pull_request"]["parameters"]
     assert pull_request["allowed_merge_methods"] == ["squash"]
-    assert pull_request["required_approving_review_count"] == 0
+    assert pull_request["required_approving_review_count"] == 1
     assert (
         pull_request["require_extra_approval_for_unattributed_changes"] is False
     )

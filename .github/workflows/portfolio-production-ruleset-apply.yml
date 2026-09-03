@@ -1,6 +1,16 @@
 name: Apply portfolio production branch ruleset
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/portfolio-production-ruleset-apply.yml"
+      - "config/ai-production-branch-ruleset.v1.json"
+      - "config/portfolio-repositories.v1.json"
+      - "scripts/apply_portfolio_production_ruleset.py"
+      - "scripts/portfolio_ruleset/**"
+      - "tests/test_portfolio_production_ruleset.py"
   issue_comment:
     types:
       - created
@@ -17,12 +27,22 @@ jobs:
   apply:
     if: >-
       github.repository == 'appolon1908-hue/Middleware-' &&
-      github.event.issue.number == 116 &&
-      github.event.issue.pull_request == null &&
-      github.event.comment.user.login == 'appolon1908-hue' &&
-      github.event.comment.user.id == 275410064 &&
-      github.event.comment.author_association == 'OWNER' &&
-      github.event.comment.body == '/apply-portfolio-production-ruleset v1'
+      (
+        (
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          contains(github.event.head_commit.message, 'governance: apply production branch ruleset across all repositories')
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.number == 116 &&
+          github.event.issue.pull_request == null &&
+          github.event.comment.user.login == 'appolon1908-hue' &&
+          github.event.comment.user.id == 275410064 &&
+          github.event.comment.author_association == 'OWNER' &&
+          github.event.comment.body == '/apply-portfolio-production-ruleset v1'
+        )
+      )
     name: Apply and verify all production-branch rulesets
     runs-on: ubuntu-24.04
     timeout-minutes: 45

@@ -10,10 +10,39 @@ from app.config import ConfigurationError, Settings
 from app.commands import ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
 from app.odoo_transport import OdooCommandDispatcher
-from app.storage import NATS_JETSTREAM_DESTINATION, PostgresOutboxStore
+from app.storage import NATS_JETSTREAM_DESTINATION, OutboxRecord, PostgresOutboxStore
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
 from app.worker import OutboxWorker
+
+
+async def _load_reconciliation_command_id(
+    pool: asyncpg.Pool,
+    record: OutboxRecord,
+) -> str | None:
+    """Read the trusted command identity from the exact durable outbox row."""
+
+    async with pool.acquire() as conn:
+        value = await conn.fetchval(
+            """
+            SELECT command_id
+            FROM middleware_outbox
+            WHERE id=$1
+              AND tenant_id=$2
+              AND destination=$3
+              AND event_type=$4
+              AND idempotency_key=$5
+              AND completed_at IS NULL
+              AND cancelled_at IS NULL
+              AND dead_lettered_at IS NULL
+            """,
+            record.id,
+            record.tenant_id,
+            record.destination,
+            record.event_type,
+            record.idempotency_key,
+        )
+    return str(value) if value is not None else None
 
 
 async def main() -> None:
@@ -43,9 +72,14 @@ async def main() -> None:
             handlers[NATS_JETSTREAM_DESTINATION] = publisher.publish
         if temporal_enabled:
             temporal_client = await connect_temporal(settings)
+
+            async def reconciliation_command_id(record: OutboxRecord) -> str | None:
+                return await _load_reconciliation_command_id(pool, record)
+
             temporal_dispatcher = TemporalCommandDispatcher(
                 temporal_client,
                 settings.temporal_task_queue,
+                reconciliation_command_id_lookup=reconciliation_command_id,
             )
             handlers[TEMPORAL_COMMAND_DESTINATION] = temporal_dispatcher.dispatch
         if odoo_enabled:

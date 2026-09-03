@@ -9,7 +9,7 @@ The harness performs only two network operation classes:
 1. OAuth 2.0 Client Credentials token issuance at the explicitly supplied staging token endpoint.
 2. One read-only `GET` using a freshly generated random UUID: regular callers use `/v1/operations/{command_id}`, while provider-control callers use `/api/v1/control/identity-probes/{probe_id}` so they never receive tenant-wide operation-read authority.
 
-A valid bearer must receive tenant-scoped `404` for that deliberately nonexistent operation. That result proves that the original token passed cryptographic verification, exact issuer/audience/`azp`/scope checks, and tenant authorization before the read reached the durable command ledger.
+A valid bearer must receive tenant-scoped `404` for the deliberately nonexistent identifier. For regular callers, that result proves authentication and tenant authorization before the durable ledger lookup. For provider-control callers, it proves the same identity controls through the isolated probe route without reading the command ledger or any tenant resource.
 
 The harness never sends `POST /v1/commands`, never calls a provider adapter, and never enables a capability.
 
@@ -22,15 +22,18 @@ The client inventory is derived from:
 - `config/control-plane-callers.v1.json`
 - `config/provider-operation-policy.json`
 
-Entries participate only when `staging_auth_matrix=true`. Compatibility-only callers are excluded. Provider-control callers are registered as read-only in the generic operation plane:
+Entries participate only when `staging_auth_matrix=true`. Compatibility-only callers are excluded. Provider-control callers are denied access to the generic operation-read and generic mutation planes:
 
 - their generic mutation scope ends in `.denied` and is not granted;
+- their generic operation-read scope ends in `.denied` and is not granted;
 - `connector_commands_allowed=false`;
 - `allowed_command_prefixes=[]`;
 - `allowed_targets=[]`;
-- their GET probe uses one exact provider-operation scope already present in the canonical identity grant.
+- their isolated identity probe uses one exact provider-operation scope already present in the canonical identity grant.
 
 The matrix must include all marked product and control-plane identities. This includes the six product clients and the provider-control identities for AI, communications, marketing, and social.
+
+Every repository change after generated-contract refresh requires a new exact-head source and synthetic merge-result validation. Evidence from an earlier commit cannot certify a later head.
 
 ## Per-client probes
 
@@ -41,7 +44,7 @@ For each selected client, the harness requests a short-lived staging token and v
 - `azp` equals the selected client ID;
 - subject is present;
 - token lifetime is no more than 300 seconds;
-- the configured status/read probe scope is present;
+- the configured read-probe scope is present;
 - `tenant_id` is present, bounded, and not a wildcard.
 
 It then executes:

@@ -12,16 +12,20 @@ def test_kyqra_result_and_progress_endpoints_keep_distinct_contracts() -> None:
 
     assert results.producer_client_id == "kyqra-gateway"
     assert results.required_scope == "crawler.results.publish"
-    assert results.event_types == ("codestra.crawler.result.available",)
+    assert results.event_types == frozenset(
+        {"codestra.crawler.result.available"}
+    )
 
     assert progress.producer_client_id == "kyqra-gateway"
     assert progress.required_scope == "crawler.progress.publish"
-    assert set(progress.event_types) == {
-        "codestra.crawler.job.completed",
-        "codestra.crawler.job.failed",
-        "codestra.crawler.job.progress",
-    }
-    assert set(results.event_types).isdisjoint(progress.event_types)
+    assert progress.event_types == frozenset(
+        {
+            "codestra.crawler.job.completed",
+            "codestra.crawler.job.failed",
+            "codestra.crawler.job.progress",
+        }
+    )
+    assert results.event_types.isdisjoint(progress.event_types)
 
 
 @pytest.mark.parametrize(

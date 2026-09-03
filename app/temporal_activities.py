@@ -19,6 +19,7 @@ from .commands import (
 )
 from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
+from .klyrow_email_adapter import KlyrowEmailAdapter, KlyrowEmailAdapterError
 from .telnexa_provider_adapter import (
     TelnexaProviderAdapterError,
     TelnexaSmsAdapter,
@@ -96,11 +97,13 @@ class CommandLedgerWorkflowActivities:
         odoo: OdooProviderAdapter | None = None,
         klyrow_alert: KlyrowAlertAdapter | None = None,
         telnexa_sms: TelnexaSmsAdapter | None = None,
+        klyrow_email: KlyrowEmailAdapter | None = None,
     ) -> None:
         self.store = store
         self.odoo = odoo
         self.klyrow_alert = klyrow_alert
         self.telnexa_sms = telnexa_sms
+        self.klyrow_email = klyrow_email
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -137,6 +140,8 @@ class CommandLedgerWorkflowActivities:
             return self.klyrow_alert
         if request.target == "telnexa-sms" and self.telnexa_sms is not None:
             return self.telnexa_sms
+        if request.target == "klyrow-email" and self.klyrow_email is not None:
+            return self.klyrow_email
         raise ApplicationError(
             "no production provider adapter is activated for this command",
             non_retryable=True,
@@ -155,6 +160,7 @@ class CommandLedgerWorkflowActivities:
             OdooProviderAdapterError,
             KlyrowAlertAdapterError,
             TelnexaProviderAdapterError,
+            KlyrowEmailAdapterError,
         ) as exc:
             raise ApplicationError(
                 str(exc),
@@ -173,6 +179,7 @@ class CommandLedgerWorkflowActivities:
             OdooProviderAdapterError,
             KlyrowAlertAdapterError,
             TelnexaProviderAdapterError,
+            KlyrowEmailAdapterError,
         ) as exc:
             raise ApplicationError(
                 str(exc),

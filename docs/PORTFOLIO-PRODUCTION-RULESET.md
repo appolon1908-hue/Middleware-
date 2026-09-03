@@ -56,8 +56,13 @@ when present. Existing differently named rulesets are left untouched.
 
 ## Execution
 
-The workflow is deliberately locked to repository owner ID `275410064`, issue
-`#116`, and this exact command:
+The first rollout runs automatically after the protected squash merge of the
+portfolio-governance PR into `main`. The push trigger is path-scoped and also
+requires the merge commit message to identify this exact portfolio ruleset
+change.
+
+A fail-closed retry remains available. The workflow is locked to repository
+owner ID `275410064`, issue `#116`, and this exact owner comment:
 
 ```text
 /apply-portfolio-production-ruleset v1

@@ -1664,6 +1664,298 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /api/v1/control/identity-probes/{probe_id}:
+    get:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Verify one provider-control machine identity without reading data
+      description: 'Authenticate a provider caller and then terminate with deterministic
+        404.
+
+
+        This route does not access the command ledger, provider adapters, or any
+
+        tenant resource. It exists solely for protected staging identity evidence.'
+      operationId: provider_control_identity_probe_api_v1_control_identity_probes__probe_id__get
+      parameters:
+      - name: probe_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Probe Id
+      - *id001
+      responses:
+        '404':
+          description: Identity and tenant authorization succeeded; the random probe
+            resource intentionally does not exist
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/control/ai/inference-requests:
+    post:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Submit ai.inference.request through the durable operation engine
+      operationId: provider_control_ai_inference_request_api_v1_control_ai_inference_requests_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderControlRequest'
+        required: true
+      responses:
+        '202':
+          description: Durable provider operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '200':
+          description: Idempotent replay of the existing durable operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /api/v1/control/communications/email:
+    post:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Submit communication.email.request through the durable operation engine
+      operationId: provider_control_communication_email_request_api_v1_control_communications_email_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderControlRequest'
+        required: true
+      responses:
+        '202':
+          description: Durable provider operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '200':
+          description: Idempotent replay of the existing durable operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /api/v1/control/communications/sms:
+    post:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Submit communication.sms.request through the durable operation engine
+      operationId: provider_control_communication_sms_request_api_v1_control_communications_sms_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderControlRequest'
+        required: true
+      responses:
+        '202':
+          description: Durable provider operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '200':
+          description: Idempotent replay of the existing durable operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /api/v1/control/marketing/campaigns:
+    post:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Submit marketing.campaign.request through the durable operation engine
+      operationId: provider_control_marketing_campaign_request_api_v1_control_marketing_campaigns_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderControlRequest'
+        required: true
+      responses:
+        '202':
+          description: Durable provider operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '200':
+          description: Idempotent replay of the existing durable operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /api/v1/control/social/publications:
+    post:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Submit social.publish.request through the durable operation engine
+      operationId: provider_control_social_publish_request_api_v1_control_social_publications_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderControlRequest'
+        required: true
+      responses:
+        '202':
+          description: Durable provider operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '200':
+          description: Idempotent replay of the existing durable operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderControlResponse'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
   /api/v1/operations:
     get:
       tags:
@@ -6475,6 +6767,148 @@ components:
       - capability
       - proposed_action
       title: PolicyDecisionRequest
+    ProviderControlRequest:
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          title: Operation Id
+        payload:
+          type: object
+          title: Payload
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      title: ProviderControlRequest
+      description: Minimal public request; Middleware owns all provider bindings.
+    ProviderControlResponse:
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          title: Command Id
+        tenant_id:
+          type: string
+          title: Tenant Id
+        command_type:
+          type: string
+          title: Command Type
+        command_version:
+          type: string
+          title: Command Version
+        target:
+          type: string
+          title: Target
+        requested_by:
+          type: string
+          title: Requested By
+        correlation_id:
+          type: string
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          title: Idempotency Key
+        capability:
+          type: string
+          title: Capability
+        state:
+          type: string
+          enum:
+          - RECEIVED
+          - QUEUED
+          - SUBMITTED
+          - ACCEPTED
+          - UNKNOWN
+          - COMPLETED
+          - FAILED
+          - RECONCILIATION_REQUIRED
+          - DEAD_LETTERED
+          - CANCELLED
+          title: State
+        provider_operation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider Operation Id
+        readback_evidence:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Readback Evidence
+        readback_evidence_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Readback Evidence Sha256
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        resource_version:
+          type: integer
+          title: Resource Version
+          default: 1
+        cancelled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Cancelled At
+        cancellation_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cancellation Reason
+        reconciliation_requested_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Reconciliation Requested At
+        reconciliation_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reconciliation Reason
+        duplicate:
+          type: boolean
+          title: Duplicate
+        control_operation:
+          type: string
+          title: Control Operation
+        external_effect_dispatched:
+          type: boolean
+          const: false
+          title: External Effect Dispatched
+      additionalProperties: false
+      type: object
+      required:
+      - command_id
+      - tenant_id
+      - command_type
+      - command_version
+      - target
+      - requested_by
+      - correlation_id
+      - idempotency_key
+      - capability
+      - state
+      - created_at
+      - updated_at
+      - duplicate
+      - control_operation
+      - external_effect_dispatched
+      title: ProviderControlResponse
     ProviderHealthReport:
       properties:
         status:

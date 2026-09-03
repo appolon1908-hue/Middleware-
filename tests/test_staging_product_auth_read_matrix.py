@@ -96,6 +96,46 @@ def test_matrix_client_registry_is_policy_derived_and_complete() -> None:
     )
 
 
+
+
+def test_provider_callers_use_the_no_data_identity_probe() -> None:
+    module = load_module()
+    clients = module._load_policy()
+    provider = clients["codestra-ai"]
+    ordinary = clients["moneybee-backend"]
+    assert provider.provider_control is True
+    assert provider.status_scope == "ai.inference.request"
+    assert ordinary.provider_control is False
+    assert ordinary.status_scope == "moneybee.middleware.status.read"
+
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return module.httpx.Response(404, request=request)
+
+    transport = module.httpx.MockTransport(respond)
+    with module.httpx.Client(transport=transport) as client:
+        module._operation_get(
+            client,
+            gateway_base_url="https://gateway.test.invalid",
+            operation_id=module.uuid.uuid4(),
+            authorization="Bearer ordinary",
+            tenant_id="tenant-test",
+        )
+        module._operation_get(
+            client,
+            gateway_base_url="https://gateway.test.invalid",
+            operation_id=module.uuid.uuid4(),
+            authorization="Bearer provider",
+            tenant_id="tenant-test",
+            provider_control=True,
+        )
+
+    assert requests[0].url.path.startswith("/v1/operations/")
+    assert requests[1].url.path.startswith("/api/v1/control/identity-probes/")
+
+
 def test_provider_callers_cannot_use_generic_mutation_authority() -> None:
     policy = json.loads(
         (ROOT / "config/control-plane-callers.v1.json").read_text(
@@ -110,6 +150,7 @@ def test_provider_callers_cannot_use_generic_mutation_authority() -> None:
     }
     for client_id in providers:
         caller = policy["callers"][client_id]
+        assert caller["status_scope"].endswith(".denied")
         assert caller["connector_commands_allowed"] is False
         assert caller["command_scope"].endswith(".denied")
         assert caller["allowed_command_prefixes"] == []

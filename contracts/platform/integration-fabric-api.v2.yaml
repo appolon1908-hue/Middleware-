@@ -1664,6 +1664,53 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /api/v1/control/identity-probes/{probe_id}:
+    get:
+      tags:
+      - durable-control
+      - provider-control
+      summary: Verify one provider-control machine identity without reading data
+      description: 'Authenticate a provider caller and then terminate with deterministic
+        404.
+
+
+        This route does not access the command ledger, provider adapters, or any
+
+        tenant resource. It exists solely for protected staging identity evidence.'
+      operationId: provider_control_identity_probe_api_v1_control_identity_probes__probe_id__get
+      parameters:
+      - name: probe_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Probe Id
+      - *id001
+      responses:
+        '404':
+          description: Identity and tenant authorization succeeded; the random probe
+            resource intentionally does not exist
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /api/v1/control/ai/inference-requests:
     post:
       tags:

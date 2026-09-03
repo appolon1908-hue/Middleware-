@@ -7,9 +7,11 @@
 The harness performs only two network operation classes:
 
 1. OAuth 2.0 Client Credentials token issuance at the explicitly supplied staging token endpoint.
-2. `GET /v1/operations/{command_id}` using a freshly generated random UUID.
+2. One no-effect authenticated `GET` using a freshly generated random UUID:
+   - ordinary product and automation callers use `/v1/operations/{command_id}`;
+   - provider-control callers use `/api/v1/control/identity-probes/{probe_id}` so their deliberately denied generic operation-read scope remains fail closed.
 
-A valid bearer must receive tenant-scoped `404` for that deliberately nonexistent operation. That result proves that the original token passed cryptographic verification, exact issuer/audience/`azp`/scope checks, and tenant authorization before the read reached the durable command ledger.
+A valid bearer must receive tenant-scoped `404` for that deliberately nonexistent resource. That result proves that the original token passed cryptographic verification, exact issuer/audience/`azp`/scope checks, and tenant authorization. The provider identity probe does not access the command ledger or any provider adapter.
 
 The harness never sends `POST /v1/commands`, never calls a provider adapter, and never enables a capability.
 
@@ -22,13 +24,13 @@ The client inventory is derived from:
 - `config/control-plane-callers.v1.json`
 - `config/provider-operation-policy.json`
 
-Entries participate only when `staging_auth_matrix=true`. Compatibility-only callers are excluded. Provider-control callers are registered as read-only in the generic operation plane:
+Entries participate only when `staging_auth_matrix=true`. Compatibility-only callers are excluded. Provider-control callers remain denied in the generic operation plane:
 
-- their generic mutation scope ends in `.denied` and is not granted;
+- their generic read and mutation scopes end in `.denied` and are not granted;
 - `connector_commands_allowed=false`;
 - `allowed_command_prefixes=[]`;
 - `allowed_targets=[]`;
-- their GET probe uses one exact provider-operation scope already present in the canonical identity grant.
+- their no-data identity probe uses one exact provider-operation scope already present in the canonical identity grant.
 
 The matrix must include all marked product and control-plane identities. This includes the six product clients and the provider-control identities for AI, communications, marketing, and social.
 
@@ -41,7 +43,7 @@ For each selected client, the harness requests a short-lived staging token and v
 - `azp` equals the selected client ID;
 - subject is present;
 - token lifetime is no more than 300 seconds;
-- the configured status/read probe scope is present;
+- the exact selected read/probe scope is present;
 - `tenant_id` is present, bounded, and not a wildcard.
 
 It then executes:
@@ -134,7 +136,7 @@ Evidence is written outside the repository, by default under a new private direc
 
 - exact source SHA and image digest;
 - SHA-256 of the combined caller/provider policy;
-- client ID and required scope;
+- client ID, required scope, and selected no-effect probe class;
 - issuer, audience, `azp`, and token lifetime facts;
 - SHA-256 of each tenant ID, never the raw tenant;
 - expected and actual HTTP status for every probe;

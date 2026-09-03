@@ -111,10 +111,11 @@ def _load_policy() -> dict[str, MatrixClient]:
             raise MatrixError(f"{client_id}: status scope is missing")
         is_provider = client_id in provider_scopes
         if is_provider:
-            if status_scope not in provider_scopes[client_id]:
+            if not status_scope.endswith(".denied"):
                 raise MatrixError(
-                    f"{client_id}: read probe scope is not bound to its provider operation"
+                    f"{client_id}: generic operation read scope is not fail-closed"
                 )
+            probe_scope = sorted(provider_scopes[client_id])[0]
             if raw.get("connector_commands_allowed") is not False:
                 raise MatrixError(
                     f"{client_id}: provider caller has generic connector authority"
@@ -133,7 +134,7 @@ def _load_policy() -> dict[str, MatrixClient]:
                 )
         clients[client_id] = MatrixClient(
             client_id=client_id,
-            status_scope=status_scope,
+            status_scope=probe_scope if is_provider else status_scope,
             secret_environment=_secret_environment(client_id),
             provider_control=is_provider,
         )
@@ -316,6 +317,7 @@ def _operation_get(
     authorization: str | None,
     tenant_id: str,
     forwarded_authorization: str | None = None,
+    provider_control: bool = False,
 ) -> httpx.Response:
     headers = {
         "Accept": "application/json",
@@ -326,9 +328,14 @@ def _operation_get(
         headers["Authorization"] = authorization
     if forwarded_authorization is not None:
         headers["X-Forwarded-Authorization"] = forwarded_authorization
+    route = (
+        f"/api/v1/control/identity-probes/{operation_id}"
+        if provider_control
+        else f"/v1/operations/{operation_id}"
+    )
     return client.request(
         method="GET",
-        url=f"{gateway_base_url}/v1/operations/{operation_id}",
+        url=gateway_base_url + route,
         headers=headers,
     )
 
@@ -527,6 +534,7 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=operation_id,
                         authorization=f"Bearer {token}",
                         tenant_id=tenant_id,
+                        provider_control=matrix_client.provider_control,
                     ),
                 )
             )
@@ -541,6 +549,7 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=operation_id,
                         authorization=f"Bearer {tamper_signature(token)}",
                         tenant_id=tenant_id,
+                        provider_control=matrix_client.provider_control,
                     ),
                 )
             )
@@ -555,11 +564,14 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=operation_id,
                         authorization=f"Bearer {token}",
                         tenant_id="matrix-mismatch-" + uuid.uuid4().hex,
+                        provider_control=matrix_client.provider_control,
                     ),
                 )
             )
 
         for case, fixture in sorted(fixtures.items()):
+            fixture_claims = decode_unverified_claims(fixture["token"])
+            fixture_client = policy_clients.get(str(fixture_claims.get("azp", "")))
             records.append(
                 _record(
                     client_id="<negative-fixture>",
@@ -571,6 +583,11 @@ def run() -> tuple[dict[str, Any], Path]:
                         operation_id=uuid.uuid4(),
                         authorization=f"Bearer {fixture['token']}",
                         tenant_id=fixture["tenant_id"],
+                        provider_control=(
+                            fixture_client.provider_control
+                            if fixture_client is not None
+                            else False
+                        ),
                     ),
                 )
             )
@@ -584,7 +601,10 @@ def run() -> tuple[dict[str, Any], Path]:
         "environment": "staging",
         "source_sha": source_sha,
         "image_digest": image_digest,
-        "route": "/v1/operations/{command_id}",
+        "routes": {
+            "generic_operation": "/v1/operations/{command_id}",
+            "provider_identity": "/api/v1/control/identity-probes/{probe_id}",
+        },
         "route_matrix_sha256": policy_digest,
         "generated_at": datetime.now(UTC).isoformat(),
         "clients": clients_evidence,

@@ -13,6 +13,8 @@ A valid bearer must receive tenant-scoped `404` for that deliberately nonexisten
 
 The harness never sends `POST /v1/commands`, never calls a provider adapter, and never enables a capability.
 
+Provider-control route registration belongs to the FastAPI application module, not package initialization. This keeps dependency-light governance checks and Temporal workflow sandbox imports isolated from web-runtime side effects while ensuring the packaged API deterministically mounts every policy-derived provider route.
+
 ## Source authority
 
 The client inventory is derived from:

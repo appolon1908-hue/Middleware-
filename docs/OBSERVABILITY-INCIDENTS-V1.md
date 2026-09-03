@@ -29,8 +29,11 @@ email content, and secret material are never metric labels.
 ## State and delivery model
 
 The canonical incident states are `firing`, `acknowledged`, `resolved`,
-`inhibited`, and `silenced`. A new firing transition creates an incident; a firing
-transition after resolution reopens it. Operators may acknowledge an active or
+`inhibited`, and `silenced`. A new firing transition creates an incident; only a
+firing transition with a later `startsAt` may reopen an occurrence that has
+persisted resolved `endsAt` evidence. A delayed firing webhook with the same
+`startsAt` is rejected before replay or projection mutation. Operators may
+acknowledge an active or
 suppressed incident, resolve an unresolved incident, and reopen only a resolved
 incident. Every operator mutation uses optimistic `expected_version` concurrency.
 Stale versions and changed semantic content under the same idempotency identity
@@ -55,7 +58,17 @@ resolved occurrence, its persisted `endsAt` is also ordering evidence: a status
 snapshot observed at or before that instant cannot reopen the incident. A
 webhook transition whose `startsAt` predates the persisted occurrence is also
 rejected before replay or projection mutation, so a delayed resolved or firing
-webhook cannot replace a newer recurrence. PostgreSQL status events retain the
+webhook cannot replace a newer recurrence. A firing webhook whose `startsAt`
+equals an already-ended occurrence is likewise stale and cannot erase its
+resolved evidence. A firing status observation strictly newer than the
+persisted `endsAt` is authoritative reopening evidence: it clears the terminal
+`endsAt` before a matching same-occurrence webhook is accepted, including when
+operator acknowledgement keeps the visible projection `acknowledged` while the
+authoritative source state returns to firing. PostgreSQL and
+in-memory operator reopen mutations clear the same terminal `endsAt`
+evidence before returning the firing projection, so an explicitly authorized
+reopen cannot leave later matching delivery transitions permanently blocked.
+PostgreSQL status events retain the
 original sanitized response projection; retrying an older status request after
 a newer status has applied therefore returns the original result without
 rewinding the current projection. A multi-item snapshot returns explicit
@@ -132,7 +145,12 @@ before routing traffic. Restore evidence must use isolated temporary resources;
 live data must never be destroyed for a test.
 
 Normal application rollback keeps schema 0009 and redeploys the recorded previous
-immutable image digest. Schema rollback is offline and destructive to incident
+immutable image digest. The rollback candidate must pass the same-start
+resolved-then-delayed-firing denial, newer-status-then-webhook reopening, and
+acknowledged-status/operator-reopen-then-webhook tests for both memory and
+PostgreSQL stores;
+an image that can erase persisted `endsAt` evidence is not an eligible rollback
+target. Schema rollback is offline and destructive to incident
 evidence. It requires independent approval, stopped writers, exports and checksums
 for all five tables, isolated restore/read validation, and the reviewed script
 `migrations/rollback/0009_observability_incidents.down.sql`.

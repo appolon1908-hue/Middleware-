@@ -959,6 +959,38 @@ def test_delayed_webhook_cannot_replace_a_newer_alert_occurrence() -> None:
         assert detail.json()["starts_at"] == "2026-09-02T17:00:00Z"
 
 
+def test_delayed_firing_webhook_cannot_reopen_an_already_ended_occurrence() -> None:
+    firing_value = webhook()
+    resolved_value = copy.deepcopy(firing_value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="ended-occurrence-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+        delayed = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=firing_value,
+            headers=headers(key="ended-occurrence-delayed-firing-0001"),
+        )
+        assert delayed.status_code == 409
+        assert delayed.json()["code"] == "incident_conflict"
+        detail = client.get(
+            f"/v1/observability/incidents/{incident_id}",
+            headers=headers(
+                "observability-operator", key="ended-occurrence-read-0001"
+            ),
+        )
+        assert detail.status_code == 200
+        assert detail.json()["state"] == "resolved"
+        assert detail.json()["ends_at"] == "2026-09-02T16:10:00Z"
+
+
 def test_status_cycles_and_rejects_stale_observations() -> None:
     value = webhook()
     with TestClient(app()) as client:
@@ -1079,6 +1111,167 @@ def test_status_snapshot_before_resolved_end_cannot_reopen_incident() -> None:
             headers=headers("observability-operator", key="status-order-read-0001"),
         )
         assert detail.json()["state"] == "resolved"
+
+
+def test_newer_firing_status_reopens_ended_occurrence_for_matching_webhook() -> None:
+    value = webhook()
+    resolved_value = copy.deepcopy(value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="status-reopen-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+
+        reopened = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json={
+                "observedAt": "2026-09-02T16:11:00Z",
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [
+                    {
+                        "groupKey": value["groupKey"],
+                        "fingerprint": value["alerts"][0]["fingerprint"],
+                        "startsAt": value["alerts"][0]["startsAt"],
+                        "state": "firing",
+                        "silencedBy": [],
+                        "inhibitedBy": [],
+                    }
+                ],
+            },
+            headers=headers(key="status-reopen-snapshot-0001"),
+        )
+        assert reopened.status_code == 200
+        assert reopened.json()["items"][0]["state"] == "firing"
+        assert reopened.json()["items"][0]["ends_at"] is None
+
+        matching = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="status-reopen-webhook-0001"),
+        )
+        assert matching.status_code == 202
+        assert matching.json()["operations"][0]["incident_id"] == incident_id
+
+
+def test_newer_firing_status_clears_end_evidence_while_acknowledged() -> None:
+    value = webhook()
+    resolved_value = copy.deepcopy(value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="status-ack-reopen-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+
+        silenced = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json={
+                "observedAt": "2026-09-02T16:11:00Z",
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [
+                    {
+                        "groupKey": value["groupKey"],
+                        "fingerprint": value["alerts"][0]["fingerprint"],
+                        "startsAt": value["alerts"][0]["startsAt"],
+                        "state": "silenced",
+                        "silencedBy": ["status-ack-reopen-silence-1"],
+                        "inhibitedBy": [],
+                    }
+                ],
+            },
+            headers=headers(key="status-ack-reopen-silenced-0001"),
+        )
+        assert silenced.status_code == 200
+        assert silenced.json()["items"][0]["ends_at"] == "2026-09-02T16:10:00Z"
+
+        acknowledged = client.post(
+            f"/v1/observability/incidents/{incident_id}/acknowledge",
+            json={"expected_version": 2, "reason": "operator owns recurrence"},
+            headers=headers(
+                "observability-operator",
+                key="status-ack-reopen-mutation-0001",
+            ),
+        )
+        assert acknowledged.status_code == 200
+        assert acknowledged.json()["state"] == "acknowledged"
+        assert acknowledged.json()["ends_at"] == "2026-09-02T16:10:00Z"
+
+        firing = client.post(
+            "/v1/integrations/alertmanager/status-events",
+            json={
+                "observedAt": "2026-09-02T16:12:00Z",
+                "sourceDeployment": "alertmanager-test-1",
+                "items": [
+                    {
+                        "groupKey": value["groupKey"],
+                        "fingerprint": value["alerts"][0]["fingerprint"],
+                        "startsAt": value["alerts"][0]["startsAt"],
+                        "state": "firing",
+                        "silencedBy": [],
+                        "inhibitedBy": [],
+                    }
+                ],
+            },
+            headers=headers(key="status-ack-reopen-firing-0001"),
+        )
+        assert firing.status_code == 200
+        assert firing.json()["items"][0]["state"] == "acknowledged"
+        assert firing.json()["items"][0]["ends_at"] is None
+
+        matching = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=value,
+            headers=headers(key="status-ack-reopen-webhook-0001"),
+        )
+        assert matching.status_code == 202
+        assert matching.json()["operations"][0]["incident_id"] == incident_id
+
+
+def test_operator_reopen_clears_ended_occurrence_for_matching_webhook() -> None:
+    firing_value = webhook()
+    resolved_value = copy.deepcopy(firing_value)
+    resolved_value["status"] = "resolved"
+    resolved_value["alerts"][0]["status"] = "resolved"
+    resolved_value["alerts"][0]["endsAt"] = "2026-09-02T16:10:00Z"
+    with TestClient(app()) as client:
+        resolved = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=resolved_value,
+            headers=headers(key="operator-reopen-resolved-0001"),
+        )
+        assert resolved.status_code == 202
+        incident_id = resolved.json()["operations"][0]["incident_id"]
+
+        reopened = client.post(
+            f"/v1/observability/incidents/{incident_id}/reopen",
+            json={"expected_version": 1, "reason": "operator verified recurrence"},
+            headers=headers(
+                "observability-operator",
+                key="operator-reopen-mutation-0001",
+            ),
+        )
+        assert reopened.status_code == 200
+        assert reopened.json()["state"] == "firing"
+        assert reopened.json()["ends_at"] is None
+
+        matching = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=firing_value,
+            headers=headers(key="operator-reopen-webhook-0001"),
+        )
+        assert matching.status_code == 202
+        assert matching.json()["operations"][0]["incident_id"] == incident_id
 
 
 def test_status_snapshot_reports_partial_application_per_item() -> None:

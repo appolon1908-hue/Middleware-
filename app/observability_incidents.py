@@ -305,6 +305,21 @@ def next_incident_state(
     return "firing", "firing"
 
 
+def webhook_transition_predates_projection(
+    alert: AlertmanagerAlert,
+    *,
+    starts_at: datetime,
+    ends_at: datetime | None,
+) -> bool:
+    """Reject transitions that cannot be newer than the current occurrence."""
+
+    return alert.starts_at < starts_at or (
+        alert.status == "firing"
+        and alert.starts_at == starts_at
+        and ends_at is not None
+    )
+
+
 class IncidentStore(Protocol):
     async def ingest(
         self,
@@ -483,7 +498,11 @@ class MemoryIncidentStore:
             current_projection = self._incidents.get(key)
             if (
                 current_projection is not None
-                and alert.starts_at < current_projection.starts_at
+                and webhook_transition_predates_projection(
+                    alert,
+                    starts_at=current_projection.starts_at,
+                    ends_at=current_projection.ends_at,
+                )
             ):
                 raise IncidentConflict(
                     "alert transition predates the current alert occurrence"
@@ -917,6 +936,12 @@ class MemoryIncidentStore:
             incident = previous.model_copy(
                 update={
                     "state": state,
+                    # A newer authoritative firing snapshot reopens this exact
+                    # occurrence. Clear its prior terminal evidence so the
+                    # matching webhook can subsequently create the governed
+                    # notification command without looking like a delayed
+                    # pre-resolution replay.
+                    "ends_at": None if item.state == "firing" else previous.ends_at,
                     "last_seen_at": now,
                     "source_deployment": source_deployment,
                     "correlation_id": correlation_id,
@@ -1047,6 +1072,7 @@ class MemoryIncidentStore:
                     "acknowledged_at": now if action == "acknowledge" else None,
                     "acknowledged_by": actor_id if action == "acknowledge" else None,
                     "resolved_at": now if action == "resolve" else None,
+                    "ends_at": None if action == "reopen" else previous.ends_at,
                     "correlation_id": correlation_id,
                     "resource_version": previous.resource_version + 1,
                     "updated_at": now,
@@ -1538,7 +1564,11 @@ class PostgresIncidentStore:
                 )
                 if (
                     current_projection is not None
-                    and alert.starts_at < current_projection["starts_at"]
+                    and webhook_transition_predates_projection(
+                        alert,
+                        starts_at=current_projection["starts_at"],
+                        ends_at=current_projection["ends_at"],
+                    )
                 ):
                     raise IncidentConflict(
                         "alert transition predates the current alert occurrence"
@@ -2164,6 +2194,8 @@ class PostgresIncidentStore:
                     """
                     UPDATE middleware_observability_incidents SET
                       state=$3::text, last_seen_at=$4::timestamptz,
+                      ends_at=CASE WHEN $7::text='firing'
+                        THEN NULL::timestamptz ELSE ends_at END,
                       resolved_at=CASE WHEN $3::text='resolved'
                         THEN $4::timestamptz ELSE NULL::timestamptz END,
                       source_deployment=$5::text, correlation_id=$6::text,
@@ -2177,6 +2209,7 @@ class PostgresIncidentStore:
                     now,
                     source_deployment,
                     correlation_id,
+                    item.state,
                 )
                 assert row is not None
                 incident = self._incident(row)
@@ -2391,6 +2424,8 @@ class PostgresIncidentStore:
                         THEN $6::text ELSE NULL::text END,
                       resolved_at=CASE WHEN $4::text='resolve'
                         THEN $5::timestamptz ELSE NULL::timestamptz END,
+                      ends_at=CASE WHEN $4::text='reopen'
+                        THEN NULL::timestamptz ELSE ends_at END,
                       correlation_id=$7::text,
                       resource_version=resource_version+1,
                       updated_at=$5::timestamptz

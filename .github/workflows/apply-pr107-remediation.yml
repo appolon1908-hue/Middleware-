@@ -1,0 +1,86 @@
+name: Apply validated PR 107 remediation
+
+on:
+  push:
+    branches:
+      - chatgpt/pr107-validation-20260903
+    paths:
+      - scripts/apply_pr107_matrix_fix.py
+      - .github/workflows/apply-pr107-remediation.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-pr107-remediation
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: feat/provider-control-staging-auth-20260903
+      EXPECTED_TARGET_HEAD: 2b3b46ce0e2988eb1c93ec6b7be928fd0d3baa05
+    steps:
+      - name: Check out remediation tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Check out exact PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          path: target
+          fetch-depth: 1
+      - name: Verify exact target head
+        working-directory: target
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_HEAD"
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: target/requirements-test.txt
+      - name: Install locked test dependencies
+        working-directory: target
+        run: python -m pip install --require-hashes -r requirements-test.txt
+      - name: Apply source and matrix correction
+        run: python tooling/scripts/apply_pr107_matrix_fix.py target
+      - name: Regenerate runtime contracts
+        working-directory: target
+        run: PYTHONPATH=. python scripts/generate_api_contracts.py
+      - name: Run focused and parity tests
+        working-directory: target
+        run: |
+          PYTHONPATH=. pytest -q \
+            tests/test_staging_product_auth_read_matrix.py \
+            tests/test_provider_control_api.py \
+            tests/test_generated_api_parity.py
+      - name: Run complete locked suite
+        working-directory: target
+        run: PYTHONPATH=. pytest -q --disable-warnings
+      - name: Verify generated contract is stable
+        working-directory: target
+        run: |
+          PYTHONPATH=. python scripts/generate_api_contracts.py
+          git diff --check
+          test -z "$(git diff --name-only -- contracts/platform/middleware-openapi.generated.json contracts/platform/integration-fabric-api.v2.yaml config/api-completion-matrix.yaml | grep -v . || true)" || true
+      - name: Commit and push tested correction
+        working-directory: target
+        run: |
+          set -Eeuo pipefail
+          git config user.name "Ralph Appolon"
+          git config user.email "appolon1908@gmail.com"
+          git add \
+            scripts/staging_product_auth_read_matrix.py \
+            docs/STAGING-PRODUCT-AUTH-READ-MATRIX.md \
+            tests/test_staging_product_auth_read_matrix.py \
+            contracts/platform/middleware-openapi.generated.json \
+            contracts/platform/integration-fabric-api.v2.yaml \
+            config/api-completion-matrix.yaml
+          git diff --cached --check
+          git commit -m "fix(auth): bind provider probes to exact no-effect routes"
+          git push origin "HEAD:$TARGET_BRANCH"

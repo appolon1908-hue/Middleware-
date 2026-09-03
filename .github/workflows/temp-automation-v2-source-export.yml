@@ -27,13 +27,13 @@ jobs:
           printf 'EXPORTED_SOURCE_SHA=%s\n' "$(git rev-parse HEAD)"
           tar \
             --exclude=.git \
-            --exclude=automation-v2-source.tar.gz \
-            -czf automation-v2-source.tar.gz .
+            -C "$GITHUB_WORKSPACE" \
+            -czf "$RUNNER_TEMP/automation-v2-source.tar.gz" .
 
       - name: Upload exact source
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: automation-v2-source-${{ github.sha }}
-          path: automation-v2-source.tar.gz
+          path: ${{ runner.temp }}/automation-v2-source.tar.gz
           if-no-files-found: error
           retention-days: 1

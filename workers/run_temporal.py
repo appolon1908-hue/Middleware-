@@ -9,13 +9,37 @@ from temporalio.worker import Worker
 from app.config import ConfigurationError, Settings
 from app.commands import PostgresCommandStore
 from app.klyrow_alert_adapter import KlyrowAlertAdapter
+from app.klyrow_email_adapter import KlyrowEmailAdapter
 from app.odoo_provider_adapter import OdooProviderAdapter
+from app.postly_social_adapter import PostlySocialAdapter
+from app.telnexa_provider_adapter import TelnexaSmsAdapter
 from app.temporal_activities import (
     CommandLedgerWorkflowActivities,
     FailClosedWorkflowActivities,
 )
 from app.temporal_runtime import connect_temporal
 from app.temporal_workflows import WORKFLOWS
+
+
+def build_command_activities(
+    settings: Settings,
+    command_store: PostgresCommandStore,
+) -> CommandLedgerWorkflowActivities:
+    """Wire every reviewed provider adapter into the durable Temporal worker.
+
+    Adapter construction does not authorize delivery. Each adapter re-checks
+    its individual effect gate at execution time and resolves provider secrets
+    only after that gate permits the operation.
+    """
+
+    return CommandLedgerWorkflowActivities(
+        command_store,
+        OdooProviderAdapter(settings),
+        KlyrowAlertAdapter(settings),
+        telnexa_sms_adapter=TelnexaSmsAdapter(settings),
+        klyrow_email_adapter=KlyrowEmailAdapter(settings),
+        postly_social_adapter=PostlySocialAdapter(settings),
+    )
 
 
 async def main() -> None:
@@ -30,11 +54,7 @@ async def main() -> None:
     command_store = await PostgresCommandStore.connect(settings.database_url)
     try:
         safe_activities = FailClosedWorkflowActivities()
-        command_activities = CommandLedgerWorkflowActivities(
-            command_store,
-            OdooProviderAdapter(settings),
-            KlyrowAlertAdapter(settings),
-        )
+        command_activities = build_command_activities(settings, command_store)
         worker = Worker(
             client,
             task_queue=settings.temporal_task_queue,

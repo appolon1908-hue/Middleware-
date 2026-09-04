@@ -6,18 +6,22 @@ on:
       - ".github/workflows/portfolio-main-release-authorities.yml"
       - "config/portfolio-main-release-authorities.v1.json"
       - "scripts/apply_portfolio_main_release_authorities.py"
+      - "scripts/apply_portfolio_release_reviewer_access.py"
       - "tests/test_portfolio_main_release_authorities.py"
+      - "tests/test_portfolio_release_reviewer_access.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/portfolio-main-release-authorities.yml"
       - "config/portfolio-main-release-authorities.v1.json"
       - "scripts/apply_portfolio_main_release_authorities.py"
+      - "scripts/apply_portfolio_release_reviewer_access.py"
       - "tests/test_portfolio_main_release_authorities.py"
+      - "tests/test_portfolio_release_reviewer_access.py"
   workflow_dispatch:
     inputs:
       mode:
-        description: Validate policy or apply the exact committed rulesets
+        description: Validate policy or apply the fixed reviewer and exact rulesets
         required: true
         type: choice
         options: [validate, apply]
@@ -57,21 +61,28 @@ jobs:
           set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test -z "$(git status --porcelain)"
-      - name: Validate bounded governance policy
+      - name: Validate bounded governance and reviewer policies
         run: |
           set -Eeuo pipefail
           python3 -m py_compile \
             scripts/apply_portfolio_main_release_authorities.py \
-            tests/test_portfolio_main_release_authorities.py
-          python3 -m unittest -v tests.test_portfolio_main_release_authorities
+            scripts/apply_portfolio_release_reviewer_access.py \
+            tests/test_portfolio_main_release_authorities.py \
+            tests/test_portfolio_release_reviewer_access.py
+          python3 -m unittest -v \
+            tests.test_portfolio_main_release_authorities \
+            tests.test_portfolio_release_reviewer_access
           python3 scripts/apply_portfolio_main_release_authorities.py --mode validate
+          python3 scripts/apply_portfolio_release_reviewer_access.py --mode validate
           python3 -m json.tool config/portfolio-main-release-authorities.v1.json >/dev/null
           git diff --check
       - name: Upload secret-free policy evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: portfolio-main-release-authority-policy-${{ env.EXPECTED_SHA }}
-          path: artifacts/portfolio-main-release-authorities/
+          path: |
+            artifacts/portfolio-main-release-authorities/
+            artifacts/portfolio-release-reviewer-access/
           if-no-files-found: error
           retention-days: 30
 
@@ -103,7 +114,7 @@ jobs:
           test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$CONFIRMATION" = APPLY_MAIN_RELEASE_AUTHORITY_V1
-      - name: Apply and read back all four rulesets
+      - name: Apply and read back all six rulesets
         env:
           CODESTRA_REPOSITORY_ADMIN_TOKEN: ${{ secrets.CODESTRA_REPOSITORY_ADMIN_TOKEN }}
         run: |
@@ -112,14 +123,33 @@ jobs:
           python3 scripts/apply_portfolio_main_release_authorities.py \
             --mode apply \
             --confirm APPLY_MAIN_RELEASE_AUTHORITY_V1
+      - id: reviewer
+        name: Configure and verify the exact independent reviewer
+        continue-on-error: true
+        env:
+          CODESTRA_REPOSITORY_ADMIN_TOKEN: ${{ secrets.CODESTRA_REPOSITORY_ADMIN_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$CODESTRA_REPOSITORY_ADMIN_TOKEN"
+          python3 scripts/apply_portfolio_release_reviewer_access.py \
+            --mode apply \
+            --confirm APPLY_MAIN_RELEASE_AUTHORITY_V1
       - name: Upload bounded rollout evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: portfolio-main-release-authority-rollout-${{ github.sha }}
-          path: artifacts/portfolio-main-release-authorities/
+          path: |
+            artifacts/portfolio-main-release-authorities/
+            artifacts/portfolio-release-reviewer-access/
           if-no-files-found: error
           retention-days: 90
+      - name: Fail closed while reviewer invitations await acceptance
+        if: ${{ steps.reviewer.outcome != 'success' }}
+        run: |
+          echo 'PORTFOLIO_RELEASE_REVIEWER_ACCESS=BLOCKED' >&2
+          echo 'The exact reviewer must accept every pending repository invitation.' >&2
+          exit 1
       - name: Confirm no runtime effect
         if: always()
         run: |

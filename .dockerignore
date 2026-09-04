@@ -4,6 +4,7 @@
 .github/workflows/*
 !.github/workflows/production-runtime-certification.yml
 !.github/workflows/integration-main-release-authorities.yml
+!.github/workflows/mirror-codestra-legacy-middleware-images.yml
 .env
 .env.*
 *.env

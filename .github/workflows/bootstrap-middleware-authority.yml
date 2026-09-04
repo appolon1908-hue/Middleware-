@@ -1,0 +1,85 @@
+name: Bootstrap Middleware Authority Convergence
+
+on:
+  push:
+    branches:
+      - migration/middleware-authority-convergence-20260904
+    paths:
+      - .github/workflows/bootstrap-middleware-authority.yml
+      - .authority-bootstrap/**
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-middleware-authority-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    name: Materialize and verify reviewed authority package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact migration branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: migration/middleware-authority-convergence-20260904
+          fetch-depth: 0
+
+      - name: Reconstruct the reviewed package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REPOSITORY" = "appolon1908-hue/Middleware-"
+          test "$GITHUB_REF" = "refs/heads/migration/middleware-authority-convergence-20260904"
+          test "$(find .authority-bootstrap -maxdepth 1 -type f -name 'part-*' | wc -l)" -eq 5
+          cat .authority-bootstrap/part-* > "$RUNNER_TEMP/authority-package.b64"
+          printf '%s  %s\n' \
+            c377afa94a2f14fcf304e2a6aea8a5522846909f6ead3ae5a45283d0f3bb86eb \
+            "$RUNNER_TEMP/authority-package.b64" | sha256sum --check --strict
+          base64 --decode "$RUNNER_TEMP/authority-package.b64" > "$RUNNER_TEMP/authority-package.tar.gz"
+          printf '%s  %s\n' \
+            6a860a2a6464b66f0bd1a2d3f1309a260291112e30b683b1553bb0744b1954c8 \
+            "$RUNNER_TEMP/authority-package.tar.gz" | sha256sum --check --strict
+          gzip -t "$RUNNER_TEMP/authority-package.tar.gz"
+          if tar -tzf "$RUNNER_TEMP/authority-package.tar.gz" |
+              grep -E '(^/|(^|/)\.\.(/|$))'; then
+            echo "::error::Unsafe archive member detected" >&2
+            exit 1
+          fi
+          tar -xzf "$RUNNER_TEMP/authority-package.tar.gz" -C .
+          chmod 0755 \
+            scripts/run_ci.sh \
+            scripts/server-a-backup-legacy-middleware-images.sh \
+            scripts/validate_middleware_authority_convergence.py
+
+      - name: Verify generated authority controls
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m json.tool config/middleware-authority-convergence.v1.json >/dev/null
+          python3 scripts/validate_middleware_authority_convergence.py
+          python3 -m py_compile \
+            scripts/validate_middleware_authority_convergence.py \
+            tests/test_middleware_authority_convergence.py
+          bash -n scripts/run_ci.sh
+          bash -n scripts/server-a-backup-legacy-middleware-images.sh
+          git diff --check
+
+      - name: Replace bootstrap payload with reviewed source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf .authority-bootstrap
+          rm -f .github/workflows/bootstrap-middleware-authority.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && {
+            echo "::error::Bootstrap produced no repository change" >&2
+            exit 1
+          }
+          git commit -m "chore(authority): converge Server A middleware authorities"
+          git push origin HEAD:migration/middleware-authority-convergence-20260904

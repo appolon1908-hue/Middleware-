@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import signal
 from contextlib import suppress
 from typing import Any
@@ -23,6 +24,9 @@ from app.vicidial_odoo_projection import (
     ProjectionSettings,
     ProjectionState,
     project_envelope,
+)
+from app.vicidial_odoo_projection_authority import (
+    validate_projection_source_locks,
 )
 
 log = logging.getLogger("codestra.vicidial_odoo_projection")
@@ -136,6 +140,10 @@ async def run() -> None:
     settings = ProjectionSettings.from_env()
     if not settings.enabled:
         raise SystemExit("VICIDIAL_ODOO_PROJECTION_ENABLED is false")
+    # Source locks are evaluated only for an enabled worker. They bind the
+    # runtime to the exact reviewed Keycloak, Odoo, and VICIdial commits and
+    # fail before any NATS connection, durable state mutation, or Odoo request.
+    validate_projection_source_locks(os.environ)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",

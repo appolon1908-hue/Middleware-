@@ -61,7 +61,7 @@ class PortfolioMainReleaseAuthoritiesTests(unittest.TestCase):
     def test_validate_mode_never_requires_a_token_or_mutates_github(self) -> None:
         result = MODULE.execute("validate", "")
         self.assertEqual(result["result"], "PASS")
-        self.assertEqual(len(result["repositories"]), 4)
+        self.assertEqual(len(result["repositories"]), 6)
         self.assertTrue(
             all(row["action"] == "policy-validated" for row in result["repositories"])
         )

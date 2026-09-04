@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "authority_id": "codestra.production-reviewer-access.v1",
+  "owner": "appolon1908-hue",
+  "reviewer": {
+    "login": "kazan555",
+    "user_id": 77101516,
+    "permission": "push",
+    "admin": false
+  },
+  "repositories": [
+    "appolon1908-hue/codestra-production-platform",
+    "appolon1908-hue/Middleware-",
+    "appolon1908-hue/Websocket-",
+    "appolon1908-hue/Odoo",
+    "appolon1908-hue/Caddy",
+    "appolon1908-hue/Kong",
+    "appolon1908-hue/Keycloak",
+    "appolon1908-hue/SDK-repository",
+    "appolon1908-hue/Vicidialer-Codestra",
+    "appolon1908-hue/N8N",
+    "appolon1908-hue/klyrow.com",
+    "appolon1908-hue/social.codestra.co",
+    "appolon1908-hue/Codestra-AI",
+    "appolon1908-hue/Codestra-Marketing-",
+    "appolon1908-hue/codestra-provisioning-service",
+    "appolon1908-hue/Codestra-Prometheus",
+    "appolon1908-hue/telnexa",
+    "appolon1908-hue/kyqra-crawler",
+    "appolon1908-hue/beyvra-backend"
+  ]
+}

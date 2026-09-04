@@ -1,4 +1,24 @@
 services:
+  vicidial-odoo-projection-state-init:
+    image: ${MIDDLEWARE_IMAGE:?pin an immutable middleware image@sha256 digest}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        chown 65532:65532 /state
+        chmod 0700 /state
+        test "$(stat -c '%u:%g:%a' /state)" = "65532:65532:700"
+    restart: "no"
+    read_only: true
+    user: "0:0"
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    volumes:
+      - vicidial_odoo_projection_state:/state
+
   vicidial-odoo-projection:
     image: ${MIDDLEWARE_IMAGE:?pin an immutable middleware image@sha256 digest}
     command: ["-m", "workers.run_vicidial_odoo_projection"]
@@ -8,6 +28,11 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      disable: true
+    depends_on:
+      vicidial-odoo-projection-state-init:
+        condition: service_completed_successfully
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=32m
     env_file:

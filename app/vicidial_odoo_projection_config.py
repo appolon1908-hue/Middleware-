@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import re
 import stat
 from dataclasses import dataclass
@@ -164,6 +165,23 @@ def _validate_nats_profile(
         )
 
 
+def _validate_profile_credential_path(
+    credential: Path,
+    *,
+    profile: Mapping[str, Any],
+) -> None:
+    prefix = profile.get("secret_path_prefix")
+    if not isinstance(prefix, str) or not prefix.startswith("/"):
+        raise ProjectionConfigurationError(
+            "selected runtime profile has malformed secret-path authority"
+        )
+    normalized = posixpath.normpath(str(credential).replace("\\", "/"))
+    if not normalized.startswith(prefix):
+        raise ProjectionConfigurationError(
+            "NATS credential path does not match the runtime profile"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectionSettings:
     enabled: bool
@@ -308,6 +326,14 @@ class ProjectionSettings:
             raise ProjectionConfigurationError(
                 "RUNTIME_PROFILE_ID environment does not match APP_ENV"
             )
+        if (
+            self.activation_id is not None
+            and profile.get("production_activation_allowed") is not True
+        ):
+            raise ProjectionConfigurationError(
+                "VICIDIAL_ODOO_ACTIVATION_ID is forbidden "
+                "by the runtime profile"
+            )
         if not self.state_path.is_absolute():
             raise ProjectionConfigurationError(
                 "projection state path must be absolute"
@@ -346,6 +372,10 @@ class ProjectionSettings:
                 "enabled projection requires an absolute "
                 "NATS credentials path"
             )
+        _validate_profile_credential_path(
+            self.nats_credentials_file,
+            profile=profile,
+        )
         if not self.odoo_base_url:
             raise ProjectionConfigurationError(
                 "enabled projection requires ODOO_19_BASE_URL"

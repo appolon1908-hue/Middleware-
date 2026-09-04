@@ -49,6 +49,9 @@ CMD ["-m", "uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "
 FROM runtime-common AS worker
 CMD ["-m", "workers.run_outbox"]
 
+FROM runtime-common AS telephony-worker
+CMD ["-m", "workers.run_telephony_projection"]
+
 FROM ${RUNTIME_BASE} AS connector-dependencies
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build

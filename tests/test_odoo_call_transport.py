@@ -99,6 +99,7 @@ async def test_post_uses_the_exact_odoo_call_event_hmac_contract() -> None:
     request = seen[0]
     assert request.url.path == CALL_EVENT_PATH
     assert request.headers["X-Codestra-Event-ID"] == "vici-event-00000001"
+    assert request.headers["X-Codestra-Tenant-ID"] == TENANT
     assert hmac.compare_digest(
         request.headers["X-Codestra-Signature"],
         expected_signature(request),

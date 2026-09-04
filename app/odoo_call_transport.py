@@ -121,6 +121,7 @@ class OdooCallEventDispatcher:
             "X-Codestra-Timestamp": timestamp,
             "X-Codestra-Signature": signature,
             "X-Codestra-Event-ID": event_id,
+            "X-Codestra-Tenant-ID": tenant_id,
         }
 
     async def dispatch(self, record: OutboxRecord) -> None:

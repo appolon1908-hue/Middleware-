@@ -47,6 +47,28 @@
         "deployment-policy",
         "validate"
       ]
+    },
+    {
+      "repository": "appolon1908-hue/Breero.com",
+      "repository_id": 1331354808,
+      "default_branch": "main",
+      "required_status_checks": [
+        "quality"
+      ]
+    },
+    {
+      "repository": "appolon1908-hue/Moneybee-Backend",
+      "repository_id": 1343760409,
+      "default_branch": "main",
+      "required_status_checks": [
+        "verify",
+        "postgres-identity-tenancy",
+        "containers (api)",
+        "containers (worker)",
+        "containers (migrate)",
+        "application",
+        "deployment-policy"
+      ]
     }
   ]
 }

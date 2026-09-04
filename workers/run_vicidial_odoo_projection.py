@@ -72,8 +72,18 @@ async def handle_message(
             return
         try:
             if current == "reconciliation_required":
-                await dispatcher.reconcile(event, reason="durable prior unknown outcome")
+                await dispatcher.reconcile(event, reason="durable prior write attempt")
             else:
+                # Persist the uncertainty boundary before any network I/O. A process
+                # exit after this commit, whether before or after Odoo receives the
+                # POST, therefore redelivers into signed read-back rather than a
+                # blind second submission. A confirmed 404 moves the row to
+                # retryable and only a later delivery may open another write attempt.
+                state.transition(
+                    event.event_id,
+                    "reconciliation_required",
+                    "write attempt opened before Odoo submission",
+                )
                 await dispatcher.submit(event)
         except KnownNotDelivered as exc:
             state.transition(event.event_id, "retryable", str(exc))

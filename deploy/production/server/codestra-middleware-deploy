@@ -505,7 +505,7 @@ migration_versions="$(
     psql -X -v ON_ERROR_STOP=1 --dbname="$POSTGRES_DATABASE" --tuples-only --no-align \
     --command="SELECT string_agg(version::text, ',' ORDER BY version) FROM middleware_schema_migrations"
 )"
-[[ "$migration_versions" == "1,2,3,4,5,6,7,8,9" ]] || fail "middleware_migration_head_mismatch"
+[[ "$migration_versions" == "1,2,3,4,5,6,7,8,9,10" ]] || fail "middleware_migration_head_mismatch"
 
 snapshot_counts() {
   local output="$1"

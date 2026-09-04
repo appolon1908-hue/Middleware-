@@ -36,8 +36,9 @@ python3 scripts/validate_automation_operation_policy.py
 printf '==> Validating repository safety controls\n'
 python3 scripts/validate_repository.py
 
-printf '==> Validating Middleware source/image authority convergence\n'
+printf '==> Validating Middleware authority convergence controls\n'
 python3 scripts/validate_middleware_authority_convergence.py
+python3 scripts/validate_middleware_authority_assets.py
 
 printf '==> Validating integration workstream manifest\n'
 python3 scripts/validate_workstream_manifest.py

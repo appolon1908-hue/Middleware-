@@ -5,6 +5,13 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .automation_policy import AutomationPolicy
+from .automation_v2 import (
+    AutomationService,
+    MemoryAutomationStore,
+    PostgresAutomationStore,
+    WorkflowRouter,
+)
 from .commands import (
     CommandPolicyRegistry,
     CommandService,
@@ -42,6 +49,7 @@ class Runtime:
     commands: CommandService | None = None
     communications: CommunicationsService | None = None
     incidents: IncidentService | None = None
+    automation: AutomationService | None = None
 
     async def readiness(self) -> ReadinessReport:
         checks: dict[str, Awaitable[bool] | None] = {
@@ -58,6 +66,9 @@ class Runtime:
         )
         checks["incident_store"] = (
             self.incidents.store.ready() if self.incidents is not None else None
+        )
+        checks["automation_store"] = (
+            self.automation.ready() if self.automation is not None else None
         )
 
         async def bounded(check: Awaitable[bool] | None) -> str:
@@ -85,6 +96,8 @@ class Runtime:
         await self.replay.close()
         if self.communications is not None:
             await self.communications.store.close()
+        if self.automation is not None:
+            await self.automation.close()
         if self.commands is not None:
             await self.commands.store.close()
         if self.incidents is not None:
@@ -93,10 +106,20 @@ class Runtime:
 
 async def build_runtime(settings: Settings) -> Runtime:
     tokens = KeycloakJwtVerifier(settings)
+    command_policies = CommandPolicyRegistry.load()
+    automation_policy = AutomationPolicy.from_path()
+    workflow_router = WorkflowRouter.load()
     if settings.allow_in_memory_storage:
         commands = CommandService(
             store=MemoryCommandStore(),
-            policies=CommandPolicyRegistry.load(),
+            policies=command_policies,
+        )
+        automation = AutomationService(
+            store=MemoryAutomationStore(),
+            policy=automation_policy,
+            workflow_router=workflow_router,
+            commands=commands,
+            umbrella_controls=settings.umbrella_controls,
         )
         return Runtime(
             settings=settings,
@@ -109,28 +132,42 @@ async def build_runtime(settings: Settings) -> Runtime:
                 commands=commands,
                 umbrella_controls=settings.umbrella_controls,
             ),
+            automation=automation,
         )
     assert settings.database_url is not None
     assert settings.redis_url is not None
     inbox = await PostgresInboxStore.connect(settings.database_url)
     try:
-        commands = await PostgresCommandStore.connect(settings.database_url)
+        commands_store = await PostgresCommandStore.connect(settings.database_url)
         try:
-            replay = await RedisReplayGuard.connect(settings.redis_url)
+            automation_store = await PostgresAutomationStore.connect(settings.database_url)
+            try:
+                replay = await RedisReplayGuard.connect(settings.redis_url)
+            except Exception:
+                await automation_store.close()
+                raise
         except Exception:
-            await commands.close()
+            await commands_store.close()
             raise
     except Exception:
         await inbox.close()
         raise
+    commands = CommandService(
+        store=commands_store,
+        policies=command_policies,
+    )
     runtime = Runtime(
         settings=settings,
         inbox=inbox,
         replay=replay,
         tokens=tokens,
-        commands=CommandService(
-            store=commands,
-            policies=CommandPolicyRegistry.load(),
+        commands=commands,
+        automation=AutomationService(
+            store=automation_store,
+            policy=automation_policy,
+            workflow_router=workflow_router,
+            commands=commands,
+            umbrella_controls=settings.umbrella_controls,
         ),
     )
     runtime.communications = CommunicationsService(

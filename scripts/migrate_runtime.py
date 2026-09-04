@@ -103,6 +103,18 @@ async def verify_database_lineage(conn: asyncpg.Connection) -> tuple[str, ...]:
     return observed
 
 
+def migration_sets() -> tuple[tuple[str, tuple[Path, ...]], ...]:
+    core = tuple(sorted((ROOT / "migrations").glob("[0-9][0-9][0-9][0-9]_*.sql")))
+    automation = tuple(
+        sorted((ROOT / "migrations" / "automation").glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    )
+    if not core:
+        raise SystemExit("no runtime migrations found")
+    if not automation:
+        raise SystemExit("no automation-v2 migrations found")
+    return (("core", core), ("automation-v2", automation))
+
+
 async def main() -> None:
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -110,15 +122,13 @@ async def main() -> None:
     conn = await asyncpg.connect(url, command_timeout=30)
     try:
         await verify_database_lineage(conn)
-
-        migrations = sorted((ROOT / "migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
-        if not migrations:
-            raise SystemExit("no runtime migrations found")
-        for migration in migrations:
-            await conn.execute(migration.read_text(encoding="utf-8"))
-            print(f"RUNTIME_MIGRATION_APPLIED={migration.name}")
+        for authority, migrations in migration_sets():
+            for migration in migrations:
+                await conn.execute(migration.read_text(encoding="utf-8"))
+                print(f"RUNTIME_MIGRATION_APPLIED={authority}/{migration.name}")
     finally:
         await conn.close()
+    print("AUTOMATION_V2_SCHEMA_MIGRATION=PASS")
     print("RUNTIME_MIGRATION=PASS")
 
 

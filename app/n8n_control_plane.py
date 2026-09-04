@@ -5,12 +5,13 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from .automation_v2 import v2_router
 from .commands import CommandCapabilityDisabled, CommandEnvelope
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .storage import StorageError
 
-router = APIRouter(prefix="/v1/integrations/n8n", tags=["n8n-control-plane"])
+router = APIRouter(tags=["n8n-control-plane"])
 
 _LEGACY_SUNSET = "Wed, 30 Jun 2027 23:59:59 GMT"
 _LEGACY_WARNING = '299 - "Deprecated n8n v1 compatibility route; migrate to /v2/automation"'
@@ -52,7 +53,7 @@ def _validate_destination_contract(command: CommandEnvelope) -> None:
         raise RequestValidationError(str(exc)) from exc
 
 
-@router.post("/commands", deprecated=True)
+@router.post("/v1/integrations/n8n/commands", deprecated=True)
 async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSONResponse:
     """Accept a durable command through the legacy n8n v1 compatibility route.
 
@@ -97,7 +98,7 @@ async def submit_n8n_command(command: CommandEnvelope, request: Request) -> JSON
     )
 
 
-@router.get("/operations/{command_id}", deprecated=True)
+@router.get("/v1/integrations/n8n/operations/{command_id}", deprecated=True)
 async def get_n8n_operation(command_id: UUID, request: Request) -> JSONResponse:
     """Return durable command state through the legacy n8n v1 compatibility route."""
     active = request.app.state.runtime
@@ -121,3 +122,6 @@ async def get_n8n_operation(command_id: UUID, request: Request) -> JSONResponse:
             ),
         },
     )
+
+
+router.include_router(v2_router)

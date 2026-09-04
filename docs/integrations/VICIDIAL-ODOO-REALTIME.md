@@ -16,10 +16,11 @@ The worker consumes only the explicit `codestra.vicidial.call.lifecycle.*`
 event allowlist. It does not transport RTP/SRTP audio and has no AMI, ARI,
 originate, campaign-write, callback, or production-dialing permission.
 
-The shared VICIdial ingress also retains the pre-existing SDK compatibility
+The shared VICidial ingress also retains the pre-existing SDK compatibility
 event `codestra.events.call_disposition_updated`. That event remains accepted by
 the normal route but is outside the lifecycle subject and cannot be consumed by
-this projection worker. The Keycloak lifecycle lock authorizes only the exact
+this projection worker. The lifecycle authority is pinned to protected Keycloak
+`main` merge `922d039b5143f3ac738e88998036355562a8dd5d`; it authorizes the exact
 `codestra.vicidial.call.lifecycle.*` subset plus the already published canonical
 VICIdial events.
 
@@ -49,15 +50,15 @@ one slow event cannot let later deliveries expire behind it.
 
 ## Activation sequence
 
-1. Merge the exact Keycloak lifecycle allowlist.
+1. Protected Keycloak merge `922d039b5143f3ac738e88998036355562a8dd5d`
+   is the immutable lifecycle identity authority.
 2. Merge and deploy the exact Odoo projection endpoint and screen-pop gate.
-3. Replace the temporary Keycloak review-head lock with its protected merge SHA.
-4. Merge this Middleware worker and the matching webhook contract.
-5. Deploy a protected staging candidate with the worker disabled.
-6. Bind NATS and Odoo secrets outside Git.
-7. Enable `VICIDIAL_ODOO_PROJECTION_ENABLED=true` with
+3. Merge this Middleware worker and its protected Keycloak authority lock.
+4. Deploy a protected staging candidate with the worker disabled.
+5. Bind NATS and Odoo secrets outside Git.
+6. Enable `VICIDIAL_ODOO_PROJECTION_ENABLED=true` with
    `VICIDIAL_ODOO_SYNTHETIC_ONLY=true` only for `TEST_SYN`.
-8. Certify created -> ringing -> connected -> hangup -> completed, duplicate,
+7. Certify created -> ringing -> connected -> hangup -> completed, duplicate,
    out-of-order, restart, and read-back behavior.
 
 Production remains a separate activation release requiring an exact activation

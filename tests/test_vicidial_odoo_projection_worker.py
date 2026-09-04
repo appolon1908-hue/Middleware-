@@ -9,8 +9,12 @@ from types import SimpleNamespace
 import pytest
 
 from app.models import EventEnvelope
-from app.vicidial_odoo_projection import ProjectionState
-from workers.run_vicidial_odoo_projection import process_batch, progress_heartbeat
+from app.vicidial_odoo_projection import ProjectionState, project_envelope
+from workers.run_vicidial_odoo_projection import (
+    handle_message,
+    process_batch,
+    progress_heartbeat,
+)
 
 
 class FakeMessage:
@@ -49,6 +53,37 @@ class ConcurrentDispatcher:
 
     async def reconcile(self, event, *, reason: str) -> None:
         raise AssertionError(f"unexpected read-back: {reason}")
+
+
+class CrashAfterTransmissionDispatcher:
+    def __init__(self) -> None:
+        self.submit_calls = 0
+        self.reconcile_calls = 0
+
+    async def submit(self, event) -> None:
+        self.submit_calls += 1
+        # Model a process failure after the transport may have transmitted the
+        # request but before the worker can persist delivered evidence.
+        raise RuntimeError("simulated crash after possible Odoo transmission")
+
+    async def reconcile(self, event, *, reason: str) -> None:
+        self.reconcile_calls += 1
+        raise AssertionError(f"unexpected first-attempt read-back: {reason}")
+
+
+class SuccessfulReadBackDispatcher:
+    def __init__(self) -> None:
+        self.submit_calls = 0
+        self.reconcile_calls = 0
+        self.reasons: list[str] = []
+
+    async def submit(self, event) -> None:
+        self.submit_calls += 1
+        raise AssertionError("redelivery must not submit blindly")
+
+    async def reconcile(self, event, *, reason: str) -> None:
+        self.reconcile_calls += 1
+        self.reasons.append(reason)
 
 
 def envelope(index: int) -> EventEnvelope:
@@ -115,3 +150,50 @@ async def test_fetched_batch_starts_all_messages_without_ack_wait_queueing(
     assert [message.acks for message in messages] == [1, 1, 1, 1]
     assert [message.terms for message in messages] == [0, 0, 0, 0]
     assert [message.naks for message in messages] == [[], [], [], []]
+
+
+@pytest.mark.asyncio
+async def test_crash_after_possible_post_redelivers_into_readback_only(
+    tmp_path: Path,
+) -> None:
+    source = envelope(9)
+    payload = source.model_dump_json().encode()
+    state = ProjectionState(tmp_path / "projection.sqlite3")
+    first_message = FakeMessage(payload)
+    first_dispatcher = CrashAfterTransmissionDispatcher()
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated crash after possible Odoo transmission",
+    ):
+        await handle_message(
+            first_message,
+            settings=SimpleNamespace(synthetic_only=True),
+            state=state,
+            dispatcher=first_dispatcher,
+        )
+
+    projected = project_envelope(source, synthetic_only=True)
+    assert state.register(projected) == "reconciliation_required"
+    assert first_dispatcher.submit_calls == 1
+    assert first_dispatcher.reconcile_calls == 0
+    assert first_message.acks == 0
+    assert first_message.terms == 0
+    assert first_message.naks == []
+
+    redelivery = FakeMessage(payload)
+    readback = SuccessfulReadBackDispatcher()
+    await handle_message(
+        redelivery,
+        settings=SimpleNamespace(synthetic_only=True),
+        state=state,
+        dispatcher=readback,
+    )
+
+    assert readback.submit_calls == 0
+    assert readback.reconcile_calls == 1
+    assert readback.reasons == ["durable prior write attempt"]
+    assert state.register(projected) == "delivered"
+    assert redelivery.acks == 1
+    assert redelivery.terms == 0
+    assert redelivery.naks == []

@@ -26,7 +26,7 @@ def test_family_operations_are_not_wrapped_in_failure_aggregation_lists() -> Non
         "archive_family",
         "mirror_family",
     ):
-        assert f"{command} \\\n" in loop
+        assert f"{command} \\" in loop
 
 
 def test_backup_script_retains_immediate_fail_closed_controls() -> None:

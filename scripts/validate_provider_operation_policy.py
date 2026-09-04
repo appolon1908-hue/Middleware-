@@ -45,7 +45,7 @@ EXPECTED_OPERATIONS = {
         True,
         "transactional_outbox",
         "sms",
-        "sms.message.send.v1",
+        "sms.message.submit.v1",
         "telnexa-sms",
         "SMS_DELIVERY",
     ),

@@ -44,7 +44,7 @@ CANARIES: dict[str, dict[str, str]] = {
     },
     "sms": {
         "target": "telnexa-sms",
-        "command_type": "sms.message.send.v1",
+        "command_type": "sms.message.submit.v1",
         "capability": "SMS_DELIVERY",
     },
     "voice": {

@@ -49,7 +49,7 @@
       "externalEffect": true,
       "durability": "transactional_outbox",
       "providerClass": "sms",
-      "commandType": "sms.message.send.v1",
+      "commandType": "sms.message.submit.v1",
       "target": "telnexa-sms",
       "capability": "SMS_DELIVERY"
     },

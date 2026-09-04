@@ -1053,6 +1053,43 @@ class ConnectorRepository:
             )
         return dict(row)
 
+    def webhook_body_reference_state(
+        self,
+        *,
+        tenant_id: UUID,
+        webhook_id: UUID,
+        event_id: str,
+        body_sha256: str,
+        encrypted_body_reference: str,
+    ) -> str:
+        """Classify a journaled body after an uncertain transaction outcome."""
+        with self.database.session(tenant_id) as session:
+            row = session.execute(
+                text(
+                    """
+                    SELECT body_sha256, encrypted_body_reference
+                      FROM connector_sdk.connector_webhook_inbox
+                     WHERE tenant_id=:tenant_id
+                       AND webhook_id=:webhook_id
+                       AND event_id=:event_id
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "webhook_id": webhook_id,
+                    "event_id": event_id,
+                },
+            ).mappings().one_or_none()
+        if row is None:
+            return "unreferenced"
+        if (
+            str(row["body_sha256"]) == body_sha256
+            and str(row["encrypted_body_reference"])
+            == encrypted_body_reference
+        ):
+            return "accepted"
+        return "rejected"
+
     def persist_verified_webhook(
         self,
         *,

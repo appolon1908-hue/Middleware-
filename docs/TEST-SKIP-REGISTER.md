@@ -1,7 +1,13 @@
 # Test skip register
 
-Baseline observed on `main` at `382683958feefce73458ee56a1589092bad632b3`:
-**158 passed, 23 skipped**.
+Baseline observed on `main` at `3f95d771667b2a5e29f9cbd589d8309f2201bdd7`:
+**503 passed, 45 skipped**.
+
+The counts are the unit-suite result reported by the `Validate middleware source
+head`, `Validate middleware merge result` and `docker-test-build` jobs of
+`Middleware CI`. Refresh this baseline and
+`config/test-skip-register.v1.json` in the same change whenever those counts
+move.
 
 The skipped tests are not accepted as unowned coverage gaps. They are
 infrastructure-gated tests executed by dedicated CI jobs with disposable

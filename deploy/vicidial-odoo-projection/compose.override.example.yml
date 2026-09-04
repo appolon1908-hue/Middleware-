@@ -1,0 +1,27 @@
+services:
+  vicidial-odoo-projection:
+    image: ${MIDDLEWARE_IMAGE:?pin an immutable middleware image@sha256 digest}
+    command: ["-m", "workers.run_vicidial_odoo_projection"]
+    restart: unless-stopped
+    read_only: true
+    user: "65532:65532"
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    env_file:
+      - ./vicidial-odoo-projection.env
+    volumes:
+      - vicidial_odoo_projection_state:/var/lib/codestra-middleware
+      - ${NATS_VICIDIAL_ODOO_CREDS_FILE:?host NATS credentials file}:/run/secrets/nats-vicidial-odoo.creds:ro
+      - ${ODOO_CALL_EVENT_HMAC_FILE:?host Odoo HMAC file}:/run/secrets/odoo-call-event-hmac:ro
+    networks:
+      - middleware_private
+
+volumes:
+  vicidial_odoo_projection_state:
+
+networks:
+  middleware_private:
+    external: true

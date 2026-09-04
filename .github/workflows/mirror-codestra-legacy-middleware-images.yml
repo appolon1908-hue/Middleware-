@@ -1,13 +1,6 @@
 name: Mirror Codestra-SRL Middleware Rollback Images
 
 on:
-  push:
-    branches:
-      - migration/middleware-authority-convergence-20260904
-    paths:
-      - .github/workflows/mirror-codestra-legacy-middleware-images.yml
-      - config/middleware-authority-convergence.v1.json
-      - scripts/validate_middleware_authority_convergence.py
   workflow_dispatch:
 
 permissions:
@@ -119,7 +112,7 @@ jobs:
 
           if [[ -z "$CODESTRA_GHCR_TOKEN" ]]; then
             cat "$RUNNER_TEMP/source-inspect.err" >&2
-            echo "::error::Codestra-SRL GHCR is not anonymously readable. Add CODESTRA_GHCR_TOKEN with read:packages permission and rerun." >&2
+            echo "::error::Codestra-SRL GHCR is private. Add repository secret CODESTRA_GHCR_TOKEN with read:packages permission, then rerun this workflow from the protected migration head." >&2
             exit 78
           fi
 

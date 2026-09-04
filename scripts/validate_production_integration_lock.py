@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 import sys
@@ -60,6 +61,27 @@ GLOBAL_GATES = [
     "monitoring_continuity",
     "bounded_read_only_canary",
 ]
+COMPONENT_DEFAULT_KEYS = {
+    "branch",
+    "source",
+    "protected",
+    "checks",
+    "reviewer",
+    "prs",
+    "deps",
+    "binding",
+    "state",
+    "blockers",
+}
+COMPONENT_REQUIRED_KEYS = {"id", "repo", "rid", "sha"}
+COMPONENT_ALLOWED_KEYS = COMPONENT_REQUIRED_KEYS | COMPONENT_DEFAULT_KEYS
+CERTIFICATION_FIELDS = {
+    "immutable_image_digest",
+    "staging_evidence",
+    "backup_restore_evidence",
+    "rollback_evidence",
+    "runtime_readback_evidence",
+}
 
 
 class LockError(RuntimeError):
@@ -80,50 +102,62 @@ def load_lock(path: Path = LOCK_PATH) -> dict[str, Any]:
     return value
 
 
-def validate_runtime(component: Mapping[str, Any]) -> None:
-    cid = str(component["component_id"])
-    runtime = component.get("runtime")
-    require(isinstance(runtime, Mapping), f"{cid}: runtime record missing")
-    require(runtime.get("binding_state") in BINDING_STATES, f"{cid}: invalid binding state")
-    certified = runtime.get("runtime_certified")
-    require(isinstance(certified, bool), f"{cid}: runtime_certified must be boolean")
-    evidence_fields = (
-        "staging_evidence",
-        "backup_restore_evidence",
-        "rollback_evidence",
-        "runtime_readback_evidence",
-    )
-    if certified:
-        digest = runtime.get("immutable_image_digest")
-        require(isinstance(digest, str) and DIGEST_RE.fullmatch(digest), f"{cid}: immutable digest required")
-        for field in evidence_fields:
-            value = runtime.get(field)
-            require(isinstance(value, str) and value.strip(), f"{cid}: {field} required")
-        require(
-            component.get("source_state") == "protected_source_ready",
-            f"{cid}: certified runtime requires protected source",
-        )
-        governance = component["governance"]
-        require(governance.get("branch_protected") is True, f"{cid}: protected branch required")
-        require(
-            governance.get("required_status_checks_state") == "active",
-            f"{cid}: active required checks required",
-        )
-    else:
-        require(runtime.get("immutable_image_digest") is None, f"{cid}: uncertified digest must be null")
-        for field in evidence_fields:
-            require(runtime.get(field) is None, f"{cid}: uncertified evidence must be null")
+def expand_component(raw: Mapping[str, Any], defaults: Mapping[str, Any]) -> dict[str, Any]:
+    require(set(raw).issubset(COMPONENT_ALLOWED_KEYS), "unknown component field")
+    require(COMPONENT_REQUIRED_KEYS.issubset(raw), "component identity fields missing")
+    row = copy.deepcopy(dict(defaults))
+    row.update(copy.deepcopy(dict(raw)))
+    return row
 
 
 def validate_candidate(component_id: str, candidate: Mapping[str, Any]) -> None:
-    number = candidate.get("pull_request")
-    require(isinstance(number, int) and number > 0, f"{component_id}: invalid PR number")
-    head = candidate.get("head_sha")
-    require(isinstance(head, str) and SHA_RE.fullmatch(head), f"{component_id}: invalid candidate SHA")
-    base = candidate.get("base_branch")
-    require(isinstance(base, str) and base, f"{component_id}: candidate base missing")
-    require(candidate.get("status") in CANDIDATE_STATES, f"{component_id}: invalid candidate status")
-    require(candidate.get("merge_method") in {"squash", "merge"}, f"{component_id}: invalid merge method")
+    require(
+        set(candidate) == {"n", "sha", "base", "status", "merge"},
+        f"{component_id}: candidate field drift",
+    )
+    require(
+        isinstance(candidate.get("n"), int) and candidate["n"] > 0,
+        f"{component_id}: invalid PR number",
+    )
+    require(
+        isinstance(candidate.get("sha"), str)
+        and SHA_RE.fullmatch(candidate["sha"]),
+        f"{component_id}: invalid candidate SHA",
+    )
+    require(
+        isinstance(candidate.get("base"), str) and candidate["base"],
+        f"{component_id}: candidate base missing",
+    )
+    require(
+        candidate.get("status") in CANDIDATE_STATES,
+        f"{component_id}: invalid candidate status",
+    )
+    require(
+        candidate.get("merge") in {"squash", "merge"},
+        f"{component_id}: invalid merge method",
+    )
+
+
+def validate_certification(
+    component: Mapping[str, Any],
+    certification: Mapping[str, Any],
+) -> None:
+    cid = str(component["id"])
+    require(set(certification) == CERTIFICATION_FIELDS, f"{cid}: certification field drift")
+    digest = certification.get("immutable_image_digest")
+    require(
+        isinstance(digest, str) and DIGEST_RE.fullmatch(digest),
+        f"{cid}: immutable digest required",
+    )
+    for field in CERTIFICATION_FIELDS - {"immutable_image_digest"}:
+        value = certification.get(field)
+        require(isinstance(value, str) and value.strip(), f"{cid}: {field} required")
+    require(
+        component["source"] == "protected_source_ready",
+        f"{cid}: certified runtime requires protected source",
+    )
+    require(component["protected"] is True, f"{cid}: protected branch required")
+    require(component["checks"] == "active", f"{cid}: active required checks required")
 
 
 def validate_lock(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -137,18 +171,33 @@ def validate_lock(value: Mapping[str, Any]) -> dict[str, Any]:
 
     authority = value.get("authority")
     require(isinstance(authority, Mapping), "authority missing")
-    require(authority.get("repository") == "appolon1908-hue/Middleware-", "authority repository drift")
+    require(
+        authority.get("repository") == "appolon1908-hue/Middleware-",
+        "authority repository drift",
+    )
     base_sha = authority.get("base_sha")
-    require(isinstance(base_sha, str) and SHA_RE.fullmatch(base_sha), "authority base SHA invalid")
+    require(
+        isinstance(base_sha, str) and SHA_RE.fullmatch(base_sha),
+        "authority base SHA invalid",
+    )
 
     policy = value.get("release_policy")
     require(isinstance(policy, Mapping), "release policy missing")
     require(policy.get("immutable_artifacts_only") is True, "immutable artifacts are required")
     require(policy.get("rebuild_between_environments") is False, "environment rebuilds are forbidden")
     percent = policy.get("max_read_only_canary_percent")
-    require(isinstance(percent, int) and 0 < percent <= 1, "read-only canary must be <=1 percent")
-    require(policy.get("read_only_canary_methods") == ["GET", "HEAD"], "read-only canary methods drift")
-    require(policy.get("required_global_gates") == GLOBAL_GATES, "global gate order or coverage drift")
+    require(
+        isinstance(percent, int) and 0 < percent <= 1,
+        "read-only canary must be <=1 percent",
+    )
+    require(
+        policy.get("read_only_canary_methods") == ["GET", "HEAD"],
+        "read-only canary methods drift",
+    )
+    require(
+        policy.get("required_global_gates") == GLOBAL_GATES,
+        "global gate order or coverage drift",
+    )
     require(policy.get("calls_placed") == 0, "CALLS_PLACED must remain zero")
     effects = policy.get("external_effects")
     require(isinstance(effects, Mapping) and effects, "external effects registry missing")
@@ -156,112 +205,121 @@ def validate_lock(value: Mapping[str, Any]) -> dict[str, Any]:
         require(isinstance(name, str) and name, "invalid external effect name")
         require(enabled is False, f"external effect must remain disabled: {name}")
 
-    components = value.get("components")
-    require(isinstance(components, list) and len(components) >= 20, "component coverage incomplete")
+    defaults = value.get("component_defaults")
+    require(isinstance(defaults, Mapping), "component defaults missing")
+    require(set(defaults) == COMPONENT_DEFAULT_KEYS, "component default field drift")
+    require(defaults.get("branch") == "main", "default branch drift")
+    require(defaults.get("source") in SOURCE_STATES, "default source state invalid")
+    require(defaults.get("protected") is False, "default protection must fail closed")
+    require(defaults.get("checks") in CHECK_STATES, "default checks invalid")
+    require(defaults.get("reviewer") in REVIEWER_STATES, "default reviewer invalid")
+    require(defaults.get("prs") == [], "default PR list must be empty")
+    require(defaults.get("deps") == [], "default dependencies must be empty")
+    require(defaults.get("binding") in BINDING_STATES, "default binding invalid")
+    require(defaults.get("state") == "BLOCKED", "default production state must be BLOCKED")
+    require(
+        isinstance(defaults.get("blockers"), list) and defaults["blockers"],
+        "default blockers missing",
+    )
+
+    components_raw = value.get("components")
+    require(
+        isinstance(components_raw, list) and len(components_raw) >= 20,
+        "component coverage incomplete",
+    )
     ids: set[str] = set()
     repositories: set[str] = set()
     repository_ids: set[int] = set()
-    normalized: list[dict[str, Any]] = []
-    for raw in components:
+    components: list[dict[str, Any]] = []
+    for raw in components_raw:
         require(isinstance(raw, Mapping), "component must be an object")
-        cid = raw.get("component_id")
+        row = expand_component(raw, defaults)
+        cid = row.get("id")
         require(isinstance(cid, str) and cid, "component ID missing")
         require(cid not in ids, f"duplicate component ID: {cid}")
         ids.add(cid)
 
-        repository = raw.get("repository")
+        repository = row.get("repo")
         require(
             isinstance(repository, str) and REPO_RE.fullmatch(repository),
             f"{cid}: invalid repository authority",
         )
         require(repository not in repositories, f"duplicate repository: {repository}")
         repositories.add(repository)
-
-        repository_id = raw.get("repository_id")
-        require(isinstance(repository_id, int) and repository_id > 0, f"{cid}: repository ID invalid")
+        repository_id = row.get("rid")
+        require(
+            isinstance(repository_id, int) and repository_id > 0,
+            f"{cid}: repository ID invalid",
+        )
         require(repository_id not in repository_ids, f"duplicate repository ID: {repository_id}")
         repository_ids.add(repository_id)
 
-        branch = raw.get("authority_branch")
-        require(isinstance(branch, str) and branch, f"{cid}: authority branch missing")
-        source_sha = raw.get("source_sha")
-        require(isinstance(source_sha, str) and SHA_RE.fullmatch(source_sha), f"{cid}: source SHA invalid")
-        require(raw.get("source_state") in SOURCE_STATES, f"{cid}: invalid source state")
-        require(raw.get("production_state") in PRODUCTION_STATES, f"{cid}: invalid production state")
-
-        role = raw.get("integration_role")
-        require(isinstance(role, str) and role.strip(), f"{cid}: integration role missing")
-        blockers = raw.get("blockers")
+        require(
+            isinstance(row.get("branch"), str) and row["branch"],
+            f"{cid}: authority branch missing",
+        )
+        require(
+            isinstance(row.get("sha"), str) and SHA_RE.fullmatch(row["sha"]),
+            f"{cid}: source SHA invalid",
+        )
+        require(row.get("source") in SOURCE_STATES, f"{cid}: invalid source state")
+        require(row.get("state") in PRODUCTION_STATES, f"{cid}: invalid production state")
+        require(isinstance(row.get("protected"), bool), f"{cid}: branch protection invalid")
+        require(row.get("checks") in CHECK_STATES, f"{cid}: required-check state invalid")
+        require(row.get("reviewer") in REVIEWER_STATES, f"{cid}: reviewer state invalid")
+        require(row.get("binding") in BINDING_STATES, f"{cid}: binding state invalid")
+        blockers = row.get("blockers")
         require(isinstance(blockers, list) and blockers, f"{cid}: blockers must be explicit")
         require(
-            all(isinstance(item, str) and item.strip() for item in blockers),
+            all(isinstance(item, str) and item for item in blockers),
             f"{cid}: invalid blocker",
         )
 
-        governance = raw.get("governance")
-        require(isinstance(governance, Mapping), f"{cid}: governance missing")
-        require(isinstance(governance.get("branch_protected"), bool), f"{cid}: branch protection invalid")
-        require(
-            governance.get("required_status_checks_state") in CHECK_STATES,
-            f"{cid}: required-check state invalid",
-        )
-        require(
-            governance.get("independent_reviewer_state") in REVIEWER_STATES,
-            f"{cid}: reviewer state invalid",
-        )
-        if raw.get("source_state") == "protected_source_ready":
-            require(governance.get("branch_protected") is True, f"{cid}: protected source claim invalid")
-            require(
-                governance.get("required_status_checks_state") == "active",
-                f"{cid}: protected source requires active checks",
-            )
-        if (
-            governance.get("branch_protected") is False
-            or governance.get("required_status_checks_state") != "active"
-        ):
-            require(
-                raw.get("production_state") == "BLOCKED",
-                f"{cid}: incomplete governance must remain blocked",
-            )
+        if row["source"] == "protected_source_ready":
+            require(row["protected"] is True, f"{cid}: protected source claim invalid")
+            require(row["checks"] == "active", f"{cid}: protected source requires active checks")
+        if row["protected"] is False or row["checks"] != "active":
+            require(row["state"] == "BLOCKED", f"{cid}: incomplete governance must remain blocked")
 
-        candidates = raw.get("candidates")
-        require(isinstance(candidates, list), f"{cid}: candidates must be a list")
-        for candidate in candidates:
+        prs = row.get("prs")
+        require(isinstance(prs, list), f"{cid}: candidates must be a list")
+        for candidate in prs:
             require(isinstance(candidate, Mapping), f"{cid}: candidate must be an object")
             validate_candidate(cid, candidate)
-        if raw.get("source_state") in {"candidate_pending_review", "candidate_needs_refresh"}:
-            require(bool(candidates), f"{cid}: candidate source state requires PR evidence")
+        if row["source"] in {"candidate_pending_review", "candidate_needs_refresh"}:
+            require(bool(prs), f"{cid}: candidate source state requires PR evidence")
 
-        dependencies = raw.get("depends_on")
-        require(isinstance(dependencies, list), f"{cid}: dependencies must be a list")
+        deps = row.get("deps")
+        require(isinstance(deps, list), f"{cid}: dependencies must be a list")
         require(
-            all(isinstance(item, str) and item for item in dependencies),
+            all(isinstance(item, str) and item for item in deps),
             f"{cid}: invalid dependency",
         )
+        components.append(row)
 
-        validate_runtime(raw)
-        if raw.get("production_state") == "SOURCE_READY":
-            require(raw["runtime"]["runtime_certified"] is False, f"{cid}: source-ready is not runtime-certified")
-        normalized.append(dict(raw))
+    for row in components:
+        for dependency in row["deps"]:
+            require(dependency in ids, f"{row['id']}: unknown dependency: {dependency}")
+            require(dependency != row["id"], f"{row['id']}: self-dependency forbidden")
 
-    for component in normalized:
-        cid = component["component_id"]
-        for dependency in component["depends_on"]:
-            require(dependency in ids, f"{cid}: unknown dependency: {dependency}")
-            require(dependency != cid, f"{cid}: self-dependency forbidden")
+    certifications = value.get("runtime_certifications")
+    require(isinstance(certifications, Mapping), "runtime certifications must be an object")
+    by_id = {row["id"]: row for row in components}
+    for cid, certification in certifications.items():
+        require(cid in by_id, f"unknown runtime certification: {cid}")
+        require(isinstance(certification, Mapping), f"{cid}: certification must be an object")
+        validate_certification(by_id[cid], certification)
 
     order = value.get("promotion_order")
     require(isinstance(order, list) and len(order) >= 10, "promotion order incomplete")
-    require(all(isinstance(step, str) and step.strip() for step in order), "invalid promotion step")
+    require(all(isinstance(step, str) and step for step in order), "invalid promotion step")
 
     return {
         "schema_version": "1.0",
         "result": "PASS",
         "decision": "NO_GO",
-        "component_count": len(normalized),
-        "runtime_certified_count": sum(
-            1 for row in normalized if row["runtime"]["runtime_certified"]
-        ),
+        "component_count": len(components),
+        "runtime_certified_count": len(certifications),
         "production_activated": False,
         "external_effects_enabled": [],
         "calls_placed": 0,

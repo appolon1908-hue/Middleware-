@@ -16,6 +16,7 @@ from .config import Settings
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
 from .storage import InboxStore, MemoryInboxStore, PostgresInboxStore
+from .vicidial_call_projection import wrap_postgres_inbox
 
 if TYPE_CHECKING:
     from .observability_incidents import IncidentService
@@ -112,8 +113,17 @@ async def build_runtime(settings: Settings) -> Runtime:
         )
     assert settings.database_url is not None
     assert settings.redis_url is not None
-    inbox = await PostgresInboxStore.connect(settings.database_url)
+    base_inbox = await PostgresInboxStore.connect(settings.database_url)
+    inbox, call_projector = wrap_postgres_inbox(
+        base_inbox,
+        enabled=settings.odoo_delivery_enabled,
+    )
     try:
+        # The repair scan is idempotent and runs only when the existing governed
+        # Odoo write gate is explicitly open. It closes the narrow crash window
+        # between durable webhook acceptance and projection insertion.
+        if settings.odoo_delivery_enabled:
+            await call_projector.repair_pending()
         commands = await PostgresCommandStore.connect(settings.database_url)
         try:
             replay = await RedisReplayGuard.connect(settings.redis_url)

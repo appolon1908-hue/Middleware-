@@ -9,10 +9,15 @@ import httpx
 from app.config import ConfigurationError, Settings
 from app.commands import ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
+from app.odoo_call_transport import (
+    OdooCallEventConfigurationError,
+    OdooCallEventDispatcher,
+)
 from app.odoo_transport import OdooCommandDispatcher
 from app.storage import NATS_JETSTREAM_DESTINATION, OutboxRecord, PostgresOutboxStore
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
+from app.vicidial_call_projection import ODOO_CALL_EVENT_DESTINATION
 from app.worker import OutboxWorker
 
 
@@ -83,8 +88,8 @@ async def main() -> None:
             )
             handlers[TEMPORAL_COMMAND_DESTINATION] = temporal_dispatcher.dispatch
         if odoo_enabled:
-            # Registered only when ODOO_WRITE is on, so the handler cannot be
-            # reached while the capability is closed.
+            # Registered only when the existing ODOO_WRITE and umbrella gates are
+            # both open. Source merge alone cannot dispatch an Odoo mutation.
             odoo_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(settings.odoo_timeout_seconds)
             )
@@ -95,6 +100,23 @@ async def main() -> None:
                 source_delivery_enabled=settings.odoo_source_delivery_enabled,
                 default_secret=settings.odoo_default_hmac_secret or None,
             ).dispatch
+            handlers[ODOO_CALL_EVENT_DESTINATION] = OdooCallEventDispatcher(
+                client=odoo_client,
+                base_url=settings.odoo_base_url or "",
+                secrets=dict(settings.odoo_tenant_hmac_secrets),
+                default_secret=settings.odoo_default_hmac_secret or None,
+            ).dispatch
+        else:
+            # Preserve any row created before a safety rollback. The generic
+            # worker quarantines exceptions from registered handlers, while a
+            # missing handler would consume retries and eventually dead-letter.
+            async def call_event_delivery_disabled(_record: OutboxRecord) -> None:
+                raise OdooCallEventConfigurationError(
+                    "Odoo call-event delivery is disabled by the governed write gate"
+                )
+
+            handlers[ODOO_CALL_EVENT_DESTINATION] = call_event_delivery_disabled
+
         worker = OutboxWorker(
             PostgresOutboxStore(pool),
             handlers,

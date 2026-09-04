@@ -9,8 +9,8 @@
   "lifecycleContract": {
     "repository": "appolon1908-hue/Keycloak",
     "path": "config/contracts/webhook-contracts.json",
-    "reviewBranch": "feat/vicidial-call-lifecycle-events-v1",
-    "reviewSha": "4f24cabbd97c5eb4f082dfa1f3390bdd295d09e8"
+    "protectedBranch": "main",
+    "mergeSha": "922d039b5143f3ac738e88998036355562a8dd5d"
   },
   "issuer": "https://auth.codestra.co/realms/codestra",
   "consumerClientId": "middleware-api",

@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE TABLE middleware_realtime_tickets (
+CREATE TABLE IF NOT EXISTS middleware_realtime_tickets (
     ticket_sha256 char(64) PRIMARY KEY,
     tenant_id text NOT NULL,
     campaign_id text NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE middleware_realtime_tickets (
     CHECK (tenant_id <> '' AND campaign_id <> '' AND agent_id <> '' AND role <> '')
 );
 
-CREATE TABLE middleware_realtime_events (
+CREATE TABLE IF NOT EXISTS middleware_realtime_events (
     sequence bigserial PRIMARY KEY,
     tenant_id text NOT NULL,
     campaign_id text NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE middleware_realtime_events (
     CHECK (event_type IN ('telephony.call-state.v1', 'telephony.screen-pop.v1'))
 );
 
-CREATE INDEX middleware_realtime_events_scope_sequence_idx
+CREATE INDEX IF NOT EXISTS middleware_realtime_events_scope_sequence_idx
     ON middleware_realtime_events (tenant_id, campaign_id, agent_id, sequence);
 
 INSERT INTO middleware_schema_migrations(version,name)

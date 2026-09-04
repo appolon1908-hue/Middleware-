@@ -1,0 +1,10 @@
+name: Automation v2 materialize candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  noop:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo MATERIALIZER_PROBE=PASS

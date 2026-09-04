@@ -3,6 +3,7 @@
 !.github/workflows/
 .github/workflows/*
 !.github/workflows/production-runtime-certification.yml
+!.github/workflows/integration-main-release-authorities.yml
 .env
 .env.*
 *.env

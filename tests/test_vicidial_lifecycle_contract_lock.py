@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "config" / "api-webhook-contracts.json"
-EXPECTED_REVIEW_SHA = "4f24cabbd97c5eb4f082dfa1f3390bdd295d09e8"
+EXPECTED_MERGE_SHA = "922d039b5143f3ac738e88998036355562a8dd5d"
 EXPECTED_LIFECYCLE_TYPES = (
     "codestra.vicidial.call.lifecycle.answered",
     "codestra.vicidial.call.lifecycle.completed",
@@ -32,14 +32,14 @@ EXPECTED_ROUTE_TYPES = tuple(
 )
 
 
-def test_lifecycle_contract_is_pinned_and_exact() -> None:
+def test_lifecycle_contract_is_pinned_to_protected_merge() -> None:
     value = json.loads(CONTRACT.read_text(encoding="utf-8"))
     lock = value["lifecycleContract"]
     assert lock == {
         "repository": "appolon1908-hue/Keycloak",
         "path": "config/contracts/webhook-contracts.json",
-        "reviewBranch": "feat/vicidial-call-lifecycle-events-v1",
-        "reviewSha": EXPECTED_REVIEW_SHA,
+        "protectedBranch": "main",
+        "mergeSha": EXPECTED_MERGE_SHA,
     }
     hook = next(
         item

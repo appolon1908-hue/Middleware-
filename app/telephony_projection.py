@@ -114,7 +114,9 @@ class VicidialLifecyclePayload(BaseModel):
     def identifiers_are_bounded_and_canonical(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized or not _SAFE_IDENTIFIER.fullmatch(normalized):
-            raise ValueError("telephony identifiers must use the canonical safe character set")
+            raise ValueError(
+                "telephony identifiers must use the canonical safe character set"
+            )
         return normalized
 
     @field_validator("caller_number", "destination_number")
@@ -127,7 +129,12 @@ class VicidialLifecyclePayload(BaseModel):
             raise ValueError("telephony phone numbers must be E.164")
         return normalized
 
-    @field_validator("hangup_cause", "transfer_destination", "recording_id", "recording_reference")
+    @field_validator(
+        "hangup_cause",
+        "transfer_destination",
+        "recording_id",
+        "recording_reference",
+    )
     @classmethod
     def optional_text_is_clean(cls, value: str | None) -> str | None:
         if value is None:
@@ -206,21 +213,33 @@ class OdooCallEvent(BaseModel):
 
 def build_odoo_call_event(event: EventEnvelope) -> dict[str, Any]:
     if event.source != "vicidial-adapter":
-        raise TelephonyProjectionError("telephony lifecycle source must be vicidial-adapter")
+        raise TelephonyProjectionError(
+            "telephony lifecycle source must be vicidial-adapter"
+        )
     target_type = MIDDLEWARE_TO_ODOO_EVENT.get(event.event_type)
     if target_type is None:
-        raise TelephonyProjectionError("event is not a projectable VICIdial lifecycle event")
+        raise TelephonyProjectionError(
+            "event is not a projectable VICIdial lifecycle event"
+        )
     try:
         source = VicidialLifecyclePayload.model_validate(event.payload)
     except ValidationError as exc:
-        raise TelephonyProjectionError("VICIdial lifecycle payload is invalid") from exc
+        raise TelephonyProjectionError(
+            "VICIdial lifecycle payload is invalid"
+        ) from exc
 
     if target_type == "call.recording_available" and not source.recording_id:
-        raise TelephonyProjectionError("recording availability requires recording_id")
+        raise TelephonyProjectionError(
+            "recording availability requires recording_id"
+        )
     if target_type == "call.transfer.completed" and not source.transfer_destination:
-        raise TelephonyProjectionError("completed transfer requires transfer_destination")
+        raise TelephonyProjectionError(
+            "completed transfer requires transfer_destination"
+        )
     if target_type == "call.transfer.completed" and not source.transfer_type:
-        raise TelephonyProjectionError("completed transfer requires transfer_type")
+        raise TelephonyProjectionError(
+            "completed transfer requires transfer_type"
+        )
 
     payload = source.model_dump(exclude_none=True)
     payload.update(
@@ -236,7 +255,9 @@ def build_odoo_call_event(event: EventEnvelope) -> dict[str, Any]:
     try:
         normalized = OdooCallEvent.model_validate(payload)
     except ValidationError as exc:
-        raise TelephonyProjectionError("normalized Odoo call event is invalid") from exc
+        raise TelephonyProjectionError(
+            "normalized Odoo call event is invalid"
+        ) from exc
     return normalized.model_dump(mode="json", exclude_none=True)
 
 
@@ -267,9 +288,13 @@ def _json_object(value: object) -> dict[str, Any]:
         try:
             value = json.loads(value)
         except ValueError as exc:
-            raise TelephonyProjectionError("persisted telephony payload is invalid JSON") from exc
+            raise TelephonyProjectionError(
+                "persisted telephony payload is invalid JSON"
+            ) from exc
     if not isinstance(value, dict):
-        raise TelephonyProjectionError("persisted telephony payload must be an object")
+        raise TelephonyProjectionError(
+            "persisted telephony payload must be an object"
+        )
     return dict(value)
 
 
@@ -282,6 +307,29 @@ class PostgresTelephonyProjectionStore:
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self.pool = pool
+
+    async def _reject(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        tenant_id: str,
+        event_id: str,
+        error: Exception,
+    ) -> None:
+        await conn.execute(
+            """
+            UPDATE middleware_inbox
+            SET status='rejected',
+                processed_at=now(),
+                reprocess_requested_at=NULL,
+                last_error=$3,
+                resource_version=resource_version+1
+            WHERE tenant_id=$1 AND event_id=$2
+            """,
+            tenant_id,
+            event_id,
+            _safe_error(error),
+        )
 
     async def project_once(self) -> bool:
         async with self.pool.acquire() as conn:
@@ -312,13 +360,21 @@ class PostgresTelephonyProjectionStore:
                     return False
 
                 try:
-                    envelope = EventEnvelope.model_validate(_json_object(row["payload"]))
+                    envelope = EventEnvelope.model_validate(
+                        _json_object(row["payload"])
+                    )
                     if envelope.event_id != row["event_id"]:
-                        raise TelephonyProjectionError("persisted event identity mismatch")
+                        raise TelephonyProjectionError(
+                            "persisted event identity mismatch"
+                        )
                     if envelope.tenant_id != row["tenant_id"]:
-                        raise TelephonyProjectionError("persisted tenant identity mismatch")
+                        raise TelephonyProjectionError(
+                            "persisted tenant identity mismatch"
+                        )
                     if envelope.event_type != row["event_type"]:
-                        raise TelephonyProjectionError("persisted event type mismatch")
+                        raise TelephonyProjectionError(
+                            "persisted event type mismatch"
+                        )
                     projection = build_odoo_call_event(envelope)
                     projection_json = json.dumps(
                         projection,
@@ -326,62 +382,78 @@ class PostgresTelephonyProjectionStore:
                         sort_keys=True,
                         separators=(",", ":"),
                     )
-                    idempotency_key = "odoo-call-event:" + envelope.event_id
-                    inserted = await conn.fetchrow(
+                except (
+                    TelephonyProjectionError,
+                    ValidationError,
+                    TypeError,
+                    ValueError,
+                ) as exc:
+                    await self._reject(
+                        conn,
+                        tenant_id=row["tenant_id"],
+                        event_id=row["event_id"],
+                        error=exc,
+                    )
+                    return True
+
+                idempotency_key = "odoo-call-event:" + envelope.event_id
+                inserted = await conn.fetchrow(
+                    """
+                    INSERT INTO middleware_outbox (
+                        tenant_id, destination, event_type, payload,
+                        idempotency_key
+                    ) VALUES ($1,$2,$3,$4::jsonb,$5)
+                    ON CONFLICT (tenant_id, destination, idempotency_key)
+                    DO NOTHING
+                    RETURNING id
+                    """,
+                    envelope.tenant_id,
+                    ODOO_CALL_EVENT_DESTINATION,
+                    ODOO_CALL_EVENT_OUTBOX_TYPE,
+                    projection_json,
+                    idempotency_key,
+                )
+                if inserted is None:
+                    existing = await conn.fetchrow(
                         """
-                        INSERT INTO middleware_outbox (
-                            tenant_id, destination, event_type, payload,
-                            idempotency_key
-                        ) VALUES ($1,$2,$3,$4::jsonb,$5)
-                        ON CONFLICT (tenant_id, destination, idempotency_key)
-                        DO NOTHING
-                        RETURNING id
+                        SELECT event_type, payload
+                        FROM middleware_outbox
+                        WHERE tenant_id=$1
+                          AND destination=$2
+                          AND idempotency_key=$3
                         """,
                         envelope.tenant_id,
                         ODOO_CALL_EVENT_DESTINATION,
-                        ODOO_CALL_EVENT_OUTBOX_TYPE,
-                        projection_json,
                         idempotency_key,
                     )
-                    if inserted is None:
-                        existing = await conn.fetchrow(
-                            """
-                            SELECT event_type, payload
-                            FROM middleware_outbox
-                            WHERE tenant_id=$1
-                              AND destination=$2
-                              AND idempotency_key=$3
-                            """,
-                            envelope.tenant_id,
-                            ODOO_CALL_EVENT_DESTINATION,
-                            idempotency_key,
+                    if existing is None:
+                        raise RuntimeError(
+                            "Odoo call-event outbox conflict disappeared"
                         )
-                        if existing is None:
-                            raise TelephonyProjectionError(
-                                "Odoo call-event outbox conflict could not be reconciled"
-                            )
-                        if (
-                            existing["event_type"] != ODOO_CALL_EVENT_OUTBOX_TYPE
-                            or _json_object(existing["payload"]) != projection
-                        ):
-                            raise TelephonyProjectionError(
+                    try:
+                        matching = (
+                            existing["event_type"]
+                            == ODOO_CALL_EVENT_OUTBOX_TYPE
+                            and _json_object(existing["payload"]) == projection
+                        )
+                    except TelephonyProjectionError as exc:
+                        await self._reject(
+                            conn,
+                            tenant_id=row["tenant_id"],
+                            event_id=row["event_id"],
+                            error=exc,
+                        )
+                        return True
+                    if not matching:
+                        await self._reject(
+                            conn,
+                            tenant_id=row["tenant_id"],
+                            event_id=row["event_id"],
+                            error=TelephonyProjectionError(
                                 "Odoo call-event idempotency conflict"
-                            )
-                except Exception as exc:
-                    await conn.execute(
-                        """
-                        UPDATE middleware_inbox
-                        SET status='rejected',
-                            processed_at=now(),
-                            last_error=$3,
-                            resource_version=resource_version+1
-                        WHERE tenant_id=$1 AND event_id=$2
-                        """,
-                        row["tenant_id"],
-                        row["event_id"],
-                        _safe_error(exc),
-                    )
-                    return True
+                            ),
+                        )
+                        return True
 
                 await conn.execute(
                     """
@@ -471,7 +543,8 @@ class TelephonyOutboxStore(PostgresOutboxStore):
                     await conn.execute(
                         """
                         INSERT INTO middleware_outbox_attempt_events(
-                            outbox_id, tenant_id, attempt_number, event_type, worker_id
+                            outbox_id, tenant_id, attempt_number,
+                            event_type, worker_id
                         ) VALUES($1,$2,$3,'claimed',$4)
                         """,
                         row["id"],
@@ -506,15 +579,18 @@ class OdooCallEventDispatcher:
             or not parsed.hostname
             or parsed.username is not None
             or parsed.password is not None
+            or parsed.path not in {"", "/"}
             or parsed.query
             or parsed.fragment
         ):
-            raise ValueError("Odoo call-event base URL must be an HTTPS origin")
+            raise ValueError(
+                "Odoo call-event base URL must be an HTTPS origin"
+            )
         self.base_url = self.base_url.rstrip("/")
 
     def _secret(self, tenant_id: str) -> bytes:
         # The current Odoo call-event receiver uses one deployment-managed
-        # secret.  A tenant override is accepted only when no default exists.
+        # secret. A tenant override is accepted only when no default exists.
         secret = self.default_secret or self.tenant_secrets.get(tenant_id, b"")
         if len(secret) < 32:
             raise TelephonyProjectionError(
@@ -549,21 +625,34 @@ class OdooCallEventDispatcher:
                 hashlib.sha256(b"").hexdigest(),
             )
         ).encode("utf-8")
-        return "sha256=" + hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+        return (
+            "sha256="
+            + hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+        )
 
     async def __call__(self, record: OutboxRecord) -> None:
         if record.destination != ODOO_CALL_EVENT_DESTINATION:
-            raise TelephonyProjectionError("outbox destination is not Odoo call events")
+            raise TelephonyProjectionError(
+                "outbox destination is not Odoo call events"
+            )
         if record.event_type != ODOO_CALL_EVENT_OUTBOX_TYPE:
-            raise TelephonyProjectionError("outbox type is not an Odoo call event")
+            raise TelephonyProjectionError(
+                "outbox type is not an Odoo call event"
+            )
         try:
             event = OdooCallEvent.model_validate(record.payload)
         except ValidationError as exc:
-            raise TelephonyProjectionError("outbox call-event payload is invalid") from exc
+            raise TelephonyProjectionError(
+                "outbox call-event payload is invalid"
+            ) from exc
         if event.tenant_id != record.tenant_id:
-            raise TelephonyProjectionError("outbox and call-event tenant mismatch")
+            raise TelephonyProjectionError(
+                "outbox and call-event tenant mismatch"
+            )
         if record.idempotency_key != "odoo-call-event:" + event.event_id:
-            raise TelephonyProjectionError("outbox call-event idempotency mismatch")
+            raise TelephonyProjectionError(
+                "outbox call-event idempotency mismatch"
+            )
 
         payload = event.model_dump(mode="json", exclude_none=True)
         body = json.dumps(
@@ -577,7 +666,9 @@ class OdooCallEventDispatcher:
         headers = {
             "Content-Type": "application/json",
             "X-Codestra-Timestamp": timestamp,
-            "X-Codestra-Signature": self._post_signature(secret, timestamp, body),
+            "X-Codestra-Signature": self._post_signature(
+                secret, timestamp, body
+            ),
             "X-Codestra-Event-ID": event.event_id,
             "X-Codestra-Tenant-ID": event.tenant_id,
             "X-Correlation-ID": event.correlation_id,
@@ -619,11 +710,17 @@ class OdooCallEventDispatcher:
                 "Odoo call-event response is not JSON"
             ) from exc
         if not isinstance(value, dict):
-            raise TelephonyProjectionError("Odoo call-event response must be an object")
+            raise TelephonyProjectionError(
+                "Odoo call-event response must be an object"
+            )
         if value.get("call_id") != event.call_id:
-            raise TelephonyProjectionError("Odoo call-event response identity mismatch")
+            raise TelephonyProjectionError(
+                "Odoo call-event response identity mismatch"
+            )
         if value.get("state") not in set(ODOO_EVENT_STATE.values()):
-            raise TelephonyProjectionError("Odoo call-event response state is invalid")
+            raise TelephonyProjectionError(
+                "Odoo call-event response state is invalid"
+            )
         if value.get("duplicate") not in {True, False}:
             raise TelephonyProjectionError(
                 "Odoo call-event response duplicate marker is missing"
@@ -653,7 +750,10 @@ class OdooCallEventDispatcher:
             "X-Correlation-ID": event.correlation_id,
         }
         try:
-            response = await self.client.get(self.base_url + path, headers=headers)
+            response = await self.client.get(
+                self.base_url + path,
+                headers=headers,
+            )
         except httpx.RequestError as exc:
             raise TelephonyProjectionError(
                 "Odoo call-event outcome remains unknown"
@@ -664,7 +764,8 @@ class OdooCallEventDispatcher:
             )
         if response.status_code != 200:
             raise TelephonyProjectionError(
-                f"Odoo call-event readback failed with HTTP {response.status_code}"
+                "Odoo call-event readback failed with HTTP "
+                f"{response.status_code}"
             )
         try:
             evidence = response.json()

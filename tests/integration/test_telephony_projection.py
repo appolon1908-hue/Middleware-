@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,7 +65,9 @@ def event(payload=None, event_id="evt-telephony-postgres-0001"):
 async def pool():
     assert DATABASE_URL
     value = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
-    migrations = sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    migrations = sorted(
+        Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql")
+    )
     async with value.acquire() as conn:
         for migration in migrations:
             await conn.execute(migration.read_text(encoding="utf-8"))
@@ -119,7 +122,8 @@ async def test_projection_is_atomic_idempotent_and_destination_filtered(pool):
         )
         rows = await conn.fetch(
             """
-            SELECT destination, event_type, idempotency_key, attempt_count, payload
+            SELECT destination, event_type, idempotency_key,
+                   attempt_count, payload
             FROM middleware_outbox
             WHERE tenant_id=$1
             ORDER BY destination
@@ -135,11 +139,19 @@ async def test_projection_is_atomic_idempotent_and_destination_filtered(pool):
         ODOO_CALL_EVENT_DESTINATION,
     }
     call_event = next(
-        row for row in rows if row["destination"] == ODOO_CALL_EVENT_DESTINATION
+        row
+        for row in rows
+        if row["destination"] == ODOO_CALL_EVENT_DESTINATION
     )
     assert call_event["event_type"] == ODOO_CALL_EVENT_OUTBOX_TYPE
-    assert call_event["idempotency_key"] == "odoo-call-event:" + envelope.event_id
-    assert call_event["payload"]["call_id"] == "call-postgres-0001"
+    assert (
+        call_event["idempotency_key"]
+        == "odoo-call-event:" + envelope.event_id
+    )
+    payload = call_event["payload"]
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    assert payload["call_id"] == "call-postgres-0001"
 
     outbox = TelephonyOutboxStore(pool)
     claimed = await outbox.claim(worker_id="telephony-worker-1")

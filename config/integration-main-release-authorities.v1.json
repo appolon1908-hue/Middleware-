@@ -88,6 +88,14 @@
         "deploy-readiness / deploy-readiness / secret-scan",
         "deploy-readiness / deploy-readiness / source-ci"
       ]
+    },
+    {
+      "repository": "appolon1908-hue/Websocket-",
+      "repository_id": 1357322123,
+      "default_branch": "main",
+      "required_status_checks": [
+        "exact-head-ci"
+      ]
     }
   ]
 }

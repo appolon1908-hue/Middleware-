@@ -32,6 +32,19 @@ EXPECTED_REPOSITORIES = {
         1329513537,
         ("deployment-policy", "validate"),
     ),
+    "appolon1908-hue/Breero.com": (1331354808, ("quality",)),
+    "appolon1908-hue/Moneybee-Backend": (
+        1343760409,
+        (
+            "verify",
+            "postgres-identity-tenancy",
+            "containers (api)",
+            "containers (worker)",
+            "containers (migrate)",
+            "application",
+            "deployment-policy",
+        ),
+    ),
 }
 
 

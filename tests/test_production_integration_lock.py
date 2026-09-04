@@ -37,46 +37,59 @@ class ProductionIntegrationLockTests(unittest.TestCase):
 
     def test_duplicate_repository_fails(self) -> None:
         broken = copy.deepcopy(self.lock)
-        broken["components"][1]["repository"] = broken["components"][0]["repository"]
+        broken["components"][1]["repo"] = broken["components"][0]["repo"]
         with self.assertRaises(MODULE.LockError):
             MODULE.validate_lock(broken)
 
     def test_candidate_state_without_pr_evidence_fails(self) -> None:
         broken = copy.deepcopy(self.lock)
         row = next(
-            item for item in broken["components"]
-            if item["source_state"] == "candidate_pending_review"
+            item
+            for item in broken["components"]
+            if item.get("source") == "candidate_pending_review"
         )
-        row["candidates"] = []
+        row["prs"] = []
         with self.assertRaises(MODULE.LockError):
             MODULE.validate_lock(broken)
 
     def test_false_runtime_certification_fails_without_digest_and_evidence(self) -> None:
         broken = copy.deepcopy(self.lock)
-        row = broken["components"][0]
-        row["runtime"]["runtime_certified"] = True
+        broken["runtime_certifications"]["middleware"] = {
+            "immutable_image_digest": None,
+            "staging_evidence": None,
+            "backup_restore_evidence": None,
+            "rollback_evidence": None,
+            "runtime_readback_evidence": None,
+        }
         with self.assertRaises(MODULE.LockError):
             MODULE.validate_lock(broken)
 
     def test_unprotected_component_cannot_be_source_ready(self) -> None:
         broken = copy.deepcopy(self.lock)
         row = next(
-            item for item in broken["components"]
-            if item["governance"]["branch_protected"] is False
+            item
+            for item in broken["components"]
+            if item.get("protected", False) is False
         )
-        row["production_state"] = "SOURCE_READY"
+        row["state"] = "SOURCE_READY"
         with self.assertRaises(MODULE.LockError):
             MODULE.validate_lock(broken)
 
     def test_invalid_source_sha_fails(self) -> None:
         broken = copy.deepcopy(self.lock)
-        broken["components"][0]["source_sha"] = "main"
+        broken["components"][0]["sha"] = "main"
         with self.assertRaises(MODULE.LockError):
             MODULE.validate_lock(broken)
 
     def test_calls_placed_must_remain_zero(self) -> None:
         broken = copy.deepcopy(self.lock)
         broken["release_policy"]["calls_placed"] = 1
+        with self.assertRaises(MODULE.LockError):
+            MODULE.validate_lock(broken)
+
+    def test_defaults_must_remain_fail_closed(self) -> None:
+        broken = copy.deepcopy(self.lock)
+        broken["component_defaults"]["state"] = "SOURCE_READY"
         with self.assertRaises(MODULE.LockError):
             MODULE.validate_lock(broken)
 

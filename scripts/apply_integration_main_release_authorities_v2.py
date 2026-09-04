@@ -55,6 +55,10 @@ EXPECTED_REPOSITORIES = {
             "deploy-readiness / deploy-readiness / source-ci",
         ),
     ),
+    "appolon1908-hue/Websocket-": (
+        1357322123,
+        ("exact-head-ci",),
+    ),
     "appolon1908-hue/klyrow.com": (
         1334863061,
         ("frontend", "test", "secrets", "image"),

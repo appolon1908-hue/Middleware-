@@ -7,15 +7,24 @@ CATALOG="${MIDDLEWARE_AUTHORITY_CATALOG:-${ROOT_DIR}/config/middleware-authority
 STATE_ROOT="${MIDDLEWARE_AUTHORITY_BACKUP_ROOT:-/var/lib/codestra-middleware/authority-backups}"
 REGISTRY_AUTH_FILE="${REGISTRY_AUTH_FILE:-/root/.config/containers/auth.json}"
 EXPECTED_HOST="65.109.65.169"
+EXPECTED_LOCAL_FAMILIES=11
 MODE="${1:-status}"
 RUN_STAMP="$(date -u +'%Y%m%dT%H%M%SZ')-$$"
 RUN_ROOT="${STATE_ROOT}/${RUN_STAMP}"
+ROWS_FILE=""
 
 fail() {
   printf 'MIDDLEWARE_LEGACY_BACKUP=FAIL\n' >&2
   printf 'FAILURE_REASON=%s\n' "$1" >&2
   exit 1
 }
+
+cleanup() {
+  if [[ -n "${ROWS_FILE:-}" ]]; then
+    rm -f -- "$ROWS_FILE"
+  fi
+}
+trap cleanup EXIT
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "missing_command_$1"
@@ -37,15 +46,18 @@ case "$MODE" in
   *) fail "usage_status_archive_mirror_or_all" ;;
 esac
 
-for command in python3 docker gzip sha256sum tar realpath stat ip hostname; do
+for command in python3 docker gzip sha256sum tar realpath stat ip hostname mktemp; do
   require_command "$command"
 done
 
-[[ -f "$CATALOG" && ! -L "$CATALOG" ]] || fail "catalog_missing_or_symlink"
-python3 "${ROOT_DIR}/scripts/validate_middleware_authority_convergence.py" "$CATALOG" >/dev/null ||
+[[ -f "$CATALOG" && ! -L "$CATALOG" ]] ||
+  fail "catalog_missing_or_symlink"
+python3 "${ROOT_DIR}/scripts/validate_middleware_authority_convergence.py" \
+  "$CATALOG" >/dev/null ||
   fail "catalog_validation_failed"
 
-catalog_host="$(python3 - "$CATALOG" <<'PY'
+catalog_host="$(
+  python3 - "$CATALOG" <<'PY'
 import json
 import sys
 
@@ -66,9 +78,12 @@ fi
 [[ "$STATE_ROOT" == /* && "$STATE_ROOT" != "/" && "$STATE_ROOT" != *"/../"* ]] ||
   fail "unsafe_state_root"
 install -d -m 0700 -o root -g root "$STATE_ROOT"
-[[ -d "$STATE_ROOT" && ! -L "$STATE_ROOT" ]] || fail "state_root_missing_or_symlink"
-[[ "$(realpath "$STATE_ROOT")" == "$STATE_ROOT" ]] || fail "state_root_not_canonical"
-[[ "$(stat -c '%u' "$STATE_ROOT")" -eq 0 ]] || fail "state_root_not_root_owned"
+[[ -d "$STATE_ROOT" && ! -L "$STATE_ROOT" ]] ||
+  fail "state_root_missing_or_symlink"
+[[ "$(realpath "$STATE_ROOT")" == "$STATE_ROOT" ]] ||
+  fail "state_root_not_canonical"
+[[ "$(stat -c '%u' "$STATE_ROOT")" -eq 0 ]] ||
+  fail "state_root_not_root_owned"
 if find "$STATE_ROOT" -maxdepth 0 -perm /077 -print -quit | grep -q .; then
   fail "state_root_permissions_too_broad"
 fi
@@ -78,12 +93,14 @@ docker info >/dev/null 2>&1 || fail "docker_daemon_unavailable"
 catalog_rows() {
   python3 - "$CATALOG" <<'PY'
 from __future__ import annotations
+
 import json
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as handle:
     value = json.load(handle)
 
+selected = 0
 for family in value["runtimeImageFamilies"]:
     backup = family["backup"]
     if backup["method"] != "server-a-archive-and-config-digest-mirror":
@@ -97,53 +114,52 @@ for family in value["runtimeImageFamilies"]:
     ]
     if any("\t" in str(field) or "\n" in str(field) for field in fields):
         raise SystemExit("catalog contains unsafe tab/newline data")
+    if not fields[4]:
+        raise SystemExit(f"catalog family {fields[0]} has no workloads")
     print("\t".join(fields))
+    selected += 1
+
+if selected != 11:
+    raise SystemExit(f"expected 11 local backup families, got {selected}")
 PY
 }
 
 verify_image_and_workloads() {
   local family_id="$1" expected_id="$2" runtime_reference="$3" workload_csv="$4"
-  local actual_image_id seen missing workload actual state
+  local actual_image_id workload actual state
+  local seen=0
   local -a workloads
 
-  actual_image_id="$(docker image inspect --format '{{.Id}}' "$expected_id" 2>/dev/null)" || {
-    printf 'family=%s status=MISSING_IMAGE expected=%s reference=%s\n' \
-      "$family_id" "$expected_id" "$runtime_reference" >&2
-    return 1
-  }
-  [[ "$actual_image_id" == "$expected_id" ]] || {
-    printf 'family=%s status=IMAGE_ID_MISMATCH expected=%s actual=%s\n' \
-      "$family_id" "$expected_id" "$actual_image_id" >&2
-    return 1
-  }
+  actual_image_id="$(
+    docker image inspect --format '{{.Id}}' "$expected_id" 2>/dev/null
+  )" || fail "MISSING_IMAGE_${family_id}"
+  [[ "$actual_image_id" == "$expected_id" ]] ||
+    fail "IMAGE_ID_MISMATCH_${family_id}"
 
-  seen=0
-  missing=0
   IFS=',' read -r -a workloads <<<"$workload_csv"
+  [[ "${#workloads[@]}" -gt 0 ]] ||
+    fail "MISSING_EXPECTED_WORKLOADS_${family_id}"
+
   for workload in "${workloads[@]}"; do
-    if ! docker container inspect "$workload" >/dev/null 2>&1; then
-      printf 'family=%s workload=%s status=NOT_PRESENT\n' \
-        "$family_id" "$workload" >&2
-      missing=$((missing + 1))
-      continue
-    fi
+    docker container inspect "$workload" >/dev/null 2>&1 ||
+      fail "MISSING_EXPECTED_WORKLOADS_${family_id}_${workload}"
+
+    actual="$(
+      docker container inspect --format '{{.Image}}' "$workload"
+    )"
+    state="$(
+      docker container inspect --format '{{.State.Status}}' "$workload"
+    )"
+    [[ "$actual" == "$expected_id" ]] ||
+      fail "RUNTIME_IMAGE_ID_MISMATCH_${family_id}_${workload}"
+
+    printf 'family=%s workload=%s status=MATCH state=%s image_id=%s reference=%s\n' \
+      "$family_id" "$workload" "$state" "$actual" "$runtime_reference"
     seen=$((seen + 1))
-    actual="$(docker container inspect --format '{{.Image}}' "$workload")"
-    state="$(docker container inspect --format '{{.State.Status}}' "$workload")"
-    if [[ "$actual" != "$expected_id" ]]; then
-      printf 'family=%s workload=%s status=RUNTIME_IMAGE_ID_MISMATCH expected=%s actual=%s\n' \
-        "$family_id" "$workload" "$expected_id" "$actual" >&2
-      return 1
-    fi
-    printf 'family=%s workload=%s status=MATCH state=%s image_id=%s\n' \
-      "$family_id" "$workload" "$state" "$actual"
   done
 
-  if [[ "$missing" -ne 0 || "$seen" -ne "${#workloads[@]}" ]]; then
-    printf 'family=%s status=MISSING_EXPECTED_WORKLOADS missing=%s observed=%s expected=%s\n' \
-      "$family_id" "$missing" "$seen" "${#workloads[@]}" >&2
-    return 1
-  fi
+  [[ "$seen" -eq "${#workloads[@]}" ]] ||
+    fail "MISSING_EXPECTED_WORKLOADS_${family_id}"
 
   printf 'family=%s image_status=MATCH observed_workloads=%s expected_workloads=%s\n' \
     "$family_id" "$seen" "${#workloads[@]}"
@@ -165,33 +181,42 @@ output, expected_id, workload_csv = sys.argv[1:]
 records: list[dict[str, object]] = []
 
 for name in workload_csv.split(","):
-    raw = subprocess.check_output(
-        ["docker", "container", "inspect", name],
-        text=True,
+    document = json.loads(
+        subprocess.check_output(
+            ["docker", "container", "inspect", name],
+            text=True,
+        )
     )
-    document = json.loads(raw)
     if not isinstance(document, list) or len(document) != 1:
         raise SystemExit(f"unexpected docker inspect result for {name}")
     container = document[0]
     image_id = container.get("Image")
     if image_id != expected_id:
         raise SystemExit(
-            f"container {name} image mismatch: expected {expected_id}, got {image_id!r}"
+            f"container {name} image mismatch: expected {expected_id}, "
+            f"got {image_id!r}"
         )
 
     config = container.get("Config") or {}
     state = container.get("State") or {}
     health = state.get("Health") or {}
     labels = config.get("Labels") or {}
-    mounts = []
-    for mount in container.get("Mounts") or []:
-        mounts.append(
-            {
-                "type": mount.get("Type"),
-                "destination": mount.get("Destination"),
-                "read_only": not bool(mount.get("RW")),
-            }
-        )
+    mounts = [
+        {
+            "type": mount.get("Type"),
+            "destination": mount.get("Destination"),
+            "read_only": not bool(mount.get("RW")),
+        }
+        for mount in container.get("Mounts") or []
+    ]
+
+    def digest_json(value: object) -> str:
+        encoded = json.dumps(
+            value,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
     records.append(
         {
@@ -199,27 +224,17 @@ for name in workload_csv.split(","):
             "image_id": image_id,
             "state": state.get("Status"),
             "health": health.get("Status"),
-            "entrypoint_sha256": "sha256:"
-            + hashlib.sha256(
-                json.dumps(
-                    config.get("Entrypoint") or [],
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ).encode("utf-8")
-            ).hexdigest(),
-            "command_sha256": "sha256:"
-            + hashlib.sha256(
-                json.dumps(
-                    config.get("Cmd") or [],
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ).encode("utf-8")
-            ).hexdigest(),
+            "entrypoint_sha256": digest_json(config.get("Entrypoint") or []),
+            "command_sha256": digest_json(config.get("Cmd") or []),
             "compose": {
                 "project": labels.get("com.docker.compose.project"),
                 "service": labels.get("com.docker.compose.service"),
-                "working_dir": labels.get("com.docker.compose.project.working_dir"),
-                "config_files": labels.get("com.docker.compose.project.config_files"),
+                "working_dir": labels.get(
+                    "com.docker.compose.project.working_dir"
+                ),
+                "config_files": labels.get(
+                    "com.docker.compose.project.config_files"
+                ),
             },
             "mounts": sorted(
                 mounts,
@@ -254,8 +269,8 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-import tarfile
 import sys
+import tarfile
 
 archive_path, expected_id, output_path = sys.argv[1:]
 expected_hex = expected_id.removeprefix("sha256:")
@@ -281,7 +296,9 @@ with tarfile.open(archive_path, mode="r:gz") as archive:
         raise SystemExit("docker save manifest is not a regular file")
     manifest = json.load(manifest_stream)
     if not isinstance(manifest, list) or len(manifest) != 1:
-        raise SystemExit("docker save archive must contain exactly one image manifest")
+        raise SystemExit(
+            "docker save archive must contain exactly one image manifest"
+        )
 
     record = manifest[0]
     config_name = record.get("Config")
@@ -300,28 +317,36 @@ with tarfile.open(archive_path, mode="r:gz") as archive:
     config_stream = archive.extractfile(config_member)
     if config_stream is None:
         raise SystemExit("docker save config object is not a regular file")
-    config_bytes = config_stream.read()
-    actual_config_digest = hashlib.sha256(config_bytes).hexdigest()
+    actual_config_digest = hashlib.sha256(config_stream.read()).hexdigest()
     if actual_config_digest != expected_hex:
         raise SystemExit(
             "docker save config digest mismatch: "
-            f"expected sha256:{expected_hex}, got sha256:{actual_config_digest}"
+            f"expected sha256:{expected_hex}, "
+            f"got sha256:{actual_config_digest}"
         )
 
     layer_records = []
     for layer_name in layers:
         if not isinstance(layer_name, str) or not layer_name:
-            raise SystemExit("docker save manifest contains an invalid layer name")
+            raise SystemExit(
+                "docker save manifest contains an invalid layer name"
+            )
         path = PurePosixPath(layer_name)
         if path.is_absolute() or ".." in path.parts:
             raise SystemExit(f"unsafe Docker layer member: {layer_name!r}")
         try:
             layer = archive.getmember(layer_name)
         except KeyError as exc:
-            raise SystemExit(f"docker save layer is missing: {layer_name}") from exc
+            raise SystemExit(
+                f"docker save layer is missing: {layer_name}"
+            ) from exc
         if not layer.isfile():
-            raise SystemExit(f"docker save layer is not a regular file: {layer_name}")
-        layer_records.append({"name": layer_name, "size": layer.size})
+            raise SystemExit(
+                f"docker save layer is not a regular file: {layer_name}"
+            )
+        layer_records.append(
+            {"name": layer_name, "size": layer.size}
+        )
 
 value = {
     "schema_version": 1,
@@ -357,7 +382,8 @@ archive_family() {
     >"${family_dir}/runtime-identity.txt"
 
   capture_workload_metadata \
-    "${family_dir}/workload-metadata.json" "$expected_id" "$workload_csv"
+    "${family_dir}/workload-metadata.json" \
+    "$expected_id" "$workload_csv"
 
   docker image inspect --format \
     '{"id":{{json .Id}},"repo_tags":{{json .RepoTags}},"repo_digests":{{json .RepoDigests}},"created":{{json .Created}},"os":{{json .Os}},"architecture":{{json .Architecture}}}' \
@@ -371,12 +397,15 @@ archive_family() {
 
   machine_id_digest="UNAVAILABLE"
   if [[ -f /etc/machine-id && ! -L /etc/machine-id ]]; then
-    machine_id_digest="sha256:$(sha256sum /etc/machine-id | awk '{print $1}')"
+    machine_id_digest="sha256:$(
+      sha256sum /etc/machine-id | awk '{print $1}'
+    )"
   fi
 
-  python3 - "${family_dir}/backup-evidence.json" "$family_id" "$expected_id" \
-    "$runtime_reference" "$destination_tag" "$archive" "$archive_digest" \
-    "$workload_csv" "$EXPECTED_HOST" "$(hostname)" "$machine_id_digest" <<'PY'
+  python3 - "${family_dir}/backup-evidence.json" \
+    "$family_id" "$expected_id" "$runtime_reference" "$destination_tag" \
+    "$archive" "$archive_digest" "$workload_csv" "$EXPECTED_HOST" \
+    "$(hostname)" "$machine_id_digest" <<'PY'
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -441,11 +470,13 @@ mirror_family() {
     fail "registry_auth_file_invalid_json"
 
   verify_image_and_workloads \
-    "$family_id" "$expected_id" "$runtime_reference" "$workload_csv" >/dev/null
+    "$family_id" "$expected_id" "$runtime_reference" "$workload_csv" \
+    >/dev/null
 
   (
     set -Eeuo pipefail
     local short temp_ref destination_digest evidence_dir
+
     short="${expected_id#sha256:}"
     short="${short:0:12}"
     temp_ref="localhost/codestra-middleware-legacy:${family_id}-${short}-$$"
@@ -477,8 +508,10 @@ mirror_family() {
     [[ "$destination_digest" =~ ^sha256:[0-9a-f]{64}$ ]] ||
       fail "destination_manifest_digest_invalid"
 
-    python3 - "${evidence_dir}/destination-manifest.json" "$expected_id" <<'PY'
+    python3 - "${evidence_dir}/destination-manifest.json" \
+      "$expected_id" <<'PY'
 from __future__ import annotations
+
 import json
 import sys
 
@@ -488,12 +521,14 @@ expected = sys.argv[2]
 actual = manifest.get("config", {}).get("digest")
 if actual != expected:
     raise SystemExit(
-        f"destination OCI config digest mismatch: expected {expected}, got {actual!r}"
+        "destination OCI config digest mismatch: "
+        f"expected {expected}, got {actual!r}"
     )
 PY
 
-    python3 - "${evidence_dir}/mirror-evidence.json" "$family_id" "$expected_id" \
-      "$runtime_reference" "$destination_tag" "$destination_digest" <<'PY'
+    python3 - "${evidence_dir}/mirror-evidence.json" \
+      "$family_id" "$expected_id" "$runtime_reference" \
+      "$destination_tag" "$destination_digest" <<'PY'
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -501,7 +536,14 @@ import json
 from pathlib import Path
 import sys
 
-output, family_id, image_id, source, destination, destination_digest = sys.argv[1:]
+(
+    output,
+    family_id,
+    image_id,
+    source,
+    destination,
+    destination_digest,
+) = sys.argv[1:]
 value = {
     "schema_version": 1,
     "mirrored_at": datetime.now(UTC).isoformat(),
@@ -529,8 +571,9 @@ PY
 }
 
 write_run_checksums() {
-  [[ -d "$RUN_ROOT" ]] || return 0
+  [[ -d "$RUN_ROOT" ]] || fail "evidence_root_missing"
   (
+    set -Eeuo pipefail
     cd "$RUN_ROOT"
     find . -type f ! -name SHA256SUMS -print0 |
       sort -z |
@@ -540,51 +583,50 @@ write_run_checksums() {
   )
 }
 
+ROWS_FILE="$(mktemp)"
+catalog_rows >"$ROWS_FILE" || fail "catalog_rows_failed"
+[[ "$(wc -l <"$ROWS_FILE")" -eq "$EXPECTED_LOCAL_FAMILIES" ]] ||
+  fail "local_image_family_count_mismatch"
+
 if [[ "$MODE" != "status" ]]; then
   install -d -m 0700 -o root -g root "$RUN_ROOT"
 fi
 
-failures=0
-while IFS=$'\t' read -r family_id expected_id runtime_reference destination_tag workload_csv; do
+processed=0
+while IFS=$'\t' read -r family_id expected_id runtime_reference \
+    destination_tag workload_csv; do
   case "$MODE" in
     status)
       verify_image_and_workloads \
-        "$family_id" "$expected_id" "$runtime_reference" "$workload_csv" ||
-        failures=$((failures + 1))
+        "$family_id" "$expected_id" "$runtime_reference" "$workload_csv"
       ;;
     archive)
       archive_family \
         "$family_id" "$expected_id" "$runtime_reference" \
-        "$destination_tag" "$workload_csv" ||
-        failures=$((failures + 1))
+        "$destination_tag" "$workload_csv"
       ;;
     mirror)
       mirror_family \
         "$family_id" "$expected_id" "$runtime_reference" \
-        "$destination_tag" "$workload_csv" ||
-        failures=$((failures + 1))
+        "$destination_tag" "$workload_csv"
       ;;
     all)
       archive_family \
         "$family_id" "$expected_id" "$runtime_reference" \
-        "$destination_tag" "$workload_csv" || {
-          failures=$((failures + 1))
-          continue
-        }
+        "$destination_tag" "$workload_csv"
       mirror_family \
         "$family_id" "$expected_id" "$runtime_reference" \
-        "$destination_tag" "$workload_csv" ||
-        failures=$((failures + 1))
+        "$destination_tag" "$workload_csv"
       ;;
   esac
-done < <(catalog_rows)
+  processed=$((processed + 1))
+done <"$ROWS_FILE"
+
+[[ "$processed" -eq "$EXPECTED_LOCAL_FAMILIES" ]] ||
+  fail "processed_image_family_count_mismatch"
 
 if [[ "$MODE" != "status" ]]; then
   write_run_checksums
-fi
-
-if [[ "$failures" -ne 0 ]]; then
-  fail "${failures}_image_families_failed"
 fi
 
 printf 'MIDDLEWARE_LEGACY_BACKUP=PASS\n'

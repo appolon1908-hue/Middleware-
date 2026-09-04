@@ -11,6 +11,11 @@ from .replay import ReplayBusy
 from .runtime import Runtime
 from .security import RequestValidationError, authorize_tenant, verify_signed_request
 from .storage import ReplayConflict, canonical_payload_sha256
+from .telephony_projection import (
+    TelephonyProjectionError,
+    VICIDIAL_LIFECYCLE_EVENT_TYPES,
+    build_odoo_call_event,
+)
 
 
 CANONICAL_ERROR_SCHEMA = {
@@ -106,6 +111,15 @@ async def accept_webhook(
         raise RequestValidationError("body idempotency_key does not match headers")
     if envelope.source != route.producer_client_id:
         raise RequestValidationError("body source does not match route producer")
+
+    if (
+        route.producer_client_id == "vicidial-adapter"
+        and envelope.event_type in VICIDIAL_LIFECYCLE_EVENT_TYPES
+    ):
+        try:
+            build_odoo_call_event(envelope)
+        except TelephonyProjectionError as exc:
+            raise RequestValidationError(str(exc)) from exc
 
     semantic_sha = semantic_digest(envelope)
     token: str | None = None

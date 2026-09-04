@@ -67,15 +67,25 @@ jobs:
           bash -n scripts/server-a-backup-legacy-middleware-images.sh
           git diff --check
 
-      - name: Replace bootstrap payload with reviewed source
+      - name: Commit reviewed non-workflow authority source
         shell: bash
         run: |
           set -Eeuo pipefail
-          rm -rf .authority-bootstrap
-          rm -f .github/workflows/bootstrap-middleware-authority.yml
+          # The Actions token deliberately lacks workflow-file write permission.
+          # The connected repository authority installs the separately reviewed
+          # mirror workflow after this source commit succeeds.
+          rm -f .github/workflows/mirror-codestra-legacy-middleware-images.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add \
+            MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml \
+            config/middleware-authority-convergence.v1.json \
+            docs/production/MIDDLEWARE-AUTHORITY-CONVERGENCE.md \
+            docs/production/RUNTIME-SOURCE-AUTHORITY.md \
+            scripts/run_ci.sh \
+            scripts/server-a-backup-legacy-middleware-images.sh \
+            scripts/validate_middleware_authority_convergence.py \
+            tests/test_middleware_authority_convergence.py
           git diff --cached --check
           git diff --cached --quiet && {
             echo "::error::Bootstrap produced no repository change" >&2

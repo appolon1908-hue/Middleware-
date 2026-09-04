@@ -1,10 +1,92 @@
 name: Automation v2 materialize candidate
+
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feat/automation-v2-runtime-integration-20260904
+
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: automation-v2-materialize-candidate
+  cancel-in-progress: false
+
 jobs:
-  noop:
+  materialize:
+    if: github.ref == 'refs/heads/feat/automation-v2-runtime-integration-20260904' && github.actor == 'appolon1908-hue'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
     steps:
-      - run: echo MATERIALIZER_PROBE=PASS
+      - name: Check out exact transport head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Verify, materialize, validate, and replace transport source
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_ARCHIVE_SHA256: 29d4cc1ff64390bf71befc014a8659d7ba6ae96835effc2b8fcc0bae040a555e
+          TARGET_BRANCH: feat/automation-v2-runtime-integration-20260904
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$GITHUB_REF" = "refs/heads/$TARGET_BRANCH"
+
+          payload=.codestra/automation-v2-payload
+          expected=(
+            part-000
+            part-001-00 part-001-01 part-001-02 part-001-03
+            part-001-04 part-001-06 part-001-08 part-001-10
+            part-001-12 part-001-14 part-001-16 part-001-18
+          )
+          mapfile -t observed < <(find "$payload" -maxdepth 1 -type f -printf '%f\n' | sort)
+          printf '%s\n' "${expected[@]}" | sort > /tmp/expected-parts
+          printf '%s\n' "${observed[@]}" > /tmp/observed-parts
+          diff -u /tmp/expected-parts /tmp/observed-parts
+
+          : > /tmp/automation-v2-candidate.b64
+          for part in "${expected[@]}"; do
+            cat "$payload/$part" >> /tmp/automation-v2-candidate.b64
+          done
+          base64 --decode /tmp/automation-v2-candidate.b64 > /tmp/automation-v2-candidate.tar.gz
+          printf '%s  %s\n' "$EXPECTED_ARCHIVE_SHA256" /tmp/automation-v2-candidate.tar.gz | sha256sum --check --strict
+          gzip --test /tmp/automation-v2-candidate.tar.gz
+          if tar -tzf /tmp/automation-v2-candidate.tar.gz | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+            echo 'unsafe archive path' >&2
+            exit 1
+          fi
+
+          tar -xzf /tmp/automation-v2-candidate.tar.gz --no-same-owner --no-same-permissions
+          rm -rf "$payload" .github/workflows/automation-v2-materialize.yml
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+
+          python3 -m compileall -q app scripts tests
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          required = [
+              Path('config/automation-workflow-routing.v1.json'),
+              Path('config/automation-conformance-waivers.v1.json'),
+              Path('contracts/automation/command-envelope-authority.v1.json'),
+              Path('contracts/automation/n8n-control-plane.v2.json'),
+          ]
+          for path in required:
+              json.loads(path.read_text(encoding='utf-8'))
+          assert Path('app/automation_v2.py').stat().st_size > 100_000
+          assert Path('migrations/automation/0001_automation_v2.sql').stat().st_size > 8_000
+          print('AUTOMATION_V2_ARCHIVE_VALIDATION=PASS')
+          PY
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(automation): implement durable v2 control plane'
+          git push origin "HEAD:$TARGET_BRANCH"

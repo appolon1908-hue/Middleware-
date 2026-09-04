@@ -194,7 +194,7 @@ jobs:
               raise SystemExit("release digest mismatch")
           if not re.fullmatch(r"[0-9a-f]{12}-[0-9a-f]{12}", release_id):
               raise SystemExit("release id invalid")
-          if value.get("runtime", {}).get("schema_or_migration_head") != "0009_observability_incidents":
+          if value.get("runtime", {}).get("schema_or_migration_head") != "0010_realtime_gateway":
               raise SystemExit("release schema head mismatch")
           if value.get("runtime", {}).get("external_effects_default") != "disabled":
               raise SystemExit("release effect default mismatch")

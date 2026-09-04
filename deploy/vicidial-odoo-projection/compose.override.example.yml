@@ -1,12 +1,9 @@
 services:
   vicidial-odoo-projection-state-init:
     image: ${MIDDLEWARE_IMAGE:?pin an immutable middleware image@sha256 digest}
-    entrypoint: ["/bin/sh", "-ec"]
-    command:
-      - |
-        chown 65532:65532 /state
-        chmod 0700 /state
-        test "$(stat -c '%u:%g:%a' /state)" = "65532:65532:700"
+    command: ["-m", "workers.init_vicidial_odoo_projection_state"]
+    environment:
+      VICIDIAL_ODOO_STATE_DIRECTORY: /state
     restart: "no"
     read_only: true
     user: "0:0"
@@ -14,6 +11,8 @@ services:
     cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      disable: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m
     volumes:
@@ -39,7 +38,7 @@ services:
       - ./vicidial-odoo-projection.env
     volumes:
       - vicidial_odoo_projection_state:/var/lib/codestra-middleware
-      - ${NATS_VICIDIAL_ODOO_CREDS_FILE:?host NATS credentials file}:/run/secrets/nats-vicidial-odoo.creds:ro
+      - ${NATS_VICIDIAL_ODOO_CREDS_FILE:?host NATS credentials file}:/run/secrets/middleware-staging-vicidial-odoo-nats.creds:ro
       - ${ODOO_CALL_EVENT_HMAC_FILE:?host Odoo HMAC file}:/run/secrets/odoo-call-event-hmac:ro
     networks:
       - middleware_private

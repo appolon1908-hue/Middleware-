@@ -197,7 +197,10 @@ async def test_dispatcher_posts_signed_event_and_validates_response():
         assert request.headers["X-Codestra-Signature"] == (
             OdooCallEventDispatcher._post_signature(SECRET, timestamp, body)
         )
-        assert request.headers["X-Codestra-Event-ID"] == projection["event_id"]
+        assert (
+            request.headers["X-Codestra-Event-ID"]
+            == projection["event_id"]
+        )
         return httpx.Response(
             202,
             json={
@@ -208,7 +211,8 @@ async def test_dispatcher_posts_signed_event_and_validates_response():
             },
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
         dispatcher = OdooCallEventDispatcher(
             client=client,
             base_url="https://odoo.example.test",
@@ -229,7 +233,10 @@ async def test_dispatcher_reconciles_ambiguous_post_with_exact_readback():
         methods.append(request.method)
         if request.method == "POST":
             return httpx.Response(503, json={"error": "ambiguous"})
-        assert request.url.path == ODOO_CALL_EVENT_PATH + "/" + projection["event_id"]
+        assert (
+            request.url.path
+            == ODOO_CALL_EVENT_PATH + "/" + projection["event_id"]
+        )
         timestamp = request.headers["X-Codestra-Timestamp"]
         expected = OdooCallEventDispatcher._readback_signature(
             SECRET,
@@ -255,7 +262,8 @@ async def test_dispatcher_reconciles_ambiguous_post_with_exact_readback():
             },
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
         dispatcher = OdooCallEventDispatcher(
             client=client,
             base_url="https://odoo.example.test",
@@ -274,7 +282,8 @@ async def test_dispatcher_retries_only_when_readback_proves_absence():
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503 if request.method == "POST" else 404)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
         dispatcher = OdooCallEventDispatcher(
             client=client,
             base_url="https://odoo.example.test",
@@ -305,7 +314,8 @@ async def test_dispatcher_refuses_mismatched_readback():
             },
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
         dispatcher = OdooCallEventDispatcher(
             client=client,
             base_url="https://odoo.example.test",
@@ -316,18 +326,31 @@ async def test_dispatcher_refuses_mismatched_readback():
             await dispatcher(outbox_record(projection))
 
 
-def test_dispatcher_requires_https_origin():
-    with pytest.raises(ValueError):
-        OdooCallEventDispatcher(
-            client=httpx.AsyncClient(),
-            base_url="http://odoo.example.test",
-            default_secret=SECRET,
-            tenant_secrets={},
-        )
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "base_url",
+    (
+        "http://odoo.example.test",
+        "https://user@odoo.example.test",
+        "https://odoo.example.test/base",
+        "https://odoo.example.test?redirect=true",
+    ),
+)
+async def test_dispatcher_requires_clean_https_origin(base_url):
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(ValueError):
+            OdooCallEventDispatcher(
+                client=client,
+                base_url=base_url,
+                default_secret=SECRET,
+                tenant_secrets={},
+            )
 
 
 def test_projection_timestamp_is_timezone_aware():
     projection = build_odoo_call_event(lifecycle_event())
-    parsed = datetime.fromisoformat(projection["timestamp"].replace("Z", "+00:00"))
+    parsed = datetime.fromisoformat(
+        projection["timestamp"].replace("Z", "+00:00")
+    )
     assert parsed.tzinfo is not None
     assert parsed.astimezone(timezone.utc).year == 2026

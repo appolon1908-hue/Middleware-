@@ -8,6 +8,7 @@ import copy
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / ".codestra/calling-contract.lock.json"
@@ -21,13 +22,27 @@ EXPECTED = {
 }
 
 
+def reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous JSON objects instead of silently keeping the last key."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field: {key}")
+        result[key] = value
+    return result
+
+
+def parse_document(text: str) -> object:
+    return json.loads(text, object_pairs_hook=reject_duplicate_pairs)
+
+
 def validate(document: object) -> None:
     if not isinstance(document, dict):
         raise ValueError("calling contract lock must be a JSON object")
     if set(document) != set(EXPECTED):
         raise ValueError("calling contract lock fields do not match the canonical schema")
     for field in ("schema_version", "version", "sha256", "authority", "role"):
-        if not isinstance(document.get(field), str) or document[field] != EXPECTED[field]:
+        if type(document.get(field)) is not str or document[field] != EXPECTED[field]:
             raise ValueError(f"calling contract {field} does not match authority")
     if not re.fullmatch(r"[0-9a-f]{64}", document["sha256"]):
         raise ValueError("calling contract digest is malformed")
@@ -38,7 +53,7 @@ def validate(document: object) -> None:
 
 
 def load() -> object:
-    return json.loads(LOCK.read_text(encoding="utf-8"))
+    return parse_document(LOCK.read_text(encoding="utf-8"))
 
 
 def self_test() -> None:
@@ -63,6 +78,18 @@ def self_test() -> None:
         except ValueError:
             continue
         raise AssertionError(f"negative calling-contract fixture {number} was accepted")
+
+    duplicate_json = [
+        '{"authority":"wrong","authority":"appolon1908-hue/codestra-production-platform#257"}',
+        '{"role":"wrong_role","role":"command_boundary"}',
+        '{"external_effects_enabled":true,"external_effects_enabled":false}',
+    ]
+    for number, text in enumerate(duplicate_json, 1):
+        try:
+            parse_document(text)
+        except ValueError:
+            continue
+        raise AssertionError(f"duplicate-key JSON fixture {number} was accepted")
 
 
 def main() -> int:

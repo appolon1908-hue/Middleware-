@@ -14,6 +14,7 @@ from .commands import (
 from .communications import CommunicationsService, MemoryCommunicationsStore, PostgresCommunicationsStore
 from .config import Settings
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
+from .realtime import MemoryRealtimeStore, PostgresRealtimeStore, RealtimeStore
 from .security import KeycloakJwtVerifier, TokenVerifier
 from .storage import InboxStore, MemoryInboxStore, PostgresInboxStore
 
@@ -42,6 +43,7 @@ class Runtime:
     commands: CommandService | None = None
     communications: CommunicationsService | None = None
     incidents: IncidentService | None = None
+    realtime: RealtimeStore | None = None
 
     async def readiness(self) -> ReadinessReport:
         checks: dict[str, Awaitable[bool] | None] = {
@@ -59,6 +61,8 @@ class Runtime:
         checks["incident_store"] = (
             self.incidents.store.ready() if self.incidents is not None else None
         )
+        if self.realtime is not None:
+            checks["realtime_store"] = self.realtime.ready()
 
         async def bounded(check: Awaitable[bool] | None) -> str:
             if check is None:
@@ -89,6 +93,8 @@ class Runtime:
             await self.commands.store.close()
         if self.incidents is not None:
             await self.incidents.store.close()
+        if self.realtime is not None:
+            await self.realtime.close()
 
 
 async def build_runtime(settings: Settings) -> Runtime:
@@ -109,6 +115,7 @@ async def build_runtime(settings: Settings) -> Runtime:
                 commands=commands,
                 umbrella_controls=settings.umbrella_controls,
             ),
+            realtime=MemoryRealtimeStore(),
         )
     assert settings.database_url is not None
     assert settings.redis_url is not None
@@ -123,6 +130,13 @@ async def build_runtime(settings: Settings) -> Runtime:
     except Exception:
         await inbox.close()
         raise
+    try:
+        realtime = await PostgresRealtimeStore.connect(settings.database_url)
+    except Exception:
+        await replay.close()
+        await commands.close()
+        await inbox.close()
+        raise
     runtime = Runtime(
         settings=settings,
         inbox=inbox,
@@ -132,12 +146,17 @@ async def build_runtime(settings: Settings) -> Runtime:
             store=commands,
             policies=CommandPolicyRegistry.load(),
         ),
+        realtime=realtime,
     )
-    runtime.communications = CommunicationsService(
-        store=await PostgresCommunicationsStore.connect(settings.database_url),
-        commands=runtime.commands,
-        umbrella_controls=settings.umbrella_controls,
-    )
+    try:
+        runtime.communications = CommunicationsService(
+            store=await PostgresCommunicationsStore.connect(settings.database_url),
+            commands=runtime.commands,
+            umbrella_controls=settings.umbrella_controls,
+        )
+    except Exception:
+        await runtime.close()
+        raise
     if not await runtime.ready():
         await runtime.close()
         raise RuntimeError("mandatory runtime readiness checks failed during startup")

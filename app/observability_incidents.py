@@ -2625,7 +2625,8 @@ class PostgresIncidentStore:
                 row["tgname"] for row in triggers if row["enabled"] == "O"
             }
             return (
-                head == 9
+                head is not None
+                and head >= 9
                 and found_tables == self.REQUIRED_TABLES
                 and all(
                     required <= found_columns[table]

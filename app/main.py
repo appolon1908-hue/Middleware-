@@ -9,8 +9,8 @@ from uuid import UUID
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
-from fastapi.responses import JSONResponse, Response
-from pydantic import AwareDatetime, ValidationError
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
@@ -51,6 +51,7 @@ from .operations_dashboard import router as operations_dashboard_router
 from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
+from .realtime import MemoryRealtimeStore, stream_events
 from .security import SecurityError
 from .service import (
     CANONICAL_ERROR_SCHEMA,
@@ -62,6 +63,10 @@ from .service import (
 )
 from .storage import ReplayConflict, StorageError
 from .survey_routes import register_survey_routes
+
+
+class TicketConsumeRequest(BaseModel):
+    ticket: str = Field(min_length=32, max_length=512)
 
 
 
@@ -161,6 +166,57 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+
+    def realtime_store(request: Request):
+        active = request.app.state.runtime
+        if active.realtime is None:
+            if not active.settings.allow_in_memory_storage:
+                raise StorageError("realtime store is unavailable")
+            active.realtime = MemoryRealtimeStore()
+        return active.realtime
+
+    async def authorize_realtime(request: Request, scope: str) -> dict[str, object]:
+        return await request.app.state.runtime.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id="websocket-gateway",
+            required_scope=scope,
+        )
+
+    @app.post("/internal/v1/realtime/tickets/consume", include_in_schema=False)
+    async def consume_realtime_ticket(body: TicketConsumeRequest, request: Request) -> JSONResponse:
+        from .security import AuthenticationError
+
+        await authorize_realtime(request, "realtime.ticket.consume")
+        principal = await realtime_store(request).consume_ticket(body.ticket, datetime.now(UTC))
+        if principal is None:
+            raise AuthenticationError("ticket is invalid, expired, or already consumed")
+        return JSONResponse(content={
+            "active": True,
+            "tenant_id": principal.tenant_id,
+            "campaign_id": principal.campaign_id,
+            "agent_id": principal.agent_id,
+            "role": principal.role,
+            "expires_at": principal.expires_at.astimezone(UTC).isoformat(),
+        }, headers={"Cache-Control": "no-store"})
+
+    @app.get("/internal/v1/realtime/events/stream", include_in_schema=False)
+    async def realtime_event_stream(request: Request, tenant_id: str, campaign_id: str,
+                                    agent_id: str, after: int = Query(0, ge=0)) -> StreamingResponse:
+        from .security import AuthorizationError, authorize_tenant
+
+        claims = await authorize_realtime(request, "realtime.events.read")
+        authorize_tenant(claims, tenant_id)
+        for claim, requested in (("campaign_id", campaign_id), ("agent_id", agent_id)):
+            allowed = claims.get(claim)
+            if not isinstance(allowed, str) or allowed != requested or allowed == "*":
+                raise AuthorizationError(f"token is not authorized for requested {claim}")
+        return StreamingResponse(
+            stream_events(realtime_store(request), tenant_id=tenant_id,
+                          campaign_id=campaign_id, agent_id=agent_id, after=after,
+                          disconnected=request.is_disconnected),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):

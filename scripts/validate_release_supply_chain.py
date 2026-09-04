@@ -166,7 +166,7 @@ def main() -> int:
         "only-fixed: true": "actionable vulnerability gate",
         "cosign sign --yes": "image signature",
         '--annotations "codestra.source_sha=$RELEASE_SOURCE_SHA"': "source annotation",
-        '--annotations "codestra.schema_head=0009_observability_incidents"': "schema annotation",
+        '--annotations "codestra.schema_head=0010_realtime_gateway"': "schema annotation",
         "cosign attest --yes": "SBOM attestation",
         "cosign sign-blob --yes": "manifest signature",
         "cosign verify-attestation": "SBOM attestation verification",

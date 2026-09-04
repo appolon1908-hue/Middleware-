@@ -11,13 +11,16 @@ from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[1]
 ContractName = Literal["event", "command"]
-SpecializedContractName = Literal["telnexa_sms_command"]
+SpecializedContractName = Literal["telnexa_sms_command", "postly_social_command"]
 CONTRACT_PATHS: dict[ContractName, Path] = {
     "event": ROOT / "contracts" / "platform" / "event-envelope.v1.schema.json",
     "command": ROOT / "contracts" / "platform" / "command-envelope.v1.schema.json",
 }
 SPECIALIZED_CONTRACT_PATHS: dict[SpecializedContractName, Path] = {
     "telnexa_sms_command": ROOT / "contracts" / "telnexa-sms-command.v1.schema.json",
+    "postly_social_command": ROOT
+    / "contracts"
+    / "postly-social-command.v1.schema.json",
 }
 
 

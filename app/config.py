@@ -53,6 +53,7 @@ SUPPORTED_EXTERNAL_EFFECTS = frozenset(
         "SCRAPPER_ODOO_DELIVERY_ENABLED",
         "SMS_DELIVERY_ENABLED",
         "EMAIL_DELIVERY_ENABLED",
+        "SOCIAL_DELIVERY_ENABLED",
     }
 )
 
@@ -432,6 +433,14 @@ class Settings:
                 + ", ".join(enabled_delivery_effects)
             )
         self._validate_odoo_transport(enabled)
+        if (
+            "SOCIAL_DELIVERY_ENABLED" in enabled
+            and self.umbrella_controls["SOCIAL_PUBLISHING_ENABLED"] is not True
+        ):
+            raise ConfigurationError(
+                "SOCIAL_PUBLISHING_ENABLED must be true before enabling: "
+                "SOCIAL_DELIVERY_ENABLED"
+            )
         if self.production_dialing != "DISABLED":
             raise ConfigurationError(
                 "PRODUCTION_DIALING must remain DISABLED"
@@ -655,6 +664,18 @@ class Settings:
             raise ConfigurationError(
                 "Odoo signing secrets must be at least 32 bytes"
             )
+
+    @property
+    def social_publishing_enabled(self) -> bool:
+        """True only when the effect gate and its own umbrella switch are on.
+
+        Social publishing hangs off SOCIAL_PUBLISHING_ENABLED, not the
+        EXTERNAL_DELIVERY_ENABLED umbrella that guards the messaging effects.
+        """
+        return bool(
+            self.external_effects.get("SOCIAL_DELIVERY_ENABLED")
+            and self.umbrella_controls.get("SOCIAL_PUBLISHING_ENABLED")
+        )
 
     @property
     def email_delivery_enabled(self) -> bool:

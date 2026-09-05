@@ -273,11 +273,12 @@ class CommandLedgerWorkflowActivities:
             row = await conn.fetchrow(
                 """
                 UPDATE middleware_command_attempts
-                SET state='provider_dispatch_claimed'
+                SET result_payload='{"dispatch_claimed":true}'::jsonb
                 WHERE id=(SELECT id FROM middleware_command_attempts
                           WHERE tenant_id=$1 AND command_id=$2
                           ORDER BY attempt_number DESC LIMIT 1)
                   AND state='dispatching'
+                  AND result_payload IS NULL
                 RETURNING id
                 """,
                 request.tenant_id, request.command_id,

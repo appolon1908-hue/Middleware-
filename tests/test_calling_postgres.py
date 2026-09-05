@@ -134,11 +134,13 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         await second.execute_command(request)
         self.assertEqual(adapter.executions, 1)
         self.assertEqual(adapter.readbacks, 1)
-        state = await self.pool.fetchval(
-            "SELECT state FROM middleware_command_attempts WHERE tenant_id=$1 AND command_id=$2",
+        state, result_payload = await self.pool.fetchrow(
+            "SELECT state,result_payload FROM middleware_command_attempts WHERE tenant_id=$1 AND command_id=$2",
             operation.tenant_id, str(operation.command_id),
         )
-        self.assertEqual(state, "provider_dispatch_claimed")
+        self.assertEqual(state, "dispatching")
+        value = result_payload if isinstance(result_payload, dict) else __import__("json").loads(result_payload)
+        self.assertEqual(value, {"dispatch_claimed": True})
 
 
 if __name__ == "__main__":

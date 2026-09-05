@@ -64,36 +64,36 @@ jobs:
                   )
               target.write_text(text.replace(old, new), encoding="utf-8")
 
-          replace_once(
-              "app/runtime.py",
-              '''        checks["automation_store"] = (
-              self.automation.ready() if self.automation is not None else None
+          runtime_old = (
+              '        checks["automation_store"] = (\n'
+              '            self.automation.ready() if self.automation is not None else None\n'
+              '        )\n'
           )
-          ''',
-              '''        if self.automation is not None:
-              checks["automation_store"] = self.automation.ready()
-          ''',
+          runtime_new = (
+              '        if self.automation is not None:\n'
+              '            checks["automation_store"] = self.automation.ready()\n'
           )
+          replace_once("app/runtime.py", runtime_old, runtime_new)
 
-          replace_once(
-              "tests/test_automation_v2.py",
-              '''    observed = {
-              f"{method} {route.path}"
-              for route in app.routes
-              for method in (route.methods or set())
-              if route.path.startswith("/v2/automation")
-          }
-          ''',
-              '''    schema = app.openapi()
-          observed = {
-              f"{method.upper()} {path}"
-              for path, item in schema["paths"].items()
-              if path.startswith("/v2/automation")
-              for method in item
-              if method in {"get", "post", "put", "patch", "delete"}
-          }
-          ''',
+          routes_old = (
+              '    observed = {\n'
+              '        f"{method} {route.path}"\n'
+              '        for route in app.routes\n'
+              '        for method in (route.methods or set())\n'
+              '        if route.path.startswith("/v2/automation")\n'
+              '    }\n'
           )
+          routes_new = (
+              '    schema = app.openapi()\n'
+              '    observed = {\n'
+              '        f"{method.upper()} {path}"\n'
+              '        for path, item in schema["paths"].items()\n'
+              '        if path.startswith("/v2/automation")\n'
+              '        for method in item\n'
+              '        if method in {"get", "post", "put", "patch", "delete"}\n'
+              '    }\n'
+          )
+          replace_once("tests/test_automation_v2.py", routes_old, routes_new)
 
           register_path = Path("config/test-skip-register.v1.json")
           register = json.loads(register_path.read_text(encoding="utf-8"))
@@ -145,6 +145,7 @@ jobs:
           python3 - <<'PY'
           import hashlib
           import json
+          import subprocess
           from pathlib import Path
 
           paths = [
@@ -155,9 +156,13 @@ jobs:
               "contracts/platform/integration-fabric-api.v2.yaml",
               "config/api-completion-matrix.yaml",
           ]
+          source_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"],
+              text=True,
+          ).strip()
           evidence = {
               "schema_version": "1.0",
-              "source_sha": Path(".git/HEAD").read_text().strip(),
+              "source_sha": source_sha,
               "runtime_deployed": False,
               "external_effects_enabled": False,
               "calls_placed": 0,

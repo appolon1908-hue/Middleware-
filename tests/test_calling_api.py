@@ -5,6 +5,7 @@ import asyncio
 import json
 import time
 import unittest
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import UUID
@@ -12,8 +13,9 @@ from uuid import UUID
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.calling_contract import CAPABILITY, CLIENT_ID
-from app.commands import CommandError, CommandPolicyRegistry, CommandService, MemoryCommandStore
+from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, TARGET
+from app.calling_ledger import operation_response
+from app.commands import CommandEnvelope, CommandError, CommandOperation, CommandPolicyRegistry, CommandService, MemoryCommandStore
 from app.security import AuthenticationError, SecurityError, validate_claims
 from app.telephony_api import router
 from tests.test_calling_contract import SOURCE_SHA, grant, originate, principal
@@ -31,6 +33,33 @@ class FakeCallingTokens:
             raise AuthenticationError("invalid test token")
         validate_claims(self.claims, expected_client_id=expected_client_id, required_scope=required_scope)
         return dict(self.claims)
+
+
+def test_completed_hangup_response_uses_bound_originate_evidence_identity():
+    now = datetime.now(UTC)
+    original_id = "00000000-0000-4000-8000-000000000010"
+    hangup_id = UUID("00000000-0000-4000-8000-000000000011")
+    document = CommandEnvelope(
+        command_id=hangup_id, command_type=HANGUP, command_version="1.0",
+        target=TARGET, tenant_id="tenant-test", requested_by="subject-appolon",
+        correlation_id="test-correlation-0001", idempotency_key="hangup-key",
+        capability=CAPABILITY, payload={"origin_operation_id": original_id},
+    )
+    operation = CommandOperation(
+        command_id=hangup_id, command_type=HANGUP, command_version="1.0",
+        target=TARGET, tenant_id="tenant-test", requested_by="subject-appolon",
+        correlation_id="test-correlation-0001", idempotency_key="hangup-key",
+        capability=CAPABILITY, state="completed", created_at=now, updated_at=now,
+        readback_evidence_sha256="a" * 64,
+        readback_evidence={
+            "operation_id": original_id, "tenant_id": "tenant-test",
+            "call_state": "completed", "internal_only": True,
+            "external_dialing": False,
+        },
+    )
+    response = operation_response(operation, document)
+    assert response["dialing"] == "unknown"
+    assert response["reason"] == "terminal call outcome reconciled; see call_state"
 
 
 async def asgi_request(app, method, path, body=None, headers=None):

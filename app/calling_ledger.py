@@ -32,7 +32,7 @@ def _decode_document(row: Any) -> CommandEnvelope:
     return envelope
 
 
-def _terminal(operation: CommandOperation) -> bool:
+def _terminal(operation: CommandOperation, *, evidence_operation_id: str | None = None) -> bool:
     if operation.state == "cancelled":
         return True  # Existing cancellation logic permits this only before dispatch.
     evidence = operation.readback_evidence or {}
@@ -40,7 +40,7 @@ def _terminal(operation: CommandOperation) -> bool:
         operation.state == "completed"
         and operation.readback_evidence_sha256 is not None
         and evidence.get("call_state") in TERMINAL_CALL_STATES
-        and evidence.get("operation_id") == str(operation.command_id)
+        and evidence.get("operation_id") == (evidence_operation_id or str(operation.command_id))
         and evidence.get("tenant_id") == operation.tenant_id
         and evidence.get("internal_only") is True
         and evidence.get("external_dialing") is False
@@ -271,7 +271,10 @@ class CallingLedger:
         return operation
 
 
-def operation_response(operation: CommandOperation) -> dict[str, Any]:
+def operation_response(
+    operation: CommandOperation,
+    document: CommandEnvelope | None = None,
+) -> dict[str, Any]:
     # The merged Odoo client accepts only attempting, unknown and blocked.
     # A durable queue acknowledgement is deliberately NOT attempting/answered.
     dialing = "unknown"
@@ -280,7 +283,12 @@ def operation_response(operation: CommandOperation) -> dict[str, Any]:
         dialing, reason = "attempting", "telephony adapter accepted the call operation"
     elif operation.state == "cancelled":
         dialing, reason = "blocked", "request cancelled before dispatch"
-    elif _terminal(operation):
+    evidence_operation_id = None
+    if document is not None and document.command_type == HANGUP:
+        evidence_operation_id = str(document.payload.get("origin_operation_id", ""))
+    elif document is not None and document.command_type != ORIGINATE:
+        evidence_operation_id = "invalid"
+    if _terminal(operation, evidence_operation_id=evidence_operation_id):
         reason = "terminal call outcome reconciled; see call_state"
     evidence = operation.readback_evidence or {}
     return {

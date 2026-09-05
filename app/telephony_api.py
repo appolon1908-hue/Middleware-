@@ -116,8 +116,8 @@ async def originate(body: OriginateRequest, request: Request) -> JSONResponse:
 @router.get("/requests/{operation_id}", response_model=CallingResponse)
 async def call_status(operation_id: UUID, request: Request) -> JSONResponse:
     principal = await _principal(request, "read")
-    _, operation = await _ledger(request).get(principal, operation_id)
-    return _json(operation_response(operation))
+    document, operation = await _ledger(request).get(principal, operation_id)
+    return _json(operation_response(operation, document))
 
 
 @router.post("/requests/{operation_id}/reconcile", response_model=CallingResponse,
@@ -131,7 +131,7 @@ async def reconcile(operation_id: UUID, body: MutationRequest, request: Request)
         raise RequestValidationError("reconciliation must preserve the calling correlation ID")
     operation = await ledger.reconcile(principal, operation_id, key=body.idempotency_key,
                                        expected_version=body.expected_version, reason=body.reason)
-    return _json(operation_response(operation), 202)
+    return _json(operation_response(operation, document), 202)
 
 
 @router.post("/requests/{operation_id}/hangup", response_model=CallingResponse,

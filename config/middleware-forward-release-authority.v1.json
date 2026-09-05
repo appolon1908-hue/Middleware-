@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "middleware-forward-release-authority",
+  "repositoryAuthority": {
+    "repository": "appolon1908-hue/Middleware-",
+    "protectedRef": "refs/heads/main",
+    "sourceResolution": "resolve the exact protected-main GitHub event SHA at workflow execution",
+    "staticSourceShaAllowed": false,
+    "ruleset": "middleware-main-production-authority"
+  },
+  "artifactAuthority": {
+    "imageRepository": "ghcr.io/appolon1908-hue/codestra-middleware",
+    "releaseWorkflow": ".github/workflows/release.yml",
+    "releaseManifestSchema": "contracts/release-manifest.v1.schema.json",
+    "requiredSchemaHead": "0010_realtime_gateway",
+    "candidateStatus": "PENDING_EXACT_PROTECTED_MERGE_BUILD",
+    "currentSignedCandidate": null,
+    "historicalSignedPredecessor": {
+      "role": "historical-predecessor-only",
+      "promotionAuthorized": false,
+      "sourceSha": "b03b378f3a358de333e37cf6cc7a37668f004b4f",
+      "gitTreeId": "8e9a4be456a2f82ef3352a277f6f76f1a2e18d90",
+      "imageDigest": "sha256:dfdcfb92538242df9c9e81c27f15f9bd14b2cb840ea4c16d91dccc8f0eed7a3c",
+      "imageReference": "ghcr.io/appolon1908-hue/codestra-middleware@sha256:dfdcfb92538242df9c9e81c27f15f9bd14b2cb840ea4c16d91dccc8f0eed7a3c",
+      "releaseId": "b03b378f3a35-dfdcfb925382",
+      "schemaHead": "0009_observability_incidents",
+      "builtAt": "2026-09-04T18:50:33Z",
+      "workflowRunId": 33908027409,
+      "workflowRunAttempt": 1,
+      "artifactId": 9950295151,
+      "artifactArchiveDigest": "sha256:d349026c57f4037ec572ade1daecfca879aab535b023473532dd8b5e8c113c31",
+      "signature": "sigstore-keyless-verified",
+      "sbom": "present",
+      "vulnerabilityGate": "PASS",
+      "verification": "PASS"
+    }
+  },
+  "runtimeAuthority": {
+    "runtimeState": "must_be_proven_at_execution",
+    "repositoryMetadataClaimsDeployment": false,
+    "certificationIssue": 118,
+    "requiredEvidence": [
+      "signed release manifest bound to exact protected-main source",
+      "immutable image digest and verified provenance",
+      "schema head 0010_realtime_gateway",
+      "effective source, digest, schema, profile, and capability read-back",
+      "backup and isolated restore evidence",
+      "rollback rehearsal and data-integrity evidence",
+      "zero live-effect counters"
+    ]
+  },
+  "legacyBoundary": {
+    "sourceRepository": "Codestra-SRL/codestra-middleware",
+    "imageCatalog": "config/middleware-authority-convergence.v1.json",
+    "snapshotRole": "historical-observed-inventory-only",
+    "forwardBuildsAuthorized": false,
+    "runtimeExpansionAuthorized": false,
+    "deletionAuthorized": false,
+    "rollbackRetentionRequired": true
+  },
+  "safetyBoundary": {
+    "deploymentAuthorizedByThisFile": false,
+    "productionTrafficAuthorizedByThisFile": false,
+    "externalEffectsAuthorizedByThisFile": false,
+    "liveWritesRequired": false,
+    "odooWritesRequired": false,
+    "n8nDeliveryRequired": false,
+    "emailDeliveryRequired": false,
+    "smsDeliveryRequired": false,
+    "socialPublishingRequired": false,
+    "pstnDialingRequired": false,
+    "callsPlacedExpected": 0
+  }
+}

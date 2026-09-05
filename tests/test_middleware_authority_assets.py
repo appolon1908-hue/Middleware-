@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
+import json
 import shutil
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts" / "validate_middleware_authority_assets.py"
@@ -17,6 +18,7 @@ spec.loader.exec_module(validator)
 
 ASSETS = (
     validator.CATALOG_PATH,
+    validator.CURRENT_AUTHORITY_PATH,
     validator.WORKFLOW_PATH,
     validator.BACKUP_SCRIPT_PATH,
     validator.DOCKERFILE_PATH,
@@ -34,6 +36,47 @@ def _copy_assets(destination: Path) -> None:
 
 def test_authority_implementation_assets_are_fail_closed() -> None:
     assert validator.validate_assets(ROOT) == []
+
+
+def test_current_authority_must_require_schema_0010(tmp_path: Path) -> None:
+    _copy_assets(tmp_path)
+    path = tmp_path / validator.CURRENT_AUTHORITY_PATH
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value["artifactAuthority"]["requiredSchemaHead"] = (
+        "0009_observability_incidents"
+    )
+    path.write_text(json.dumps(value), encoding="utf-8")
+    errors = validator.validate_assets(tmp_path)
+    assert any("must require schema 0010_realtime_gateway" in error for error in errors)
+
+
+def test_current_candidate_must_remain_pending_and_null(tmp_path: Path) -> None:
+    _copy_assets(tmp_path)
+    path = tmp_path / validator.CURRENT_AUTHORITY_PATH
+    value = json.loads(path.read_text(encoding="utf-8"))
+    artifacts = value["artifactAuthority"]
+    artifacts["candidateStatus"] = "VERIFIED"
+    artifacts["currentSignedCandidate"] = dict(
+        artifacts["historicalSignedPredecessor"]
+    )
+    path.write_text(json.dumps(value), encoding="utf-8")
+    errors = validator.validate_assets(tmp_path)
+    assert any("exact-main-build pending" in error for error in errors)
+    assert any("must be null" in error for error in errors)
+
+
+def test_historical_predecessor_cannot_authorize_promotion(
+    tmp_path: Path,
+) -> None:
+    _copy_assets(tmp_path)
+    path = tmp_path / validator.CURRENT_AUTHORITY_PATH
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value["artifactAuthority"]["historicalSignedPredecessor"][
+        "promotionAuthorized"
+    ] = True
+    path.write_text(json.dumps(value), encoding="utf-8")
+    errors = validator.validate_assets(tmp_path)
+    assert any("promotion must be forbidden" in error for error in errors)
 
 
 def test_mirror_workflow_must_require_protected_main(tmp_path: Path) -> None:

@@ -11,6 +11,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = Path("config/middleware-authority-convergence.v1.json")
+CURRENT_AUTHORITY_PATH = Path(
+    "config/middleware-forward-release-authority.v1.json"
+)
 WORKFLOW_PATH = Path(
     ".github/workflows/mirror-codestra-legacy-middleware-images.yml"
 )
@@ -24,6 +27,8 @@ EXPECTED_FAMILY_COUNT = 16
 EXPECTED_WORKLOAD_COUNT = 31
 EXPECTED_REGISTRY_MIRRORS = 4
 EXPECTED_LOCAL_BACKUPS = 11
+CURRENT_SCHEMA_HEAD = "0010_realtime_gateway"
+PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -39,17 +44,23 @@ def _read(root: Path, relative: Path, errors: list[str]) -> str:
         return ""
 
 
-def _load_catalog(root: Path, errors: list[str]) -> dict[str, Any]:
-    raw = _read(root, CATALOG_PATH, errors)
+def _load_object(
+    root: Path,
+    relative: Path,
+    *,
+    label: str,
+    errors: list[str],
+) -> dict[str, Any]:
+    raw = _read(root, relative, errors)
     if not raw:
         return {}
     try:
         value = json.loads(raw)
     except json.JSONDecodeError as exc:
-        errors.append(f"catalog is invalid JSON: {exc}")
+        errors.append(f"{label} is invalid JSON: {exc}")
         return {}
     if not isinstance(value, dict):
-        errors.append("catalog root must be an object")
+        errors.append(f"{label} root must be an object")
         return {}
     return value
 
@@ -58,7 +69,18 @@ def validate_assets(root: Path = ROOT) -> list[str]:
     """Return implementation errors; an empty list means PASS."""
 
     errors: list[str] = []
-    catalog = _load_catalog(root, errors)
+    catalog = _load_object(
+        root,
+        CATALOG_PATH,
+        label="historical inventory catalog",
+        errors=errors,
+    )
+    current_authority = _load_object(
+        root,
+        CURRENT_AUTHORITY_PATH,
+        label="current forward release authority",
+        errors=errors,
+    )
     workflow = _read(root, WORKFLOW_PATH, errors)
     backup_script = _read(root, BACKUP_SCRIPT_PATH, errors)
     dockerfile = _read(root, DOCKERFILE_PATH, errors)
@@ -79,12 +101,16 @@ def validate_assets(root: Path = ROOT) -> list[str]:
             continue
         workloads = family.get("workloads", [])
         if not isinstance(workloads, list):
-            errors.append(f"family {family.get('id')!r} workloads must be an array")
+            errors.append(
+                f"family {family.get('id')!r} workloads must be an array"
+            )
             workloads = []
         workload_count += len(workloads)
         backup = family.get("backup", {})
         if not isinstance(backup, dict):
-            errors.append(f"family {family.get('id')!r} backup must be an object")
+            errors.append(
+                f"family {family.get('id')!r} backup must be an object"
+            )
             continue
         method = backup.get("method")
         if method == "registry-preserve-digest":
@@ -94,36 +120,68 @@ def validate_assets(root: Path = ROOT) -> list[str]:
 
     if len(families) != EXPECTED_FAMILY_COUNT:
         errors.append(
-            f"runtime image family count drifted: expected "
+            "runtime image family count drifted: expected "
             f"{EXPECTED_FAMILY_COUNT}, got {len(families)}"
         )
     if workload_count != EXPECTED_WORKLOAD_COUNT:
         errors.append(
-            f"runtime workload count drifted: expected "
+            "runtime workload count drifted: expected "
             f"{EXPECTED_WORKLOAD_COUNT}, got {workload_count}"
         )
     if registry_mirrors != EXPECTED_REGISTRY_MIRRORS:
         errors.append(
-            f"registry mirror count drifted: expected "
+            "registry mirror count drifted: expected "
             f"{EXPECTED_REGISTRY_MIRRORS}, got {registry_mirrors}"
         )
     if local_backups != EXPECTED_LOCAL_BACKUPS:
         errors.append(
-            f"local backup count drifted: expected "
+            "local backup count drifted: expected "
             f"{EXPECTED_LOCAL_BACKUPS}, got {local_backups}"
         )
 
-    candidate = (
+    snapshot_candidate = (
         catalog.get("forwardAuthority", {})
         .get("image", {})
         .get("currentSignedCandidate", {})
     )
-    if not isinstance(candidate, dict):
-        errors.append("currentSignedCandidate must be an object")
-    else:
-        digest = candidate.get("imageDigest")
-        if not isinstance(digest, str) or DIGEST.fullmatch(digest) is None:
-            errors.append("current signed candidate digest is malformed")
+    if not isinstance(snapshot_candidate, dict):
+        errors.append("historical snapshot candidate must be an object")
+        snapshot_candidate = {}
+    snapshot_digest = snapshot_candidate.get("imageDigest")
+    if (
+        not isinstance(snapshot_digest, str)
+        or DIGEST.fullmatch(snapshot_digest) is None
+    ):
+        errors.append("historical snapshot candidate digest is malformed")
+
+    artifacts = current_authority.get("artifactAuthority", {})
+    if not isinstance(artifacts, dict):
+        errors.append("current artifactAuthority must be an object")
+        artifacts = {}
+    if artifacts.get("requiredSchemaHead") != CURRENT_SCHEMA_HEAD:
+        errors.append(
+            f"current authority must require schema {CURRENT_SCHEMA_HEAD}"
+        )
+    if artifacts.get("candidateStatus") != PENDING_CANDIDATE_STATUS:
+        errors.append("current candidate status must remain exact-main-build pending")
+    if artifacts.get("currentSignedCandidate") is not None:
+        errors.append("current signed candidate must be null before exact-main build")
+    predecessor = artifacts.get("historicalSignedPredecessor", {})
+    if not isinstance(predecessor, dict):
+        errors.append("historicalSignedPredecessor must be an object")
+        predecessor = {}
+    predecessor_digest = predecessor.get("imageDigest")
+    if (
+        not isinstance(predecessor_digest, str)
+        or DIGEST.fullmatch(predecessor_digest) is None
+    ):
+        errors.append("historical predecessor digest is malformed")
+    if predecessor.get("promotionAuthorized") is not False:
+        errors.append("historical predecessor promotion must be forbidden")
+    if predecessor_digest != snapshot_digest:
+        errors.append("historical inventory and predecessor digest disagree")
+    if predecessor.get("schemaHead") != "0009_observability_incidents":
+        errors.append("historical predecessor schema identity drifted")
 
     workflow_requirements = {
         "manual dispatch": "workflow_dispatch:",
@@ -141,16 +199,16 @@ def validate_assets(root: Path = ROOT) -> list[str]:
 
     if re.search(r"(?m)^\s*push\s*:", workflow):
         errors.append("mirror workflow must not run automatically on push")
-    forbidden_workflow_builders = (
+    for needle in (
         "docker build ",
         "docker/build-push-action",
         "buildah bud ",
         "podman build ",
-    )
-    for needle in forbidden_workflow_builders:
+    ):
         if needle in workflow:
             errors.append(
-                f"mirror workflow must copy, not rebuild images: found {needle!r}"
+                "mirror workflow must copy, not rebuild images: "
+                f"found {needle!r}"
             )
 
     script_requirements = {
@@ -175,7 +233,7 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         if needle not in backup_script:
             errors.append(f"Server A backup script missing {label}")
 
-    forbidden_script_actions = (
+    for needle in (
         "docker compose up",
         "docker compose down",
         "docker container restart",
@@ -183,11 +241,11 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         "docker container stop",
         "docker stop",
         "docker container rm",
-    )
-    for needle in forbidden_script_actions:
+    ):
         if needle in backup_script:
             errors.append(
-                f"backup script must not mutate running containers: found {needle!r}"
+                "backup script must not mutate running containers: "
+                f"found {needle!r}"
             )
 
     marker = "FROM ${TEST_BASE} AS test"
@@ -195,14 +253,14 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         errors.append("Dockerfile test target marker is missing")
     else:
         runtime_section, test_section = dockerfile.split(marker, 1)
-        test_only_paths = (
+        for path in (
             "MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml",
             ".github/workflows/mirror-codestra-legacy-middleware-images.yml",
-        )
-        for path in test_only_paths:
+        ):
             if path in runtime_section:
                 errors.append(
-                    f"authority-only asset leaked into production runtime stage: {path}"
+                    "authority-only asset leaked into production runtime stage: "
+                    f"{path}"
                 )
             if path not in test_section:
                 errors.append(f"Docker test target does not package {path}")
@@ -220,6 +278,9 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         "rollback-only",
         "CODESTRA_GHCR_TOKEN",
         "isolated restore",
+        "0010_realtime_gateway",
+        "PENDING_EXACT_PROTECTED_MERGE_BUILD",
+        "historical predecessor",
         "SERVER_A_RUNTIME_REVALIDATION=NOT_EXECUTED",
         "PRODUCTION_CHANGED=NO",
         "CALLS_PLACED=0",
@@ -228,7 +289,8 @@ def validate_assets(root: Path = ROOT) -> list[str]:
     for phrase in documentation_requirements:
         if phrase.lower() not in lower_documentation:
             errors.append(
-                f"authority documentation missing required statement: {phrase}"
+                "authority documentation missing required statement: "
+                f"{phrase}"
             )
 
     return errors
@@ -242,10 +304,13 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
     print("MIDDLEWARE_AUTHORITY_ASSETS=PASS")
+    print(f"REQUIRED_SCHEMA_HEAD={CURRENT_SCHEMA_HEAD}")
+    print(f"SIGNED_CANDIDATE_STATUS={PENDING_CANDIDATE_STATUS}")
     print(f"RUNTIME_IMAGE_FAMILIES={EXPECTED_FAMILY_COUNT}")
     print(f"RUNTIME_WORKLOADS={EXPECTED_WORKLOAD_COUNT}")
     print(f"EXACT_REGISTRY_MIRRORS={EXPECTED_REGISTRY_MIRRORS}")
     print(f"SERVER_A_LOCAL_BACKUPS={EXPECTED_LOCAL_BACKUPS}")
+    print("HISTORICAL_PREDECESSOR_PROMOTION_AUTHORIZED=NO")
     print("SERVER_A_RUNTIME_MUTATED=NO")
     return 0
 

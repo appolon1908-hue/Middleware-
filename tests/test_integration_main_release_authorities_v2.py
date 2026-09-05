@@ -30,48 +30,29 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
                 "id": MODULE.EXPECTED_REPOSITORY_ID,
                 "full_name": MODULE.EXPECTED_REPOSITORY,
                 "default_branch": "main",
-                "owner": {
-                    "login": MODULE.EXPECTED_OWNER,
-                    "id": MODULE.EXPECTED_OWNER_ID,
-                },
+                "owner": {"login": MODULE.EXPECTED_OWNER, "id": MODULE.EXPECTED_OWNER_ID},
             },
             "issue": {"number": MODULE.EXPECTED_ISSUE_NUMBER},
-            "sender": {
-                "login": MODULE.EXPECTED_OWNER,
-                "id": MODULE.EXPECTED_OWNER_ID,
-            },
+            "sender": {"login": MODULE.EXPECTED_OWNER, "id": MODULE.EXPECTED_OWNER_ID},
             "comment": {
                 "body": MODULE.EXPECTED_ISSUE_COMMAND,
-                "user": {
-                    "login": MODULE.EXPECTED_OWNER,
-                    "id": MODULE.EXPECTED_OWNER_ID,
-                },
+                "user": {"login": MODULE.EXPECTED_OWNER, "id": MODULE.EXPECTED_OWNER_ID},
             },
         }
 
-    def test_exact_eight_repository_set_validates(self) -> None:
+    def test_exact_seven_repository_set_validates(self) -> None:
         rows = MODULE.BASE.validate_config(self.config)
-        self.assertEqual(len(rows), 8)
-        self.assertEqual(
-            {row["repository"] for row in rows},
-            set(MODULE.EXPECTED_REPOSITORIES),
-        )
+        self.assertEqual(len(rows), 7)
+        self.assertEqual({row["repository"] for row in rows}, set(MODULE.EXPECTED_REPOSITORIES))
 
     def test_new_governance_gap_repositories_are_exact(self) -> None:
         expected = {
             "appolon1908-hue/N8N",
             "appolon1908-hue/klyrow.com",
             "appolon1908-hue/Codestra-Prometheus",
-            "appolon1908-hue/Websocket-",
         }
         observed = {row["repository"] for row in MODULE.BASE.validate_config(self.config)}
         self.assertTrue(expected.issubset(observed))
-
-    def test_websocket_status_context_is_exact(self) -> None:
-        self.assertEqual(
-            MODULE.EXPECTED_REPOSITORIES["appolon1908-hue/Websocket-"],
-            (1357322123, ("exact-head-ci",)),
-        )
 
     def test_exact_issue_command_event_validates(self) -> None:
         MODULE.validate_issue_comment_event(self.exact_event())
@@ -115,7 +96,7 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
     def test_validate_mode_remains_offline(self) -> None:
         document = MODULE.BASE.execute("validate", "")
         self.assertEqual(document["result"], "PASS")
-        self.assertEqual(len(document["repositories"]), 8)
+        self.assertEqual(len(document["repositories"]), 7)
         self.assertFalse(document["production_changed"])
         self.assertFalse(document["runtime_contacted"])
         self.assertFalse(document["external_effects_enabled"])

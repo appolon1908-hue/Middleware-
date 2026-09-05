@@ -201,8 +201,8 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
             "employee_id": appolon.employee_id, "username": "appolon",
             "extension": appolon.extension, "campaign": appolon.campaign_id,
             "authorization_reference": appolon_grant.authorization_reference,
-            "created_at": now, "duration_seconds": 1,
-            "talk_duration_seconds": 1, "hangup_cause": "Normal Clearing",
+            "created_at": now, "duration_seconds": 0,
+            "talk_duration_seconds": 0, "hangup_cause": "Normal Clearing",
             "hangup_cause_code": 16, "internal_only": True,
             "external_dialing": False, "recording": False,
         }

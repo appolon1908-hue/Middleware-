@@ -9,8 +9,10 @@ from .control_plane_auth import authorize_command, caller_for_authorization
 from .operations import OperationApiState, OperationResponse, _mutation_context, _operation_json, list_operations as core_list_operations
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .storage import StorageError
+from .telephony_api import router as calling_router
 
 router=APIRouter(tags=["domain-control"])
+router.include_router(calling_router)
 
 _PREFIXES={"odoo":"crm.","crm":"crm.","email":"email.","sms":"sms.","telephony":"telephony.","social":"social.","marketing":"marketing.","ai":"ai."}
 
@@ -99,9 +101,10 @@ async def n8n_cancel(operation_id:UUID,body:OperationMutationRequest,request:Req
 async def n8n_reconcile(operation_id:UUID,body:OperationMutationRequest,request:Request): return await _mutate_any(operation_id,body,request,"reconcile")
 
 async def _mutate_any(operation_id:UUID,body:OperationMutationRequest,request:Request,action:str):
-    service,tenant,actor,idem=await _mutation_context(request)
-    operation=await service.mutate_operation(tenant,operation_id,action=action,actor_id=actor,idempotency_key=idem,expected_version=body.expected_version,reason=body.reason)
-    return JSONResponse(content=_operation_json(operation))
+    operation=await _mutation_context(request)
+    service,tenant,actor,idem=operation
+    result=await service.mutate_operation(tenant,operation_id,action=action,actor_id=actor,idempotency_key=idem,expected_version=body.expected_version,reason=body.reason)
+    return JSONResponse(content=_operation_json(result))
 
 async def _health(request:Request,provider:str):
     await _get_auth(request)

@@ -12,6 +12,10 @@ from .provider_canary import (
     TARGET_CHANNELS,
     validate_provider_canary_evidence,
 )
+from .calling_contract import (
+    HANGUP, ORIGINATE, TARGET, validate_call_evidence,
+    validate_terminal_call_evidence,
+)
 
 
 @dataclass(frozen=True)
@@ -109,6 +113,13 @@ class CommandTransitionRequest:
     reason: str
     provider_operation_id: str | None = None
     readback_evidence: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class OriginalCallCompletionRequest:
+    hangup_command_id: str
+    tenant_id: str
+    readback_evidence: dict[str, Any]
 
 
 ACTIVITY_RETRY_POLICY = RetryPolicy(
@@ -343,6 +354,16 @@ class CommandExecutionWorkflow:
                 detail="adapter execution did not produce a confirmed outcome",
             )
 
+        if (request.target == TARGET and request.command_type == ORIGINATE
+                and executed.status == "pre_dispatch_rejected"):
+            rejected = await _activity("record_call_pre_dispatch_rejection", request)
+            return WorkflowOutcome(
+                operation_id=request.command_id,
+                workflow_type="command_execution",
+                status=rejected.status,
+                detail=rejected.detail,
+            )
+
         await _command_transition(
             CommandTransitionRequest(
                 request.command_id,
@@ -382,6 +403,21 @@ class CommandExecutionWorkflow:
                 status="reconciliation_required",
                 detail="provider read-back failed",
             )
+        calling_observation = None
+        if (request.target == TARGET and request.command_type in {ORIGINATE, HANGUP}
+                and readback.status != "matched"):
+            try:
+                original = (request.command_id if request.command_type == ORIGINATE
+                            else str(request.payload["origin_operation_id"]))
+                calling_observation = validate_call_evidence(
+                    readback.readback_evidence, operation_id=original,
+                    correlation_id=request.correlation_id, tenant_id=request.tenant_id,
+                    actor=request.payload["actor"],
+                    authorization_reference=request.payload["authorization_reference"],
+                    require_terminal=False,
+                )
+            except (KeyError, TypeError, ValueError):
+                calling_observation = None
         if readback.status != "matched":
             await _command_transition(
                 CommandTransitionRequest(
@@ -391,6 +427,7 @@ class CommandExecutionWorkflow:
                     actor,
                     "provider read-back did not match durable command intent",
                     executed.provider_operation_id,
+                    calling_observation,
                 )
             )
             return WorkflowOutcome(
@@ -401,7 +438,38 @@ class CommandExecutionWorkflow:
             )
 
         canary = request.payload.get("canary")
-        if request.target in TARGET_CHANNELS and isinstance(canary, dict):
+        if request.target == TARGET and request.command_type in {ORIGINATE, HANGUP}:
+            try:
+                original_operation_id = (
+                    request.command_id if request.command_type == ORIGINATE
+                    else str(request.payload["origin_operation_id"])
+                )
+                readback_evidence = validate_terminal_call_evidence(
+                    readback.readback_evidence,
+                    operation_id=original_operation_id,
+                    correlation_id=request.correlation_id,
+                    tenant_id=request.tenant_id,
+                    actor=request.payload["actor"],
+                    authorization_reference=request.payload["authorization_reference"],
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                await _command_transition(CommandTransitionRequest(
+                    request.command_id, request.tenant_id, "reconciliation_required",
+                    actor, f"terminal calling evidence was missing or invalid: {exc}",
+                    executed.provider_operation_id,
+                ))
+                return WorkflowOutcome(
+                    request.command_id, "command_execution", "reconciliation_required",
+                    "terminal calling evidence did not satisfy the bounded contract",
+                )
+            if request.command_type == HANGUP:
+                await _activity(
+                    "complete_originating_call",
+                    OriginalCallCompletionRequest(
+                        request.command_id, request.tenant_id, readback_evidence,
+                    ),
+                )
+        elif request.target in TARGET_CHANNELS and isinstance(canary, dict):
             try:
                 if canary.get("schema_version") != "1.0":
                     raise ValueError("canary schema_version must be 1.0")

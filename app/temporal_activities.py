@@ -30,7 +30,9 @@ from .telnexa_provider_adapter import (
     TelnexaSmsAdapter,
 )
 from .provider_canary import provider_evidence_digest
-from .calling_contract import HANGUP, ORIGINATE, TARGET, validate_call_evidence
+from .calling_contract import (
+    HANGUP, ORIGINATE, TARGET, CallLifecycleEvidence, validate_call_evidence,
+)
 from .vicidial_internal_call_adapter import (
     VicidialInternalCallAdapter, VicidialInternalCallError,
     VicidialInternalCallUnknown,
@@ -125,6 +127,22 @@ class CommandLedgerWorkflowActivities:
         self,
         request: CommandTransitionRequest,
     ) -> ActivityResult:
+        if (request.readback_evidence is not None
+                and request.new_state == "reconciliation_required"):
+            try:
+                observed = CallLifecycleEvidence.model_validate(
+                    request.readback_evidence
+                )
+            except (TypeError, ValueError) as exc:
+                raise ApplicationError(
+                    "nonterminal calling evidence failed the bounded contract",
+                    non_retryable=True, type="CommandTransitionRejected",
+                ) from exc
+            if observed.terminal:
+                raise ApplicationError(
+                    "terminal calling evidence cannot be stored as nonterminal",
+                    non_retryable=True, type="CommandTransitionRejected",
+                )
         try:
             operation = await self.store.transition(
                 request.tenant_id,

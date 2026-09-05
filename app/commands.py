@@ -495,8 +495,12 @@ class MemoryCommandStore:
         provider_operation_id: str | None = None,
         readback_evidence: Mapping[str, Any] | None = None,
     ) -> CommandOperation:
-        if readback_evidence is not None and new_state != "completed":
-            raise CommandConflict("read-back evidence may be persisted only on completion")
+        if readback_evidence is not None and new_state not in {
+            "completed", "reconciliation_required",
+        }:
+            raise CommandConflict(
+                "read-back evidence may be persisted only on completion or reconciliation"
+            )
         key = (tenant_id, command_id)
         entry = self._commands.get(key)
         if entry is None:
@@ -924,8 +928,12 @@ class PostgresCommandStore:
         provider_operation_id: str | None = None,
         readback_evidence: Mapping[str, Any] | None = None,
     ) -> CommandOperation:
-        if readback_evidence is not None and new_state != "completed":
-            raise CommandConflict("read-back evidence may be persisted only on completion")
+        if readback_evidence is not None and new_state not in {
+            "completed", "reconciliation_required",
+        }:
+            raise CommandConflict(
+                "read-back evidence may be persisted only on completion or reconciliation"
+            )
         safe_reason = reason[:2048]
         safe_readback = (
             dict(readback_evidence) if readback_evidence is not None else None

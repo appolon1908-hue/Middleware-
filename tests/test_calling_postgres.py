@@ -146,7 +146,19 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(value, {"dispatch_claimed": True})
 
     async def test_completed_hangup_restart_repairs_origin_without_new_mutation(self):
-        original = await self.reserve()
+        appolon = principal().model_copy(update={
+            "tenant_id": "tenant-test", "subject": "subject-appolon",
+            "employee_id": "employee-appolon", "campaign_id": "TEST_SYN",
+            "business_unit": "business-test", "extension": "6901",
+        })
+        body = originate().model_copy(update={
+            "employee_id": appolon.employee_id, "campaign": appolon.campaign_id,
+            "business_unit": appolon.business_unit,
+        })
+        appolon_grant = self.grant.model_copy(update={"principal": appolon})
+        original = await self.ledger.originate(
+            appolon, body, "test-correlation-0001", appolon_grant,
+        )
         for state in ("queued", "dispatching", "accepted", "readback_pending",
                       "reconciliation_required"):
             original = await self.store.transition(
@@ -156,14 +168,14 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
                 if state == "accepted" else None,
             )
         hangup = await self.ledger.hangup(
-            principal(), original.command_id, key="hangup-restart-0001",
+            appolon, original.command_id, key="hangup-restart-0001",
             expected_version=original.resource_version, reason="Agent hangup",
         )
         fresh_ledger = CallingLedger(self.commands)
-        document, observed = await fresh_ledger.get(principal(), hangup.command_id)
+        document, observed = await fresh_ledger.get(appolon, hangup.command_id)
         self.assertEqual(document.payload["origin_operation_id"], str(original.command_id))
         self.assertEqual(observed.command_id, hangup.command_id)
-        wrong = principal().model_copy(update={"subject": "subject-other"})
+        wrong = appolon.model_copy(update={"subject": "subject-other"})
         with self.assertRaises(CommandNotFound):
             await fresh_ledger.get(wrong, hangup.command_id)
 
@@ -185,10 +197,10 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
             "terminal": True,
             "evidence": {"event_sequence": [{"sequence": 1}],
                          "evidence_source": "ami-lifecycle-gateway"},
-            "tenant_id": "tenant-test", "subject": "subject-appolon",
-            "employee_id": "employee-appolon", "username": "appolon",
-            "extension": "6901", "campaign": "TEST_SYN",
-            "authorization_reference": self.grant.authorization_reference,
+            "tenant_id": appolon.tenant_id, "subject": appolon.subject,
+            "employee_id": appolon.employee_id, "username": "appolon",
+            "extension": appolon.extension, "campaign": appolon.campaign_id,
+            "authorization_reference": appolon_grant.authorization_reference,
             "created_at": now, "duration_seconds": 1,
             "talk_duration_seconds": 1, "hangup_cause": "Normal Clearing",
             "hangup_cause_code": 16, "internal_only": True,
@@ -241,7 +253,11 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
                          "completed")
         self.assertEqual((adapter.executions, adapter.readbacks), (0, 0))
         with self.assertRaises(CommandConflict):
-            await self.reserve(originate(idempotency_key="test-originate-after-hangup"))
+            await self.ledger.originate(
+                appolon, body.model_copy(update={
+                    "idempotency_key": "test-originate-after-hangup",
+                }), "test-correlation-0001", appolon_grant,
+            )
 
 
 if __name__ == "__main__":

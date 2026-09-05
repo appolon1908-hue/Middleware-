@@ -11,8 +11,8 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from app.calling_contract import (
-    CallPrincipal, CallingContractError, CallingGrant, OriginateRequest,
-    load_grant, operation_identity,
+    CallLifecycleEvidence, CallPrincipal, CallingContractError, CallingGrant, OriginateRequest,
+    load_grant, operation_identity, validate_call_evidence,
 )
 
 SOURCE_SHA = "a" * 40
@@ -43,6 +43,42 @@ def grant(**changes):
 
 
 class CallingContractTests(unittest.TestCase):
+    def lifecycle(self, **changes):
+        created = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+        value = dict(operation_id="op", correlation_id="corr", dispatch_state="accepted",
+                     asterisk_uniqueid="unique", linkedid="linked", call_id="call",
+                     call_state="completed", answered_at=created + timedelta(seconds=2),
+                     ended_at=created + timedelta(seconds=7), terminal=True, evidence={"sequence": 3},
+                     tenant_id="tenant", subject="subject", employee_id="employee",
+                     username="appolon", extension="6901", campaign="TEST_SYN",
+                     authorization_reference="auth", created_at=created,
+                     duration_seconds=7, talk_duration_seconds=5, hangup_cause="normal",
+                     hangup_cause_code=16, internal_only=True, external_dialing=False, recording=False)
+        return value | changes
+
+    def test_lifecycle_timestamps_and_strict_values(self):
+        CallLifecycleEvidence.model_validate(self.lifecycle())
+        invalid = [
+            {"ended_at": "invalid"}, {"ended_at": datetime(2026,9,5,19,0,tzinfo=UTC)},
+            {"duration_seconds": 6}, {"talk_duration_seconds": 4}, {"terminal": "true"},
+            {"duration_seconds": True},
+        ]
+        for changes in invalid:
+            with self.subTest(changes=changes), self.assertRaises(ValidationError):
+                CallLifecycleEvidence.model_validate(self.lifecycle(**changes))
+
+    def test_nonterminal_lifecycle_rejects_terminal_unknown_and_end_time(self):
+        bindings = dict(operation_id="op", correlation_id="corr", tenant_id="tenant",
+                        actor={"subject":"subject","employee_id":"employee","extension":"6901","campaign_id":"TEST_SYN"},
+                        authorization_reference="auth", require_terminal=False)
+        created=datetime(2026,9,5,20,0,tzinfo=UTC)
+        base=self.lifecycle(call_state="ringing", terminal=False, answered_at=None,
+                            ended_at=None, duration_seconds=None, talk_duration_seconds=None,
+                            linkedid=None, evidence=None, created_at=created)
+        validate_call_evidence(base, **bindings)
+        for changes in ({"call_state":"completed"},{"call_state":"mystery"},{"ended_at":created}):
+            with self.subTest(changes=changes), self.assertRaises((CallingContractError,ValidationError)):
+                validate_call_evidence(base|changes, **bindings)
     def test_internal_shape_and_grant(self):
         grant().authorize(principal(), originate(), source_sha=SOURCE_SHA)
 

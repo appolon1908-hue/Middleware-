@@ -808,7 +808,8 @@ class PostgresCommandStore:
                         SELECT metadata->>'readback_evidence_sha256'
                         FROM middleware_command_audit
                         WHERE tenant_id=$1 AND command_id=$2
-                          AND new_state='completed'
+                          AND new_state IN ('completed','reconciliation_required')
+                          AND metadata ? 'readback_evidence_sha256'
                         ORDER BY id DESC LIMIT 1
                     ) AS readback_evidence_sha256
                 """,

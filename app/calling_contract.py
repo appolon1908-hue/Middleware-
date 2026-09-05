@@ -54,9 +54,9 @@ class CallLifecycleEvidence(StrictModel):
     linkedid: str | None
     call_id: str | None
     call_state: str
-    answered_at: str | None
-    ended_at: str | None
-    terminal: bool
+    answered_at: AwareDatetime | None
+    ended_at: AwareDatetime | None
+    terminal: StrictBool
     evidence: dict[str, Any] | None
     tenant_id: str
     subject: str
@@ -65,14 +65,36 @@ class CallLifecycleEvidence(StrictModel):
     extension: Literal["6901"]
     campaign: Literal["TEST_SYN"]
     authorization_reference: str
-    created_at: str
-    duration_seconds: int | None = Field(ge=0, le=86400)
-    talk_duration_seconds: int | None = Field(ge=0, le=86400)
+    created_at: AwareDatetime
+    duration_seconds: StrictInt | None = Field(ge=0, le=86400)
+    talk_duration_seconds: StrictInt | None = Field(ge=0, le=86400)
     hangup_cause: str | None = Field(default=None, max_length=128)
-    hangup_cause_code: int | None = Field(default=None, ge=0, le=255)
+    hangup_cause_code: StrictInt | None = Field(default=None, ge=0, le=255)
     internal_only: Literal[True]
     external_dialing: Literal[False]
     recording: Literal[False]
+
+    @model_validator(mode="after")
+    def coherent_timing(self) -> CallLifecycleEvidence:
+        if self.answered_at is not None and self.answered_at < self.created_at:
+            raise ValueError("answer precedes call creation")
+        if self.ended_at is not None:
+            if self.ended_at < self.created_at or (
+                self.answered_at is not None and self.ended_at < self.answered_at
+            ):
+                raise ValueError("call lifecycle timestamps are inconsistent")
+            if self.duration_seconds is not None and self.duration_seconds != int(
+                (self.ended_at - self.created_at).total_seconds()
+            ):
+                raise ValueError("call duration conflicts with lifecycle timestamps")
+            expected_talk = 0 if self.answered_at is None else int(
+                (self.ended_at - self.answered_at).total_seconds()
+            )
+            if self.talk_duration_seconds is not None and self.talk_duration_seconds != expected_talk:
+                raise ValueError("talk duration conflicts with lifecycle timestamps")
+        elif self.duration_seconds is not None or self.talk_duration_seconds is not None:
+            raise ValueError("duration requires an end timestamp")
+        return self
 
 
 def validate_call_evidence(
@@ -96,7 +118,10 @@ def validate_call_evidence(
         or evidence.duration_seconds is None or evidence.evidence is None
     ):
         raise CallingContractError("calling_terminal_evidence_incomplete")
-    if not require_terminal and evidence.terminal:
+    if not require_terminal and (
+        evidence.terminal or evidence.call_state not in NONTERMINAL_CALL_STATES
+        or evidence.ended_at is not None
+    ):
         raise CallingContractError("calling_status_conflicts_with_terminal_evidence")
     return evidence.model_dump(mode="json")
 

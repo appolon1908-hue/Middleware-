@@ -674,6 +674,26 @@ class CommandLedgerWorkflowActivities:
         original_request = ReconciliationRequest(
             original_id, request.tenant_id, "same-call hangup terminal evidence",
         )
+        # A terminal same-call hangup may outrun the originate workflow's
+        # readback. Move only that durable origin into its existing
+        # reconciliation transition; no generic transition is broadened.
+        async with self.store.pool.acquire() as conn:
+            origin_state = await conn.fetchval(
+                "SELECT state FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+                request.tenant_id, original_id,
+            )
+        if origin_state in {"accepted", "readback_pending"}:
+            try:
+                await self.store.transition(
+                    request.tenant_id, UUID(original_id),
+                    new_state="reconciliation_required",
+                    actor_id="temporal:codestra.same-call-hangup.v1",
+                    reason="validated terminal hangup requires originating-call reconciliation",
+                )
+            except CommandConflict:
+                # A concurrent terminal/readback transition is reloaded and
+                # validated below; it is never overwritten from local state.
+                pass
         command, completed, digest = await self._load_reconciliation_command(original_request)
         if completed is not None:
             return completed

@@ -30,12 +30,18 @@ from .telnexa_provider_adapter import (
     TelnexaSmsAdapter,
 )
 from .provider_canary import provider_evidence_digest
+from .calling_contract import HANGUP, ORIGINATE, TARGET, validate_call_evidence
+from .vicidial_internal_call_adapter import (
+    VicidialInternalCallAdapter, VicidialInternalCallError,
+    VicidialInternalCallUnknown,
+)
 from .temporal_workflows import (
     ActivityResult,
     CommandExecutionRequest,
     CommandTransitionRequest,
     DeadLetterReplayRequest,
     DelayedCallbackRequest,
+    OriginalCallCompletionRequest,
     ProvisioningStepRequest,
     ReconciliationRequest,
 )
@@ -104,6 +110,7 @@ class CommandLedgerWorkflowActivities:
         telnexa_sms: TelnexaSmsAdapter | None = None,
         klyrow_email: KlyrowEmailAdapter | None = None,
         postly_social: PostlySocialAdapter | None = None,
+        vicidial_internal: VicidialInternalCallAdapter | None = None,
     ) -> None:
         self.store = store
         self.odoo = odoo
@@ -111,6 +118,7 @@ class CommandLedgerWorkflowActivities:
         self.telnexa_sms = telnexa_sms
         self.klyrow_email = klyrow_email
         self.postly_social = postly_social
+        self.vicidial_internal = vicidial_internal
 
     @activity.defn(name="record_command_transition")
     async def record_command_transition(
@@ -151,6 +159,9 @@ class CommandLedgerWorkflowActivities:
             return self.klyrow_email
         if request.target == "postly-social" and self.postly_social is not None:
             return self.postly_social
+        if (request.target == TARGET and request.command_type in {ORIGINATE, HANGUP}
+                and self.vicidial_internal is not None):
+            return self.vicidial_internal
         raise ApplicationError(
             "no production provider adapter is activated for this command",
             non_retryable=True,
@@ -162,7 +173,15 @@ class CommandLedgerWorkflowActivities:
         self,
         request: CommandExecutionRequest,
     ) -> ActivityResult:
+        if request.target == TARGET:
+            request = await self._load_durable_execution_request(request)
         adapter = self._adapter(request)
+        if request.target == TARGET:
+            claimed = await self._claim_call_dispatch(request)
+            if not claimed:
+                # A previous process may have sent the mutation. Readback is
+                # the only safe continuation; never originate/hang up again.
+                return await adapter.readback(request)
         try:
             return await adapter.execute(request)
         except PostlySocialUnknownOutcomeError as exc:
@@ -174,12 +193,17 @@ class CommandLedgerWorkflowActivities:
                 non_retryable=True,
                 type="ProviderOutcomeUnknown",
             ) from exc
+        except VicidialInternalCallUnknown as exc:
+            raise ApplicationError(
+                str(exc), non_retryable=True, type="ProviderOutcomeUnknown",
+            ) from exc
         except (
             OdooProviderAdapterError,
             KlyrowAlertAdapterError,
             TelnexaProviderAdapterError,
             KlyrowEmailAdapterError,
             PostlySocialAdapterError,
+            VicidialInternalCallError,
         ) as exc:
             raise ApplicationError(
                 str(exc),
@@ -200,11 +224,65 @@ class CommandLedgerWorkflowActivities:
             TelnexaProviderAdapterError,
             KlyrowEmailAdapterError,
             PostlySocialAdapterError,
+            VicidialInternalCallError,
         ) as exc:
             raise ApplicationError(
                 str(exc),
                 type="ProviderReadbackError",
             ) from exc
+
+    async def _load_durable_execution_request(
+        self, request: CommandExecutionRequest,
+    ) -> CommandExecutionRequest:
+        try:
+            operation_id = UUID(request.command_id)
+        except ValueError as exc:
+            raise ApplicationError("command identity is invalid", non_retryable=True,
+                                   type="CommandExecutionRejected") from exc
+        async with self.store.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+                request.tenant_id, request.command_id,
+            )
+        if row is None:
+            raise ApplicationError("durable command was not found", non_retryable=True,
+                                   type="CommandExecutionRejected")
+        durable, digest = self._validated_reconciliation_command(
+            row,
+            ReconciliationRequest(request.command_id, request.tenant_id, "dispatch validation"),
+            operation_id,
+        )
+        if durable != request or not hmac.compare_digest(
+            digest, authenticated_command_digest(
+                CommandEnvelope.model_validate({
+                    key: getattr(request, key) for key in (
+                        "command_id", "command_type", "command_version", "target",
+                        "tenant_id", "requested_by", "correlation_id",
+                        "idempotency_key", "capability", "payload",
+                    )
+                }), request.authenticated_client_id,
+            ),
+        ):
+            raise ApplicationError("Temporal command differs from durable intent",
+                                   non_retryable=True, type="CommandExecutionRejected")
+        return durable
+
+    async def _claim_call_dispatch(self, request: CommandExecutionRequest) -> bool:
+        """Atomically elect the only process allowed to send a call mutation."""
+        async with self.store.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE middleware_command_attempts
+                SET state='provider_dispatch_claimed'
+                WHERE id=(SELECT id FROM middleware_command_attempts
+                          WHERE tenant_id=$1 AND command_id=$2
+                          ORDER BY attempt_number DESC LIMIT 1)
+                  AND state='dispatching'
+                RETURNING id
+                """,
+                request.tenant_id, request.command_id,
+            )
+        return row is not None
 
     @staticmethod
     def _validated_reconciliation_command(
@@ -507,10 +585,75 @@ class CommandLedgerWorkflowActivities:
         assert command is not None
         assert payload_sha256 is not None
         result = await self.readback_command(command)
+        if command.target == TARGET and command.command_type in {ORIGINATE, HANGUP}:
+            original = (command.command_id if command.command_type == ORIGINATE
+                        else str(command.payload.get("origin_operation_id", "")))
+            try:
+                evidence = validate_call_evidence(
+                    result.readback_evidence, operation_id=original,
+                    correlation_id=command.correlation_id, tenant_id=command.tenant_id,
+                    actor=command.payload["actor"],
+                    authorization_reference=command.payload["authorization_reference"],
+                    require_terminal=result.status == "matched",
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ApplicationError(
+                    "calling evidence failed the bounded contract",
+                    non_retryable=True, type="ProviderReadbackContractError",
+                ) from exc
+            result = ActivityResult(
+                result.status, result.detail, result.provider_operation_id, evidence,
+            )
         return await self._persist_reconciliation_result(
             request,
             result,
             payload_sha256,
+        )
+
+    @activity.defn(name="complete_originating_call")
+    async def complete_originating_call(
+        self, request: OriginalCallCompletionRequest,
+    ) -> ActivityResult:
+        try:
+            hangup_id = UUID(request.hangup_command_id)
+        except ValueError as exc:
+            raise ApplicationError("hangup command identity is invalid", non_retryable=True,
+                                   type="CommandExecutionRejected") from exc
+        async with self.store.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+                request.tenant_id, request.hangup_command_id,
+            )
+        if row is None:
+            raise ApplicationError("hangup command was not found", non_retryable=True,
+                                   type="CommandExecutionRejected")
+        hangup, _ = self._validated_reconciliation_command(
+            row, ReconciliationRequest(request.hangup_command_id, request.tenant_id,
+                                       "hangup completion"), hangup_id,
+        )
+        if hangup.command_type != HANGUP or hangup.target != TARGET:
+            raise ApplicationError("command is not a bounded hangup", non_retryable=True,
+                                   type="CommandExecutionRejected")
+        original_id = str(hangup.payload.get("origin_operation_id", ""))
+        original_request = ReconciliationRequest(
+            original_id, request.tenant_id, "same-call hangup terminal evidence",
+        )
+        command, completed, digest = await self._load_reconciliation_command(original_request)
+        if completed is not None:
+            return completed
+        assert command is not None and digest is not None
+        evidence = validate_call_evidence(
+            request.readback_evidence, operation_id=original_id,
+            correlation_id=command.correlation_id, tenant_id=command.tenant_id,
+            actor=command.payload["actor"],
+            authorization_reference=command.payload["authorization_reference"],
+            require_terminal=True,
+        )
+        return await self._persist_reconciliation_result(
+            original_request,
+            ActivityResult("matched", "same-call hangup terminal evidence verified",
+                           evidence["asterisk_uniqueid"], evidence),
+            digest,
         )
 
     def registered(self) -> tuple[Any, ...]:
@@ -519,4 +662,5 @@ class CommandLedgerWorkflowActivities:
             self.execute_command,
             self.readback_command,
             self.reconcile_operation,
+            self.complete_originating_call,
         )

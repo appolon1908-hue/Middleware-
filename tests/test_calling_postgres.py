@@ -11,7 +11,12 @@ from uuid import uuid4
 import asyncpg
 
 from app.calling_ledger import CallingLedger
-from app.commands import CommandConflict, CommandPolicyRegistry, CommandService, PostgresCommandStore
+from app.commands import (
+    AUTHENTICATED_CLIENT_ID_KEY, CommandConflict, CommandPolicyRegistry,
+    CommandService, PostgresCommandStore,
+)
+from app.temporal_activities import CommandLedgerWorkflowActivities
+from app.temporal_workflows import ActivityResult, CommandExecutionRequest
 from tests.test_calling_contract import grant, originate, principal
 
 DATABASE = os.getenv("CALLING_TEST_DATABASE_URL", "")
@@ -95,6 +100,45 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         await self.pool.execute("DROP TRIGGER reject_calling_test_outbox ON middleware_outbox")
         await self.reserve()
         self.assertEqual(await self.counts(), (1, 1, 1))
+
+    async def test_two_worker_activities_acquire_one_durable_dispatch_claim(self):
+        operation = await self.reserve()
+        for state in ("queued", "dispatching"):
+            await self.store.transition(
+                operation.tenant_id, operation.command_id, new_state=state,
+                actor_id="test-worker", reason="synthetic dispatch setup",
+            )
+        row = await self.pool.fetchrow(
+            "SELECT payload FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+            operation.tenant_id, str(operation.command_id),
+        )
+        payload = row["payload"] if isinstance(row["payload"], dict) else __import__("json").loads(row["payload"])
+        client_id = payload.pop(AUTHENTICATED_CLIENT_ID_KEY)
+        request = CommandExecutionRequest(**payload, authenticated_client_id=client_id)
+
+        class Adapter:
+            def __init__(self):
+                self.executions = 0
+                self.readbacks = 0
+            async def execute(self, _request):
+                self.executions += 1
+                return ActivityResult("accepted", "synthetic accepted", "provider-id")
+            async def readback(self, _request):
+                self.readbacks += 1
+                return ActivityResult("mismatch", "synthetic pending", "provider-id")
+
+        adapter = Adapter()
+        first = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)  # type: ignore[arg-type]
+        second = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)  # type: ignore[arg-type]
+        await first.execute_command(request)
+        await second.execute_command(request)
+        self.assertEqual(adapter.executions, 1)
+        self.assertEqual(adapter.readbacks, 1)
+        state = await self.pool.fetchval(
+            "SELECT state FROM middleware_command_attempts WHERE tenant_id=$1 AND command_id=$2",
+            operation.tenant_id, str(operation.command_id),
+        )
+        self.assertEqual(state, "provider_dispatch_claimed")
 
 
 if __name__ == "__main__":

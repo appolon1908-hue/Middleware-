@@ -11,7 +11,7 @@ import os
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Literal, Mapping
+from typing import Annotated, Any, Literal, Mapping
 from uuid import UUID, uuid5
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -44,6 +44,65 @@ class CallingContractError(ValueError):
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class CallLifecycleEvidence(StrictModel):
+    operation_id: str
+    correlation_id: str
+    dispatch_state: Literal["dispatch_unknown", "accepted"]
+    asterisk_uniqueid: str
+    linkedid: str | None
+    call_id: str | None
+    call_state: str
+    answered_at: str | None
+    ended_at: str | None
+    terminal: bool
+    evidence: dict[str, Any] | None
+    tenant_id: str
+    subject: str
+    employee_id: str
+    username: Literal["appolon"]
+    extension: Literal["6901"]
+    campaign: Literal["TEST_SYN"]
+    authorization_reference: str
+    created_at: str
+    duration_seconds: int | None = Field(ge=0, le=86400)
+    talk_duration_seconds: int | None = Field(ge=0, le=86400)
+    hangup_cause: str | None = Field(default=None, max_length=128)
+    hangup_cause_code: int | None = Field(default=None, ge=0, le=255)
+    internal_only: Literal[True]
+    external_dialing: Literal[False]
+    recording: Literal[False]
+
+
+def validate_call_evidence(
+    value: object, *, operation_id: str, correlation_id: str, tenant_id: str,
+    actor: Mapping[str, object], authorization_reference: str,
+    require_terminal: bool,
+) -> dict[str, Any]:
+    evidence = CallLifecycleEvidence.model_validate(value)
+    if (evidence.operation_id != operation_id
+            or evidence.correlation_id != correlation_id
+            or evidence.tenant_id != tenant_id
+            or evidence.subject != actor.get("subject")
+            or evidence.employee_id != actor.get("employee_id")
+            or evidence.extension != actor.get("extension")
+            or evidence.campaign != actor.get("campaign_id")
+            or evidence.authorization_reference != authorization_reference):
+        raise CallingContractError("calling_evidence_identity_mismatch")
+    if require_terminal and (
+        not evidence.terminal or evidence.call_state not in TERMINAL_CALL_STATES
+        or not evidence.linkedid or not evidence.ended_at
+        or evidence.duration_seconds is None or evidence.evidence is None
+    ):
+        raise CallingContractError("calling_terminal_evidence_incomplete")
+    if not require_terminal and evidence.terminal:
+        raise CallingContractError("calling_status_conflicts_with_terminal_evidence")
+    return evidence.model_dump(mode="json")
+
+
+def validate_terminal_call_evidence(value: object, **bindings: Any) -> dict[str, Any]:
+    return validate_call_evidence(value, require_terminal=True, **bindings)
 
 
 class CallPrincipal(StrictModel):

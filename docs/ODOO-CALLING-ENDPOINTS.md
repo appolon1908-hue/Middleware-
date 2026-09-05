@@ -124,15 +124,35 @@ The explicitly enabled test/development MemoryCommandStore has an equivalent
 in-process reservation lock. It is prohibited by this API when the runtime does
 not authorize in-memory storage. It is not a production persistence alternative.
 
-## Required downstream completion before a real call
+## Restricted Server B execution
 
-A reviewed VICIdial executor still has to consume the durable internal command,
-recheck current authorization and routing, enforce agent readiness and a
-same-agent/same-call hangup, and return validated terminal readback. Binding that
-executor must also retain the terminal calling evidence in the Temporal command
-completion/reconciliation path; the generic workflow does not automatically
-persist arbitrary provider fields. Until that is implemented, a completion without
-such evidence deliberately cannot release this API's active/unknown-call guard.
+The Temporal worker owns the only Server B client. Canonical originate and
+hangup commands targeting `vicidial-restricted` are sent to the bounded
+`/v1/calls/internal/...` routes using HMAC v2 over the exact backend path and
+body. The original originate operation ID remains the Server B readback and
+hangup identity; an ingress prefix is not added to the signed backend path.
+
+Execution remains disabled unless the operator supplies a private HTTPS/mTLS
+origin and protected references in `VICIDIAL_INTERNAL_CALL_BASE_URL`,
+`VICIDIAL_INTERNAL_CALL_HMAC_FILE`,
+`VICIDIAL_INTERNAL_CALL_SERVICE_IDENTITY`,
+`VICIDIAL_INTERNAL_CALL_EXPECTED_HOST`,
+`VICIDIAL_INTERNAL_CALL_CA_FILE`,
+`VICIDIAL_INTERNAL_CALL_MTLS_CERT_FILE`, and
+`VICIDIAL_INTERNAL_CALL_MTLS_KEY_FILE`. No credential value is committed.
+
+The protected `CODESTRA_INTERNAL_CALL_POLICY_FILE` is reloaded immediately
+before dispatch and checked against the independently configured running source
+SHA. A PostgreSQL attempt claim elects the sole mutation sender. Once claimed,
+timeout, disconnect, malformed acknowledgement, or 5xx can only continue by
+reading the same Server B operation; none permits another originate.
+
+Only the typed internal-call evidence contract may enter durable command
+history. Accepted, ringing, answered, and connected observations remain
+nonterminal and require later reconciliation. Completion requires bound terminal
+evidence, including the Asterisk identities, end timestamp, duration, and the
+internal-only safety assertions. The exact tested downstream implementation is
+VICIdial PR #26; its head is an integration dependency, not a protected release.
 
 The owning repositories must separately provide and deploy agent activation,
 secure browser credential enrollment, SIP registration, internal destination

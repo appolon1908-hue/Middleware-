@@ -1,0 +1,196 @@
+name: Generate automation v2 repair artifact
+
+on:
+  push:
+    branches:
+      - feat/automation-v2-runtime-integration-20260904
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automation-v2-repair-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  generate-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact draft head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove exact clean source
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install hash-locked test dependencies
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --require-hashes -r requirements-test.txt
+          python3 -m pip check
+
+      - name: Apply deterministic compatibility and governance repairs
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"{path}: expected one repair target, found {count}"
+                  )
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          runtime_old = (
+              '        checks["automation_store"] = (\n'
+              '            self.automation.ready() if self.automation is not None else None\n'
+              '        )\n'
+          )
+          runtime_new = (
+              '        if self.automation is not None:\n'
+              '            checks["automation_store"] = self.automation.ready()\n'
+          )
+          replace_once("app/runtime.py", runtime_old, runtime_new)
+
+          routes_old = (
+              '    observed = {\n'
+              '        f"{method} {route.path}"\n'
+              '        for route in app.routes\n'
+              '        for method in (route.methods or set())\n'
+              '        if route.path.startswith("/v2/automation")\n'
+              '    }\n'
+          )
+          routes_new = (
+              '    schema = app.openapi()\n'
+              '    observed = {\n'
+              '        f"{method.upper()} {path}"\n'
+              '        for path, item in schema["paths"].items()\n'
+              '        if path.startswith("/v2/automation")\n'
+              '        for method in item\n'
+              '        if method in {"get", "post", "put", "patch", "delete"}\n'
+              '    }\n'
+          )
+          replace_once("tests/test_automation_v2.py", routes_old, routes_new)
+
+          register_path = Path("config/test-skip-register.v1.json")
+          register = json.loads(register_path.read_text(encoding="utf-8"))
+          rows = register["registered_files"]
+          entry = {
+              "path": "tests/integration/test_automation_v2_store.py",
+              "gate": "RUNTIME_INTEGRATION_TESTS",
+              "required_job": "Disposable PostgreSQL Redis integration",
+          }
+          if any(row.get("path") == entry["path"] for row in rows):
+              raise SystemExit("automation v2 store test is already registered")
+          rows.append(entry)
+          rows.sort(key=lambda row: row["path"])
+          register_path.write_text(
+              json.dumps(register, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Regenerate runtime-derived API authorities
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/generate_api_contracts.py
+          python3 -m json.tool \
+            contracts/platform/middleware-openapi.generated.json >/dev/null
+          python3 -m json.tool config/test-skip-register.v1.json >/dev/null
+
+      - name: Run repository and focused regression gates
+        env:
+          PYTEST_ADDOPTS: -p no:cacheprovider
+        run: |
+          set -Eeuo pipefail
+          bash scripts/run_ci.sh
+          pytest -q \
+            tests/test_automation_v2.py \
+            tests/test_generated_api_parity.py \
+            tests/test_runtime.py
+          git diff --check
+
+      - name: Run complete hermetic test suite
+        env:
+          PYTEST_ADDOPTS: -p no:cacheprovider
+        run: pytest -q
+
+      - name: Record repair manifest
+        if: success()
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          from pathlib import Path
+
+          paths = [
+              "app/runtime.py",
+              "config/test-skip-register.v1.json",
+              "tests/test_automation_v2.py",
+              "contracts/platform/middleware-openapi.generated.json",
+              "contracts/platform/integration-fabric-api.v2.yaml",
+              "config/api-completion-matrix.yaml",
+          ]
+          source_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"],
+              text=True,
+          ).strip()
+          evidence = {
+              "schema_version": "1.0",
+              "source_sha": source_sha,
+              "runtime_deployed": False,
+              "external_effects_enabled": False,
+              "calls_placed": 0,
+              "files": {
+                  path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                  for path in paths
+              },
+          }
+          out = Path("artifacts/automation-v2-repair")
+          out.mkdir(parents=True, exist_ok=True)
+          (out / "manifest.json").write_text(
+              json.dumps(evidence, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload generated repair files
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: automation-v2-repair-${{ github.sha }}
+          path: |
+            app/runtime.py
+            config/test-skip-register.v1.json
+            tests/test_automation_v2.py
+            contracts/platform/middleware-openapi.generated.json
+            contracts/platform/integration-fabric-api.v2.yaml
+            config/api-completion-matrix.yaml
+            artifacts/automation-v2-repair/manifest.json
+          if-no-files-found: error
+          retention-days: 7

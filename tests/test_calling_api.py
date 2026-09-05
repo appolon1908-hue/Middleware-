@@ -238,6 +238,40 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["call_id"], "test-asterisk-id")
         self.assertEqual(len(self.store._commands), 2)
 
+    async def test_owner_can_status_and_reconcile_hangup_after_start_grant_expiry(self):
+        identity = await self.accept_call()
+        mutation = dict(
+            idempotency_key="test-hangup-status-0001", expected_version=1,
+            reason="Agent hangup",
+        )
+        status, created, _ = await asgi_request(
+            self.app, "POST",
+            f"/v1/telephony/calls/requests/{identity}/hangup", mutation,
+        )
+        self.assertEqual(status, 202)
+        hangup_id = created["hangup_operation_id"]
+        self.policy_mock.side_effect = AssertionError(
+            "read/end of an existing call must not reload the expired start grant"
+        )
+        status, observed, _ = await asgi_request(
+            self.app, "GET", f"/v1/telephony/calls/requests/{hangup_id}",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(observed["operation_id"], hangup_id)
+        status, reconciled, _ = await asgi_request(
+            self.app, "POST", f"/v1/telephony/calls/requests/{hangup_id}/reconcile",
+            dict(idempotency_key="test-hangup-reconcile-0001", expected_version=1,
+                 reason="Reconcile uncertain hangup"),
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(reconciled["operation_id"], hangup_id)
+
+        self.tokens.claims["sub"] = "subject-other"
+        denied, _, _ = await asgi_request(
+            self.app, "GET", f"/v1/telephony/calls/requests/{hangup_id}",
+        )
+        self.assertEqual(denied, 404)
+
     async def test_reconciliation_does_not_resubmit_originate(self):
         identity = await self.accept_call()
         status, _, _ = await asgi_request(self.app, "POST", f"/v1/telephony/calls/requests/{identity}/reconcile",

@@ -90,8 +90,45 @@ class CallingLedger:
                 raise CommandNotFound("calling request was not found")
         else:
             raise RuntimeError("unsupported calling command store")
-        self._owner(document, principal)
-        return document, await self.store.get(principal.tenant_id, operation_id)
+        operation = await self.store.get(principal.tenant_id, operation_id)
+        if document.command_type == ORIGINATE:
+            self._owner(document, principal)
+            return document, operation
+        if document.target != TARGET or document.command_type != HANGUP:
+            raise CommandNotFound("calling request was not found")
+        try:
+            original_id = UUID(str(document.payload["origin_operation_id"]))
+        except (KeyError, TypeError, ValueError):
+            raise CommandNotFound("calling request was not found") from None
+        if isinstance(self.store, PostgresCommandStore):
+            async with self.store.pool.acquire() as conn:
+                original_row = await conn.fetchrow(
+                    "SELECT payload,payload_sha256 FROM middleware_commands "
+                    "WHERE tenant_id=$1 AND command_id=$2",
+                    principal.tenant_id, str(original_id),
+                )
+            if original_row is None:
+                raise CommandNotFound("calling request was not found")
+            original = _decode_document(original_row)
+        else:
+            original = self._documents.get((principal.tenant_id, original_id))
+            if original is None:
+                raise CommandNotFound("calling request was not found")
+        self._owner(original, principal)
+        original_operation = await self.store.get(principal.tenant_id, original_id)
+        if (document.tenant_id != original.tenant_id
+                or document.requested_by != original.requested_by
+                or document.correlation_id != original.correlation_id
+                or document.payload.get("actor") != original.payload.get("actor")
+                or document.payload.get("originate") != original.payload.get("originate")
+                or document.payload.get("authorization_reference")
+                    != original.payload.get("authorization_reference")
+                or document.payload.get("policy_sha256")
+                    != original.payload.get("policy_sha256")
+                or document.payload.get("call_id")
+                    != original_operation.provider_operation_id):
+            raise CommandNotFound("calling request was not found")
+        return document, operation
 
     async def replay(self, principal: CallPrincipal, body: OriginateRequest,
                      correlation_id: str) -> CommandOperation | None:
@@ -224,7 +261,12 @@ class CallingLedger:
             if current.resource_version != expected_version:
                 raise CommandConflict("expected_version is stale")
         # The store checks the complete duplicate payload, including the call ID.
-        return await self.store.submit(command, authenticated_client_id=CLIENT_ID)
+        operation = await self.store.submit(
+            command, authenticated_client_id=CLIENT_ID,
+        )
+        if isinstance(self.store, MemoryCommandStore):
+            self._documents[(principal.tenant_id, command.command_id)] = command
+        return operation
 
 
 def operation_response(operation: CommandOperation) -> dict[str, Any]:

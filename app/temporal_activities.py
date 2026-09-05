@@ -401,12 +401,15 @@ class CommandLedgerWorkflowActivities:
             )
         if row["state"] == "completed":
             operation = await self.store.get(request.tenant_id, operation_id)
-            return None, ActivityResult(
+            command, payload_digest = self._validated_reconciliation_command(
+                row, request, operation_id,
+            )
+            return command, ActivityResult(
                 status="completed",
                 detail="provider read-back was already durably reconciled",
                 provider_operation_id=operation.provider_operation_id,
                 readback_evidence=operation.readback_evidence,
-            ), None
+            ), payload_digest
         if row["state"] != "reconciliation_required":
             raise ApplicationError(
                 "operation is not awaiting reconciliation",
@@ -600,6 +603,13 @@ class CommandLedgerWorkflowActivities:
             request
         )
         if completed is not None:
+            assert command is not None
+            if (command.target == TARGET and command.command_type == HANGUP
+                    and completed.readback_evidence):
+                await self.complete_originating_call(OriginalCallCompletionRequest(
+                    command.command_id, command.tenant_id,
+                    completed.readback_evidence,
+                ))
             return completed
         assert command is not None
         assert payload_sha256 is not None

@@ -605,11 +605,18 @@ class CommandLedgerWorkflowActivities:
             result = ActivityResult(
                 result.status, result.detail, result.provider_operation_id, evidence,
             )
-        return await self._persist_reconciliation_result(
+        persisted = await self._persist_reconciliation_result(
             request,
             result,
             payload_sha256,
         )
+        if (command.target == TARGET and command.command_type == HANGUP
+                and persisted.status == "completed"):
+            await self.complete_originating_call(OriginalCallCompletionRequest(
+                command.command_id, command.tenant_id,
+                persisted.readback_evidence or {},
+            ))
+        return persisted
 
     @activity.defn(name="complete_originating_call")
     async def complete_originating_call(

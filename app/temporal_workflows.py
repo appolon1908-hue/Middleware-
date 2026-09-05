@@ -393,13 +393,12 @@ class CommandExecutionWorkflow:
                 status="reconciliation_required",
                 detail="provider read-back failed",
             )
-        calling_observation = None
         if (request.target == TARGET and request.command_type in {ORIGINATE, HANGUP}
                 and readback.status != "matched"):
             try:
                 original = (request.command_id if request.command_type == ORIGINATE
                             else str(request.payload["origin_operation_id"]))
-                calling_observation = validate_call_evidence(
+                validate_call_evidence(
                     readback.readback_evidence, operation_id=original,
                     correlation_id=request.correlation_id, tenant_id=request.tenant_id,
                     actor=request.payload["actor"],
@@ -407,7 +406,7 @@ class CommandExecutionWorkflow:
                     require_terminal=False,
                 )
             except (KeyError, TypeError, ValueError):
-                calling_observation = None
+                pass
         if readback.status != "matched":
             await _command_transition(
                 CommandTransitionRequest(
@@ -417,7 +416,6 @@ class CommandExecutionWorkflow:
                     actor,
                     "provider read-back did not match durable command intent",
                     executed.provider_operation_id,
-                    calling_observation,
                 )
             )
             return WorkflowOutcome(

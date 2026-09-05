@@ -12,7 +12,7 @@ import asyncpg
 
 from app.calling_ledger import CallingLedger
 from app.commands import CommandConflict, CommandPolicyRegistry, CommandService, PostgresCommandStore
-from test_calling_contract import grant, originate, principal
+from tests.test_calling_contract import grant, originate, principal
 
 DATABASE = os.getenv("CALLING_TEST_DATABASE_URL", "")
 

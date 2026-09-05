@@ -16,7 +16,7 @@ from app.calling_contract import CAPABILITY, CLIENT_ID
 from app.commands import CommandError, CommandPolicyRegistry, CommandService, MemoryCommandStore
 from app.security import AuthenticationError, SecurityError, validate_claims
 from app.telephony_api import router
-from test_calling_contract import SOURCE_SHA, grant, originate, principal
+from tests.test_calling_contract import SOURCE_SHA, grant, originate, principal
 
 
 class FakeCallingTokens:

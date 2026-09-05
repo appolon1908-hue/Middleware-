@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -41,7 +42,16 @@ class IntegrationAuthorityCompatibilityTests(unittest.TestCase):
         )
 
     def test_original_public_cli_validate_remains_usable(self) -> None:
-        self.assertEqual(MODULE.main(["--mode", "validate"]), 0)
+        previous = MODULE.BASE.EVIDENCE_DIR
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                MODULE.BASE.EVIDENCE_DIR = (
+                    Path(directory) / "integration-main-release-authorities"
+                )
+                self.assertEqual(MODULE.main(["--mode", "validate"]), 0)
+                self.assertTrue(MODULE.BASE.EVIDENCE_DIR.is_dir())
+        finally:
+            MODULE.BASE.EVIDENCE_DIR = previous
 
     def test_policy_job_has_no_issue_write_permission(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")

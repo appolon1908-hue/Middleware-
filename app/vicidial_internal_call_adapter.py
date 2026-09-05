@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import httpx
 from .calling_contract import (
@@ -197,11 +198,32 @@ class VicidialInternalCallAdapter:
             return ActivityResult(value["status"], "bounded originate submitted",
                                   value.get("asterisk_uniqueid"))
         if request.command_type == HANGUP:
-            if request.target != TARGET or request.capability != CAPABILITY or request.authenticated_client_id != CLIENT_ID:
+            if ((request.target, request.command_version, request.capability,
+                 request.authenticated_client_id) !=
+                    (TARGET, "1.0", CAPABILITY, CLIENT_ID)):
                 raise VicidialInternalCallError("hangup provenance is outside bounded calling")
             original = str(request.payload.get("origin_operation_id", ""))
             if not original or set(request.payload) != {"actor", "originate", "origin_operation_id", "call_id", "authorization_reference", "policy_sha256", "reason"}:
                 raise VicidialInternalCallError("hangup payload shape is not canonical")
+            try:
+                actor = CallPrincipal.model_validate(request.payload["actor"])
+                originate = OriginateRequest.model_validate(
+                    request.payload["originate"] | {"idempotency_key": original}
+                )
+                UUID(original)
+            except (KeyError, TypeError, ValueError):
+                raise VicidialInternalCallError("hangup identity or original request is invalid") from None
+            if (request.tenant_id != actor.tenant_id
+                    or request.requested_by != actor.subject
+                    or actor.extension != "6901" or actor.campaign_id != "TEST_SYN"
+                    or originate.employee_id != actor.employee_id
+                    or originate.campaign != actor.campaign_id
+                    or originate.business_unit != actor.business_unit
+                    or originate.destination != "internal:TEST_ECHO"
+                    or originate.destination_class != "internal_test"
+                    or originate.recording_requested
+                    or not str(request.payload["call_id"]).strip()):
+                raise VicidialInternalCallError("hangup binding is outside the authorized call")
             value = await self._request("POST", f"/v1/calls/internal/{original}/hangup",
                                         document={}, scope="telephony:internal-call-hangup",
                                         idempotency_key=original + ":hangup")

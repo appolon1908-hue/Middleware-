@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from app.calling_contract import CAPABILITY, CLIENT_ID, ORIGINATE, CallingGrant, CallPrincipal
+from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, ORIGINATE, CallingGrant, CallPrincipal
 from app.temporal_workflows import CommandExecutionRequest
 from app.vicidial_internal_call_adapter import (
     VicidialInternalCallAdapter, VicidialInternalCallError,
@@ -74,6 +74,21 @@ def command(grant):
             },
             "authorization_reference": grant.authorization_reference,
             "policy_sha256": grant.digest(),
+        },
+    )
+
+
+def hangup_command(grant):
+    original = command(grant)
+    return CommandExecutionRequest(
+        command_id="22222222-2222-5222-8222-222222222222",
+        command_type=HANGUP, command_version="1.0", target="vicidial-restricted",
+        tenant_id=original.tenant_id, requested_by=original.requested_by,
+        correlation_id=original.correlation_id, idempotency_key="hangup-appolon-0001",
+        capability=CAPABILITY, authenticated_client_id=CLIENT_ID,
+        payload={
+            **original.payload, "origin_operation_id": original.command_id,
+            "call_id": "codestra-unique-1", "reason": "Agent hangup",
         },
     )
 
@@ -184,3 +199,39 @@ def test_wrong_identity_is_rejected(field, value, tmp_path):
                                           httpx.AsyncClient(transport=httpx.MockTransport(lambda r: None)))
     with pytest.raises(VicidialInternalCallError):
         adapter._originate(request)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", [
+    "requested_by", "tenant_id", "actor_extension", "destination",
+])
+async def test_hangup_binding_mismatch_fails_before_network(change, tmp_path):
+    grant, env = environment(tmp_path)
+    request = hangup_command(grant)
+    values = request.__dict__.copy()
+    if change == "requested_by":
+        values["requested_by"] = "subject-other"
+    elif change == "tenant_id":
+        values["tenant_id"] = "tenant-other"
+    elif change == "actor_extension":
+        values["payload"] = request.payload | {
+            "actor": request.payload["actor"] | {"extension": "6101"},
+        }
+    else:
+        values["payload"] = request.payload | {
+            "originate": request.payload["originate"] | {"destination": "internal:OTHER"},
+        }
+    request = CommandExecutionRequest(**values)
+    called = False
+
+    async def endpoint(http_request):
+        nonlocal called
+        called = True
+        return httpx.Response(200, request=http_request, json={})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(endpoint))
+    adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
+    with pytest.raises(VicidialInternalCallError, match="hangup"):
+        await adapter.execute(request)
+    assert called is False
+    await client.aclose()

@@ -10,6 +10,7 @@
     "DEAD_LETTER_REPLAY": false,
     "EMAIL_DELIVERY": false,
     "EXTERNAL_MODEL_CALLS": false,
+    "INTERNAL_TELEPHONY_CALLS": false,
     "LIVE_ADVERTISING": false,
     "OBSERVABILITY_ALERT_EMAIL_DELIVERY": false,
     "ODOO_WRITE": false,

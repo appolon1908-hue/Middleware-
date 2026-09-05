@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import stat
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from app import vicidial_odoo_projection_config as projection_config
 from app.vicidial_odoo_projection import (
     ProjectionConfigurationError,
     ProjectionSettings,
@@ -23,12 +25,30 @@ COMPOSE = (
     / "vicidial-odoo-projection"
     / "compose.override.example.yml"
 )
+RUNTIME_AUTHORITY = (
+    ROOT
+    / "config"
+    / "vicidial-odoo-projection-runtime-authority.v1.json"
+)
+
+
+@pytest.fixture(autouse=True)
+def _stub_projection_secret_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep profile-path tests hermetic while production still reads real files."""
+
+    def read_private_text(path: Path, *, minimum_bytes: int = 1) -> str:
+        if path.name.endswith(".json"):
+            return json.dumps({"COD": "s" * 32})
+        return "s" * max(32, minimum_bytes)
+
+    monkeypatch.setattr(
+        projection_config._BASE,
+        "_read_private_text",
+        read_private_text,
+    )
 
 
 def _enabled_staging_env(tmp_path: Path) -> dict[str, str]:
-    secret = tmp_path / "odoo-call-event-hmac"
-    secret.write_text("s" * 32, encoding="utf-8")
-    secret.chmod(0o600)
     return {
         "APP_ENV": "staging",
         "RUNTIME_PROFILE_ID": "codestra-middleware-staging-v1",
@@ -48,8 +68,44 @@ def _enabled_staging_env(tmp_path: Path) -> dict[str, str]:
             "middleware-staging-vicidial-odoo-nats.creds"
         ),
         "ODOO_19_BASE_URL": "https://odoo-staging.internal.codestra",
-        "VICIDIAL_ODOO_HMAC_SECRET_FILE": str(secret),
+        "VICIDIAL_ODOO_HMAC_SECRET_FILE": (
+            "/run/secrets/middleware-staging-vicidial-odoo-hmac"
+        ),
         "PRODUCTION_DIALING": "DISABLED",
+    }
+
+
+def test_projection_runtime_authority_is_exact_and_fail_closed() -> None:
+    document = json.loads(RUNTIME_AUTHORITY.read_text(encoding="utf-8"))
+    assert document["schema_version"] == "1.0"
+    assert document["kind"] == (
+        "vicidial-odoo-projection-runtime-authority"
+    )
+    profiles = document["profiles"]
+    assert set(profiles) == {
+        "codestra-middleware-staging-v1",
+        "codestra-middleware-production-v1",
+        "codestra-middleware-production-compose-v1",
+    }
+    assert profiles["codestra-middleware-staging-v1"] == {
+        "environment": "staging",
+        "mode": "synthetic-only",
+        "odoo_origin": "https://odoo-staging.internal.codestra",
+        "hmac_secret_path_prefix": (
+            "/run/secrets/middleware-staging-vicidial-odoo-"
+        ),
+    }
+    assert profiles["codestra-middleware-production-v1"]["mode"] == (
+        "blocked-pending-protected-authority"
+    )
+    assert profiles[
+        "codestra-middleware-production-compose-v1"
+    ]["mode"] == "blocked-pending-protected-authority"
+    assert document["safety_boundary"] == {
+        "runtime_activation_authorized_by_this_file": False,
+        "production_dialing_authorized_by_this_file": False,
+        "external_effects_authorized_by_this_file": False,
+        "calls_placed_expected": 0,
     }
 
 
@@ -59,6 +115,9 @@ def test_enabled_projection_is_bound_to_registered_staging_profile(
     settings = ProjectionSettings.from_env(_enabled_staging_env(tmp_path))
     assert settings.runtime_profile_id == "codestra-middleware-staging-v1"
     assert settings.nats_stream == "CODESTRA_STAGING_EVENTS"
+    assert settings.odoo_base_url == (
+        "https://odoo-staging.internal.codestra"
+    )
     assert settings.subject == (
         "codestra.staging.events.vicidial.call.lifecycle.>"
     )
@@ -85,6 +144,32 @@ def test_staging_projection_rejects_production_nats_identity(
     with pytest.raises(
         ProjectionConfigurationError,
         match="must match the selected runtime profile",
+    ):
+        ProjectionSettings.from_env(env)
+
+
+def test_staging_projection_rejects_production_odoo_origin(
+    tmp_path: Path,
+) -> None:
+    env = _enabled_staging_env(tmp_path)
+    env["ODOO_19_BASE_URL"] = "https://odoo.internal.codestra"
+    with pytest.raises(
+        ProjectionConfigurationError,
+        match="Odoo origin does not match",
+    ):
+        ProjectionSettings.from_env(env)
+
+
+def test_staging_projection_rejects_production_hmac_path(
+    tmp_path: Path,
+) -> None:
+    env = _enabled_staging_env(tmp_path)
+    env["VICIDIAL_ODOO_HMAC_SECRET_FILE"] = (
+        "/run/secrets/middleware-production-vicidial-odoo-hmac"
+    )
+    with pytest.raises(
+        ProjectionConfigurationError,
+        match="HMAC_SECRET_FILE does not match",
     ):
         ProjectionSettings.from_env(env)
 
@@ -151,6 +236,10 @@ def test_projection_rejects_activation_for_profile_that_forbids_it(
                 "middleware-production-compose-vicidial-odoo-nats.creds"
             ),
             "ODOO_19_BASE_URL": "https://odoo.internal.codestra",
+            "VICIDIAL_ODOO_HMAC_SECRET_FILE": (
+                "/run/secrets/"
+                "middleware-production-compose-vicidial-odoo-hmac"
+            ),
             "EXTERNAL_DELIVERY_ENABLED": "true",
             "ODOO_WRITE": "true",
         }
@@ -238,6 +327,13 @@ def test_worker_compose_uses_distroless_safe_state_initializer() -> None:
         volume.endswith(
             ":/run/secrets/"
             "middleware-staging-vicidial-odoo-nats.creds:ro"
+        )
+        for volume in worker["volumes"]
+    )
+    assert any(
+        volume.endswith(
+            ":/run/secrets/"
+            "middleware-staging-vicidial-odoo-hmac:ro"
         )
         for volume in worker["volumes"]
     )

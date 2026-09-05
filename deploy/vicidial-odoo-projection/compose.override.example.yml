@@ -39,7 +39,7 @@ services:
     volumes:
       - vicidial_odoo_projection_state:/var/lib/codestra-middleware
       - ${NATS_VICIDIAL_ODOO_CREDS_FILE:?host NATS credentials file}:/run/secrets/middleware-staging-vicidial-odoo-nats.creds:ro
-      - ${ODOO_CALL_EVENT_HMAC_FILE:?host Odoo HMAC file}:/run/secrets/odoo-call-event-hmac:ro
+      - ${ODOO_CALL_EVENT_HMAC_FILE:?host Odoo HMAC file}:/run/secrets/middleware-staging-vicidial-odoo-hmac:ro
     networks:
       - middleware_private
 

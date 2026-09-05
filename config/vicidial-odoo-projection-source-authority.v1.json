@@ -8,6 +8,7 @@
       "state_at_lock": "merged",
       "base_ref": "refs/heads/main",
       "source_sha": "922d039b5143f3ac738e88998036355562a8dd5d",
+      "merge_sha": "922d039b5143f3ac738e88998036355562a8dd5d",
       "runtime_env": "KEYCLOAK_LIFECYCLE_SOURCE_SHA",
       "merge_required_before_activation": true
     },

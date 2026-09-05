@@ -123,18 +123,25 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
             def __init__(self):
                 self.executions = 0
                 self.readbacks = 0
+                self.claim_observed = asyncio.Event()
+                self.loser_observed = asyncio.Event()
             async def execute(self, _request):
                 self.executions += 1
+                self.claim_observed.set()
+                await asyncio.wait_for(self.loser_observed.wait(), timeout=5)
                 return ActivityResult("accepted", "synthetic accepted", "provider-id")
             async def readback(self, _request):
+                await asyncio.wait_for(self.claim_observed.wait(), timeout=5)
                 self.readbacks += 1
+                self.loser_observed.set()
                 return ActivityResult("mismatch", "synthetic pending", "provider-id")
 
         adapter = Adapter()
         first = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)  # type: ignore[arg-type]
         second = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)  # type: ignore[arg-type]
-        await first.execute_command(request)
-        await second.execute_command(request)
+        await asyncio.gather(
+            first.execute_command(request), second.execute_command(request),
+        )
         self.assertEqual(adapter.executions, 1)
         self.assertEqual(adapter.readbacks, 1)
         state, result_payload = await self.pool.fetchrow(

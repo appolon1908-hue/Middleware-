@@ -115,15 +115,24 @@ class VicidialInternalCallAdapter:
         return self._client
 
     async def _request(self, method: str, path: str, *, document: dict | None = None,
-                       scope: str, idempotency_key: str = "") -> dict[str, Any]:
-        body = (json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
-                if document is not None else b"")
-        request = self._client_or_create().build_request(
-            method, self._origin() + path, content=body,
-            headers=self._headers(method, path, body, scope, idempotency_key),
-        )
+                       scope: str, idempotency_key: str = "",
+                       reject_preparation: bool = False) -> dict[str, Any]:
         try:
-            response = await self._client_or_create().send(request, stream=True)
+            body = (json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+                    if document is not None else b"")
+            client = self._client_or_create()
+            request = client.build_request(
+                method, self._origin() + path, content=body,
+                headers=self._headers(method, path, body, scope, idempotency_key),
+            )
+        except (ConfigurationError, OSError, ssl.SSLError, ValueError,
+                UnicodeError, httpx.HTTPError) as exc:
+            error = "bounded Server B request preparation failed"
+            if reject_preparation:
+                raise VicidialInternalCallPreDispatchRejected(error) from exc
+            raise VicidialInternalCallError(error) from exc
+        try:
+            response = await client.send(request, stream=True)
             if int(response.headers.get("content-length", "0") or 0) > 65_536:
                 raise VicidialInternalCallError("Server B response exceeded the bounded size")
             chunks = bytearray()
@@ -196,7 +205,8 @@ class VicidialInternalCallAdapter:
             _, _, document = self._originate(request)
             value = await self._request("POST", self.ORIGINATE_PATH, document=document,
                                         scope="telephony:internal-call",
-                                        idempotency_key=request.command_id)
+                                        idempotency_key=request.command_id,
+                                        reject_preparation=True)
             if value.get("operation_id") != request.command_id or value.get("status") not in {"accepted", "dispatch_unknown"}:
                 raise VicidialInternalCallUnknown("Server B originate acknowledgement was invalid")
             return ActivityResult(value["status"], "bounded originate submitted",

@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import ssl
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -184,6 +185,46 @@ async def test_policy_change_after_enqueue_fails_before_network(tmp_path):
     with pytest.raises(VicidialInternalCallPreDispatchRejected, match="changed"):
         await adapter.execute(command(grant))
     assert called is False
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["origin", "tls", "headers"])
+async def test_request_preparation_failure_is_conclusive_no_send(
+    tmp_path, monkeypatch, failure,
+):
+    grant, env = environment(tmp_path)
+    sends = 0
+
+    async def endpoint(request):
+        nonlocal sends
+        sends += 1
+        return httpx.Response(200, request=request, json={})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(endpoint))
+    adapter = VicidialInternalCallAdapter(
+        SimpleNamespace(source_sha=SOURCE_SHA), env, client,
+    )
+    if failure == "origin":
+        env.pop("VICIDIAL_INTERNAL_CALL_BASE_URL")
+    elif failure == "tls":
+        monkeypatch.setattr(
+            adapter, "_client_or_create",
+            lambda: (_ for _ in ()).throw(ssl.SSLError("synthetic TLS setup")),
+        )
+    else:
+        monkeypatch.setattr(
+            adapter, "_headers",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                UnicodeError("synthetic header encoding")
+            ),
+        )
+    with pytest.raises(
+        VicidialInternalCallPreDispatchRejected,
+        match="request preparation failed",
+    ):
+        await adapter.execute(command(grant))
+    assert sends == 0
     await client.aclose()
 
 

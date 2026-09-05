@@ -255,10 +255,18 @@ class CommandLedgerWorkflowActivities:
                     durable.tenant_id, durable.command_id,
                 )
                 attempt = await conn.fetchrow(
-                    "SELECT id, result_payload FROM middleware_command_attempts "
+                    "SELECT id, state, result_payload, error_code FROM middleware_command_attempts "
                     "WHERE tenant_id=$1 AND command_id=$2 ORDER BY attempt_number DESC LIMIT 1 FOR UPDATE",
                     durable.tenant_id, durable.command_id,
                 )
+                if (row is not None and attempt is not None
+                        and row["state"] == "cancelled"
+                        and attempt["state"] == "failed"
+                        and attempt["error_code"] == "pre_dispatch_rejected"
+                        and dict(attempt["result_payload"] or {}) == {"dispatch_claimed": True}):
+                    return ActivityResult(
+                        "cancelled", "bounded originate rejected before transport",
+                    )
                 if row is None or attempt is None or row["state"] != "dispatching" or dict(attempt["result_payload"] or {}) != {"dispatch_claimed": True}:
                     raise ApplicationError(
                         "pre-dispatch rejection does not own the durable dispatch claim",

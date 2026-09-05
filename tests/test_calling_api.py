@@ -272,6 +272,46 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(denied, 404)
 
+    async def test_hangup_relationship_tampering_and_hangup_of_hangup_are_denied(self):
+        identity = await self.accept_call()
+        mutation = dict(
+            idempotency_key="test-hangup-relation-0001", expected_version=1,
+            reason="Agent hangup",
+        )
+        status, created, _ = await asgi_request(
+            self.app, "POST",
+            f"/v1/telephony/calls/requests/{identity}/hangup", mutation,
+        )
+        self.assertEqual(status, 202)
+        hangup_id = UUID(created["hangup_operation_id"])
+
+        nested_status, _, _ = await asgi_request(
+            self.app, "POST",
+            f"/v1/telephony/calls/requests/{hangup_id}/hangup",
+            dict(idempotency_key="test-nested-hangup-0001", expected_version=1,
+                 reason="Invalid nested hangup"),
+        )
+        self.assertEqual(nested_status, 409)
+        self.assertEqual(len(self.store._commands), 2)
+
+        ledger = self.runtime._calling_ledger
+        durable = ledger._documents[(principal().tenant_id, hangup_id)]
+        for payload_update in (
+            {"origin_operation_id": str(hangup_id)},
+            {"actor": durable.payload["actor"] | {"extension": "6999"}},
+            {"call_id": "different-provider-call"},
+        ):
+            ledger._documents[(principal().tenant_id, hangup_id)] = (
+                durable.model_copy(update={
+                    "payload": durable.payload | payload_update,
+                })
+            )
+            denied, _, _ = await asgi_request(
+                self.app, "GET", f"/v1/telephony/calls/requests/{hangup_id}",
+            )
+            self.assertEqual(denied, 404)
+        ledger._documents[(principal().tenant_id, hangup_id)] = durable
+
     async def test_reconciliation_does_not_resubmit_originate(self):
         identity = await self.accept_call()
         status, _, _ = await asgi_request(self.app, "POST", f"/v1/telephony/calls/requests/{identity}/reconcile",

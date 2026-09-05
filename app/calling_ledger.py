@@ -238,6 +238,8 @@ class CallingLedger:
     async def hangup(self, principal: CallPrincipal, operation_id: UUID, *,
                      key: str, expected_version: int, reason: str) -> CommandOperation:
         original, current = await self.get(principal, operation_id)
+        if original.command_type != ORIGINATE:
+            raise CommandConflict("hangup must reference an originate operation")
         # Expiring the start grant must not remove the owner's ability to end
         # that same call. No new originate authority is granted by this method.
         if not current.provider_operation_id:

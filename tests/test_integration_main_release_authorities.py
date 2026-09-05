@@ -25,21 +25,15 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
 
     def test_exact_fixed_repository_set_validates(self) -> None:
         rows = MODULE.validate_config(self.config)
-        self.assertEqual(
-            {row["repository"] for row in rows},
-            set(V2.EXPECTED_REPOSITORIES),
-        )
-        self.assertEqual(len(rows), 8)
+        self.assertEqual({row["repository"] for row in rows}, set(V2.EXPECTED_REPOSITORIES))
+        self.assertEqual(len(rows), 7)
         self.assertEqual(self.config["reviewer"], MODULE.EXPECTED_REVIEWER)
 
     def test_every_ruleset_is_fail_closed(self) -> None:
         for row in MODULE.validate_config(self.config):
             normalized = MODULE.normalize_ruleset(MODULE.desired_ruleset(row))
             self.assertEqual(normalized["bypass_actors"], [])
-            self.assertEqual(
-                normalized["conditions"]["ref_name"]["include"],
-                ["~DEFAULT_BRANCH"],
-            )
+            self.assertEqual(normalized["conditions"]["ref_name"]["include"], ["~DEFAULT_BRANCH"])
             pull = normalized["rules"]["pull_request"]
             self.assertEqual(pull["required_approving_review_count"], 1)
             self.assertTrue(pull["dismiss_stale_reviews_on_push"])
@@ -75,7 +69,7 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         self.assertFalse(document["production_changed"])
         self.assertFalse(document["runtime_contacted"])
         self.assertFalse(document["external_effects_enabled"])
-        self.assertEqual(len(document["repositories"]), 8)
+        self.assertEqual(len(document["repositories"]), 7)
 
 
 if __name__ == "__main__":

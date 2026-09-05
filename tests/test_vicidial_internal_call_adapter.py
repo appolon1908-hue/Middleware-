@@ -16,7 +16,7 @@ from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, ORIGINATE, Calli
 from app.temporal_workflows import CommandExecutionRequest
 from app.vicidial_internal_call_adapter import (
     VicidialInternalCallAdapter, VicidialInternalCallError,
-    VicidialInternalCallUnknown,
+    VicidialInternalCallPreDispatchRejected, VicidialInternalCallUnknown,
 )
 
 SOURCE_SHA = "a" * 40
@@ -181,7 +181,7 @@ async def test_policy_change_after_enqueue_fails_before_network(tmp_path):
     Path(env["CODESTRA_INTERNAL_CALL_POLICY_FILE"]).write_text(changed.model_dump_json())
     client = httpx.AsyncClient(transport=httpx.MockTransport(endpoint))
     adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
-    with pytest.raises(VicidialInternalCallError, match="changed"):
+    with pytest.raises(VicidialInternalCallPreDispatchRejected, match="changed"):
         await adapter.execute(command(grant))
     assert called is False
     await client.aclose()

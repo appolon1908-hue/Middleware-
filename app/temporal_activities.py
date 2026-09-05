@@ -35,7 +35,7 @@ from .calling_contract import (
 )
 from .vicidial_internal_call_adapter import (
     VicidialInternalCallAdapter, VicidialInternalCallError,
-    VicidialInternalCallUnknown,
+    VicidialInternalCallPreDispatchRejected, VicidialInternalCallUnknown,
 )
 from .temporal_workflows import (
     ActivityResult,
@@ -202,6 +202,14 @@ class CommandLedgerWorkflowActivities:
                 return await adapter.readback(request)
         try:
             return await adapter.execute(request)
+        except VicidialInternalCallPreDispatchRejected:
+            # The adapter performs every policy/provenance check before it
+            # constructs or sends the HTTP request. This status is therefore
+            # reserved for a positively known no-send originate outcome.
+            return ActivityResult(
+                "pre_dispatch_rejected",
+                "bounded originate rejected before transport",
+            )
         except PostlySocialUnknownOutcomeError as exc:
             # Postly has no idempotency key. Retrying an ambiguous publish
             # could put a second post on a real account, so this outcome must
@@ -227,6 +235,56 @@ class CommandLedgerWorkflowActivities:
                 str(exc),
                 type="ProviderAdapterError",
             ) from exc
+
+    @activity.defn(name="record_call_pre_dispatch_rejection")
+    async def record_call_pre_dispatch_rejection(
+        self, request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        """Atomically persist the claimed, conclusively unsent call outcome."""
+        durable = await self._load_durable_execution_request(request)
+        if durable.command_type != ORIGINATE or durable.target != TARGET:
+            raise ApplicationError(
+                "pre-dispatch rejection is restricted to bounded originate",
+                non_retryable=True, type="CommandExecutionRejected",
+            )
+        async with self.store.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    "SELECT state FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2 FOR UPDATE",
+                    durable.tenant_id, durable.command_id,
+                )
+                attempt = await conn.fetchrow(
+                    "SELECT id, result_payload FROM middleware_command_attempts "
+                    "WHERE tenant_id=$1 AND command_id=$2 ORDER BY attempt_number DESC LIMIT 1 FOR UPDATE",
+                    durable.tenant_id, durable.command_id,
+                )
+                if row is None or attempt is None or row["state"] != "dispatching" or dict(attempt["result_payload"] or {}) != {"dispatch_claimed": True}:
+                    raise ApplicationError(
+                        "pre-dispatch rejection does not own the durable dispatch claim",
+                        non_retryable=True, type="CommandExecutionRejected",
+                    )
+                await conn.execute(
+                    "UPDATE middleware_commands SET state='cancelled', resource_version=resource_version+1, "
+                    "cancelled_at=now(), cancellation_reason=$3, updated_at=now() "
+                    "WHERE tenant_id=$1 AND command_id=$2",
+                    durable.tenant_id, durable.command_id,
+                    "bounded originate rejected before transport",
+                )
+                await conn.execute(
+                    "UPDATE middleware_command_attempts SET state='failed', "
+                    "error_code='pre_dispatch_rejected', error_detail=$2, finished_at=now() WHERE id=$1",
+                    attempt["id"],
+                    "bounded originate rejected before transport",
+                )
+                await conn.execute(
+                    "INSERT INTO middleware_command_audit "
+                    "(tenant_id,command_id,previous_state,new_state,actor_id,reason,metadata) "
+                    "VALUES ($1,$2,'dispatching','cancelled',$3,$4,'{\"external_effect\":false}'::jsonb)",
+                    durable.tenant_id, durable.command_id,
+                    "temporal:codestra.calling-dispatch.v1",
+                    "bounded originate rejected before transport",
+                )
+        return ActivityResult("cancelled", "bounded originate rejected before transport")
 
     @activity.defn(name="readback_command")
     async def readback_command(
@@ -716,6 +774,7 @@ class CommandLedgerWorkflowActivities:
         return (
             self.record_command_transition,
             self.execute_command,
+            self.record_call_pre_dispatch_rejection,
             self.readback_command,
             self.reconcile_operation,
             self.complete_originating_call,

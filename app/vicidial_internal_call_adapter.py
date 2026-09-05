@@ -32,6 +32,10 @@ class VicidialInternalCallUnknown(VicidialInternalCallError):
     """The mutation may have reached Server B and must only be read back."""
 
 
+class VicidialInternalCallPreDispatchRejected(VicidialInternalCallError):
+    """The originate request was conclusively rejected before transport."""
+
+
 class VicidialInternalCallAdapter:
     ORIGINATE_PATH = "/v1/calls/internal/originate"
 
@@ -155,28 +159,28 @@ class VicidialInternalCallAdapter:
         if (request.target, request.command_type, request.command_version,
                 request.capability, request.authenticated_client_id) != (
                 TARGET, ORIGINATE, "1.0", CAPABILITY, CLIENT_ID):
-            raise VicidialInternalCallError("command provenance is outside bounded calling")
+            raise VicidialInternalCallPreDispatchRejected("command provenance is outside bounded calling")
         if set(request.payload) != {"actor", "originate", "authorization_reference", "policy_sha256"}:
-            raise VicidialInternalCallError("calling payload shape is not canonical")
+            raise VicidialInternalCallPreDispatchRejected("calling payload shape is not canonical")
         try:
             principal = CallPrincipal.model_validate(request.payload["actor"])
             body = OriginateRequest.model_validate(request.payload["originate"] | {
                 "idempotency_key": request.idempotency_key,
             })
         except (KeyError, TypeError, ValueError):
-            raise VicidialInternalCallError("calling identity or request is invalid") from None
+            raise VicidialInternalCallPreDispatchRejected("calling identity or request is invalid") from None
         grant = load_grant(self.env)
         if grant is None or grant.digest() != request.payload["policy_sha256"]:
-            raise VicidialInternalCallError("dispatch-time calling policy is unavailable or changed")
+            raise VicidialInternalCallPreDispatchRejected("dispatch-time calling policy is unavailable or changed")
         try:
             grant.authorize(principal, body, source_sha=self.settings.source_sha)
         except CallingContractError as exc:
-            raise VicidialInternalCallError(
+            raise VicidialInternalCallPreDispatchRejected(
                 "dispatch-time calling policy rejected the command"
             ) from exc
         if (principal.extension != "6901" or principal.campaign_id != "TEST_SYN"
                 or body.destination != "internal:TEST_ECHO"):
-            raise VicidialInternalCallError("identity or route is outside Appolon internal calling")
+            raise VicidialInternalCallPreDispatchRejected("identity or route is outside Appolon internal calling")
         return principal, body, {
             "operation_id": request.command_id, "correlation_id": request.correlation_id,
             "tenant_id": principal.tenant_id, "subject": principal.subject,

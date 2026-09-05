@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +21,20 @@ from app.vicidial_internal_call_adapter import (
 
 SOURCE_SHA = "a" * 40
 SECRET = b"synthetic-hmac-value-with-32-bytes-minimum"
+
+
+@pytest.fixture(autouse=True)
+def emulate_root_owned_policy(monkeypatch):
+    """CI is non-root; only the fstat ownership observation is synthesized."""
+    actual_fstat = os.fstat
+
+    def root_fstat(descriptor):
+        value = actual_fstat(descriptor)
+        return SimpleNamespace(
+            st_mode=value.st_mode, st_uid=0, st_size=value.st_size,
+        )
+
+    monkeypatch.setattr("app.calling_contract.os.fstat", root_fstat)
 
 
 def principal():

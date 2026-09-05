@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -12,11 +13,13 @@ import asyncpg
 
 from app.calling_ledger import CallingLedger
 from app.commands import (
-    AUTHENTICATED_CLIENT_ID_KEY, CommandConflict, CommandPolicyRegistry,
+    AUTHENTICATED_CLIENT_ID_KEY, CommandConflict, CommandNotFound, CommandPolicyRegistry,
     CommandService, PostgresCommandStore,
 )
 from app.temporal_activities import CommandLedgerWorkflowActivities
-from app.temporal_workflows import ActivityResult, CommandExecutionRequest
+from app.temporal_workflows import (
+    ActivityResult, CommandExecutionRequest, ReconciliationRequest,
+)
 from tests.test_calling_contract import grant, originate, principal
 
 DATABASE = os.getenv("CALLING_TEST_DATABASE_URL", "")
@@ -141,6 +144,104 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state, "dispatching")
         value = result_payload if isinstance(result_payload, dict) else __import__("json").loads(result_payload)
         self.assertEqual(value, {"dispatch_claimed": True})
+
+    async def test_completed_hangup_restart_repairs_origin_without_new_mutation(self):
+        original = await self.reserve()
+        for state in ("queued", "dispatching", "accepted", "readback_pending",
+                      "reconciliation_required"):
+            original = await self.store.transition(
+                original.tenant_id, original.command_id, new_state=state,
+                actor_id="test-worker", reason="synthetic restart boundary",
+                provider_operation_id=("codestra-" + "a" * 32)
+                if state == "accepted" else None,
+            )
+        hangup = await self.ledger.hangup(
+            principal(), original.command_id, key="hangup-restart-0001",
+            expected_version=original.resource_version, reason="Agent hangup",
+        )
+        fresh_ledger = CallingLedger(self.commands)
+        document, observed = await fresh_ledger.get(principal(), hangup.command_id)
+        self.assertEqual(document.payload["origin_operation_id"], str(original.command_id))
+        self.assertEqual(observed.command_id, hangup.command_id)
+        wrong = principal().model_copy(update={"subject": "subject-other"})
+        with self.assertRaises(CommandNotFound):
+            await fresh_ledger.get(wrong, hangup.command_id)
+
+        for state in ("queued", "dispatching", "accepted", "readback_pending",
+                      "reconciliation_required"):
+            hangup = await self.store.transition(
+                hangup.tenant_id, hangup.command_id, new_state=state,
+                actor_id="test-worker", reason="synthetic interrupted hangup",
+                provider_operation_id=("codestra-" + "a" * 32)
+                if state == "accepted" else None,
+            )
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        evidence = {
+            "operation_id": str(original.command_id),
+            "correlation_id": "test-correlation-0001", "dispatch_state": "accepted",
+            "asterisk_uniqueid": "codestra-" + "a" * 32,
+            "linkedid": "codestra-" + "a" * 32, "call_id": "call-test-1",
+            "call_state": "completed", "answered_at": now, "ended_at": now,
+            "terminal": True,
+            "evidence": {"event_sequence": [{"sequence": 1}],
+                         "evidence_source": "ami-lifecycle-gateway"},
+            "tenant_id": "tenant-test", "subject": "subject-appolon",
+            "employee_id": "employee-appolon", "username": "appolon",
+            "extension": "6901", "campaign": "TEST_SYN",
+            "authorization_reference": self.grant.authorization_reference,
+            "created_at": now, "duration_seconds": 1,
+            "talk_duration_seconds": 1, "hangup_cause": "Normal Clearing",
+            "hangup_cause_code": 16, "internal_only": True,
+            "external_dialing": False, "recording": False,
+        }
+
+        class NoMutationAdapter:
+            executions = 0
+            readbacks = 0
+            async def execute(self, _request):
+                self.executions += 1
+                raise AssertionError("restart recovery must not mutate Server B")
+            async def readback(self, _request):
+                self.readbacks += 1
+                raise AssertionError("completed hangup recovery uses persisted evidence")
+
+        adapter = NoMutationAdapter()
+        interrupted = CommandLedgerWorkflowActivities(
+            self.store, vicidial_internal=adapter,  # type: ignore[arg-type]
+        )
+        request = ReconciliationRequest(
+            str(hangup.command_id), hangup.tenant_id, "synthetic crash boundary",
+        )
+        command, _, digest = await interrupted._load_reconciliation_command(request)
+        self.assertIsNotNone(command)
+        self.assertIsNotNone(digest)
+        await interrupted._persist_reconciliation_result(
+            request, ActivityResult("matched", "terminal hangup", evidence["asterisk_uniqueid"], evidence),
+            digest,  # type: ignore[arg-type]
+        )
+        self.assertEqual((await self.store.get(original.tenant_id, original.command_id)).state,
+                         "reconciliation_required")
+
+        restarted = CommandLedgerWorkflowActivities(
+            self.store, vicidial_internal=adapter,  # type: ignore[arg-type]
+        )
+        await restarted.reconcile_operation(request)
+        audit_count = await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE tenant_id=$1",
+            original.tenant_id,
+        )
+        await restarted.reconcile_operation(request)
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE tenant_id=$1",
+            original.tenant_id,
+        ), audit_count)
+        self.assertEqual((await self.store.get(original.tenant_id, original.command_id)).state,
+                         "completed")
+        self.assertEqual((await self.store.get(hangup.tenant_id, hangup.command_id)).state,
+                         "completed")
+        self.assertEqual((adapter.executions, adapter.readbacks), (0, 0))
+        with self.assertRaises(CommandConflict):
+            await self.reserve(originate(idempotency_key="test-originate-after-hangup"))
 
 
 if __name__ == "__main__":

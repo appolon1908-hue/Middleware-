@@ -109,7 +109,7 @@ def environment(tmp_path):
 
 def test_downstream_contract_lock_matches_adapter_routes():
     lock = json.loads(Path("config/vicidial-internal-call-contract.lock.json").read_text())
-    assert lock["tested_sha"] == "b79fa89a74b0078d2e7c3bd6a8c5cbb08e54ccc4"
+    assert lock["tested_sha"] == "170bc10fa135b85a34831799399e469cfc42c373"
     assert lock["protected_release"] is False
     assert lock["routes"] == {
         "originate": VicidialInternalCallAdapter.ORIGINATE_PATH,

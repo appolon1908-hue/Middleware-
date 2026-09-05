@@ -1,299 +1,238 @@
 #!/usr/bin/env python3
-"""Apply and verify fixed least-privilege reviewer access for release repositories."""
+"""Strict production reviewer-access authority.
+
+The existing rollout engine is preserved in a base module. This wrapper adds
+stable repository identity, exact write-level permission, and post-update
+read-back without broad changes to the already reviewed invitation workflow.
+"""
 
 from __future__ import annotations
 
-import argparse
-import datetime as dt
+import importlib.util
 import json
-import os
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = ROOT / "config" / "production-reviewer-access.v1.json"
-EVIDENCE_DIR = ROOT / "artifacts" / "production-reviewer-access"
-TOKEN_ENV = "CODESTRA_REPOSITORY_ADMIN_TOKEN"
-CONFIRMATION = "APPLY_PRODUCTION_REVIEWER_ACCESS_V1"
-AUTHORITY_ID = "codestra.production-reviewer-access.v1"
-EXPECTED_OWNER = "appolon1908-hue"
-EXPECTED_REVIEWER = {
-    "login": "kazan555",
-    "user_id": 77101516,
-    "permission": "push",
-    "admin": False,
-}
+BASE_SCRIPT = ROOT / "scripts" / "apply_production_reviewer_access_base.py"
+
+spec = importlib.util.spec_from_file_location(
+    "production_reviewer_access_base",
+    BASE_SCRIPT,
+)
+if spec is None or spec.loader is None:
+    raise RuntimeError("cannot load production reviewer-access base")
+BASE = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(BASE)
+
 EXPECTED_REPOSITORIES = {
-    "appolon1908-hue/codestra-production-platform",
-    "appolon1908-hue/Middleware-",
-    "appolon1908-hue/Websocket-",
-    "appolon1908-hue/Odoo",
-    "appolon1908-hue/Caddy",
-    "appolon1908-hue/Kong",
-    "appolon1908-hue/Keycloak",
-    "appolon1908-hue/SDK-repository",
-    "appolon1908-hue/Vicidialer-Codestra",
-    "appolon1908-hue/N8N",
-    "appolon1908-hue/klyrow.com",
-    "appolon1908-hue/social.codestra.co",
-    "appolon1908-hue/Codestra-AI",
-    "appolon1908-hue/Codestra-Marketing-",
-    "appolon1908-hue/codestra-provisioning-service",
-    "appolon1908-hue/Codestra-Prometheus",
-    "appolon1908-hue/telnexa",
-    "appolon1908-hue/kyqra-crawler",
-    "appolon1908-hue/beyvra-backend",
+    "appolon1908-hue/codestra-production-platform": 1314230781,
+    "appolon1908-hue/Middleware-": 1347559071,
+    "appolon1908-hue/Websocket-": 1357322123,
+    "appolon1908-hue/Odoo": 1347522940,
+    "appolon1908-hue/Caddy": 1350228103,
+    "appolon1908-hue/Kong": 1347790742,
+    "appolon1908-hue/Keycloak": 1347523366,
+    "appolon1908-hue/SDK-repository": 1349042079,
+    "appolon1908-hue/Vicidialer-Codestra": 1347744324,
+    "appolon1908-hue/N8N": 1347560645,
+    "appolon1908-hue/klyrow.com": 1334863061,
+    "appolon1908-hue/social.codestra.co": 1348783113,
+    "appolon1908-hue/Codestra-AI": 1351354401,
+    "appolon1908-hue/Codestra-Marketing-": 1351352422,
+    "appolon1908-hue/codestra-provisioning-service": 1339900477,
+    "appolon1908-hue/Codestra-Prometheus": 1350767800,
+    "appolon1908-hue/telnexa": 1334764612,
+    "appolon1908-hue/kyqra-crawler": 1334792686,
+    "appolon1908-hue/beyvra-backend": 1319831182,
+}
+EXPECTED_TOP_LEVEL_FIELDS = {
+    "schema_version",
+    "authority_id",
+    "owner",
+    "reviewer",
+    "repositories",
 }
 
 
-class AccessError(RuntimeError):
-    """Committed reviewer authority or observed GitHub state is invalid."""
+def _reject_duplicate_pairs(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON field: {key}")
+        value[key] = item
+    return value
 
 
-class PendingInvitation(AccessError):
-    """At least one exact reviewer invitation still needs acceptance."""
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise AccessError(message)
-
-
-def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
+def load_config(path: Path = BASE.CONFIG_PATH) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise AccessError(f"cannot load reviewer authority: {path}") from exc
-    require(isinstance(value, dict), "reviewer authority must be an object")
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise BASE.AccessError(
+            f"cannot load reviewer authority: {path}"
+        ) from exc
+    BASE.require(
+        isinstance(value, dict),
+        "reviewer authority must be an object",
+    )
     return value
 
 
 def validate_config(config: Mapping[str, Any]) -> list[str]:
-    require(config.get("schema_version") == "1.0", "unsupported reviewer schema")
-    require(config.get("authority_id") == AUTHORITY_ID, "reviewer authority ID drift")
-    require(config.get("owner") == EXPECTED_OWNER, "reviewer owner drift")
-    require(config.get("reviewer") == EXPECTED_REVIEWER, "reviewer identity drift")
+    BASE.require(
+        set(config) == EXPECTED_TOP_LEVEL_FIELDS,
+        "reviewer authority field-set drift",
+    )
+    BASE.require(
+        config.get("schema_version") == "1.0",
+        "unsupported reviewer schema",
+    )
+    BASE.require(
+        config.get("authority_id") == BASE.AUTHORITY_ID,
+        "reviewer authority ID drift",
+    )
+    BASE.require(
+        config.get("owner") == BASE.EXPECTED_OWNER,
+        "reviewer owner drift",
+    )
+    BASE.require(
+        config.get("reviewer") == BASE.EXPECTED_REVIEWER,
+        "reviewer identity drift",
+    )
+
     rows = config.get("repositories")
-    require(isinstance(rows, list), "repositories must be a list")
-    require(all(isinstance(row, str) and row for row in rows), "invalid repository name")
-    require(len(rows) == len(set(rows)), "duplicate repository")
-    require(set(rows) == EXPECTED_REPOSITORIES, "fixed repository coverage drift")
-    require(all(row.startswith(f"{EXPECTED_OWNER}/") for row in rows), "foreign owner forbidden")
-    return sorted(rows, key=str.casefold)
+    BASE.require(isinstance(rows, list), "repositories must be a list")
+    BASE.require(
+        len(rows) == len(EXPECTED_REPOSITORIES),
+        "fixed repository coverage drift",
+    )
+    observed_names: set[str] = set()
+    observed_ids: set[int] = set()
+    for row in rows:
+        BASE.require(
+            isinstance(row, Mapping),
+            "repository authority row must be an object",
+        )
+        BASE.require(
+            set(row) == {"repository", "repository_id"},
+            "repository authority row field-set drift",
+        )
+        name = row.get("repository")
+        repository_id = row.get("repository_id")
+        BASE.require(
+            isinstance(name, str) and name in EXPECTED_REPOSITORIES,
+            "unknown repository",
+        )
+        BASE.require(name not in observed_names, f"duplicate repository: {name}")
+        BASE.require(
+            isinstance(repository_id, int)
+            and not isinstance(repository_id, bool)
+            and repository_id == EXPECTED_REPOSITORIES[name],
+            f"{name}: stable repository ID drift",
+        )
+        BASE.require(
+            repository_id not in observed_ids,
+            f"duplicate repository ID: {repository_id}",
+        )
+        BASE.require(
+            name.startswith(f"{BASE.EXPECTED_OWNER}/"),
+            "foreign owner forbidden",
+        )
+        observed_names.add(name)
+        observed_ids.add(repository_id)
+
+    BASE.require(
+        observed_names == set(EXPECTED_REPOSITORIES),
+        "fixed repository coverage drift",
+    )
+    return sorted(observed_names, key=str.casefold)
 
 
-class GitHubApi:
-    def __init__(self, token: str) -> None:
-        self.token = token
-        self.base = "https://api.github.com"
+def permission_is_write(value: Any) -> bool:
+    """Accept only GitHub's exact read-back value for write access."""
 
+    return isinstance(value, Mapping) and value.get("permission") == "write"
+
+
+def _metadata_identity(path: str) -> tuple[str, int] | None:
+    for repository, repository_id in EXPECTED_REPOSITORIES.items():
+        encoded = urllib.parse.quote(repository, safe="/")
+        if path == f"/repos/{encoded}":
+            return repository, repository_id
+    return None
+
+
+def _collaborator_repository(path: str) -> str | None:
+    suffix = f"/collaborators/{BASE.EXPECTED_REVIEWER['login']}"
+    for repository in EXPECTED_REPOSITORIES:
+        encoded = urllib.parse.quote(repository, safe="/")
+        if path == f"/repos/{encoded}{suffix}":
+            return repository
+    return None
+
+
+class GitHubApi(BASE.GitHubApi):
     def request(
         self,
         method: str,
         path: str,
         payload: Mapping[str, Any] | None = None,
     ) -> tuple[int, Any]:
-        body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
-        request = urllib.request.Request(
-            self.base + path,
-            data=body,
-            method=method,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {self.token}",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "codestra-production-reviewer-access-v1",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                raw = response.read()
-                return response.status, json.loads(raw) if raw else None
-        except urllib.error.HTTPError as exc:
-            raw = exc.read().decode("utf-8", errors="replace")
-            if exc.code == 404:
-                return 404, None
-            raise AccessError(
-                f"GitHub API {method} {path} failed with HTTP {exc.code}: {raw[:500]}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise AccessError(f"GitHub API {method} {path} unavailable") from exc
+        status, value = super().request(method, path, payload)
 
-
-def repo_path(repository: str) -> str:
-    return urllib.parse.quote(repository, safe="/")
-
-
-def permission_is_write(value: Any) -> bool:
-    if not isinstance(value, Mapping):
-        return False
-    permission = value.get("permission")
-    return permission in {"admin", "maintain", "write", "push"}
-
-
-def write_evidence(document: Mapping[str, Any]) -> None:
-    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    (EVIDENCE_DIR / "result.json").write_text(
-        json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    lines = [
-        "## Production reviewer access",
-        "",
-        f"- Result: `{document.get('result')}`",
-        f"- Mode: `{document.get('mode')}`",
-        f"- Source SHA: `{document.get('source_sha')}`",
-        "- Reviewer: `kazan555` (`push`, non-admin)",
-        "- Runtime contacted: `NO`",
-        "- Production changed: `NO`",
-        "",
-        "| Repository | State | Result |",
-        "|---|---|---|",
-    ]
-    for row in document.get("repositories", []):
-        lines.append(
-            f"| `{row.get('repository')}` | `{row.get('state')}` | `{row.get('result')}` |"
-        )
-    (EVIDENCE_DIR / "result.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def execute(mode: str, confirmation: str) -> dict[str, Any]:
-    repositories = validate_config(load_config())
-    base = {
-        "schema_version": "1.0",
-        "mode": mode,
-        "source_sha": os.environ.get("GITHUB_SHA", "local"),
-        "runtime_contacted": False,
-        "production_changed": False,
-        "external_effects_enabled": False,
-    }
-    if mode == "validate":
-        return {
-            **base,
-            "result": "PASS",
-            "repositories": [
-                {"repository": repository, "state": "policy-validated", "result": "PASS"}
-                for repository in repositories
-            ],
-        }
-
-    require(mode in {"apply", "verify"}, "unsupported mode")
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        require(
-            os.environ.get("GITHUB_REPOSITORY") == "appolon1908-hue/Middleware-",
-            "workflow repository drift",
-        )
-        require(os.environ.get("GITHUB_REF") == "refs/heads/main", "protected main required")
-        require(
-            os.environ.get("GITHUB_ACTOR") == os.environ.get("GITHUB_REPOSITORY_OWNER"),
-            "repository owner must dispatch or merge",
-        )
-    if mode == "apply":
-        require(confirmation == CONFIRMATION, "exact apply confirmation required")
-    token = os.environ.get(TOKEN_ENV, "")
-    require(bool(token), f"{TOKEN_ENV} is required")
-    api = GitHubApi(token)
-
-    status, reviewer = api.request("GET", f"/users/{EXPECTED_REVIEWER['login']}")
-    require(status == 200 and isinstance(reviewer, Mapping), "reviewer identity readback invalid")
-    require(reviewer.get("id") == EXPECTED_REVIEWER["user_id"], "reviewer stable ID drift")
-
-    pending = False
-    results: list[dict[str, Any]] = []
-    for repository in repositories:
-        encoded = repo_path(repository)
-        status, metadata = api.request("GET", f"/repos/{encoded}")
-        require(status == 200 and isinstance(metadata, Mapping), f"{repository}: repository unavailable")
-        require(metadata.get("full_name") == repository, f"{repository}: full-name readback drift")
-        owner = metadata.get("owner")
-        require(isinstance(owner, Mapping) and owner.get("login") == EXPECTED_OWNER, f"{repository}: owner drift")
-        require(metadata.get("archived") is False, f"{repository}: archived repository")
-        require(metadata.get("disabled") is False, f"{repository}: disabled repository")
-        permissions = metadata.get("permissions")
-        require(
-            isinstance(permissions, Mapping) and permissions.get("admin") is True,
-            f"{repository}: token lacks administration",
-        )
-
-        permission_status, permission = api.request(
-            "GET",
-            f"/repos/{encoded}/collaborators/{EXPECTED_REVIEWER['login']}/permission",
-        )
-        if permission_status == 200 and permission_is_write(permission):
-            state = "verified-write"
-        elif mode == "verify":
-            raise AccessError(f"{repository}: reviewer lacks accepted write access")
-        else:
-            invite_status, _ = api.request(
-                "PUT",
-                f"/repos/{encoded}/collaborators/{EXPECTED_REVIEWER['login']}",
-                {"permission": "push"},
+        identity = _metadata_identity(path)
+        if method == "GET" and identity is not None:
+            repository, repository_id = identity
+            BASE.require(
+                status == 200 and isinstance(value, Mapping),
+                f"{repository}: repository identity unavailable",
             )
-            require(invite_status in {201, 204}, f"{repository}: unexpected invitation response")
-            if invite_status == 201:
-                state = "invitation-pending"
-                pending = True
-            else:
-                state = "added-or-updated"
+            BASE.require(
+                value.get("id") == repository_id,
+                f"{repository}: stable repository ID drift",
+            )
+            BASE.require(
+                value.get("full_name") == repository,
+                f"{repository}: full-name readback drift",
+            )
 
-        results.append(
-            {
-                "repository": repository,
-                "state": state,
-                "result": "BLOCKED" if state == "invitation-pending" else "PASS",
-            }
-        )
+        repository = _collaborator_repository(path)
+        if method == "PUT" and repository is not None and status == 204:
+            permission_status, permission = super().request(
+                "GET",
+                f"{path}/permission",
+            )
+            BASE.require(
+                permission_status == 200 and permission_is_write(permission),
+                f"{repository}: collaborator permission did not read back as exact write",
+            )
 
-    document = {
-        **base,
-        "generated_at": dt.datetime.now(dt.UTC).isoformat(),
-        "result": "BLOCKED" if pending else "PASS",
-        "repositories": results,
-    }
-    if pending:
-        write_evidence(document)
-        raise PendingInvitation("one or more exact reviewer invitations require acceptance")
-    return document
+        return status, value
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("validate", "apply", "verify"), default="validate")
-    parser.add_argument("--confirm", default="")
-    return parser.parse_args(argv)
+BASE.load_config = load_config
+BASE.validate_config = validate_config
+BASE.permission_is_write = permission_is_write
+BASE.GitHubApi = GitHubApi
+BASE.EXPECTED_REPOSITORIES = set(EXPECTED_REPOSITORIES)
+
+execute = BASE.execute
+write_evidence = BASE.write_evidence
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(list(sys.argv[1:] if argv is None else argv))
-    try:
-        document = execute(args.mode, args.confirm)
-        write_evidence(document)
-        print(
-            "PRODUCTION_REVIEWER_ACCESS="
-            f"PASS mode={args.mode} repositories={len(document['repositories'])}"
-        )
-        return 0
-    except PendingInvitation as exc:
-        print(f"PRODUCTION_REVIEWER_ACCESS=BLOCKED reason={exc}", file=sys.stderr)
-        return 2
-    except AccessError as exc:
-        document = {
-            "schema_version": "1.0",
-            "mode": args.mode,
-            "source_sha": os.environ.get("GITHUB_SHA", "local"),
-            "result": "FAIL",
-            "runtime_contacted": False,
-            "production_changed": False,
-            "external_effects_enabled": False,
-            "error": str(exc),
-            "repositories": [],
-        }
-        write_evidence(document)
-        print(f"PRODUCTION_REVIEWER_ACCESS=FAIL reason={exc}", file=sys.stderr)
-        return 1
+    return BASE.main(list(sys.argv[1:] if argv is None else argv))
+
+
+def __getattr__(name: str) -> Any:
+    return getattr(BASE, name)
 
 
 if __name__ == "__main__":

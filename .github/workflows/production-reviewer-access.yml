@@ -6,6 +6,7 @@ on:
       - ".github/workflows/production-reviewer-access.yml"
       - "config/production-reviewer-access.v1.json"
       - "scripts/apply_production_reviewer_access.py"
+      - "scripts/apply_production_reviewer_access_base.py"
       - "tests/test_production_reviewer_access.py"
       - "Dockerfile.runtime"
   push:
@@ -14,6 +15,7 @@ on:
       - ".github/workflows/production-reviewer-access.yml"
       - "config/production-reviewer-access.v1.json"
       - "scripts/apply_production_reviewer_access.py"
+      - "scripts/apply_production_reviewer_access_base.py"
       - "tests/test_production_reviewer_access.py"
       - "Dockerfile.runtime"
   issue_comment:
@@ -21,7 +23,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: production-reviewer-access-${{ github.event_name }}-${{ github.event.issue.number || github.ref }}
@@ -40,6 +41,7 @@ jobs:
         github.event.action == 'created' &&
         github.event.repository.id == 1347559071 &&
         github.event.repository.full_name == 'appolon1908-hue/Middleware-' &&
+        github.event.repository.default_branch == 'main' &&
         github.event.issue.number == 130 &&
         github.event.issue.pull_request == null &&
         github.event.comment.body == '/apply-production-reviewer-access v1' &&
@@ -69,6 +71,7 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile \
             scripts/apply_production_reviewer_access.py \
+            scripts/apply_production_reviewer_access_base.py \
             tests/test_production_reviewer_access.py
           python3 -m unittest -v tests.test_production_reviewer_access
           python3 scripts/apply_production_reviewer_access.py --mode validate
@@ -87,22 +90,21 @@ jobs:
     needs: [policy]
     if: >-
       needs.policy.result == 'success' &&
-      (
-        (
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          github.actor == github.repository_owner
-        ) ||
-        (
-          github.event_name == 'issue_comment' &&
-          github.event.repository.id == 1347559071 &&
-          github.event.issue.number == 130 &&
-          github.event.issue.pull_request == null &&
-          github.event.comment.body == '/apply-production-reviewer-access v1' &&
-          github.event.sender.id == 275410064 &&
-          github.event.sender.login == 'appolon1908-hue'
-        )
-      )
+      github.event_name == 'issue_comment' &&
+      github.event.action == 'created' &&
+      github.event.repository.id == 1347559071 &&
+      github.event.repository.full_name == 'appolon1908-hue/Middleware-' &&
+      github.event.repository.default_branch == 'main' &&
+      github.event.issue.number == 130 &&
+      github.event.issue.pull_request == null &&
+      github.event.comment.body == '/apply-production-reviewer-access v1' &&
+      github.event.sender.id == 275410064 &&
+      github.event.sender.login == 'appolon1908-hue' &&
+      github.event.comment.user.id == 275410064 &&
+      github.event.comment.user.login == 'appolon1908-hue'
+    permissions:
+      contents: read
+      issues: write
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:
@@ -114,9 +116,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Require current protected main
+      - name: Require current protected main and exact command
         run: |
           set -Eeuo pipefail
+          test "$GITHUB_EVENT_NAME" = issue_comment
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -151,10 +154,10 @@ jobs:
           set -Eeuo pipefail
           if [ "$ROLLOUT_OUTCOME" = success ]; then
             result=PASS
-            detail='All 19 fixed repositories read back accepted write-level reviewer access.'
+            detail='All 19 stable repository identities read back exact write-level reviewer access.'
           else
             result=BLOCKED
-            detail='At least one token, administration, invitation-acceptance, identity, or permission readback gate is incomplete.'
+            detail='At least one token, administration, invitation-acceptance, stable identity, exact-write, or permission readback gate is incomplete.'
           fi
           gh issue comment 130 --repo "$GITHUB_REPOSITORY" --body "## Production reviewer access — $result
 
@@ -163,7 +166,7 @@ jobs:
 $detail
 
 No runtime, deployment, credential value, route, traffic, provider, business write, or external effect was changed."
-      - name: Fail closed until invitations are accepted
+      - name: Fail closed until every exact readback passes
         if: steps.rollout.outcome != 'success'
         run: |
           echo 'PRODUCTION_REVIEWER_ACCESS=BLOCKED' >&2

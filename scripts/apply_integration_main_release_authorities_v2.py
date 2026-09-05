@@ -9,11 +9,18 @@ from pathlib import Path
 from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_SCRIPT = ROOT / "scripts" / "apply_integration_main_release_authorities.py"
+BASE_SCRIPT = (
+    ROOT
+    / "scripts"
+    / "apply_integration_main_release_authorities_base.py"
+)
 
-spec = importlib.util.spec_from_file_location("integration_authority_v1", BASE_SCRIPT)
+spec = importlib.util.spec_from_file_location(
+    "integration_authority_v1_base",
+    BASE_SCRIPT,
+)
 if spec is None or spec.loader is None:
-    raise RuntimeError("cannot load v1 integration authority")
+    raise RuntimeError("cannot load integration authority base")
 BASE = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(BASE)
 
@@ -71,36 +78,77 @@ EXPECTED_REPOSITORIES = {
 
 
 def configure_base() -> None:
+    """Make the preserved engine use the current seven-repository authority."""
+
     BASE.EXPECTED_REPOSITORIES = EXPECTED_REPOSITORIES
 
 
 def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
     BASE.require(event.get("action") == "created", "issue command action drift")
     repository = event.get("repository")
-    BASE.require(isinstance(repository, Mapping), "issue command repository missing")
-    BASE.require(repository.get("id") == EXPECTED_REPOSITORY_ID, "issue command repository ID drift")
-    BASE.require(repository.get("full_name") == EXPECTED_REPOSITORY, "issue command repository drift")
-    BASE.require(repository.get("default_branch") == "main", "issue command default branch drift")
+    BASE.require(
+        isinstance(repository, Mapping),
+        "issue command repository missing",
+    )
+    BASE.require(
+        repository.get("id") == EXPECTED_REPOSITORY_ID,
+        "issue command repository ID drift",
+    )
+    BASE.require(
+        repository.get("full_name") == EXPECTED_REPOSITORY,
+        "issue command repository drift",
+    )
+    BASE.require(
+        repository.get("default_branch") == "main",
+        "issue command default branch drift",
+    )
     owner = repository.get("owner")
     BASE.require(isinstance(owner, Mapping), "issue command owner missing")
-    BASE.require(owner.get("login") == EXPECTED_OWNER, "issue command owner login drift")
-    BASE.require(owner.get("id") == EXPECTED_OWNER_ID, "issue command owner ID drift")
+    BASE.require(
+        owner.get("login") == EXPECTED_OWNER,
+        "issue command owner login drift",
+    )
+    BASE.require(
+        owner.get("id") == EXPECTED_OWNER_ID,
+        "issue command owner ID drift",
+    )
 
     issue = event.get("issue")
     BASE.require(isinstance(issue, Mapping), "issue command issue missing")
-    BASE.require(issue.get("number") == EXPECTED_ISSUE_NUMBER, "issue command number drift")
-    BASE.require("pull_request" not in issue, "issue command cannot originate from a pull request")
+    BASE.require(
+        issue.get("number") == EXPECTED_ISSUE_NUMBER,
+        "issue command number drift",
+    )
+    BASE.require(
+        "pull_request" not in issue,
+        "issue command cannot originate from a pull request",
+    )
 
     sender = event.get("sender")
     comment = event.get("comment")
     BASE.require(isinstance(sender, Mapping), "issue command sender missing")
     BASE.require(isinstance(comment, Mapping), "issue command comment missing")
     comment_user = comment.get("user")
-    BASE.require(isinstance(comment_user, Mapping), "issue command comment user missing")
+    BASE.require(
+        isinstance(comment_user, Mapping),
+        "issue command comment user missing",
+    )
     for actor, label in ((sender, "sender"), (comment_user, "comment user")):
-        BASE.require(actor.get("login") == EXPECTED_OWNER, f"issue command {label} login drift")
-        BASE.require(actor.get("id") == EXPECTED_OWNER_ID, f"issue command {label} ID drift")
-    BASE.require(comment.get("body") == EXPECTED_ISSUE_COMMAND, "issue command body drift")
+        BASE.require(
+            actor.get("login") == EXPECTED_OWNER,
+            f"issue command {label} login drift",
+        )
+        BASE.require(
+            actor.get("id") == EXPECTED_OWNER_ID,
+            f"issue command {label} ID drift",
+        )
+    BASE.require(
+        comment.get("body") == EXPECTED_ISSUE_COMMAND,
+        "issue command body drift",
+    )
+
+
+configure_base()
 
 
 def main(argv: list[str] | None = None) -> int:

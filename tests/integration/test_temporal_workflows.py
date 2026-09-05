@@ -52,6 +52,7 @@ class DeterministicActivities:
         self.execute_attempts = 0
         self.readback_attempts = 0
         self.execute_outcome_unknown = False
+        self.execute_status = "accepted"
 
     @activity.defn(name="reconcile_operation")
     async def reconcile_operation(
@@ -145,7 +146,7 @@ class DeterministicActivities:
                 non_retryable=True,
                 type="UncertainProviderOutcome",
             )
-        return ActivityResult("accepted", "provider accepted", "provider-op-1")
+        return ActivityResult(self.execute_status, "provider result", "provider-op-1")
 
     @activity.defn(name="readback_command")
     async def readback_command(
@@ -270,6 +271,34 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                 "readback_pending",
                 "completed",
             ]
+
+            activities.command_transitions.clear()
+            activities.execute_status = "dispatch_unknown"
+            readbacks_before = activities.readback_attempts
+            dispatch_unknown = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id="00000000-0000-4000-8000-000000000099",
+                    command_type="telephony-internal.calls.originate",
+                    command_version="1.0",
+                    target="vicidial-restricted",
+                    tenant_id="tenant-test",
+                    requested_by="subject-appolon",
+                    correlation_id="calling-correlation-unknown",
+                    idempotency_key="calling-idempotency-unknown",
+                    capability="INTERNAL_TELEPHONY_CALLS",
+                    payload={},
+                    authenticated_client_id="odoo-integration",
+                ),
+                id="test-calling-dispatch-unknown",
+                task_queue=TASK_QUEUE,
+            )
+            assert dispatch_unknown.status == "reconciliation_required"
+            assert activities.command_transitions == [
+                "queued", "dispatching", "reconciliation_required",
+            ]
+            assert activities.readback_attempts == readbacks_before
+            activities.execute_status = "accepted"
 
             activities.command_transitions.clear()
             activities.readback_status = "mismatch"

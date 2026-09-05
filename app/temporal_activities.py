@@ -16,6 +16,7 @@ from .commands import (
     CommandNotFound,
     PostgresCommandStore,
     authenticated_command_digest,
+    verify_readback_evidence_digest,
 )
 from .klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
@@ -523,11 +524,52 @@ class CommandLedgerWorkflowActivities:
                         type="ReconciliationRejected",
                     )
                 if current["state"] == "completed" and matched:
+                    durable = await conn.fetchrow(
+                        """
+                        SELECT
+                          (SELECT result_payload FROM middleware_command_attempts
+                           WHERE tenant_id=$1 AND command_id=$2
+                           ORDER BY attempt_number DESC LIMIT 1) AS evidence,
+                          (SELECT metadata->>'readback_evidence_sha256'
+                           FROM middleware_command_audit
+                           WHERE tenant_id=$1 AND command_id=$2
+                             AND new_state='completed'
+                             AND metadata ? 'readback_evidence_sha256'
+                           ORDER BY id DESC LIMIT 1) AS evidence_digest
+                        """,
+                        request.tenant_id, request.operation_id,
+                    )
+                    if durable is None:
+                        raise ApplicationError(
+                            "completed reconciliation evidence is unavailable",
+                            non_retryable=True, type="ReconciliationRejected",
+                        )
+                    if not isinstance(durable["evidence_digest"], str):
+                        raise ApplicationError(
+                            "completed reconciliation evidence digest is unavailable",
+                            non_retryable=True, type="ReconciliationRejected",
+                        )
+                    try:
+                        committed, _ = verify_readback_evidence_digest(
+                            durable["evidence"], durable["evidence_digest"],
+                        )
+                    except RuntimeError as exc:
+                        raise ApplicationError(
+                            "completed reconciliation evidence failed integrity verification",
+                            non_retryable=True, type="ReconciliationRejected",
+                        ) from exc
+                    if committed is None or not hmac.compare_digest(
+                        provider_evidence_digest(committed), evidence_digest,
+                    ):
+                        raise ApplicationError(
+                            "replacement reconciliation evidence conflicts with the durable result",
+                            non_retryable=True, type="ReconciliationRejected",
+                        )
                     return ActivityResult(
                         status="completed",
                         detail="provider read-back was already durably reconciled",
                         provider_operation_id=current["provider_operation_id"],
-                        readback_evidence=evidence,
+                        readback_evidence=committed,
                     )
                 if current["state"] != "reconciliation_required":
                     raise ApplicationError(

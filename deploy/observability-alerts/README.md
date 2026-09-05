@@ -19,7 +19,7 @@ tenant, scope, correlation ID, transport idempotency key, and
 
 ## Durable incident lifecycle
 
-Apply numbered migrations through `0009_observability_incidents` before starting
+Apply numbered migrations through `0010_realtime_gateway` before starting
 this service. One PostgreSQL transaction records the incident projection,
 immutable timeline event, immutable audit evidence, durable command/outbox, and
 notification intent. Alert transition identity is derived from Alertmanager's

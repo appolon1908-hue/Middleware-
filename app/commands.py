@@ -1130,7 +1130,9 @@ class PostgresCommandStore:
                     """,
                     list(self.REQUIRED_TRIGGERS),
                 )
-            if head != 9:
+            # Later additive migrations must not make the command subsystem
+            # report unready; its required schema was introduced at v9.
+            if head is None or head < 9:
                 return False
             observed_columns = {
                 table: set() for table in self.REQUIRED_COLUMNS

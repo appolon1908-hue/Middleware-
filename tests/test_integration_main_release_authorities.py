@@ -8,13 +8,15 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "apply_integration_main_release_authorities.py"
+SCRIPT = ROOT / "scripts" / "apply_integration_main_release_authorities_v2.py"
 CONFIG = ROOT / "config" / "integration-main-release-authorities.v1.json"
 
-spec = importlib.util.spec_from_file_location("integration_authority", SCRIPT)
+spec = importlib.util.spec_from_file_location("integration_authority_v2", SCRIPT)
 assert spec and spec.loader
-MODULE = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(MODULE)
+V2 = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(V2)
+V2.configure_base()
+MODULE = V2.BASE
 
 
 class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
@@ -25,15 +27,19 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         rows = MODULE.validate_config(self.config)
         self.assertEqual(
             {row["repository"] for row in rows},
-            set(MODULE.EXPECTED_REPOSITORIES),
+            set(V2.EXPECTED_REPOSITORIES),
         )
+        self.assertEqual(len(rows), 8)
         self.assertEqual(self.config["reviewer"], MODULE.EXPECTED_REVIEWER)
 
     def test_every_ruleset_is_fail_closed(self) -> None:
         for row in MODULE.validate_config(self.config):
             normalized = MODULE.normalize_ruleset(MODULE.desired_ruleset(row))
             self.assertEqual(normalized["bypass_actors"], [])
-            self.assertEqual(normalized["conditions"]["ref_name"]["include"], ["~DEFAULT_BRANCH"])
+            self.assertEqual(
+                normalized["conditions"]["ref_name"]["include"],
+                ["~DEFAULT_BRANCH"],
+            )
             pull = normalized["rules"]["pull_request"]
             self.assertEqual(pull["required_approving_review_count"], 1)
             self.assertTrue(pull["dismiss_stale_reviews_on_push"])
@@ -43,10 +49,7 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             status = normalized["rules"]["required_status_checks"]
             self.assertTrue(status["strict_required_status_checks_policy"])
             self.assertFalse(status["do_not_enforce_on_create"])
-            self.assertEqual(
-                status["contexts"],
-                row["required_status_checks"],
-            )
+            self.assertEqual(status["contexts"], row["required_status_checks"])
 
     def test_unknown_repository_fails(self) -> None:
         broken = copy.deepcopy(self.config)
@@ -72,7 +75,7 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         self.assertFalse(document["production_changed"])
         self.assertFalse(document["runtime_contacted"])
         self.assertFalse(document["external_effects_enabled"])
-        self.assertEqual(len(document["repositories"]), 4)
+        self.assertEqual(len(document["repositories"]), 8)
 
 
 if __name__ == "__main__":

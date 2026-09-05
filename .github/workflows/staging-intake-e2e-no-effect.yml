@@ -4,15 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       base_url:
-        description: Staging Caddy public API base URL
+        description: Isolated staging Caddy public API base URL
         required: true
         type: string
       tenant_id:
         description: Synthetic staging tenant identifier
-        required: true
-        type: string
-      runtime_readback:
-        description: Type ALL_EXTERNAL_EFFECTS_DISABLED after independent staging read-back
         required: true
         type: string
 
@@ -34,45 +30,38 @@ jobs:
     environment: intake-staging-certification
     timeout-minutes: 10
     steps:
-      - name: Fail closed unless staging runtime was independently read back
-        env:
-          CONFIRMATION: ${{ inputs.runtime_readback }}
-        run: test "$CONFIRMATION" = "ALL_EXTERNAL_EFFECTS_DISABLED"
-
-      - name: Validate staging URL boundary
-        env:
-          BASE_URL: ${{ inputs.base_url }}
-        run: |
-          python3 - <<'PY'
-          import os
-          from urllib.parse import urlparse
-          value = os.environ['BASE_URL']
-          parsed = urlparse(value)
-          if parsed.scheme != 'https' or not parsed.netloc:
-              raise SystemExit('base_url must be an HTTPS staging Caddy endpoint')
-          if parsed.username or parsed.password or parsed.query or parsed.fragment:
-              raise SystemExit('base_url must not contain credentials/query/fragment')
-          print('STAGING_URL_BOUNDARY=PASS')
-          PY
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out exact protected-main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Prove exact main SHA
-        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Prove exact protected-main identity
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test -z "$(git status --porcelain)"
 
-      - name: Run no-effect intake certification
+      - name: Require protected staging identities
+        env:
+          INTAKE_TOKEN: ${{ secrets.STAGING_SDK_INTAKE_TOKEN }}
+          SAFETY_TOKEN: ${{ secrets.STAGING_RUNTIME_SAFETY_TOKEN }}
+        run: |
+          test -n "$INTAKE_TOKEN"
+          test -n "$SAFETY_TOKEN"
+
+      - name: Run exact-source no-effect intake certification
         env:
           STAGING_SDK_INTAKE_TOKEN: ${{ secrets.STAGING_SDK_INTAKE_TOKEN }}
+          STAGING_RUNTIME_SAFETY_TOKEN: ${{ secrets.STAGING_RUNTIME_SAFETY_TOKEN }}
           BASE_URL: ${{ inputs.base_url }}
           TENANT_ID: ${{ inputs.tenant_id }}
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
         run: |
           python3 scripts/staging-intake-e2e-no-effect.py \
             --base-url "$BASE_URL" \
-            --tenant "$TENANT_ID"
+            --tenant "$TENANT_ID" \
+            --expected-source-sha "$EXPECTED_SOURCE_SHA"
 
       - name: Record non-authorization boundary
         if: always()
@@ -80,3 +69,4 @@ jobs:
           echo 'PRODUCTION_DEPLOYMENT_AUTHORIZED=NO'
           echo 'PRODUCTION_ODOO_WRITES_AUTHORIZED=NO'
           echo 'PRODUCTION_PSTN_AUTHORIZED=NO'
+          echo 'EXTERNAL_EFFECTS_AUTHORIZED=NONE'

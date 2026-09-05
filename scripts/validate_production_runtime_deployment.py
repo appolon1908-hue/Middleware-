@@ -74,7 +74,7 @@ def validate_source(root: Path = ROOT) -> None:
     require(deployment.get("restricted_user") == "middleware-deploy", "restricted user drift")
     require(deployment.get("mode") == "READ_ONLY_CANARY", "deployment mode drift")
     require(deployment.get("source_ref") == "refs/heads/main", "source ref drift")
-    require(deployment.get("schema_head") == "0009_observability_incidents", "schema head drift")
+    require(deployment.get("schema_head") == "0010_realtime_gateway", "schema head drift")
     for key in (
         "broad_compose_down_allowed",
         "business_writes_enabled",
@@ -241,7 +241,7 @@ def validate_response(
         "RELEASE_ID": release_id,
         "VERSION_SOURCE_SHA": source_sha,
         "VERSION_IMAGE_DIGEST": image_reference.rsplit("@", 1)[1],
-        "VERSION_SCHEMA_HEAD": "0009_observability_incidents",
+        "VERSION_SCHEMA_HEAD": "0010_realtime_gateway",
     }
     for key, expected in expected_dynamic.items():
         require(values.get(key) == expected, f"response dynamic value mismatch: {key}")

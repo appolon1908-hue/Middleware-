@@ -257,7 +257,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0010_realtime_gateway",
+                "0056_klyrow_delivery_events",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -604,9 +604,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0010_realtime_gateway":
+        if self.schema_head != "0056_klyrow_delivery_events":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0010_realtime_gateway"
+                "SCHEMA_HEAD must be 0056_klyrow_delivery_events"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):

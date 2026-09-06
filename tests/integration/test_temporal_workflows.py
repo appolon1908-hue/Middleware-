@@ -52,6 +52,9 @@ class DeterministicActivities:
         self.execute_attempts = 0
         self.readback_attempts = 0
         self.execute_outcome_unknown = False
+        self.execute_status = "accepted"
+        self.execute_provider_operation_id = "provider-op-1"
+        self.readback_evidence: dict[str, Any] | None = None
 
     @activity.defn(name="reconcile_operation")
     async def reconcile_operation(
@@ -145,7 +148,10 @@ class DeterministicActivities:
                 non_retryable=True,
                 type="UncertainProviderOutcome",
             )
-        return ActivityResult("accepted", "provider accepted", "provider-op-1")
+        return ActivityResult(
+            self.execute_status, "provider result",
+            self.execute_provider_operation_id,
+        )
 
     @activity.defn(name="readback_command")
     async def readback_command(
@@ -153,7 +159,10 @@ class DeterministicActivities:
         request: CommandExecutionRequest,
     ) -> ActivityResult:
         self.readback_attempts += 1
-        return ActivityResult(self.readback_status, "provider state observed")
+        return ActivityResult(
+            self.readback_status, "provider state observed",
+            self.execute_provider_operation_id, self.readback_evidence,
+        )
 
     def registered(self) -> list[Any]:
         return [
@@ -270,6 +279,81 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                 "readback_pending",
                 "completed",
             ]
+
+            activities.command_transitions.clear()
+            activities.execute_status = "dispatch_unknown"
+            readbacks_before = activities.readback_attempts
+            dispatch_unknown = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id="00000000-0000-4000-8000-000000000099",
+                    command_type="telephony-internal.calls.originate",
+                    command_version="1.0",
+                    target="vicidial-restricted",
+                    tenant_id="tenant-test",
+                    requested_by="subject-appolon",
+                    correlation_id="calling-correlation-unknown",
+                    idempotency_key="calling-idempotency-unknown",
+                    capability="INTERNAL_TELEPHONY_CALLS",
+                    payload={},
+                    authenticated_client_id="odoo-integration",
+                ),
+                id="test-calling-dispatch-unknown",
+                task_queue=TASK_QUEUE,
+            )
+            assert dispatch_unknown.status == "reconciliation_required"
+            assert activities.command_transitions == [
+                "queued", "dispatching", "reconciliation_required",
+            ]
+            assert activities.readback_attempts == readbacks_before
+            activities.execute_status = "accepted"
+
+            activities.command_transitions.clear()
+            activities.readback_status = "matched"
+            activities.execute_provider_operation_id = "accepted-asterisk-id"
+            activities.readback_evidence = {
+                "operation_id": "00000000-0000-4000-8000-000000000098",
+                "correlation_id": "calling-correlation-provider-mismatch",
+                "dispatch_state": "accepted",
+                "asterisk_uniqueid": "different-asterisk-id",
+                "linkedid": "different-asterisk-id", "call_id": "call-98",
+                "call_state": "completed", "answered_at": "2026-09-05T20:00:02Z",
+                "ended_at": "2026-09-05T20:00:07Z", "terminal": True,
+                "evidence": {"sequence": 3}, "tenant_id": "tenant-test",
+                "subject": "subject-appolon", "employee_id": "employee-appolon",
+                "username": "appolon", "extension": "6901", "campaign": "TEST_SYN",
+                "authorization_reference": "AUTH-TEST-1",
+                "created_at": "2026-09-05T20:00:00Z", "duration_seconds": 7,
+                "talk_duration_seconds": 5, "hangup_cause": "normal",
+                "hangup_cause_code": 16, "internal_only": True,
+                "external_dialing": False, "recording": False,
+            }
+            provider_mismatch = await environment.client.execute_workflow(
+                CommandExecutionWorkflow.run,
+                CommandExecutionRequest(
+                    command_id="00000000-0000-4000-8000-000000000098",
+                    command_type="telephony-internal.calls.originate",
+                    command_version="1.0", target="vicidial-restricted",
+                    tenant_id="tenant-test", requested_by="subject-appolon",
+                    correlation_id="calling-correlation-provider-mismatch",
+                    idempotency_key="calling-idempotency-provider-mismatch",
+                    capability="INTERNAL_TELEPHONY_CALLS",
+                    payload={
+                        "actor": {"subject": "subject-appolon",
+                                  "employee_id": "employee-appolon",
+                                  "extension": "6901", "campaign_id": "TEST_SYN"},
+                        "authorization_reference": "AUTH-TEST-1",
+                    },
+                    authenticated_client_id="odoo-integration",
+                ),
+                id="test-calling-provider-identity-mismatch",
+                task_queue=TASK_QUEUE,
+            )
+            assert provider_mismatch.status == "reconciliation_required"
+            assert activities.command_transitions[-1] == "reconciliation_required"
+            assert "completed" not in activities.command_transitions
+            activities.execute_provider_operation_id = "provider-op-1"
+            activities.readback_evidence = None
 
             activities.command_transitions.clear()
             activities.readback_status = "mismatch"

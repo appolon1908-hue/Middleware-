@@ -24,7 +24,7 @@ LEGACY_REPOSITORY = "Codestra-SRL/codestra-middleware"
 LEGACY_BACKUP_REPOSITORY = (
     "ghcr.io/appolon1908-hue/codestra-middleware-legacy"
 )
-CURRENT_SCHEMA_HEAD = "0010_realtime_gateway"
+CURRENT_SCHEMA_HEAD = "0056_klyrow_delivery_events"
 PREDECESSOR_SCHEMA_HEAD = "0009_observability_incidents"
 PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 

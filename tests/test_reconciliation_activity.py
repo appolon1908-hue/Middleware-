@@ -4,6 +4,7 @@ import json
 from contextlib import AbstractAsyncContextManager
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -14,6 +15,7 @@ from app.commands import (
     CommandEnvelope,
     authenticated_command_digest,
 )
+from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, TARGET
 from app.temporal_activities import (
     CommandLedgerWorkflowActivities,
     FailClosedWorkflowActivities,
@@ -148,6 +150,53 @@ def durable_row(*, state: str = "reconciliation_required") -> dict[str, Any]:
         "reconciliation_reason": "operator requested readback",
         "resource_version": 1,
     }
+
+
+def completed_hangup_row() -> dict[str, Any]:
+    row = durable_row(state="completed")
+    public_payload = {
+        "command_id": row["command_id"], "command_type": HANGUP,
+        "command_version": "1.0", "target": TARGET, "tenant_id": "tenant-1",
+        "requested_by": "subject-appolon", "correlation_id": "correlation-123",
+        "idempotency_key": "hangup-restart-0001", "capability": CAPABILITY,
+        "payload": {
+            "actor": {"tenant_id": "tenant-1", "subject": "subject-appolon",
+                      "employee_id": "employee-appolon", "campaign_id": "TEST_SYN",
+                      "business_unit": "business-test", "extension": "6901"},
+            "originate": {}, "origin_operation_id": str(uuid4()),
+            "call_id": "codestra-call-1",
+            "authorization_reference": "CHG-APPOLON-TEST-0001",
+            "policy_sha256": "a" * 64, "reason": "Agent hangup",
+        },
+    }
+    command = CommandEnvelope.model_validate(public_payload)
+    row["payload"] = json.dumps({
+        **public_payload, AUTHENTICATED_CLIENT_ID_KEY: CLIENT_ID,
+    })
+    row["payload_sha256"] = authenticated_command_digest(command, CLIENT_ID)
+    row["provider_operation_id"] = "codestra-call-1"
+    return row
+
+
+@pytest.mark.asyncio
+async def test_completed_hangup_retry_repairs_original_without_provider_mutation() -> None:
+    row = completed_hangup_row()
+    store = FakeStore(row)
+    adapter = FakeAdapter(ActivityResult("matched", "must not be called"))
+    activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
+        store, vicidial_internal=adapter,  # type: ignore[arg-type]
+    )
+    activities.complete_originating_call = AsyncMock(  # type: ignore[method-assign]
+        return_value=ActivityResult("completed", "original repaired")
+    )
+
+    result = await activities.reconcile_operation(ReconciliationRequest(
+        row["command_id"], row["tenant_id"], "restart recovery",
+    ))
+
+    assert result.status == "completed"
+    activities.complete_originating_call.assert_awaited_once()
+    assert adapter.requests == []
 
 
 @pytest.mark.asyncio

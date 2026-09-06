@@ -172,7 +172,11 @@ def validate_source_policy() -> dict[str, Any]:
     production_environment_users = [
         workflow.name
         for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml"))
-        if "environment: production" in workflow.read_text(encoding="utf-8")
+        if re.search(
+            r"^\s*environment:\s*production\s*$",
+            workflow.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
     ]
     require(
         production_environment_users == ["automated-production-promotion.yml"],

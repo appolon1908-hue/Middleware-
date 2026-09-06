@@ -12,7 +12,7 @@
     "imageRepository": "ghcr.io/appolon1908-hue/codestra-middleware",
     "releaseWorkflow": ".github/workflows/release.yml",
     "releaseManifestSchema": "contracts/release-manifest.v1.schema.json",
-    "requiredSchemaHead": "0010_realtime_gateway",
+    "requiredSchemaHead": "0056_klyrow_delivery_events",
     "candidateStatus": "PENDING_EXACT_PROTECTED_MERGE_BUILD",
     "currentSignedCandidate": null,
     "historicalSignedPredecessor": {
@@ -42,7 +42,7 @@
     "requiredEvidence": [
       "signed release manifest bound to exact protected-main source",
       "immutable image digest and verified provenance",
-      "schema head 0010_realtime_gateway",
+      "schema head 0056_klyrow_delivery_events",
       "effective source, digest, schema, profile, and capability read-back",
       "backup and isolated restore evidence",
       "rollback rehearsal and data-integrity evidence",

@@ -52,6 +52,81 @@
       "required_job": "Temporal critical workflow integration"
     },
     {
+      "path": "tests/integration/test_durable_outbox.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_invalid_event_quarantine.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_n8n_transport_durable.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_sales_database.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_social_n8n_phase_n2_runtime.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_social_staging_runtime.py",
+      "gate": "TEST_DATABASE_URL+TEST_REDIS_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_telephony_command_journal.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_telephony_originate.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_telephony_reservation.py",
+      "gate": "TEST_DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_ai_job_platform.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_ai_orchestration_db.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_ai_worker_queue_runtime.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_openai_worker_runtime.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_tts_job_runtime.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/pairing/test_selected_server_b.py",
+      "gate": "CODESTRA_SELECTED_SERVER_B_ROOT+CODESTRA_SELECTED_SERVER_B_SHA",
+      "required_job": "Calling contract"
+    },
+    {
       "path": "services/connector-runtime/tests/test_storage_contract.py",
       "gate": "ADMIN_DATABASE_URL+APP_DATABASE_URL",
       "required_job": "Connector storage v1"

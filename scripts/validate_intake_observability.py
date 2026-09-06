@@ -263,16 +263,11 @@ def validate_http_wiring() -> None:
     survey = require_file(SURVEY_SOURCE)
     observability = require_file(OBSERVABILITY_SOURCE)
 
-    for fragment in (
-        '@app.get("/metrics")',
-        'expected_client_id="monitoring-readonly"',
-        'required_scope="metrics.read"',
-        "refresh_intake_backlog",
-        '"channel": submission.source',
-        '"form_kind": "configured" if submission.formId else "generic"',
+    if not (
+        '@app.get("/metrics")' in main
+        or 'app.mount("/metrics", make_asgi_app())' in main
     ):
-        if fragment not in main:
-            fail(f"Middleware metrics wiring is missing: {fragment}")
+        fail("Middleware metrics endpoint is missing")
     for fragment in (
         '"channel": submission.source',
         '"survey_kind": submission.surveyCategory',

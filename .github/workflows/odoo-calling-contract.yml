@@ -66,6 +66,8 @@ jobs:
             tests/test_calling_api.py \
             tests/test_vicidial_internal_call_adapter.py \
             tests/test_reconciliation_activity.py
+          TEMPORAL_INTEGRATION_TESTS=1 python -m pytest -q \
+            tests/integration/test_temporal_workflows.py
           sudo --preserve-env=CODESTRA_SELECTED_SERVER_B_ROOT,CODESTRA_SELECTED_SERVER_B_SHA \
             "$(command -v python)" -m pytest -q \
             tests/pairing/test_selected_server_b.py

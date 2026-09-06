@@ -189,6 +189,49 @@ async def test_policy_change_after_enqueue_fails_before_network(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_authenticated_server_policy_denial_is_conclusive_no_effect(tmp_path):
+    grant, env = environment(tmp_path)
+    sends = 0
+
+    async def endpoint(request):
+        nonlocal sends
+        sends += 1
+        return httpx.Response(
+            403, request=request,
+            json={"detail": "internal call authorization expired"},
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(endpoint))
+    adapter = VicidialInternalCallAdapter(
+        SimpleNamespace(source_sha=SOURCE_SHA), env, client,
+    )
+    with pytest.raises(
+        VicidialInternalCallPreDispatchRejected,
+        match="conclusively rejected",
+    ):
+        await adapter.execute(command(grant))
+    assert sends == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_unrecognized_forbidden_response_is_not_conclusive(tmp_path):
+    grant, env = environment(tmp_path)
+
+    async def endpoint(request):
+        return httpx.Response(403, request=request, json={"detail": "other denial"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(endpoint))
+    adapter = VicidialInternalCallAdapter(
+        SimpleNamespace(source_sha=SOURCE_SHA), env, client,
+    )
+    with pytest.raises(VicidialInternalCallError) as caught:
+        await adapter.execute(command(grant))
+    assert not isinstance(caught.value, VicidialInternalCallPreDispatchRejected)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("policy_failure", ["deleted", "unreadable", "malformed"])
 async def test_policy_loading_failure_is_conclusive_no_send(
     tmp_path, monkeypatch, policy_failure,

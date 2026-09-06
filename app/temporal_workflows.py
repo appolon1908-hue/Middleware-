@@ -432,6 +432,7 @@ class CommandExecutionWorkflow:
                     correlation_id=request.correlation_id, tenant_id=request.tenant_id,
                     actor=request.payload["actor"],
                     authorization_reference=request.payload["authorization_reference"],
+                    provider_operation_id=executed.provider_operation_id,
                     require_terminal=False,
                 )
             except (KeyError, TypeError, ValueError):
@@ -469,6 +470,7 @@ class CommandExecutionWorkflow:
                     tenant_id=request.tenant_id,
                     actor=request.payload["actor"],
                     authorization_reference=request.payload["authorization_reference"],
+                    provider_operation_id=executed.provider_operation_id,
                 )
             except (KeyError, TypeError, ValueError) as exc:
                 await _command_transition(CommandTransitionRequest(

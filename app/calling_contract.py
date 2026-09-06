@@ -100,7 +100,7 @@ class CallLifecycleEvidence(StrictModel):
 def validate_call_evidence(
     value: object, *, operation_id: str, correlation_id: str, tenant_id: str,
     actor: Mapping[str, object], authorization_reference: str,
-    require_terminal: bool,
+    require_terminal: bool, provider_operation_id: str | None = None,
 ) -> dict[str, Any]:
     evidence = CallLifecycleEvidence.model_validate(value)
     if (evidence.operation_id != operation_id
@@ -112,6 +112,9 @@ def validate_call_evidence(
             or evidence.campaign != actor.get("campaign_id")
             or evidence.authorization_reference != authorization_reference):
         raise CallingContractError("calling_evidence_identity_mismatch")
+    if (provider_operation_id is not None
+            and evidence.asterisk_uniqueid != provider_operation_id):
+        raise CallingContractError("calling_evidence_provider_identity_mismatch")
     if require_terminal and (
         not evidence.terminal or evidence.call_state not in TERMINAL_CALL_STATES
         or not evidence.linkedid or not evidence.ended_at

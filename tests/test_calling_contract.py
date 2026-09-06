@@ -79,6 +79,20 @@ class CallingContractTests(unittest.TestCase):
         for changes in ({"call_state":"completed"},{"call_state":"mystery"},{"ended_at":created}):
             with self.subTest(changes=changes), self.assertRaises((CallingContractError,ValidationError)):
                 validate_call_evidence(base|changes, **bindings)
+
+    def test_lifecycle_evidence_must_match_accepted_provider_identity(self):
+        bindings = dict(
+            operation_id="op", correlation_id="corr", tenant_id="tenant",
+            actor={"subject":"subject","employee_id":"employee",
+                   "extension":"6901","campaign_id":"TEST_SYN"},
+            authorization_reference="auth", require_terminal=True,
+            provider_operation_id="unique",
+        )
+        validate_call_evidence(self.lifecycle(), **bindings)
+        with self.assertRaises(CallingContractError):
+            validate_call_evidence(
+                self.lifecycle(asterisk_uniqueid="different"), **bindings,
+            )
     def test_internal_shape_and_grant(self):
         grant().authorize(principal(), originate(), source_sha=SOURCE_SHA)
 

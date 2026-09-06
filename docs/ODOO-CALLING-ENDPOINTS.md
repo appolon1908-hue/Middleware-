@@ -5,9 +5,10 @@
 This change implements the Middleware HTTP admission, status, reconciliation and
 same-call hangup endpoints on the existing durable command ledger. It does not
 install an Asterisk/VICIdial runtime, create or activate an agent, enroll a browser,
-or bind a new production provider activity. The existing Temporal provider
-boundary remains fail-closed until the owning VICIdial calling contract and its
-Middleware adapter are reviewed and bound.
+or activate a production call policy. The restricted HMAC-v2 VICIdial adapter is
+implemented and bound to the real Temporal worker. Runtime dispatch remains
+fail-closed unless the reviewed Server B release, protected calling policy, mTLS
+and HMAC material, and disabled-by-default configuration are all installed.
 
 A queued request is not a phone call. Source tests are not evidence of ringing,
 SIP registration, two-way audio, hangup, or Odoo lead-history reconciliation.

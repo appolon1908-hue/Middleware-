@@ -116,7 +116,8 @@ class VicidialInternalCallAdapter:
 
     async def _request(self, method: str, path: str, *, document: dict | None = None,
                        scope: str, idempotency_key: str = "",
-                       reject_preparation: bool = False) -> dict[str, Any]:
+                       reject_preparation: bool = False,
+                       conclusive_denials: frozenset[str] = frozenset()) -> dict[str, Any]:
         try:
             body = (json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
                     if document is not None else b"")
@@ -155,6 +156,19 @@ class VicidialInternalCallAdapter:
         if response.status_code >= 500:
             raise VicidialInternalCallUnknown("Server B did not return a conclusive outcome")
         if response.status_code >= 400:
+            # These exact Server B policy denials are authenticated responses
+            # which guarantee the originate executor made no AMI mutation.
+            # Everything else remains unknown/failed and must not be promoted
+            # to a proven no-send outcome merely because it used a 4xx code.
+            try:
+                rejection = json.loads(raw)
+            except (ValueError, UnicodeError):
+                rejection = None
+            detail = rejection.get("detail") if isinstance(rejection, dict) else None
+            if response.status_code == 403 and detail in conclusive_denials:
+                raise VicidialInternalCallPreDispatchRejected(
+                    "Server B conclusively rejected originate before AMI dispatch"
+                )
             raise VicidialInternalCallError(f"Server B rejected the bounded request ({response.status_code})")
         try:
             value = json.loads(raw)
@@ -211,7 +225,10 @@ class VicidialInternalCallAdapter:
             value = await self._request("POST", self.ORIGINATE_PATH, document=document,
                                         scope="telephony:internal-call",
                                         idempotency_key=request.command_id,
-                                        reject_preparation=True)
+                                        reject_preparation=True,
+                                        conclusive_denials=frozenset({
+                                            "internal call authorization expired",
+                                        }))
             if value.get("operation_id") != request.command_id or value.get("status") not in {"accepted", "dispatch_unknown"}:
                 raise VicidialInternalCallUnknown("Server B originate acknowledgement was invalid")
             return ActivityResult(value["status"], "bounded originate submitted",

@@ -7,7 +7,6 @@ persistence are the selected source's real implementations.
 from __future__ import annotations
 
 import os
-import json
 import sqlite3
 import sys
 from datetime import UTC, datetime, timedelta
@@ -17,7 +16,10 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from app.vicidial_internal_call_adapter import VicidialInternalCallAdapter
+from app.vicidial_internal_call_adapter import (
+    VicidialInternalCallAdapter,
+    VicidialInternalCallPreDispatchRejected,
+)
 from app.calling_contract import CallPrincipal, CallingGrant
 from tests.test_vicidial_internal_call_adapter import (
     SECRET, SOURCE_SHA, command, environment, hangup_command,
@@ -132,21 +134,11 @@ async def test_real_selected_server_b_hmac_routes_policy_and_persistence(
             "command_id": "33333333-3333-5333-8333-333333333333",
             "idempotency_key": "originate-appolon-expired-0002",
         })
-        _, _, second_document = adapter._originate(second)
-        second_body = json.dumps(
-            second_document, sort_keys=True, separators=(",", ":"),
-        ).encode()
-        second_path = adapter.ORIGINATE_PATH
-        denied = await client.post(
-            second_path,
-            content=second_body,
-            headers=adapter._headers(
-                "POST", second_path, second_body, "telephony:internal-call",
-                second.command_id,
-            ),
-        )
-        assert denied.status_code == 403
-        assert denied.json() == {"detail": "internal call authorization expired"}
+        with pytest.raises(
+            VicidialInternalCallPreDispatchRejected,
+            match="conclusively rejected",
+        ):
+            await adapter.execute(second)
         assert len(ami.actions) == 1
 
         hangup_base = hangup_command(grant)

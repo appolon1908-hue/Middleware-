@@ -115,12 +115,21 @@ async def accept_webhook(
             envelope.event_id,
         )
         try:
-            result = await runtime.inbox.accept(
-                envelope,
-                producer_client_id=route.producer_client_id,
-                body_sha256=signed.body_sha256,
-                semantic_sha256=semantic_sha,
-            )
+            if runtime.automation is not None:
+                result = await runtime.automation.accept_event(
+                    runtime.inbox,
+                    envelope,
+                    producer_client_id=route.producer_client_id,
+                    body_sha256=signed.body_sha256,
+                    semantic_sha256=semantic_sha,
+                )
+            else:
+                result = await runtime.inbox.accept(
+                    envelope,
+                    producer_client_id=route.producer_client_id,
+                    body_sha256=signed.body_sha256,
+                    semantic_sha256=semantic_sha,
+                )
         except ReplayConflict as exc:
             raise ReplayConflictError(str(exc)) from exc
     except ReplayBusy as exc:

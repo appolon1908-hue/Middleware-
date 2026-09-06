@@ -5,16 +5,27 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .automation_policy import AutomationPolicy
+from .automation_v2 import (
+    AutomationService,
+    MemoryAutomationStore,
+    PostgresAutomationStore,
+    WorkflowRouter,
+)
 from .commands import (
     CommandPolicyRegistry,
     CommandService,
     MemoryCommandStore,
     PostgresCommandStore,
 )
-from .communications import CommunicationsService, MemoryCommunicationsStore, PostgresCommunicationsStore
+from .communications import (
+    CommunicationsService,
+    MemoryCommunicationsStore,
+    PostgresCommunicationsStore,
+)
 from .config import Settings
-from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .realtime import MemoryRealtimeStore, PostgresRealtimeStore, RealtimeStore
+from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
 from .storage import InboxStore, MemoryInboxStore, PostgresInboxStore
 
@@ -43,6 +54,7 @@ class Runtime:
     commands: CommandService | None = None
     communications: CommunicationsService | None = None
     incidents: IncidentService | None = None
+    automation: AutomationService | None = None
     realtime: RealtimeStore | None = None
 
     async def readiness(self) -> ReadinessReport:
@@ -56,10 +68,15 @@ class Runtime:
         else:
             checks["command_store"] = None
         checks["communications_store"] = (
-            self.communications.store.ready() if self.communications is not None else None
+            self.communications.store.ready()
+            if self.communications is not None
+            else None
         )
         checks["incident_store"] = (
             self.incidents.store.ready() if self.incidents is not None else None
+        )
+        checks["automation_store"] = (
+            self.automation.ready() if self.automation is not None else None
         )
         if self.realtime is not None:
             checks["realtime_store"] = self.realtime.ready()
@@ -89,6 +106,8 @@ class Runtime:
         await self.replay.close()
         if self.communications is not None:
             await self.communications.store.close()
+        if self.automation is not None:
+            await self.automation.close()
         if self.commands is not None:
             await self.commands.store.close()
         if self.incidents is not None:
@@ -99,10 +118,21 @@ class Runtime:
 
 async def build_runtime(settings: Settings) -> Runtime:
     tokens = KeycloakJwtVerifier(settings)
+    command_policies = CommandPolicyRegistry.load()
+    automation_policy = AutomationPolicy.from_path()
+    workflow_router = WorkflowRouter.load()
+
     if settings.allow_in_memory_storage:
         commands = CommandService(
             store=MemoryCommandStore(),
-            policies=CommandPolicyRegistry.load(),
+            policies=command_policies,
+        )
+        automation = AutomationService(
+            store=MemoryAutomationStore(),
+            policy=automation_policy,
+            workflow_router=workflow_router,
+            commands=commands,
+            umbrella_controls=settings.umbrella_controls,
         )
         return Runtime(
             settings=settings,
@@ -115,49 +145,75 @@ async def build_runtime(settings: Settings) -> Runtime:
                 commands=commands,
                 umbrella_controls=settings.umbrella_controls,
             ),
+            automation=automation,
             realtime=MemoryRealtimeStore(),
         )
+
     assert settings.database_url is not None
     assert settings.redis_url is not None
+
     inbox = await PostgresInboxStore.connect(settings.database_url)
     try:
-        commands = await PostgresCommandStore.connect(settings.database_url)
+        commands_store = await PostgresCommandStore.connect(
+            settings.database_url
+        )
         try:
-            replay = await RedisReplayGuard.connect(settings.redis_url)
+            automation_store = await PostgresAutomationStore.connect(
+                settings.database_url
+            )
+            try:
+                replay = await RedisReplayGuard.connect(settings.redis_url)
+                try:
+                    realtime = await PostgresRealtimeStore.connect(
+                        settings.database_url
+                    )
+                except Exception:
+                    await replay.close()
+                    raise
+            except Exception:
+                await automation_store.close()
+                raise
         except Exception:
-            await commands.close()
+            await commands_store.close()
             raise
     except Exception:
         await inbox.close()
         raise
-    try:
-        realtime = await PostgresRealtimeStore.connect(settings.database_url)
-    except Exception:
-        await replay.close()
-        await commands.close()
-        await inbox.close()
-        raise
+
+    commands = CommandService(
+        store=commands_store,
+        policies=command_policies,
+    )
     runtime = Runtime(
         settings=settings,
         inbox=inbox,
         replay=replay,
         tokens=tokens,
-        commands=CommandService(
-            store=commands,
-            policies=CommandPolicyRegistry.load(),
+        commands=commands,
+        automation=AutomationService(
+            store=automation_store,
+            policy=automation_policy,
+            workflow_router=workflow_router,
+            commands=commands,
+            umbrella_controls=settings.umbrella_controls,
         ),
         realtime=realtime,
     )
     try:
         runtime.communications = CommunicationsService(
-            store=await PostgresCommunicationsStore.connect(settings.database_url),
+            store=await PostgresCommunicationsStore.connect(
+                settings.database_url
+            ),
             commands=runtime.commands,
             umbrella_controls=settings.umbrella_controls,
         )
     except Exception:
         await runtime.close()
         raise
+
     if not await runtime.ready():
         await runtime.close()
-        raise RuntimeError("mandatory runtime readiness checks failed during startup")
+        raise RuntimeError(
+            "mandatory runtime readiness checks failed during startup"
+        )
     return runtime

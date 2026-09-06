@@ -130,6 +130,11 @@
       "path": "services/connector-runtime/tests/test_storage_contract.py",
       "gate": "ADMIN_DATABASE_URL+APP_DATABASE_URL",
       "required_job": "Connector storage v1"
+    },
+    {
+      "path": "tests/integration/test_automation_v2_store.py",
+      "gate": "RUNTIME_INTEGRATION_TESTS",
+      "required_job": "Disposable PostgreSQL Redis integration"
     }
   ],
   "policy": {

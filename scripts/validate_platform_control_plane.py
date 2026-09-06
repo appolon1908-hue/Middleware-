@@ -27,8 +27,12 @@ def fail(message: str) -> None:
 def main() -> int:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     vector = json.loads(HMAC_VECTOR_PATH.read_text(encoding="utf-8"))
-    capabilities = json.loads(CAPABILITIES_PATH.read_text(encoding="utf-8"))["capabilities"]
-    route_authority = json.loads(ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    capabilities = json.loads(CAPABILITIES_PATH.read_text(encoding="utf-8"))[
+        "capabilities"
+    ]
+    route_authority = json.loads(
+        ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8")
+    )
     main_source = MAIN_PATH.read_text(encoding="utf-8")
     n8n_source = N8N_PATH.read_text(encoding="utf-8")
     odoo_source = ODOO_PATH.read_text(encoding="utf-8")
@@ -62,25 +66,37 @@ def main() -> int:
     automation_authority = route_authority.get("automation", {})
     if route_authority.get("decision") != "middleware_adopts_automation_v2":
         fail("automation v2 authority decision drifted")
-    if automation_authority.get("canonical_command_submit") != "POST /v2/automation/commands":
+    if (
+        automation_authority.get("canonical_command_submit")
+        != "POST /v2/automation/commands"
+    ):
         fail("canonical automation command submit route drifted")
-    if automation_authority.get("canonical_command_read") != "GET /v2/automation/commands/{command_id}":
+    if (
+        automation_authority.get("canonical_command_read")
+        != "GET /v2/automation/commands/{command_id}"
+    ):
         fail("canonical automation command read route drifted")
 
     required_n8n_markers = (
-        'router = APIRouter(prefix="/v1/integrations/n8n"',
-        '@router.post("/commands", deprecated=True)',
-        '@router.get("/operations/{command_id}", deprecated=True)',
+        'router = APIRouter(tags=["n8n-control-plane"])',
+        '@router.post("/v1/integrations/n8n/commands", deprecated=True)',
+        (
+            '@router.get('
+            '"/v1/integrations/n8n/operations/{command_id}", deprecated=True)'
+        ),
+        "router.include_router(v2_router)",
         'expected_client_id="n8n-automation"',
         'required_scope="middleware.request.forward"',
         'required_scope="middleware.status.read"',
-        'authorize_tenant(claims, command.tenant_id)',
+        "authorize_tenant(claims, command.tenant_id)",
         'request.headers.get("Idempotency-Key") != command.idempotency_key',
         '"Deprecation": "true"',
         '"Sunset": _LEGACY_SUNSET',
         'rel="successor-version"',
     )
-    missing = [marker for marker in required_n8n_markers if marker not in n8n_source]
+    missing = [
+        marker for marker in required_n8n_markers if marker not in n8n_source
+    ]
     if missing:
         fail("legacy n8n compatibility route drifted: " + ", ".join(missing))
     if "app.include_router(n8n_control_plane_router)" not in main_source:
@@ -108,8 +124,12 @@ def main() -> int:
         "bridge_module": "codestra_middleware_bridge",
         "canonical_command_type": "crm.lead.upsert",
         "canonical_command_version": "1.0",
-        "canonical_command_path": "/codestra/middleware/v1/commands/crm.lead.upsert",
-        "canonical_status_path": "/codestra/middleware/v1/commands/{command_id}/status",
+        "canonical_command_path": (
+            "/codestra/middleware/v1/commands/crm.lead.upsert"
+        ),
+        "canonical_status_path": (
+            "/codestra/middleware/v1/commands/{command_id}/status"
+        ),
         "readback_required": True,
         "unknown_outcome_policy": "query_command_status_before_any_retry",
         "blind_resubmission_allowed": False,
@@ -131,23 +151,34 @@ def main() -> int:
         fail("Odoo HMAC canonical field order drifted")
 
     required_odoo_markers = (
-        'ODOO_LEAD_COMMAND_SCHEMA = ROOT / "contracts" / "odoo-lead-command.schema.json"',
+        (
+            'ODOO_LEAD_COMMAND_SCHEMA = ROOT / "contracts" / '
+            '"odoo-lead-command.schema.json"'
+        ),
         'UPSERT_LEAD = "crm.lead.upsert"',
-        'SUPPORTED = {UPSERT_LEAD}',
-        'COMMAND_PATH = "/codestra/middleware/v1/commands/crm.lead.upsert"',
-        'STATUS_PATH = "/codestra/middleware/v1/commands/{command_id}/status"',
+        "SUPPORTED = {UPSERT_LEAD}",
+        (
+            'COMMAND_PATH = '
+            '"/codestra/middleware/v1/commands/crm.lead.upsert"'
+        ),
+        (
+            'STATUS_PATH = '
+            '"/codestra/middleware/v1/commands/{command_id}/status"'
+        ),
         'self.settings.external_effects.get("ODOO_WRITE") is not True',
-        'len(value) > 255',
-        '_odoo_lead_command_validator().iter_errors(document)',
+        "len(value) > 255",
+        "_odoo_lead_command_validator().iter_errors(document)",
         'request.tenant_id.encode("utf-8")',
         'request.correlation_id.encode("utf-8")',
         'idempotency_key.encode("utf-8")',
-        'return await self._reconcile_unknown_write(request, exc)',
-        'reconciliation = await self.readback(request)',
+        "return await self._reconcile_unknown_write(request, exc)",
+        "reconciliation = await self.readback(request)",
         'data.get("operation") != self.UPSERT_LEAD',
-        'ODOO_INBOUND_HMAC_SECRET',
+        "ODOO_INBOUND_HMAC_SECRET",
     )
-    missing = [marker for marker in required_odoo_markers if marker not in odoo_source]
+    missing = [
+        marker for marker in required_odoo_markers if marker not in odoo_source
+    ]
     if missing:
         fail("Odoo adapter implementation drifted: " + ", ".join(missing))
     for forbidden in (
@@ -195,9 +226,17 @@ def main() -> int:
         CONTRACT_PATH.read_text(encoding="utf-8")
         + HMAC_VECTOR_PATH.read_text(encoding="utf-8")
     ).lower()
-    for forbidden in ("client_secret", "password", "access_token", "private_key"):
+    for forbidden in (
+        "client_secret",
+        "password",
+        "access_token",
+        "private_key",
+    ):
         if forbidden in serialized:
-            fail(f"shared contract contains forbidden secret-bearing field: {forbidden}")
+            fail(
+                "shared contract contains forbidden secret-bearing field: "
+                f"{forbidden}"
+            )
 
     print("PLATFORM_CONTROL_PLANE=PASS")
     return 0

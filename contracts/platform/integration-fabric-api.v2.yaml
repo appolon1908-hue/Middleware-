@@ -145,6 +145,547 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /v2/automation/jobs/claim:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Claim Automation Job
+      operationId: claim_automation_job_v2_automation_jobs_claim_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobClaimRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/jobs/{job_id}:
+    get:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Read Automation Job
+      operationId: read_automation_job_v2_automation_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/jobs/{job_id}/heartbeat:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Heartbeat Automation Job
+      operationId: heartbeat_automation_job_v2_automation_jobs__job_id__heartbeat_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Job Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/jobs/{job_id}/steps:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Record Automation Step
+      operationId: record_automation_step_v2_automation_jobs__job_id__steps_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Job Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepRecord'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/jobs/{job_id}/complete:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Complete Automation Job
+      operationId: complete_automation_job_v2_automation_jobs__job_id__complete_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Job Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerminalResult'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/jobs/{job_id}/fail:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Fail Automation Job
+      operationId: fail_automation_job_v2_automation_jobs__job_id__fail_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Job Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FailureResult'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/commands:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Submit Automation Command
+      operationId: submit_automation_command_v2_automation_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationCommandRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/commands/{command_id}:
+    get:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Read Automation Command
+      operationId: read_automation_command_v2_automation_commands__command_id__get
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Command Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/approvals:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Request Automation Approval
+      operationId: request_automation_approval_v2_automation_approvals_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/approvals/{approval_id}:
+    get:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Read Automation Approval
+      operationId: read_automation_approval_v2_automation_approvals__approval_id__get
+      parameters:
+      - name: approval_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Approval Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/dead-letters/{dead_letter_id}/replay:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Replay Automation Dead Letter
+      operationId: replay_automation_dead_letter_v2_automation_dead_letters__dead_letter_id__replay_post
+      parameters:
+      - name: dead_letter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Dead Letter Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadLetterReplayRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/jobs/reconcile:
+    post:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Reconcile Automation Jobs
+      operationId: reconcile_automation_jobs_v2_automation_jobs_reconcile_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v2/automation/capabilities/{capability}:
+    get:
+      tags:
+      - n8n-control-plane
+      - automation-v2
+      summary: Read Automation Capability
+      operationId: read_automation_capability_v2_automation_capabilities__capability__get
+      parameters:
+      - name: capability
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Capability
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v1/operations-dashboard/overview:
     get:
       tags:
@@ -6231,6 +6772,143 @@ paths:
       - *id004
 components:
   schemas:
+    ApprovalRequest:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        job_id:
+          type: string
+          format: uuid
+          title: Job Id
+        approval_type:
+          type: string
+          maxLength: 100
+          minLength: 1
+          pattern: ^[A-Z][A-Z0-9_]*$
+          title: Approval Type
+        summary:
+          type: string
+          maxLength: 1000
+          minLength: 1
+          title: Summary
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - job_id
+      - approval_type
+      - summary
+      - expires_at
+      title: ApprovalRequest
+    AutomationCommandRequest:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        job_id:
+          type: string
+          format: uuid
+          title: Job Id
+        lease_token:
+          type: string
+          maxLength: 512
+          minLength: 32
+          title: Lease Token
+        execution_id:
+          type: string
+          format: uuid
+          title: Execution Id
+        workflow_key:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Workflow Key
+        workflow_version:
+          type: integer
+          maximum: 2147483647.0
+          minimum: 1.0
+          title: Workflow Version
+        step_key:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Step Key
+        event_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Event Id
+        causation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Causation Id
+        command_type:
+          type: string
+          maxLength: 180
+          minLength: 3
+          title: Command Type
+        command_version:
+          type: string
+          const: '1.0'
+          title: Command Version
+        occurred_at:
+          type: string
+          format: date-time
+          title: Occurred At
+        payload:
+          type: object
+          title: Payload
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - job_id
+      - lease_token
+      - execution_id
+      - workflow_key
+      - workflow_version
+      - step_key
+      - event_id
+      - causation_id
+      - command_type
+      - command_version
+      - occurred_at
+      - payload
+      title: AutomationCommandRequest
     CallingResponse:
       properties:
         dialing:
@@ -6600,6 +7278,108 @@ components:
       - to
       - content
       title: CreateMessageRequest
+    DeadLetterReplayRequest:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        approval_id:
+          type: string
+          format: uuid
+          title: Approval Id
+        expected_version:
+          type: integer
+          minimum: 1.0
+          title: Expected Version
+        original_effect_fingerprint:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Original Effect Fingerprint
+        safe_replay_classification:
+          type: string
+          title: Safe Replay Classification
+        replay_reason:
+          type: string
+          maxLength: 1000
+          minLength: 1
+          title: Replay Reason
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - approval_id
+      - expected_version
+      - original_effect_fingerprint
+      - safe_replay_classification
+      - replay_reason
+      title: DeadLetterReplayRequest
+    FailureResult:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        lease_token:
+          type: string
+          maxLength: 512
+          minLength: 32
+          title: Lease Token
+        execution_id:
+          type: string
+          format: uuid
+          title: Execution Id
+        error_code:
+          type: string
+          maxLength: 180
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]*$
+          title: Error Code
+        retryable:
+          type: boolean
+          title: Retryable
+        unknown_outcome:
+          type: boolean
+          title: Unknown Outcome
+          default: false
+        safe_error:
+          type: object
+          title: Safe Error
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - lease_token
+      - execution_id
+      - error_code
+      - retryable
+      title: FailureResult
     HTTPValidationError:
       properties:
         detail:
@@ -6609,6 +7389,93 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HeartbeatRequest:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        lease_token:
+          type: string
+          maxLength: 512
+          minLength: 32
+          title: Lease Token
+        execution_id:
+          type: string
+          format: uuid
+          title: Execution Id
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - lease_token
+      - execution_id
+      title: HeartbeatRequest
+    JobClaimRequest:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        job_id:
+          type: string
+          format: uuid
+          title: Job Id
+        delivery_token:
+          type: string
+          maxLength: 512
+          minLength: 32
+          title: Delivery Token
+        workflow_key:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Workflow Key
+        workflow_version:
+          type: integer
+          maximum: 2147483647.0
+          minimum: 1.0
+          title: Workflow Version
+        execution_id:
+          type: string
+          format: uuid
+          title: Execution Id
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - job_id
+      - delivery_token
+      - workflow_key
+      - workflow_version
+      - execution_id
+      title: JobClaimRequest
     MessageContent:
       properties:
         subject:
@@ -7338,6 +8205,44 @@ components:
       - domains
       - providers
       title: ProviderReputationReport
+    ReconciliationRequest:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        mode:
+          type: string
+          enum:
+          - READ
+          - PLAN
+          title: Mode
+          default: READ
+        job_ids:
+          items:
+            type: string
+            format: uuid
+          type: array
+          maxItems: 1000
+          title: Job Ids
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      title: ReconciliationRequest
     ReconciliationResolution:
       properties:
         expected_version:
@@ -7523,6 +8428,109 @@ components:
       - EXTERNAL_MODEL_CALLS_ENABLED
       - N8N_EXTERNAL_PROVIDER_WRITES
       title: RuntimeSafetyUmbrellaControls
+    StepRecord:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        lease_token:
+          type: string
+          maxLength: 512
+          minLength: 32
+          title: Lease Token
+        execution_id:
+          type: string
+          format: uuid
+          title: Execution Id
+        step_key:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Step Key
+        step_state:
+          type: string
+          enum:
+          - STARTED
+          - COMPLETED
+          - FAILED
+          - WAITING
+          title: Step State
+        recorded_at:
+          type: string
+          format: date-time
+          title: Recorded At
+        safe_metadata:
+          type: object
+          title: Safe Metadata
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - lease_token
+      - execution_id
+      - step_key
+      - step_state
+      - recorded_at
+      title: StepRecord
+    TerminalResult:
+      properties:
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        lease_token:
+          type: string
+          maxLength: 512
+          minLength: 32
+          title: Lease Token
+        execution_id:
+          type: string
+          format: uuid
+          title: Execution Id
+        result_code:
+          type: string
+          maxLength: 180
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]*$
+          title: Result Code
+        safe_result:
+          type: object
+          title: Safe Result
+      additionalProperties: false
+      type: object
+      required:
+      - tenant_id
+      - correlation_id
+      - idempotency_key
+      - lease_token
+      - execution_id
+      - result_code
+      title: TerminalResult
     ValidationError:
       properties:
         loc:

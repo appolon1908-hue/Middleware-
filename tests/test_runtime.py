@@ -327,6 +327,7 @@ def test_health_ready_version(test_settings, runtime) -> None:
             "command_store": "not_configured",
             "communications_store": "not_configured",
             "incident_store": "not_configured",
+            "automation_store": "not_configured",
         }
         assert "checked_at" in readiness.json()
         assert client.get("/readiness").json()["components"] == readiness.json()["components"]

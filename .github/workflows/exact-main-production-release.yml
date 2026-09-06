@@ -178,7 +178,7 @@ jobs:
           python -m pip install --disable-pip-version-check --require-hashes \
             -r requirements.lock -r requirements-test.lock
           ruff check --select E9,F63,F7,F82 app tests
-          test "$(alembic heads | awk 'NR == 1 {print $1}')" = "0056_klyrow_delivery_events"
+          test "$(alembic heads | awk 'NR == 1 {print $1}')" = "0059_klyrow_usage_events"
           alembic upgrade head
           python -m pytest -q tests
 

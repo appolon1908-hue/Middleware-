@@ -44,8 +44,10 @@ from app.api.v1.provider_commands import router as provider_commands_router
 from app.integrations.postiz.routes import router as postiz_router
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
+from app.n8n_control_plane import router as n8n_control_plane_router
 
 app = FastAPI(title="Codestra Middleware", version="0.2.0")
+app.include_router(n8n_control_plane_router)
 app.include_router(events_router)
 app.include_router(callbacks_router)
 app.include_router(control_router)
@@ -82,6 +84,14 @@ app.include_router(sales_router)
 app.include_router(social_router)
 app.include_router(provider_webhooks_router)
 app.mount("/metrics", make_asgi_app())
+
+
+def create_app(*, settings=None, runtime=None) -> FastAPI:
+    """Build the Appolon compatibility API alongside the canonical application."""
+
+    from app.appolon_factory import create_app as create_appolon_app
+
+    return create_appolon_app(settings=settings, runtime=runtime)
 
 
 @app.exception_handler(RequestValidationError)

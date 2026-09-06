@@ -20,11 +20,11 @@ ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 CANONICAL_REPOSITORY = "appolon1908-hue/Middleware-"
 CANONICAL_IMAGE_REPOSITORY = "ghcr.io/appolon1908-hue/codestra-middleware"
-LEGACY_REPOSITORY = "appolon1908-hue/Middleware-"
+LEGACY_REPOSITORY = "Codestra-SRL/codestra-middleware"
 LEGACY_BACKUP_REPOSITORY = (
     "ghcr.io/appolon1908-hue/codestra-middleware-legacy"
 )
-CURRENT_SCHEMA_HEAD = "0010_realtime_gateway"
+CURRENT_SCHEMA_HEAD = "0059_klyrow_usage_events"
 PREDECESSOR_SCHEMA_HEAD = "0009_observability_incidents"
 PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 

@@ -54,7 +54,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY requirements-connector-runtime.txt ./
 RUN python -m pip install --require-hashes --prefix=/opt/connector -r requirements-connector-runtime.txt
-COPY pyproject.toml ./connector-sdk/pyproject.toml
+COPY services/connector-sdk/pyproject.toml ./connector-sdk/pyproject.toml
 COPY middleware ./connector-sdk/middleware
 RUN python -m pip install --no-deps --prefix=/opt/connector ./connector-sdk
 COPY services/connector-runtime/pyproject.toml ./runtime/pyproject.toml

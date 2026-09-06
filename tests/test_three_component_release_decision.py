@@ -20,7 +20,7 @@ DIGESTS = {
     "websocket-gateway": "sha256:" + "3" * 64,
 }
 IMAGES = {
-    "middleware": "ghcr.io/codestra-srl/codestra-middleware",
+    "middleware": "ghcr.io/appolon1908-hue/middleware",
     "agent-desktop": "ghcr.io/codestra-srl/codestra-agent-desktop",
     "websocket-gateway": "ghcr.io/codestra-srl/codestra-websocket-gateway",
 }

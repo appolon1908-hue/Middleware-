@@ -32,11 +32,11 @@ env:
   LOCAL_SBOM_PATH: /var/lib/codestra/qwen-security-review/qwen-verifier-der-68dd958/scanner/sbom.cdx.json
   PUBLISH_TAG: approved-cc7e2457fdd69fdd
   EXPECTED_ISSUER: https://token.actions.githubusercontent.com
-  EXPECTED_IDENTITY: https://github.com/Codestra-SRL/codestra-middleware/.github/workflows/publish-sign-qwen-auth-verifier.yml@refs/heads/main
+  EXPECTED_IDENTITY: https://github.com/appolon1908-hue/Middleware-/.github/workflows/publish-sign-qwen-auth-verifier.yml@refs/heads/main
 
 jobs:
   publish-sign:
-    if: github.repository == 'Codestra-SRL/codestra-middleware' && github.ref == 'refs/heads/main'
+    if: github.repository == 'appolon1908-hue/Middleware-' && github.ref == 'refs/heads/main'
     runs-on:
       group: qwen-artifact-publishers
       labels: codestra-qwen-artifact-publisher
@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "Codestra-SRL/codestra-middleware"
+          test "${GITHUB_REPOSITORY}" = "appolon1908-hue/Middleware-"
           test "${GITHUB_REF}" = "refs/heads/main"
           test "${IMAGE_REPOSITORY}" = "ghcr.io/codestra-srl/qwen-auth-verifier"
           test "${IMAGE_DIGEST}" = "sha256:cc7e2457fdd69fdd1bf766831f8f86396495b47e377e86b2d9df1d4fb5432390"

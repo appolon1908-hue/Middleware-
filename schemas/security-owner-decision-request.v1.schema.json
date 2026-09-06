@@ -21,11 +21,11 @@
     "decision_version": {"const": 1},
     "decision_status": {"const": "pending_security_owner_environment_approval"},
     "company": {"const": "Codestra LLC"},
-    "repository": {"const": "Codestra-SRL/codestra-middleware"},
+    "repository": {"const": "appolon1908-hue/Middleware-"},
     "pr_number": {"type": "integer", "minimum": 1},
     "pr_head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "image_repository": {"enum": [
-      "ghcr.io/codestra-srl/codestra-middleware",
+      "ghcr.io/appolon1908-hue/middleware",
       "ghcr.io/codestra-srl/codestra-agent-desktop",
       "ghcr.io/codestra-srl/codestra-websocket-gateway"
     ]},
@@ -45,8 +45,8 @@
     "authority_artifact": {"type": "string", "pattern": "^security-owner-authority-[1-9][0-9]*-[1-9][0-9]*$"},
     "oidc_issuer": {"const": "https://token.actions.githubusercontent.com"},
     "signer_identity": {"enum": [
-      "https://github.com/Codestra-SRL/codestra-middleware/.github/workflows/staging-candidate-build-sign.yml@refs/heads/main",
-      "https://github.com/Codestra-SRL/codestra-middleware/.github/workflows/release-component-candidate.yml@refs/heads/main"
+      "https://github.com/appolon1908-hue/Middleware-/.github/workflows/staging-candidate-build-sign.yml@refs/heads/main",
+      "https://github.com/appolon1908-hue/Middleware-/.github/workflows/release-component-candidate.yml@refs/heads/main"
     ]},
     "issued_utc": {"type": "string", "format": "date-time", "pattern": "Z$"},
     "expires_utc": {"type": "string", "format": "date-time", "pattern": "Z$"},

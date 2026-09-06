@@ -20,7 +20,7 @@ ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 CANONICAL_REPOSITORY = "appolon1908-hue/Middleware-"
 CANONICAL_IMAGE_REPOSITORY = "ghcr.io/appolon1908-hue/codestra-middleware"
-LEGACY_REPOSITORY = "Codestra-SRL/codestra-middleware"
+LEGACY_REPOSITORY = "appolon1908-hue/Middleware-"
 LEGACY_BACKUP_REPOSITORY = (
     "ghcr.io/appolon1908-hue/codestra-middleware-legacy"
 )

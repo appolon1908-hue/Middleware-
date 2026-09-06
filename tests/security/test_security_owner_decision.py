@@ -30,7 +30,7 @@ def request() -> dict:
     return {
         "schema_version": "1.0.0",
         "request_type": "security_owner_staging_preparation",
-        "repository": "Codestra-SRL/codestra-middleware",
+        "repository": "appolon1908-hue/Middleware-",
         "pr_number": 68,
         "pr_head_sha": SHA_A,
         "middleware_main_sha": SHA_B,
@@ -58,7 +58,7 @@ def validate(value: dict | None = None, image_manifest: dict | None = None) -> N
     security_decision.validate_request(
         value or request(),
         image_manifest or manifest(),
-        repository="Codestra-SRL/codestra-middleware",
+        repository="appolon1908-hue/Middleware-",
         pr_number=68,
         pr_head=SHA_A,
         now=NOW,
@@ -235,7 +235,7 @@ def decision() -> dict:
         "security_owner_authority_reference": "SECURITY.md#isolated-staging-security-owner",
         "environment_name": "security-owner-signing",
         "environment_approval_record_id": "deployment:1",
-        "workflow_repository": "Codestra-SRL/codestra-middleware",
+        "workflow_repository": "appolon1908-hue/Middleware-",
         "workflow_path": ".github/workflows/security-owner-decision-sign.yml",
         "workflow_ref": "refs/heads/main",
         "workflow_sha": SHA_B,

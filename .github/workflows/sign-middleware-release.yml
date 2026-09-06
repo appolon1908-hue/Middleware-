@@ -67,10 +67,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "Codestra-SRL/codestra-middleware"
+          test "${GITHUB_REPOSITORY}" = "appolon1908-hue/Middleware-"
           test "${GITHUB_REF}" = "refs/heads/main"
           test "${IMAGE_REPOSITORY}" = \
-            "ghcr.io/codestra-srl/codestra-middleware"
+            "ghcr.io/appolon1908-hue/middleware"
           [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ "${SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${RELEASE_TAG}" =~ ^middleware-[0-9A-Za-z][0-9A-Za-z._-]{0,79}$ ]]

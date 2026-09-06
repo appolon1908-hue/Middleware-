@@ -22,7 +22,7 @@ NOW = datetime(2026, 8, 10, 6, 0, tzinfo=timezone.utc)
 def request() -> dict:
     return {
         "schema_version": "codestra.production-canary.authorization.v2",
-        "middleware_repository": "Codestra-SRL/codestra-middleware",
+        "middleware_repository": "appolon1908-hue/Middleware-",
         "pr_number": 183,
         "release_sha": SHA,
         "image_digest": DIGEST,
@@ -49,7 +49,7 @@ def request() -> dict:
 def validate(candidate: dict) -> None:
     module.validate(
         candidate,
-        repository="Codestra-SRL/codestra-middleware",
+        repository="appolon1908-hue/Middleware-",
         pr_number=183,
         release_sha=SHA,
         image_digest=DIGEST,

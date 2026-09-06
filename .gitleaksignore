@@ -37,3 +37,12 @@ tests/test_observability_alerts.py:generic-api-key:507
 tests/test_observability_alerts.py:generic-api-key:547
 tests/test_observability_alerts.py:generic-api-key:951
 tests/integration/test_observability_incidents.py:generic-api-key:196
+# Reviewed automation v2 workflow routing identifiers and synthetic test
+# idempotency keys. "telnexa.sms.delivery-reconcile.v1" is a workflow routing
+# label and "idempotency-1..3" are literal test fixtures; neither is a
+# credential and neither can authenticate to any service.
+config/automation-workflow-routing.v1.json:generic-api-key:37
+config/automation-workflow-routing.v1.json:generic-api-key:46
+tests/test_automation_v2.py:generic-api-key:457
+tests/test_automation_v2.py:generic-api-key:479
+tests/test_automation_v2.py:generic-api-key:494

@@ -200,6 +200,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
             (
                 request.url.path.startswith("/api/")
                 or request.url.path.startswith("/v1/")
+                or request.url.path.startswith("/platform/")
             )
             and request.url.path not in signed_paths
             and not signed_write
@@ -304,6 +305,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
         }
 
     @app.get("/dependencies")
+    @app.get("/health/dependencies")
     async def dependencies() -> dict[str, object]:
         return {
             "service": service,
@@ -403,11 +405,13 @@ def worker_app(service: str, queue: str, cycle: Cycle) -> FastAPI:
 
     @app.get("/health")
     @app.get("/healthz")
+    @app.get("/health/live")
     async def health() -> dict[str, object]:
         return {"status": "ok", "service": service, "stopping": state["stopping"]}
 
     @app.get("/ready")
     @app.get("/readyz")
+    @app.get("/health/ready")
     async def ready() -> dict[str, object]:
         return {
             "status": "ready" if state["ready"] else "not-ready",
@@ -418,6 +422,7 @@ def worker_app(service: str, queue: str, cycle: Cycle) -> FastAPI:
         }
 
     @app.get("/dependencies")
+    @app.get("/health/dependencies")
     async def dependencies() -> dict[str, object]:
         return {
             "database": "configured",

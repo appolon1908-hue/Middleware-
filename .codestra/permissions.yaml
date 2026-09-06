@@ -1,0 +1,9 @@
+apiVersion: platform.codestra.co/v1
+kind: Permissions
+scopes:
+  read: [platform.services.read, platform.provisioning.read]
+  write: [platform.services.write, platform.provisioning.request]
+  review: [platform.provisioning.approve]
+production:
+  approvalRequired: true
+  selfApprovalAllowed: false

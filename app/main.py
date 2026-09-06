@@ -1,4 +1,6 @@
+import os
 import re
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -41,6 +43,7 @@ from app.api.v1.integrations import router as integrations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
+from app.api.v1.platform import router as platform_router
 from app.integrations.postiz.routes import router as postiz_router
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
@@ -74,6 +77,7 @@ app.include_router(ai_commands_router)
 app.include_router(orders_router)
 app.include_router(ai_router)
 app.include_router(provider_commands_router)
+app.include_router(platform_router)
 app.include_router(integrations_router)
 app.include_router(postiz_router)
 app.include_router(campaign_search_router)
@@ -205,7 +209,11 @@ async def control_request_guard(request: Request, call_next):
     if content_length > settings.request_max_bytes:
         return JSONResponse({"detail": "request too large"}, status_code=413)
     if (
-        (request.url.path.startswith("/api/") or request.url.path.startswith("/v1/"))
+        (
+            request.url.path.startswith("/api/")
+            or request.url.path.startswith("/v1/")
+            or request.url.path.startswith("/platform/")
+        )
         and request.url.path not in SIGNED_WEBHOOK_PATHS
         and not RECORDING_EXPORTER_PATH.fullmatch(request.url.path)
         and not (
@@ -279,4 +287,31 @@ async def version() -> dict[str, str]:
         "service": "codestra-contact-center-middleware",
         "version": "1.0.0",
         "environment": settings.environment,
+        "git_sha": os.getenv("SOURCE_SHA", "unknown"),
+        "image_digest": os.getenv("IMAGE_DIGEST", "unknown"),
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
+@app.get("/health/dependencies")
+async def health_dependencies() -> dict[str, object]:
+    """Report dependency state without returning addresses or credentials."""
+    return {
+        "service": "codestra-contact-center-middleware",
+        "environment": settings.environment,
+        "status": "configured",
+        "dependencies": {"postgres": "configured", "redis": "configured", "keycloak": "configured"},
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
+@app.get("/capabilities")
+async def capabilities() -> dict[str, object]:
+    return {
+        "service": "codestra-contact-center-middleware",
+        "environment": settings.environment,
+        "tenant_aware": True,
+        "external_delivery_enabled": settings.enable_external_delivery,
+        "live_writes_enabled": settings.live_writes_enabled,
+        "supported_api_versions": ["platform/v1", "api/v1", "api/v2"],
     }

@@ -1,0 +1,36 @@
+apiVersion: platform.codestra.co/v1
+kind: Service
+metadata:
+  name: middleware-integration-api
+spec:
+  owner: codestra-platform
+  repository: appolon1908-hue/Middleware-
+  tenantMode: multi-tenant
+  type: api
+  runtime: container
+  port: 8095
+  environments: [development, staging, production]
+  ingress:
+    authentication: keycloak
+    gateway: kong
+  contracts:
+    live: /health/live
+    ready: /health/ready
+    dependencies: /health/dependencies
+    metrics: /metrics
+    version: /version
+    capabilities: /capabilities
+    openapi: /openapi.json
+  telemetry:
+    metrics: true
+    logs: true
+    traces: true
+  dependencies: [postgres, redis, keycloak]
+  secrets:
+    - name: database
+      openbaoRole: middleware-integration-api
+    - name: redis
+      openbaoRole: middleware-integration-api
+  dataClassification: confidential
+  sloProfile: customer-api
+  alertProfile: business-critical

@@ -5,7 +5,7 @@
 Protected `main` in `appolon1908-hue/Middleware-` is the **only forward source**
 authority. Every future Middleware image admitted to staging or production must
 be built by `.github/workflows/release.yml` from the exact protected-main event
-SHA, must carry schema head `0059_klyrow_usage_events`, and must be addressed by an
+SHA, must carry schema head `0056_klyrow_delivery_events`, and must be addressed by an
 immutable GHCR digest.
 
 The machine-readable current authority is:
@@ -41,7 +41,7 @@ FORWARD_REPOSITORY=appolon1908-hue/Middleware-
 FORWARD_REF=refs/heads/main
 SOURCE_RESOLUTION=EXACT_PROTECTED_MAIN_EVENT_SHA
 STATIC_SHA_AUTHORITY=NO
-REQUIRED_SCHEMA_HEAD=0059_klyrow_usage_events
+REQUIRED_SCHEMA_HEAD=0056_klyrow_delivery_events
 SIGNED_CANDIDATE_STATUS=PENDING_EXACT_PROTECTED_MERGE_BUILD
 CURRENT_SIGNED_CANDIDATE=NONE
 PRODUCTION_DEPLOYED=NO
@@ -51,7 +51,7 @@ The current authority deliberately contains `currentSignedCandidate: null`.
 That value must remain null until the eventual protected merge SHA is built by
 the release workflow and the resulting image has verified provenance, SBOM,
 signature, vulnerability evidence, release-manifest binding, and schema
-`0059_klyrow_usage_events`.
+`0056_klyrow_delivery_events`.
 
 A repository commit cannot truthfully predict its own future squash-merge SHA or
 image digest. Recording a fabricated candidate would weaken the exact-source
@@ -77,7 +77,7 @@ it predates the realtime-gateway migration and the authority convergence merge:
 | Verification | signed, SBOM present, vulnerability gate passed |
 
 This artifact is retained for audit and rollback analysis only. It must not be
-promoted as though it contains migration `0059_klyrow_usage_events`, PR #140, this
+promoted as though it contains migration `0056_klyrow_delivery_events`, PR #140, this
 correction, or any later protected merge.
 
 The dated inventory still uses the field name `currentSignedCandidate` because
@@ -105,7 +105,7 @@ A valid future candidate must satisfy all of the following:
 4. signed release manifest;
 5. verified provenance and SBOM;
 6. no fixable high or critical vulnerability under the protected policy;
-7. schema head `0059_klyrow_usage_events`;
+7. schema head `0056_klyrow_delivery_events`;
 8. locked runtime profile;
 9. source/digest/schema/profile read-back from the candidate runtime;
 10. backup, isolated restore, and rollback rehearsal evidence;
@@ -125,7 +125,7 @@ main `167bd6221911ec3fa988d719eb259646fa90f296` with legacy anchor
 
 That comparison remains useful historical evidence. It is not a live source
 pointer. Protected main later advanced through migration
-`0059_klyrow_usage_events` and PR #140. Future release and certification workflows
+`0056_klyrow_delivery_events` and PR #140. Future release and certification workflows
 must always resolve their exact event SHA rather than using either comparison
 snapshot.
 
@@ -139,7 +139,7 @@ The appolon architecture now includes:
 - Temporal workflows, provider-control policy, idempotency, and read-back;
 - exact source, digest, schema, runtime-profile, capability, SBOM, provenance,
   signature, and vulnerability evidence;
-- the `0059_klyrow_usage_events` migration and its realtime source authority.
+- the `0056_klyrow_delivery_events` migration and its realtime source authority.
 
 The repositories remain divergent architectures, not byte-identical releases.
 One appolon image cannot safely replace every legacy worker command. A blind
@@ -251,7 +251,7 @@ traffic, consumes a queue, or enables a provider.
 1. Merge the authority correction through protected `main` with exact-head CI,
    resolved threads, and fresh independent approval.
 2. Build and sign a new immutable image from that exact protected merge SHA.
-3. Verify the release manifest reports schema `0059_klyrow_usage_events` and the
+3. Verify the release manifest reports schema `0056_klyrow_delivery_events` and the
    exact protected source/tree/image tuple.
 4. Add `CODESTRA_GHCR_TOKEN` and run the protected-main legacy mirror workflow.
 5. Enroll Server A and rerun the complete read-only inventory.
@@ -274,7 +274,7 @@ traffic, consumes a queue, or enables a provider.
 
 ```text
 APPOLON_FORWARD_SOURCE_AUTHORITY=PROTECTED_MAIN_DYNAMIC
-REQUIRED_SCHEMA_HEAD=0059_klyrow_usage_events
+REQUIRED_SCHEMA_HEAD=0056_klyrow_delivery_events
 SIGNED_CANDIDATE_STATUS=PENDING_EXACT_PROTECTED_MERGE_BUILD
 CURRENT_SIGNED_CANDIDATE=NONE
 HISTORICAL_PREDECESSOR_PROMOTION_AUTHORIZED=NO

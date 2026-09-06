@@ -12,7 +12,7 @@ decision:
   static_sha_is_authority: false
   single_forward_image_repository: ghcr.io/appolon1908-hue/codestra-middleware
   current_release_authority: config/middleware-forward-release-authority.v1.json
-  required_schema_head: 0059_klyrow_usage_events
+  required_schema_head: 0056_klyrow_delivery_events
   candidate_status: PENDING_EXACT_PROTECTED_MERGE_BUILD
   current_signed_candidate: null
   legacy_source_repository: Codestra-SRL/codestra-middleware
@@ -22,7 +22,7 @@ decision:
 protected_main_baseline_before_correction:
   merge_sha: eb526e05a7b76a24e85ba8a0b96a48622d45afe2
   git_tree_id: 4b32907ebce65147be67d6528b008886dba2069c
-  schema_head: 0059_klyrow_usage_events
+  schema_head: 0056_klyrow_delivery_events
   role: observed_baseline_not_static_authority
 
 historical_signed_predecessor:
@@ -41,7 +41,7 @@ historical_signed_predecessor:
   vulnerability_gate: PASS
   deployment_status: NOT_EXECUTED
   reason_not_current: >-
-    The artifact predates migration 0059_klyrow_usage_events, PR #140, and the
+    The artifact predates migration 0056_klyrow_delivery_events, PR #140, and the
     authority correction. It is retained for audit and rollback analysis only.
 
 observed_legacy_source:
@@ -116,7 +116,7 @@ backup:
 next_required_evidence:
   - merge this correction through protected main
   - build and sign the exact protected merge SHA
-  - verify schema head 0059_klyrow_usage_events in the release manifest
+  - verify schema head 0056_klyrow_delivery_events in the release manifest
   - record immutable image digest, provenance, SBOM, and vulnerability evidence
   - revalidate all Server A runtime identities
   - mirror or archive all rollback images

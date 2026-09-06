@@ -47,7 +47,7 @@ def test_current_authority_must_require_schema_0010(tmp_path: Path) -> None:
     )
     path.write_text(json.dumps(value), encoding="utf-8")
     errors = validator.validate_assets(tmp_path)
-    assert any("must require schema 0010_realtime_gateway" in error for error in errors)
+    assert any("must require schema 0059_klyrow_usage_events" in error for error in errors)
 
 
 def test_current_candidate_must_remain_pending_and_null(tmp_path: Path) -> None:

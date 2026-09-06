@@ -30,7 +30,7 @@ SOURCE_RESOLUTION = (
 REQUIRED_RUNTIME_EVIDENCE = (
     "signed release manifest bound to exact protected-main source",
     "immutable image digest and verified provenance",
-    "schema head 0010_realtime_gateway",
+    "schema head 0059_klyrow_usage_events",
     "effective source, digest, schema, profile, and capability read-back",
     "backup and isolated restore evidence",
     "rollback rehearsal and data-integrity evidence",

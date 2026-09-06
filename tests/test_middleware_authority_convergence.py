@@ -41,7 +41,7 @@ def test_reviewed_authority_convergence_record_is_fail_closed() -> None:
 def test_current_authority_requires_schema_0010_and_new_exact_main_build() -> None:
     value = _current_authority()
     artifacts = value["artifactAuthority"]
-    assert artifacts["requiredSchemaHead"] == "0010_realtime_gateway"
+    assert artifacts["requiredSchemaHead"] == "0059_klyrow_usage_events"
     assert (
         artifacts["candidateStatus"]
         == "PENDING_EXACT_PROTECTED_MERGE_BUILD"
@@ -121,7 +121,7 @@ def test_snapshot_must_match_historical_predecessor_evidence() -> None:
     value = copy.deepcopy(_document())
     value["forwardAuthority"]["image"]["currentSignedCandidate"][
         "schemaHead"
-    ] = "0010_realtime_gateway"
+    ] = "0059_klyrow_usage_events"
     errors = validator.validate_document(value, root=ROOT)
     assert any("snapshot predecessor" in error for error in errors)
 

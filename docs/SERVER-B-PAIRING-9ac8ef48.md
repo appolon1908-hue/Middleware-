@@ -13,6 +13,17 @@ Only the external Asterisk/AMI effect is replaced with the repository's
 synthetic no-effect transport. Credentials, databases, and destinations are
 synthetic; the sole destination is `internal:TEST_ECHO`.
 
+The expiry-safe path proves the denial reason for a distinct new originate is
+the expired startup authorization (not the consumed quota) before any second
+AMI action. The original owner can still read the existing call and submit its
+same-call hangup. A synthetic terminal AMI lifecycle event is then persisted by
+Server B and consumed through Middleware's actual readback client. The terminal
+evidence is identity-bound and complete; the execution store retains one call,
+the grant remains consumed, and the AMI action sequence remains exactly one
+originate followed by one hangup. Middleware's disposable PostgreSQL regression
+separately proves original/hangup convergence after restart without another
+mutation or duplicate completion transition.
+
 Commands executed:
 
 ```text
@@ -26,6 +37,11 @@ CODESTRA_SELECTED_SERVER_B_SHA=9ac8ef4840f78ba4ad9b816e4e409298505103ce \
 pytest -q tests/pairing/test_selected_server_b.py
 # 1 passed
 ```
+
+The required head and merge-result CI job checks out this exact Server B SHA,
+fails if the checkout or SHA verification is absent, and runs the pairing test
+with the selected-source variables set. The default local suite may skip this
+external-source test; required CI may not.
 
 The Server B archive has not been published. This evidence proves a source
 pair, not execution of a published archive. Archive digest and protected

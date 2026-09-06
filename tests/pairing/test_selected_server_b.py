@@ -7,6 +7,7 @@ persistence are the selected source's real implementations.
 from __future__ import annotations
 
 import os
+import json
 import sqlite3
 import sys
 from datetime import UTC, datetime, timedelta
@@ -41,6 +42,9 @@ async def test_real_selected_server_b_hmac_routes_policy_and_persistence(tmp_pat
     sys.path.insert(0, str(SERVER_B_ROOT / "vicidial" / "tests"))
     try:
         from codestra_vicidial.app import create_app
+        from codestra_vicidial.ami_gateway import (
+            AgentBinding, AgentDirectory, LifecycleStore, parse_ami_block,
+        )
         from codestra_vicidial.repository import MemoryRepository
         from codestra_vicidial.security import RequestAuthenticator
         from codestra_vicidial.service import AdapterService, FeatureFlags
@@ -116,6 +120,28 @@ async def test_real_selected_server_b_hmac_routes_policy_and_persistence(tmp_pat
         server.policy_provider = lambda: server.policy.model_copy(
             update={"expires_at": datetime.now(UTC) - timedelta(seconds=1)}
         )
+        second = type(request)(**{
+            **request.__dict__,
+            "command_id": "33333333-3333-5333-8333-333333333333",
+            "idempotency_key": "originate-appolon-expired-0002",
+        })
+        _, _, second_document = adapter._originate(second)
+        second_body = json.dumps(
+            second_document, sort_keys=True, separators=(",", ":"),
+        ).encode()
+        second_path = adapter.ORIGINATE_PATH
+        denied = await client.post(
+            second_path,
+            content=second_body,
+            headers=adapter._headers(
+                "POST", second_path, second_body, "telephony:internal-call",
+                second.command_id,
+            ),
+        )
+        assert denied.status_code == 403
+        assert denied.json() == {"detail": "internal call authorization expired"}
+        assert len(ami.actions) == 1
+
         hangup_base = hangup_command(grant)
         hangup = type(hangup_base)(**{
             **hangup_base.__dict__,
@@ -134,17 +160,49 @@ async def test_real_selected_server_b_hmac_routes_policy_and_persistence(tmp_pat
         assert ended.status == "accepted"
         assert [action["Action"] for action in ami.actions] == ["Originate", "Hangup"]
 
+        directory = AgentDirectory([
+            AgentBinding(
+                extension="6901", tenant_id="tenant-test",
+                business_unit_id="synthetic-unit", campaign_id="TEST_SYN",
+                agent_id="appolon", keycloak_subject="subject-appolon",
+            )
+        ])
+        terminal_event = parse_ami_block((
+            f"Event: Hangup\r\nUniqueid: {accepted.provider_operation_id}\r\n"
+            f"Linkedid: {accepted.provider_operation_id}\r\n"
+            "Channel: PJSIP/6901-00000001\r\nCause: 16\r\n"
+            "Cause-txt: Normal Clearing\r\nDuration: 3\r\nBillableSeconds: 2"
+        ).encode())
+        LifecycleStore(lifecycle).process(terminal_event, directory)
+        terminal = await adapter.readback(hangup)
+        assert terminal.status == "matched"
+        assert terminal.readback_evidence is not None
+        assert terminal.readback_evidence["terminal"] is True
+        assert terminal.readback_evidence["call_state"] == "completed"
+        assert terminal.readback_evidence["hangup_cause_code"] == 16
+        assert len(ami.actions) == 2
+
         with sqlite3.connect(server.state_path) as db:
             call = db.execute(
-                "SELECT operation_id,state FROM internal_calls"
+                "SELECT operation_id,state,hangup_state FROM internal_calls"
             ).fetchone()
-        assert call == (request.command_id, "accepted")
+            call_count = db.execute("SELECT count(*) FROM internal_calls").fetchone()[0]
+        assert call == (request.command_id, "accepted", "requested")
+        assert call_count == 1
         with sqlite3.connect(server.audit_path) as db:
             outcomes = db.execute(
                 "SELECT outcome FROM audit WHERE operation='internal-call.originate' "
                 "ORDER BY sequence"
             ).fetchall()
-        assert outcomes == [("requested",), ("accepted",), ("requested",), ("duplicate",)]
+            hangup_outcomes = db.execute(
+                "SELECT outcome FROM audit WHERE operation='internal-call.hangup' "
+                "ORDER BY sequence"
+            ).fetchall()
+        assert outcomes == [
+            ("requested",), ("accepted",), ("requested",), ("duplicate",),
+            ("requested",), ("denied",),
+        ]
+        assert hangup_outcomes == [("requested",), ("requested",)]
         await client.aclose()
     finally:
         del sys.path[:2]

@@ -8,6 +8,7 @@ on:
       - "scripts/apply_production_reviewer_access.py"
       - "scripts/apply_production_reviewer_access_base.py"
       - "tests/test_production_reviewer_access.py"
+      - "tests/test_release_workflow_regressions.py"
       - "Dockerfile.runtime"
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "scripts/apply_production_reviewer_access.py"
       - "scripts/apply_production_reviewer_access_base.py"
       - "tests/test_production_reviewer_access.py"
+      - "tests/test_release_workflow_regressions.py"
       - "Dockerfile.runtime"
   issue_comment:
     types: [created]
@@ -74,6 +76,7 @@ jobs:
             scripts/apply_production_reviewer_access_base.py \
             tests/test_production_reviewer_access.py
           python3 -m unittest -v tests.test_production_reviewer_access
+          python3 -m unittest -v tests.test_release_workflow_regressions
           python3 scripts/apply_production_reviewer_access.py --mode validate
           python3 -m json.tool config/production-reviewer-access.v1.json >/dev/null
           git diff --check
@@ -161,11 +164,11 @@ jobs:
           fi
           gh issue comment 130 --repo "$GITHUB_REPOSITORY" --body "## Production reviewer access — $result
 
-\`SOURCE_SHA=$GITHUB_SHA\`
+          \`SOURCE_SHA=$GITHUB_SHA\`
 
-$detail
+          $detail
 
-No runtime, deployment, credential value, route, traffic, provider, business write, or external effect was changed."
+          No runtime, deployment, credential value, route, traffic, provider, business write, or external effect was changed."
       - name: Fail closed until every exact readback passes
         if: steps.rollout.outcome != 'success'
         run: |

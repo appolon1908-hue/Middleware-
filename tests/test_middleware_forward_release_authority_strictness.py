@@ -40,7 +40,7 @@ def test_source_resolution_mode_is_mandatory_and_exact() -> None:
 def test_every_named_runtime_evidence_gate_is_mandatory() -> None:
     value = copy.deepcopy(_authority())
     value["runtimeAuthority"]["requiredEvidence"] = [
-        "schema head 0059_klyrow_usage_events"
+        "schema head 0056_klyrow_delivery_events"
     ] * 7
 
     errors = validator.validate_forward_authority(value)

@@ -27,7 +27,7 @@ EXPECTED_FAMILY_COUNT = 16
 EXPECTED_WORKLOAD_COUNT = 31
 EXPECTED_REGISTRY_MIRRORS = 4
 EXPECTED_LOCAL_BACKUPS = 11
-CURRENT_SCHEMA_HEAD = "0059_klyrow_usage_events"
+CURRENT_SCHEMA_HEAD = "0056_klyrow_delivery_events"
 PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -278,7 +278,7 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         "rollback-only",
         "CODESTRA_GHCR_TOKEN",
         "isolated restore",
-        "0059_klyrow_usage_events",
+        "0056_klyrow_delivery_events",
         "PENDING_EXACT_PROTECTED_MERGE_BUILD",
         "historical predecessor",
         "SERVER_A_RUNTIME_REVALIDATION=NOT_EXECUTED",

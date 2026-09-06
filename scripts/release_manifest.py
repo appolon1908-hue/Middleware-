@@ -9,6 +9,7 @@ Sigstore certificate identity, OIDC issuer, and transparency-log bundle.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import re
@@ -93,10 +94,41 @@ def canonical_json(value: dict[str, Any]) -> bytes:
 
 
 def _schema_head(root: Path) -> str:
-    migrations = sorted((root / "migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
-    if not migrations:
-        raise ReleaseManifestError("release has no numbered migrations")
-    return migrations[-1].stem
+    revisions: set[str] = set()
+    parents: set[str] = set()
+    for path in sorted((root / "migrations" / "versions").glob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            raise ReleaseManifestError("release migration graph cannot be loaded") from exc
+        values: dict[str, Any] = {}
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+                if isinstance(target, ast.Name) and target.id in {"revision", "down_revision"}:
+                    try:
+                        values[target.id] = ast.literal_eval(node.value)
+                    except (ValueError, TypeError) as exc:
+                        raise ReleaseManifestError("release migration metadata is not literal") from exc
+        revision = values.get("revision")
+        down_revision = values.get("down_revision")
+        if not isinstance(revision, str) or not revision:
+            raise ReleaseManifestError("release migration revision is invalid")
+        if revision in revisions:
+            raise ReleaseManifestError("release migration revision is duplicated")
+        revisions.add(revision)
+        if isinstance(down_revision, str):
+            parents.add(down_revision)
+        elif isinstance(down_revision, tuple):
+            if not down_revision or not all(isinstance(item, str) for item in down_revision):
+                raise ReleaseManifestError("release migration parents are invalid")
+            parents.update(down_revision)
+        elif down_revision is not None:
+            raise ReleaseManifestError("release migration parents are invalid")
+    heads = revisions - parents
+    if len(heads) != 1:
+        raise ReleaseManifestError("release must have exactly one Alembic migration head")
+    return heads.pop()
 
 
 def _runtime_profile_ids(root: Path) -> list[str]:

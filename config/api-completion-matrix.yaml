@@ -791,6 +791,30 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: telephony
   method: POST
+  path: /v1/telephony/calls/originate
+  canonical_operation_id: originate_v1_telephony_calls_originate_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: telephony
+  method: GET
+  path: /v1/telephony/calls/requests/{operation_id}
+  canonical_operation_id: call_status_v1_telephony_calls_requests__operation_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: telephony
+  method: POST
+  path: /v1/telephony/calls/requests/{operation_id}/hangup
+  canonical_operation_id: hangup_v1_telephony_calls_requests__operation_id__hangup_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: telephony
+  method: POST
+  path: /v1/telephony/calls/requests/{operation_id}/reconcile
+  canonical_operation_id: reconcile_v1_telephony_calls_requests__operation_id__reconcile_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: telephony
+  method: POST
   path: /v1/telephony/commands
   canonical_operation_id: submit_telephony_command_v1_telephony_commands_post
   implementation_file: registered FastAPI runtime

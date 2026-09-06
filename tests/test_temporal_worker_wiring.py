@@ -28,18 +28,20 @@ def test_temporal_worker_wires_all_reviewed_provider_adapters(monkeypatch: Any) 
             odoo_adapter: object,
             alert_adapter: object,
             *,
-            telnexa_sms_adapter: object,
-            klyrow_email_adapter: object,
-            postly_social_adapter: object,
+            telnexa_sms: object,
+            klyrow_email: object,
+            postly_social: object,
+            vicidial_internal: object,
         ) -> None:
             captured.update(
                 {
                     "store": provided_store,
                     "odoo": odoo_adapter,
                     "alert": alert_adapter,
-                    "sms": telnexa_sms_adapter,
-                    "email": klyrow_email_adapter,
-                    "social": postly_social_adapter,
+                    "sms": telnexa_sms,
+                    "email": klyrow_email,
+                    "social": postly_social,
+                    "vicidial": vicidial_internal,
                 }
             )
 
@@ -59,6 +61,9 @@ def test_temporal_worker_wires_all_reviewed_provider_adapters(monkeypatch: Any) 
         run_temporal, "PostlySocialAdapter", adapter_factory("social")
     )
     monkeypatch.setattr(
+        run_temporal, "VicidialInternalCallAdapter", adapter_factory("vicidial")
+    )
+    monkeypatch.setattr(
         run_temporal, "CommandLedgerWorkflowActivities", CapturingActivities
     )
 
@@ -72,4 +77,5 @@ def test_temporal_worker_wires_all_reviewed_provider_adapters(monkeypatch: Any) 
         "sms": markers["sms"],
         "email": markers["email"],
         "social": markers["social"],
+        "vicidial": markers["vicidial"],
     }

@@ -131,6 +131,25 @@ async def test_memory_command_ledger_persists_redacted_readback_evidence() -> No
             actor_id="temporal:test",
             reason=f"transition to {state}",
         )
+    observation = {"provider_reference": "provider-operation-1", "status": "ringing"}
+    awaiting = await store.transition(
+        command.tenant_id,
+        command.command_id,
+        new_state="reconciliation_required",
+        actor_id="temporal:test",
+        reason="validated provider observation remains nonterminal",
+        provider_operation_id="provider-operation-1",
+        readback_evidence=observation,
+    )
+    assert awaiting.readback_evidence == observation
+    assert awaiting.readback_evidence_sha256 == provider_evidence_digest(observation)
+    store = MemoryCommandStore()
+    await store.submit(command, authenticated_client_id="test-client")
+    for state in ("queued", "dispatching", "accepted", "readback_pending"):
+        await store.transition(
+            command.tenant_id, command.command_id, new_state=state,
+            actor_id="temporal:test", reason=f"transition to {state}",
+        )
     evidence = {"provider_reference": "provider-operation-1", "status": "matched"}
     completed = await store.transition(
         command.tenant_id,

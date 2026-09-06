@@ -52,6 +52,11 @@
       "required_job": "Temporal critical workflow integration"
     },
     {
+      "path": "tests/pairing/test_selected_server_b.py",
+      "gate": "CODESTRA_SELECTED_SERVER_B_ROOT+CODESTRA_SELECTED_SERVER_B_SHA",
+      "required_job": "Calling contract"
+    },
+    {
       "path": "services/connector-runtime/tests/test_storage_contract.py",
       "gate": "ADMIN_DATABASE_URL+APP_DATABASE_URL",
       "required_job": "Connector storage v1"

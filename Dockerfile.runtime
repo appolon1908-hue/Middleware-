@@ -118,6 +118,10 @@ RUN python -m pip install --require-hashes -r requirements-test.txt \
 COPY --chown=10001:10001 MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml ./MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml
 COPY --chown=10001:10001 .github/workflows/mirror-codestra-legacy-middleware-images.yml ./.github/workflows/mirror-codestra-legacy-middleware-images.yml
 COPY --chown=10001:10001 . .
+# Keep authority assets explicit: certification tests require these exact
+# packages to remain visible in the test-image contract.
+COPY --chown=10001:10001 MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml ./MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml
+COPY --chown=10001:10001 .github/workflows/mirror-codestra-legacy-middleware-images.yml ./.github/workflows/mirror-codestra-legacy-middleware-images.yml
 # Docker does not make the controlling .dockerignore available to COPY, so
 # recreate its non-secret policy file for contract tests that inspect it.
 RUN printf '%s\n' \

@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
@@ -140,7 +141,7 @@ async def create_service(body: ServiceCreate, db: AsyncSession = Depends(get_ses
             "slo": body.slo_profile, "alert": body.alert_profile, "now": now(),
         })
         await db.commit()
-    except Exception as exc:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(409, "service_id or repository already registered") from exc
     return {"service_id": body.service_id, "state": "registered", "catalog_id": str(service_uuid)}
@@ -208,55 +209,87 @@ async def decommission_service(service_id: str, x_codestra_role: str = Header(""
 
 
 @router.post("/provisioning/requests", status_code=202)
-async def create_provisioning(body: ProvisioningCreate, x_correlation_id: str = Header("", alias="X-Correlation-ID"), db: AsyncSession = Depends(get_session)):
+async def create_provisioning(
+    body: ProvisioningCreate,
+    x_correlation_id: str = Header("", alias="X-Correlation-ID"),
+    x_codestra_principal: str = Header("", alias="X-Codestra-Principal"),
+    db: AsyncSession = Depends(get_session),
+):
+    if not x_codestra_principal:
+        raise HTTPException(401, "authenticated principal is required")
     request_id = uuid4()
-    await get_service(body.service_id, db)
+    service = await get_service(body.service_id, db)
+    if body.environment not in service["environments"]:
+        raise HTTPException(409, "environment is not declared by the service")
     payload = body.model_dump(mode="json")
-    await db.execute(text("""INSERT INTO platform_provisioning_requests(id,service_id,environment,state,request_json,manifest_sha256,git_sha,correlation_id,created_at,updated_at)
-      SELECT :uuid,id,:env,'requested',CAST(:request AS jsonb),:manifest,:git,:correlation,:now,:now FROM platform_services WHERE service_id=:service_id"""), {"uuid": request_id, "service_id": body.service_id, "env": body.environment, "request": json.dumps(payload), "manifest": body.manifest_sha256, "git": body.git_sha, "correlation": x_correlation_id or str(request_id), "now": now()})
+    await db.execute(text("""INSERT INTO platform_provisioning_requests(id,service_id,environment,state,request_json,manifest_sha256,git_sha,correlation_id,requested_by,created_at,updated_at)
+      SELECT :uuid,id,:env,'requested',CAST(:request AS jsonb),:manifest,:git,:correlation,:principal,:now,:now FROM platform_services WHERE service_id=:service_id"""), {"uuid": request_id, "service_id": body.service_id, "env": body.environment, "request": json.dumps(payload), "manifest": body.manifest_sha256, "git": body.git_sha, "correlation": x_correlation_id or str(request_id), "principal": x_codestra_principal, "now": now()})
     await db.commit()
     return {"request_id": str(request_id), "state": "requested", "apply_authorized": False}
 
 
 @router.get("/provisioning/requests/{request_id}")
 async def get_provisioning(request_id: UUID, db: AsyncSession = Depends(get_session)):
-    row = (await db.execute(text("SELECT id,environment,state,request_json,manifest_sha256,git_sha,correlation_id,validation_json,approved_by,created_at,updated_at FROM platform_provisioning_requests WHERE id=:id"), {"id": request_id})).mappings().one_or_none()
+    row = (await db.execute(text("SELECT id,environment,state,request_json,manifest_sha256,git_sha,correlation_id,requested_by,validation_json,approved_by,created_at,updated_at FROM platform_provisioning_requests WHERE id=:id"), {"id": request_id})).mappings().one_or_none()
     if row is None:
         raise HTTPException(404, "provisioning request not found")
     return dict(row)
 
 
-async def transition(request_id: UUID, allowed: set[str], target: str, body: Transition, role: str, db: AsyncSession, validation: dict[str, bool] | None = None):
+async def transition(
+    request_id: UUID,
+    allowed: set[str],
+    target: str,
+    body: Transition,
+    role: str,
+    principal: str,
+    db: AsyncSession,
+    validation: dict[str, bool] | None = None,
+):
     require_role(role, {"platform_admin"} if target in {"apply_requested", "rollback_requested"} else ADMIN_ROLES)
+    if not principal:
+        raise HTTPException(401, "authenticated principal is required")
     current = await get_provisioning(request_id, db)
     if current["state"] not in allowed:
         raise HTTPException(409, f"cannot transition {current['state']} to {target}")
     evidence = validation if validation is not None else current.get("validation_json")
-    await db.execute(text("UPDATE platform_provisioning_requests SET state=:state,validation_json=CAST(:validation AS jsonb),approved_by=CASE WHEN :state='approved' THEN :role ELSE approved_by END,updated_at=:now WHERE id=:id"), {"state": target, "validation": json.dumps(evidence), "role": role, "now": now(), "id": request_id})
-    await db.execute(text("INSERT INTO platform_provisioning_audit(id,request_id,from_state,to_state,actor_role,reason,record_hash,created_at) VALUES (:id,:request,:from_state,:to_state,:actor,:reason,:hash,:now)"), {"id": uuid4(), "request": request_id, "from_state": current["state"], "to_state": target, "actor": role, "reason": body.reason, "hash": audit_hash({"id": str(request_id), "from": current["state"], "to": target, "role": role, "reason": body.reason}), "now": now()})
+    if target == "approved" and principal == current["requested_by"]:
+        raise HTTPException(403, "requester cannot approve their own provisioning request")
+    result = await db.execute(text("""UPDATE platform_provisioning_requests
+      SET state=:state,validation_json=CAST(:validation AS jsonb),
+          approved_by=CASE WHEN :state='approved' THEN :principal ELSE approved_by END,
+          updated_at=:now
+      WHERE id=:id AND state=ANY(CAST(:allowed AS text[])) RETURNING id"""), {
+        "state": target, "validation": json.dumps(evidence), "principal": principal,
+        "now": now(), "id": request_id, "allowed": sorted(allowed),
+    })
+    if result.scalar_one_or_none() is None:
+        await db.rollback()
+        raise HTTPException(409, "provisioning state changed concurrently")
+    await db.execute(text("INSERT INTO platform_provisioning_audit(id,request_id,from_state,to_state,actor_role,reason,record_hash,created_at) VALUES (:id,:request,:from_state,:to_state,:actor,:reason,:hash,:now)"), {"id": uuid4(), "request": request_id, "from_state": current["state"], "to_state": target, "actor": f"{role}:{principal}", "reason": body.reason, "hash": audit_hash({"id": str(request_id), "from": current["state"], "to": target, "role": role, "principal": principal, "reason": body.reason}), "now": now()})
     await db.commit()
     return {"request_id": str(request_id), "state": target, "apply_authorized": False}
 
 
 @router.post("/provisioning/requests/{request_id}/validate")
-async def validate_provisioning(request_id: UUID, body: CertificationSubmission, role: str = Header("", alias="X-Codestra-Role"), db: AsyncSession = Depends(get_session)):
+async def validate_provisioning(request_id: UUID, body: CertificationSubmission, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
     evidence = body.evidence()
     failed = sorted(name for name, passed in evidence.items() if not passed)
     if failed:
         raise HTTPException(422, {"message": "certification gates failed", "failed_gates": failed})
-    return await transition(request_id, {"requested"}, "validated", body, role, db, evidence)
+    return await transition(request_id, {"requested"}, "validated", body, role, principal, db, evidence)
 
 
 @router.post("/provisioning/requests/{request_id}/approve")
-async def approve_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), db: AsyncSession = Depends(get_session)):
-    return await transition(request_id, {"validated"}, "approved", body, role, db)
+async def approve_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
+    return await transition(request_id, {"validated"}, "approved", body, role, principal, db)
 
 
 @router.post("/provisioning/requests/{request_id}/apply")
-async def apply_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), db: AsyncSession = Depends(get_session)):
-    return await transition(request_id, {"approved"}, "apply_requested", body, role, db)
+async def apply_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
+    return await transition(request_id, {"approved"}, "apply_requested", body, role, principal, db)
 
 
 @router.post("/provisioning/requests/{request_id}/rollback")
-async def rollback_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), db: AsyncSession = Depends(get_session)):
-    return await transition(request_id, {"applied", "failed"}, "rollback_requested", body, role, db)
+async def rollback_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
+    return await transition(request_id, {"applied", "failed"}, "rollback_requested", body, role, principal, db)

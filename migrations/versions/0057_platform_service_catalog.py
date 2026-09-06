@@ -1,7 +1,7 @@
 """Canonical platform service catalog and provisioning state machine.
 
 Revision ID: 0057_platform_service_catalog
-Revises: 0056_klyrow_delivery_event_inbox
+Revises: 0056_klyrow_delivery_events
 """
 
 from alembic import op
@@ -32,7 +32,8 @@ def upgrade() -> None:
       id uuid PRIMARY KEY, service_id uuid NOT NULL REFERENCES platform_services(id) ON DELETE RESTRICT,
       environment text NOT NULL, state text NOT NULL, request_json jsonb NOT NULL,
       manifest_sha256 text NOT NULL, git_sha char(40) NOT NULL, correlation_id text NOT NULL,
-      validation_json jsonb, approved_by text, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
+      requested_by text NOT NULL, validation_json jsonb, approved_by text,
+      created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
       CONSTRAINT ck_platform_provisioning_state CHECK (state IN ('requested','validated','approved','apply_requested','applied','rollback_requested','rolled_back','failed'))
     )""")
     op.execute("""CREATE TABLE platform_provisioning_audit (

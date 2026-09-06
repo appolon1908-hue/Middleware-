@@ -105,7 +105,7 @@ jobs:
             --output "${RUNNER_TEMP}/gitleaks.tar.gz"
           echo "${GITLEAKS_ARCHIVE_SHA256}  ${RUNNER_TEMP}/gitleaks.tar.gz" | sha256sum --check --strict
           tar -xzf "${RUNNER_TEMP}/gitleaks.tar.gz" -C "${RUNNER_TEMP}" gitleaks
-          "${RUNNER_TEMP}/gitleaks" dir . --redact --no-banner --exit-code 1
+          "${RUNNER_TEMP}/gitleaks" dir . --redact --no-banner --exit-code 1 --verbose
       - name: Validate release workflow syntax and component ownership
         run: |
           set -euo pipefail

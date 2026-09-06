@@ -1,6 +1,7 @@
 name: Signed Middleware Release
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Middleware CI"]
     types: [completed]
@@ -14,6 +15,79 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  attest-pinned-release:
+    name: Recover provenance for the pinned signed release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 29b25cba8302cd15ef4d87b68f501da6347f2f17
+      IMAGE_DIGEST: sha256:0f5a5b3b1c8166d6509b228541bee01533f5feb1dbef24ed2d241194ba610802
+      IMAGE: ghcr.io/appolon1908-hue/codestra-middleware@sha256:0f5a5b3b1c8166d6509b228541bee01533f5feb1dbef24ed2d241194ba610802
+      SIGNER: https://github.com/appolon1908-hue/Middleware-/.github/workflows/release.yml@refs/heads/main
+      ISSUER: https://token.actions.githubusercontent.com
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
+      - name: Retrieve immutable evidence from the original successful release
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REPOSITORY" = appolon1908-hue/Middleware-
+          gh api repos/appolon1908-hue/Middleware-/actions/runs/33922375053 > "$RUNNER_TEMP/original-run.json"
+          jq -e --arg sha "$SOURCE_SHA" '.conclusion == "success" and .head_sha == $sha and .event == "workflow_run" and .path == ".github/workflows/release.yml"' "$RUNNER_TEMP/original-run.json"
+          gh api repos/appolon1908-hue/Middleware-/actions/artifacts/9955590882 > "$RUNNER_TEMP/artifact.json"
+          jq -e '.expired == false and .workflow_run.id == 33922375053 and .digest == "sha256:e04928d95ec12a429096af180f3bbd40891af324eff0f4868f5a7d638e74c5b6"' "$RUNNER_TEMP/artifact.json"
+          gh api repos/appolon1908-hue/Middleware-/actions/artifacts/9955590882/zip > "$RUNNER_TEMP/original-release.zip"
+          echo "e04928d95ec12a429096af180f3bbd40891af324eff0f4868f5a7d638e74c5b6  $RUNNER_TEMP/original-release.zip" | sha256sum --check --strict
+          mkdir "$RUNNER_TEMP/original-release"
+          unzip -q "$RUNNER_TEMP/original-release.zip" -d "$RUNNER_TEMP/original-release"
+          python3 scripts/release_manifest.py verify \
+            --manifest "$RUNNER_TEMP/original-release/release-manifest.v1.json" \
+            --bundle "$RUNNER_TEMP/original-release/release-manifest.v1.sigstore.json" \
+            --expected-source-sha "$SOURCE_SHA" --expected-image-digest "$IMAGE_DIGEST" \
+            --skip-workspace
+      - name: Verify existing image and evidence before adding provenance
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          cosign verify --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" "$IMAGE" > "$RUNNER_TEMP/image-signature.json"
+          cosign verify-attestation --type spdxjson --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" "$IMAGE" > "$RUNNER_TEMP/sbom-attestation.json"
+          python3 scripts/recover_pinned_provenance.py \
+            --evidence "$RUNNER_TEMP/original-release" \
+            --sbom-verification "$RUNNER_TEMP/sbom-attestation.json" \
+            --output "$RUNNER_TEMP/predicate.json"
+      - name: Publish and verify SLSA v1 on the original digest
+        run: |
+          set -Eeuo pipefail
+          cosign attest --yes --type slsaprovenance1 --predicate "$RUNNER_TEMP/predicate.json" "$IMAGE"
+          cosign verify-attestation --type slsaprovenance1 --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" "$IMAGE" > "$RUNNER_TEMP/provenance-verification.json"
+          python3 scripts/recover_pinned_provenance.py \
+            --evidence "$RUNNER_TEMP/original-release" \
+            --sbom-verification "$RUNNER_TEMP/sbom-attestation.json" \
+            --output "$RUNNER_TEMP/predicate.json" \
+            --provenance-verification "$RUNNER_TEMP/provenance-verification.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pinned-provenance-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/predicate.json
+            ${{ runner.temp }}/provenance-verification.json
+            ${{ runner.temp }}/image-signature.json
+            ${{ runner.temp }}/sbom-attestation.json
+            ${{ runner.temp }}/original-run.json
+            ${{ runner.temp }}/artifact.json
+          if-no-files-found: error
+          retention-days: 90
   release:
     name: Build, scan, sign, and verify immutable image
     if: >-

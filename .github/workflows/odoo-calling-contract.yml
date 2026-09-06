@@ -65,7 +65,9 @@ jobs:
           python -m pytest -q \
             tests/test_calling_api.py \
             tests/test_vicidial_internal_call_adapter.py \
-            tests/test_reconciliation_activity.py \
+            tests/test_reconciliation_activity.py
+          sudo --preserve-env=CODESTRA_SELECTED_SERVER_B_ROOT,CODESTRA_SELECTED_SERVER_B_SHA \
+            "$(command -v python)" -m pytest -q \
             tests/pairing/test_selected_server_b.py
           python scripts/generate_connector_artifacts.py --check
           python scripts/validate_integration_fabric.py

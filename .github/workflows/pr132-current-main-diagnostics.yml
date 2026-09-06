@@ -1,0 +1,49 @@
+name: Inspect PR 132 current-main merge
+
+on:
+  push:
+    branches: [fix/pr132-current-main-diagnostics-20260906]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR source and history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 01be8b01eae3b10e5a0d603b2b089e131c117e95
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record three-way merge evidence only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = 01be8b01eae3b10e5a0d603b2b089e131c117e95
+          git cat-file -e 63b6c0c8bca5168a1178895bd12858d0b1e8086e^{commit}
+          mkdir -p "$RUNNER_TEMP/pr132-evidence"
+          git branch evidence-pr132 HEAD
+          git branch evidence-main 63b6c0c8bca5168a1178895bd12858d0b1e8086e
+          git bundle create "$RUNNER_TEMP/pr132-evidence/source.bundle" evidence-pr132 evidence-main
+          git config user.name 'CI merge inspection'
+          git config user.email 'ci-inspection@users.noreply.github.com'
+          set +e
+          git -c core.hooksPath=/dev/null merge --no-commit --no-ff 63b6c0c8bca5168a1178895bd12858d0b1e8086e > "$RUNNER_TEMP/pr132-evidence/merge.txt" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/pr132-evidence/merge.txt"
+          printf 'MERGE_EXIT=%s\n' "$code"
+          git diff --name-only --diff-filter=U | tee "$RUNNER_TEMP/pr132-evidence/conflicts.txt"
+          git diff --cc > "$RUNNER_TEMP/pr132-evidence/conflicts.diff"
+          printf '%s\n' 'REPOSITORY_REFS_CHANGED=NO' 'PRODUCTION_DEPLOYED=NO' 'EXTERNAL_EFFECTS=NO'
+          test "$code" -le 1
+      - name: Upload source-only merge evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr132-current-main-evidence
+          path: ${{ runner.temp }}/pr132-evidence/
+          if-no-files-found: error
+          retention-days: 7

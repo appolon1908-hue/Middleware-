@@ -149,6 +149,34 @@ jobs:
       - name: Keylessly sign image, SBOM attestation, and manifest
         run: |
           set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          predicate = {
+              "buildDefinition": {
+                  "buildType": "https://codestra.example/buildtypes/exact-main-middleware-production/v1",
+                  "externalParameters": {
+                      "sourceSha": os.environ["RELEASE_SOURCE_SHA"],
+                      "platform": "linux/amd64",
+                  },
+                  "resolvedDependencies": [{
+                      "uri": f"git+https://github.com/appolon1908-hue/Middleware-@{os.environ['RELEASE_SOURCE_SHA']}",
+                      "digest": {"gitCommit": os.environ["RELEASE_SOURCE_SHA"]},
+                  }],
+              },
+              "runDetails": {
+                  "builder": {
+                      "id": "https://github.com/appolon1908-hue/Middleware-/.github/workflows/release.yml@refs/heads/main"
+                  }
+              },
+          }
+          Path(os.environ["RUNNER_TEMP"], "middleware-slsa-v1-predicate.json").write_text(
+              json.dumps(predicate, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
           cosign sign --yes \
             --annotations "codestra.source_sha=$RELEASE_SOURCE_SHA" \
             --annotations "codestra.schema_head=0010_realtime_gateway" \
@@ -156,6 +184,10 @@ jobs:
           cosign attest --yes \
             --predicate "$RELEASE_SBOM_PATH" \
             --type spdxjson \
+            "$RELEASE_IMAGE_REFERENCE"
+          cosign attest --yes \
+            --predicate "$RUNNER_TEMP/middleware-slsa-v1-predicate.json" \
+            --type slsaprovenance1 \
             "$RELEASE_IMAGE_REFERENCE"
           cosign sign-blob --yes \
             --bundle "$RELEASE_BUNDLE_PATH" \
@@ -172,6 +204,11 @@ jobs:
             "$RELEASE_IMAGE_REFERENCE"
           cosign verify-attestation \
             --type spdxjson \
+            --certificate-identity "$SIGNER_IDENTITY" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" \
+            "$RELEASE_IMAGE_REFERENCE" >/dev/null
+          cosign verify-attestation \
+            --type slsaprovenance1 \
             --certificate-identity "$SIGNER_IDENTITY" \
             --certificate-oidc-issuer "$OIDC_ISSUER" \
             "$RELEASE_IMAGE_REFERENCE" >/dev/null

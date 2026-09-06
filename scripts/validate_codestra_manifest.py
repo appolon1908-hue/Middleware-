@@ -10,12 +10,27 @@ from pathlib import Path
 import yaml  # type: ignore[import-untyped]
 from jsonschema import Draft202012Validator, FormatChecker
 
+REQUIRED_FILES = {
+    "service.yaml", "observability.yaml", "dependencies.yaml", "permissions.yaml",
+    "integration.yaml", "slo.yaml", "runbook.md",
+}
+KNOWN_DEPENDENCIES = {
+    "alertmanager", "alloy", "caddy", "grafana", "keycloak", "kong", "loki",
+    "middleware", "n8n", "odoo", "openbao", "postgres", "prometheus", "redis",
+    "superset", "tempo", "telemetry", "vicidial",
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest", nargs="?", type=Path, default=Path(".codestra/service.yaml"))
     parser.add_argument("--schema", type=Path, default=Path("contracts/platform/service.v1.schema.json"))
     args = parser.parse_args()
+    manifest_directory = args.manifest.parent
+    missing = sorted(name for name in REQUIRED_FILES if not (manifest_directory / name).is_file())
+    if missing:
+        print("missing required manifest files: " + ",".join(missing))
+        return 1
     document = yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
     schema = json.loads(args.schema.read_text(encoding="utf-8"))
     errors = sorted(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(document), key=lambda item: list(item.path))
@@ -23,6 +38,19 @@ def main() -> int:
         for error in errors:
             location = ".".join(str(part) for part in error.absolute_path) or "$"
             print(f"{location}: {error.message}")
+        return 1
+    spec = document["spec"]
+    unknown_dependencies = sorted(set(spec["dependencies"]) - KNOWN_DEPENDENCIES)
+    if unknown_dependencies:
+        print("unknown dependencies: " + ",".join(unknown_dependencies))
+        return 1
+    runbook = (manifest_directory / "runbook.md").read_text(encoding="utf-8").lower()
+    if "rollback" not in runbook:
+        print("runbook.md: rollback information is required")
+        return 1
+    integration = yaml.safe_load((manifest_directory / "integration.yaml").read_text(encoding="utf-8"))
+    if integration.get("authority") != "middleware" or integration.get("odoo", {}).get("directDatabaseAccess") is not False:
+        print("integration.yaml: middleware authority and no direct Odoo database access are required")
         return 1
     print(f"MANIFEST_VALID=PASS service={document['metadata']['name']}")
     return 0

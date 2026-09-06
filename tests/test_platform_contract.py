@@ -18,6 +18,10 @@ def test_repository_manifest_matches_canonical_schema() -> None:
     schema = json.loads((ROOT / "contracts/platform/service.v1.schema.json").read_text())
     manifest = yaml.safe_load((ROOT / ".codestra/service.yaml").read_text())
     Draft202012Validator(schema).validate(manifest)
+    assert (ROOT / ".codestra/integration.yaml").is_file()
+    assert manifest["spec"]["runtime"]["imageMustUseDigest"] is True
+    assert manifest["spec"]["integration"]["directOdooDatabaseAccess"] is False
+    assert not any(manifest["spec"]["safety"].values())
 
 
 def test_catalog_rejects_ungoverned_repository() -> None:

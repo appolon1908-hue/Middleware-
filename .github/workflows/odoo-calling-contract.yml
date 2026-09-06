@@ -51,7 +51,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           python -m pip install --require-hashes \
-            -r requirements-runtime.txt -r requirements-test.txt
+            -r requirements-test.txt
       - name: Exercise HTTP contracts and PostgreSQL reservation atomicity
         env:
           CALLING_TEST_DATABASE_URL: postgresql://middleware:middleware_ci_only@127.0.0.1:5432/middleware_test_calling

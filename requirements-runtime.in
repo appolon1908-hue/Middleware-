@@ -1,18 +1,1 @@
-fastapi==0.141.1
-uvicorn[standard]==0.34.0
-pydantic==2.10.4
-pydantic-settings==2.7.1
-email-validator==2.2.0
-PyJWT[crypto]==2.13.0
-alembic==1.16.4
-asyncpg==0.30.0
-cryptography==50.0.0
-phonenumbers==9.0.10
-psycopg[binary]==3.2.13
-redis==5.2.1
-nats-py==2.15.0
-temporalio==1.32.0
-httpx==0.28.1
-jsonschema[format]==4.26.0
-prometheus-client==0.26.0
-sqlalchemy==2.0.43
+-r requirements.in

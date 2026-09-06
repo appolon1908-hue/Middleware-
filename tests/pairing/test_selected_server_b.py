@@ -18,7 +18,9 @@ import pytest
 
 from app.vicidial_internal_call_adapter import VicidialInternalCallAdapter
 from app.calling_contract import CallPrincipal, CallingGrant
-from tests.test_vicidial_internal_call_adapter import SECRET, SOURCE_SHA, command, environment
+from tests.test_vicidial_internal_call_adapter import (
+    SECRET, SOURCE_SHA, command, environment, hangup_command,
+)
 
 
 SERVER_B_SHA = "9ac8ef4840f78ba4ad9b816e4e409298505103ce"
@@ -110,6 +112,27 @@ async def test_real_selected_server_b_hmac_routes_policy_and_persistence(tmp_pat
         seed_connected(lifecycle, accepted.provider_operation_id)
         pending = await adapter.readback(request)
         assert pending.status == "mismatch"
+
+        server.policy_provider = lambda: server.policy.model_copy(
+            update={"expires_at": datetime.now(UTC) - timedelta(seconds=1)}
+        )
+        hangup_base = hangup_command(grant)
+        hangup = type(hangup_base)(**{
+            **hangup_base.__dict__,
+            "payload": {
+                **hangup_base.payload,
+                "actor": actor.model_dump(mode="json"),
+                "originate": {
+                    **hangup_base.payload["originate"],
+                    "business_unit": "synthetic-unit",
+                },
+                "origin_operation_id": request.command_id,
+                "call_id": accepted.provider_operation_id,
+            },
+        })
+        ended = await adapter.execute(hangup)
+        assert ended.status == "accepted"
+        assert [action["Action"] for action in ami.actions] == ["Originate", "Hangup"]
 
         with sqlite3.connect(server.state_path) as db:
             call = db.execute(

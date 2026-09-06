@@ -158,11 +158,13 @@ def _headers(client_id: str, correlation_id: str, idempotency_key: str, tenant_i
 async def test_all_thirteen_v2_routes_are_mounted(test_settings) -> None:
     runtime, _, _ = _runtime(test_settings)
     app = create_app(settings=test_settings, runtime=runtime)
+    schema = app.openapi()
     observed = {
-        f"{method} {route.path}"
-        for route in app.routes
-        for method in (route.methods or set())
-        if route.path.startswith("/v2/automation")
+        f"{method.upper()} {path}"
+        for path, item in schema["paths"].items()
+        if path.startswith("/v2/automation")
+        for method in item
+        if method in {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
     }
     assert observed == {
         "POST /v2/automation/jobs/claim",

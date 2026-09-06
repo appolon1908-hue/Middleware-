@@ -825,6 +825,84 @@ operations:
   canonical_operation_id: generic_webhook_v1_webhooks__connector_id___endpoint_key___webhook_id__post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/approvals
+  canonical_operation_id: request_automation_approval_v2_automation_approvals_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: GET
+  path: /v2/automation/approvals/{approval_id}
+  canonical_operation_id: read_automation_approval_v2_automation_approvals__approval_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: GET
+  path: /v2/automation/capabilities/{capability}
+  canonical_operation_id: read_automation_capability_v2_automation_capabilities__capability__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/commands
+  canonical_operation_id: submit_automation_command_v2_automation_commands_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: GET
+  path: /v2/automation/commands/{command_id}
+  canonical_operation_id: read_automation_command_v2_automation_commands__command_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/dead-letters/{dead_letter_id}/replay
+  canonical_operation_id: replay_automation_dead_letter_v2_automation_dead_letters__dead_letter_id__replay_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/jobs/claim
+  canonical_operation_id: claim_automation_job_v2_automation_jobs_claim_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/jobs/reconcile
+  canonical_operation_id: reconcile_automation_jobs_v2_automation_jobs_reconcile_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: GET
+  path: /v2/automation/jobs/{job_id}
+  canonical_operation_id: read_automation_job_v2_automation_jobs__job_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/jobs/{job_id}/complete
+  canonical_operation_id: complete_automation_job_v2_automation_jobs__job_id__complete_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/jobs/{job_id}/fail
+  canonical_operation_id: fail_automation_job_v2_automation_jobs__job_id__fail_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/jobs/{job_id}/heartbeat
+  canonical_operation_id: heartbeat_automation_job_v2_automation_jobs__job_id__heartbeat_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: v2
+  method: POST
+  path: /v2/automation/jobs/{job_id}/steps
+  canonical_operation_id: record_automation_step_v2_automation_jobs__job_id__steps_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: version
   method: GET
   path: /version

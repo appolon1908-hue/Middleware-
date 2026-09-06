@@ -7,7 +7,7 @@ Revises: 0056_klyrow_delivery_event_inbox
 from alembic import op
 
 revision = "0057_platform_service_catalog"
-down_revision = "0056_klyrow_delivery_event_inbox"
+down_revision = "0056_klyrow_delivery_events"
 branch_labels = None
 depends_on = None
 

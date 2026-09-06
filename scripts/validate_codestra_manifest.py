@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from jsonschema import Draft202012Validator, FormatChecker
 
 

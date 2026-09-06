@@ -169,9 +169,10 @@ async def patch_service(service_id: str, body: ServicePatch, db: AsyncSession = 
         raise HTTPException(400, "at least one change is required")
     current = await get_service(service_id, db)
     merged = {**current, **changes}
-    result = await db.execute(text("""UPDATE platform_services SET owner=:owner,dependencies=CAST(:dependencies AS jsonb),slo_profile=:slo,alert_profile=:alert,updated_at=:now WHERE service_id=:id"""), {"owner": merged["owner"], "dependencies": json.dumps(merged["dependencies"]), "slo": merged["slo_profile"], "alert": merged["alert_profile"], "now": now(), "id": service_id})
+    result = await db.execute(text("""UPDATE platform_services SET owner=:owner,dependencies=CAST(:dependencies AS jsonb),slo_profile=:slo,alert_profile=:alert,updated_at=:now WHERE service_id=:id RETURNING id"""), {"owner": merged["owner"], "dependencies": json.dumps(merged["dependencies"]), "slo": merged["slo_profile"], "alert": merged["alert_profile"], "now": now(), "id": service_id})
+    updated = result.scalar_one_or_none()
     await db.commit()
-    if result.rowcount != 1:
+    if updated is None:
         raise HTTPException(404, "service not found")
     return {"service_id": service_id, "state": current["state"]}
 
@@ -188,9 +189,10 @@ async def add_environment(service_id: str, body: EnvironmentCreate, db: AsyncSes
 
 async def service_state(service_id: str, target: str, role: str, db: AsyncSession):
     require_role(role, {"platform_admin"})
-    result = await db.execute(text("UPDATE platform_services SET state=:state,updated_at=:now WHERE service_id=:id"), {"state": target, "now": now(), "id": service_id})
+    result = await db.execute(text("UPDATE platform_services SET state=:state,updated_at=:now WHERE service_id=:id RETURNING id"), {"state": target, "now": now(), "id": service_id})
+    updated = result.scalar_one_or_none()
     await db.commit()
-    if result.rowcount != 1:
+    if updated is None:
         raise HTTPException(404, "service not found")
     return {"service_id": service_id, "state": target}
 

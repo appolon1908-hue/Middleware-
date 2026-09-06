@@ -43,9 +43,18 @@ fails if the checkout or SHA verification is absent, and runs the pairing test
 with the selected-source variables set. The default local suite may skip this
 external-source test; required CI may not.
 
-The Server B archive has not been published. This evidence proves a source
-pair, not execution of a published archive. Archive digest and protected
-builder/run identity remain release gates.
+Server B source publication and independent verification are complete. The
+verified runtime source remains `9ac8ef4840f78ba4ad9b816e4e409298505103ce`;
+protected builder `def0f1822fe54ab2a0800e8d6e083533df88d064` produced run
+`34000565825/1`, artifact `9979357196`, archive SHA-256
+`5e3d4083dd94297c1085a28953547d5532e07c9685560184047208ca2cf0a252`.
+Durable cryptographic evidence merged in Vicidialer-Codestra at
+`0975e8a3b844f81671edadc15d7a743ce58d83c1`, under
+`evidence/server-b-verified-source-publication-20260906/`.
+These pairing tests execute that exact source through the real Middleware client
+and Server B authenticator/routes/state. They do not certify an installed
+production pair, live SIP or audible calling. The lock's `protected_release=false`
+is retained: publication does not itself authorize runtime activation.
 
 Middleware contains the Temporal worker binding. This is not evidence that a
 calling worker is deployed, running, registered, or polling its queue. Runtime

@@ -318,6 +318,20 @@ class CommandLedgerWorkflowActivities:
                 type="ProviderReadbackError",
             ) from exc
 
+    @activity.defn(name="recover_call_execution")
+    async def recover_call_execution(
+        self, request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        """Read committed no-send proof after a lost activity acknowledgement."""
+        durable = await self._load_durable_execution_request(request)
+        if durable.target != TARGET or durable.command_type != ORIGINATE:
+            raise ApplicationError(
+                "execution recovery is restricted to bounded originate",
+                non_retryable=True, type="CommandExecutionRejected",
+            )
+        return (await self._load_committed_call_cancellation(durable)
+                or ActivityResult("reconciliation_required", "no committed no-send proof"))
+
     async def _load_durable_execution_request(
         self, request: CommandExecutionRequest,
     ) -> CommandExecutionRequest:
@@ -628,7 +642,7 @@ class CommandLedgerWorkflowActivities:
                         non_retryable=True,
                         type="ReconciliationRejected",
                     ) from exc
-                _, current_payload_sha256 = self._validated_reconciliation_command(
+                current_command, current_payload_sha256 = self._validated_reconciliation_command(
                     current,
                     request,
                     operation_id,
@@ -643,6 +657,15 @@ class CommandLedgerWorkflowActivities:
                         type="ReconciliationRejected",
                     )
 
+                if current_command.target == TARGET:
+                    observed_id = evidence.get("asterisk_uniqueid")
+                    expected_ids = (current["provider_operation_id"], result.provider_operation_id,
+                                    current_command.payload.get("call_id"))
+                    if any(value is not None and value != observed_id for value in expected_ids):
+                        raise ApplicationError(
+                            "calling evidence differs from the accepted provider identity",
+                            non_retryable=True, type="ProviderReadbackContractError",
+                        )
                 next_state = "completed" if matched else "reconciliation_required"
                 if matched:
                     row = await conn.fetchrow(
@@ -859,6 +882,7 @@ class CommandLedgerWorkflowActivities:
             self.record_command_transition,
             self.execute_command,
             self.record_call_pre_dispatch_rejection,
+            self.recover_call_execution,
             self.readback_command,
             self.reconcile_operation,
             self.complete_originating_call,

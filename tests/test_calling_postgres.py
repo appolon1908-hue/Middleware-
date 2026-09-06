@@ -63,6 +63,115 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
     async def reserve(self, body=None, ledger=None):
         return await (ledger or self.ledger).originate(principal(), body or originate(), "test-correlation-0001", self.grant)
 
+    async def execution_request(self, operation):
+        import json
+        payload = await self.pool.fetchval(
+            "SELECT payload FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+            operation.tenant_id, str(operation.command_id),
+        )
+        payload = json.loads(payload) if isinstance(payload, str) else dict(payload)
+        client_id = payload.pop(AUTHENTICATED_CLIENT_ID_KEY)
+        return CommandExecutionRequest(**payload, authenticated_client_id=client_id)
+
+    async def test_competing_dispatch_cannot_claim_no_send_before_winner_commits(self):
+        operation = await self.reserve()
+        for state in ("queued", "dispatching"):
+            await self.store.transition(operation.tenant_id, operation.command_id,
+                                        new_state=state, actor_id="test", reason="test")
+        request = await self.execution_request(operation)
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        class Adapter:
+            executions = 0
+            readbacks = 0
+            async def execute(self, request):
+                self.executions += 1
+                entered.set()
+                await release.wait()
+                raise VicidialInternalCallPreDispatchRejected("synthetic no-send")
+            async def readback(self, request):
+                self.readbacks += 1
+                return ActivityResult("mismatch", "no conclusive observation")
+
+        adapter = Adapter()
+        winner = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)
+        loser = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)
+        task = asyncio.create_task(winner.execute_command(request))
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            self.assertEqual((await loser.execute_command(request)).status, "mismatch")
+            self.assertEqual((await loser.recover_call_execution(request)).status,
+                             "reconciliation_required")
+        finally:
+            release.set()
+        self.assertEqual((await task).status, "cancelled")
+        for _ in range(3):
+            self.assertEqual((await loser.recover_call_execution(request)).status, "cancelled")
+        self.assertEqual((adapter.executions, adapter.readbacks), (1, 1))
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE new_state='cancelled'"), 1)
+        with self.assertRaises(CommandConflict):
+            await self.reserve(originate(idempotency_key="test-no-replenishment"))
+
+    async def temporal_activity_failure(self, committed):
+        from temporalio import activity
+        from temporalio.exceptions import ApplicationError
+        from temporalio.testing import WorkflowEnvironment
+        from temporalio.worker import Worker
+        from app.temporal_workflows import CommandExecutionWorkflow
+        operation = await self.reserve()
+        request = await self.execution_request(operation)
+
+        class Adapter:
+            executions = 0
+            async def execute(self, request):
+                self.executions += 1
+                raise VicidialInternalCallPreDispatchRejected("synthetic no-send")
+            async def readback(self, request):
+                raise AssertionError("no extra provider I/O on activity failure recovery")
+
+        class LostAcknowledgement(CommandLedgerWorkflowActivities):
+            @activity.defn(name="execute_command")
+            async def execute_command(self, request: CommandExecutionRequest) -> ActivityResult:
+                if committed:
+                    result = await super().execute_command(request)
+                    assert result.status == "cancelled"
+                # Inject failure before Temporal can record activity completion.
+                # The false case has no committed no-send proof and must remain uncertain.
+                raise ApplicationError("injected activity acknowledgement failure",
+                                       non_retryable=True, type="SyntheticLostAcknowledgement")
+
+        adapter = Adapter()
+        activities = LostAcknowledgement(self.store, vicidial_internal=adapter)
+        queue = "calling-lost-ack-" + uuid4().hex
+        async with await WorkflowEnvironment.start_time_skipping() as environment:
+            async with Worker(environment.client, task_queue=queue,
+                              workflows=[CommandExecutionWorkflow], activities=activities.registered()):
+                result = await environment.client.execute_workflow(
+                    CommandExecutionWorkflow.run, request,
+                    id="lost-ack-" + uuid4().hex, task_queue=queue,
+                )
+        expected = "cancelled" if committed else "reconciliation_required"
+        self.assertEqual(result.status, expected)
+        fresh = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)
+        for _ in range(3):
+            self.assertEqual((await fresh.recover_call_execution(request)).status, expected)
+        self.assertEqual(adapter.executions, int(committed))
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT state FROM middleware_commands WHERE command_id=$1", request.command_id), expected)
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE new_state='cancelled'"), int(committed))
+        with self.assertRaises(CommandConflict):
+            await self.reserve(originate(idempotency_key="test-no-replenishment"))
+
+    @unittest.skipUnless(os.getenv("TEMPORAL_INTEGRATION_TESTS") == "1", "Temporal harness not enabled")
+    async def test_temporal_recovers_post_commit_activity_failure(self):
+        await self.temporal_activity_failure(True)
+
+    @unittest.skipUnless(os.getenv("TEMPORAL_INTEGRATION_TESTS") == "1", "Temporal harness not enabled")
+    async def test_temporal_pre_commit_failure_stays_uncertain(self):
+        await self.temporal_activity_failure(False)
+
     async def test_command_audit_and_outbox_commit_together(self):
         command = await self.reserve()
         self.assertEqual(await self.counts(), (1, 1, 1))
@@ -70,11 +179,106 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(row["command_id"]), str(command.command_id))
         self.assertEqual(row["destination"], "temporal-command")
 
+    async def test_invalid_policy_files_commit_rejection_without_transport(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from contextlib import nullcontext
+        import httpx
+        from app.vicidial_internal_call_adapter import VicidialInternalCallAdapter
+        from tests.test_vicidial_internal_call_adapter import principal as appolon
+
+        sends = 0
+        async def transport(request):
+            nonlocal sends
+            sends += 1
+            raise AssertionError("invalid policy must never reach transport")
+
+        real_fstat = os.fstat
+        def root_owned(fd):
+            fields = list(real_fstat(fd))
+            fields[4] = 0  # Only emulate the protected file's owner in non-root tests.
+            return os.stat_result(fields)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            for failure in ("missing", "unreadable", "malformed", "schema", "unsafe-mode"):
+                with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                    actor = appolon()
+                    policy = grant(principal=actor, authorization_reference="CHG-TEST-" + failure)
+                    body = originate(employee_id=actor.employee_id, campaign=actor.campaign_id,
+                                     business_unit=actor.business_unit,
+                                     idempotency_key="test-policy-" + failure)
+                    operation = await self.ledger.originate(actor, body, "policy-failure", policy)
+                    for state in ("queued", "dispatching"):
+                        await self.store.transition(operation.tenant_id, operation.command_id,
+                                                    new_state=state, actor_id="test", reason="test")
+                    request = await self.execution_request(operation)
+                    path = Path(temporary) / "policy.json"
+                    path.write_text(policy.model_dump_json())
+                    path.chmod(0o600)
+                    if failure == "missing":
+                        path.unlink()
+                    elif failure == "malformed":
+                        path.write_text("{not-json")
+                    elif failure == "schema":
+                        path.write_text("{}")
+                    elif failure == "unsafe-mode":
+                        path.chmod(0o666)
+                    blocked = (patch("app.calling_contract.os.open", side_effect=PermissionError("test"))
+                               if failure == "unreadable" else nullcontext())
+                    adapter = VicidialInternalCallAdapter(
+                        SimpleNamespace(source_sha=policy.source_sha),
+                        {"CODESTRA_INTERNAL_CALL_POLICY_FILE": str(path)}, client,
+                    )
+                    activities = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)
+                    with patch("app.calling_contract.os.fstat", side_effect=root_owned), blocked:
+                        result = await activities.execute_command(request)
+                    self.assertEqual(result.status, "cancelled")
+                    self.assertEqual((await activities.recover_call_execution(request)).status, "cancelled")
+                    self.assertEqual(await self.pool.fetchval(
+                        "SELECT count(*) FROM middleware_command_audit "
+                        "WHERE command_id=$1 AND new_state='cancelled'", request.command_id), 1)
+        self.assertEqual(sends, 0)
+
     async def test_two_facades_serialize_distinct_keys(self):
         results = await asyncio.gather(self.reserve(), self.reserve(
             originate(idempotency_key="test-originate-0002"), CallingLedger(self.commands)), return_exceptions=True)
         self.assertEqual(sum(isinstance(result, CommandConflict) for result in results), 1)
         self.assertEqual(await self.counts(), (1, 1, 1))
+
+    async def test_reconciliation_cannot_replace_the_accepted_asterisk_identity(self):
+        from temporalio.exceptions import ApplicationError
+        from tests.test_calling_contract import CallingContractTests
+        from tests.test_vicidial_internal_call_adapter import principal as appolon
+        actor = appolon()
+        policy = grant(principal=actor)
+        body = originate(employee_id=actor.employee_id, campaign=actor.campaign_id,
+                         business_unit=actor.business_unit)
+        operation = await self.ledger.originate(actor, body, "test-provider-binding", policy)
+        for state in ("queued", "dispatching", "accepted", "readback_pending", "reconciliation_required"):
+            await self.store.transition(operation.tenant_id, operation.command_id,
+                                        new_state=state, actor_id="test", reason="test",
+                                        provider_operation_id="accepted-call-A")
+        evidence = CallingContractTests().lifecycle(
+            operation_id=str(operation.command_id), correlation_id="test-provider-binding",
+            tenant_id=actor.tenant_id, subject=actor.subject, employee_id=actor.employee_id,
+            authorization_reference=policy.authorization_reference,
+            asterisk_uniqueid="unrelated-call-B",
+        )
+        class Adapter:
+            async def execute(self, request):
+                raise AssertionError("reconciliation never dispatches")
+            async def readback(self, request):
+                return ActivityResult("matched", "terminal", "unrelated-call-B", evidence)
+        activities = CommandLedgerWorkflowActivities(self.store, vicidial_internal=Adapter())
+        with self.assertRaises(ApplicationError):
+            await activities.reconcile_operation(ReconciliationRequest(
+                str(operation.command_id), operation.tenant_id, "test identity mismatch"))
+        self.assertEqual(tuple(await self.pool.fetchrow(
+            "SELECT state,provider_operation_id FROM middleware_commands WHERE command_id=$1",
+            str(operation.command_id))), ("reconciliation_required", "accepted-call-A"))
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE new_state='completed'"), 0)
 
     async def test_concurrent_retries_are_one_command_and_one_outbox(self):
         results = await asyncio.gather(*[self.reserve(ledger=CallingLedger(self.commands)) for _ in range(8)])

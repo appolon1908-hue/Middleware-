@@ -338,6 +338,13 @@ class CommandExecutionWorkflow:
                 retry_policy=RetryPolicy(maximum_attempts=1),
             )
         except ActivityError as exc:
+            if request.target == TARGET and request.command_type == ORIGINATE:
+                recovered = await _activity("recover_call_execution", request)
+                if recovered.status == "cancelled":
+                    return WorkflowOutcome(
+                        request.command_id, "command_execution", "cancelled",
+                        "committed no-send cancellation recovered after activity failure",
+                    )
             await _command_transition(
                 CommandTransitionRequest(
                     request.command_id,

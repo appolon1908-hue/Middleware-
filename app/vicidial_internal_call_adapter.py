@@ -178,7 +178,12 @@ class VicidialInternalCallAdapter:
             })
         except (KeyError, TypeError, ValueError):
             raise VicidialInternalCallPreDispatchRejected("calling identity or request is invalid") from None
-        grant = load_grant(self.env)
+        try:
+            grant = load_grant(self.env)
+        except CallingContractError as exc:
+            raise VicidialInternalCallPreDispatchRejected(
+                "dispatch-time calling policy is unavailable or invalid"
+            ) from exc
         if grant is None or grant.digest() != request.payload["policy_sha256"]:
             raise VicidialInternalCallPreDispatchRejected("dispatch-time calling policy is unavailable or changed")
         try:

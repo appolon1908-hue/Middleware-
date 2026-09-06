@@ -110,7 +110,7 @@ def environment(tmp_path):
 
 def test_downstream_contract_lock_matches_adapter_routes():
     lock = json.loads(Path("config/vicidial-internal-call-contract.lock.json").read_text())
-    assert lock["tested_sha"] == "6f6a923eb117a22b8295ca72de14728a5458feae"
+    assert lock["tested_sha"] == "9ac8ef4840f78ba4ad9b816e4e409298505103ce"
     assert lock["protected_release"] is False
     assert lock["routes"] == {
         "originate": VicidialInternalCallAdapter.ORIGINATE_PATH,
@@ -185,6 +185,44 @@ async def test_policy_change_after_enqueue_fails_before_network(tmp_path):
     with pytest.raises(VicidialInternalCallPreDispatchRejected, match="changed"):
         await adapter.execute(command(grant))
     assert called is False
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("policy_failure", ["deleted", "unreadable", "malformed"])
+async def test_policy_loading_failure_is_conclusive_no_send(
+    tmp_path, monkeypatch, policy_failure,
+):
+    grant, env = environment(tmp_path)
+    policy_path = Path(env["CODESTRA_INTERNAL_CALL_POLICY_FILE"])
+    if policy_failure == "deleted":
+        policy_path.unlink()
+    elif policy_failure == "unreadable":
+        monkeypatch.setattr(
+            "app.calling_contract.os.open",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                PermissionError("synthetic unreadable policy")
+            ),
+        )
+    else:
+        policy_path.write_text("{not-json")
+    sends = 0
+
+    async def endpoint(request):
+        nonlocal sends
+        sends += 1
+        return httpx.Response(500, request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(endpoint))
+    adapter = VicidialInternalCallAdapter(
+        SimpleNamespace(source_sha=SOURCE_SHA), env, client,
+    )
+    with pytest.raises(
+        VicidialInternalCallPreDispatchRejected,
+        match="policy is unavailable or invalid",
+    ):
+        await adapter.execute(command(grant))
+    assert sends == 0
     await client.aclose()
 
 

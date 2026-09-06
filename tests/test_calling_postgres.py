@@ -17,6 +17,7 @@ from app.commands import (
     CommandService, PostgresCommandStore,
 )
 from app.temporal_activities import CommandLedgerWorkflowActivities
+from app.vicidial_internal_call_adapter import VicidialInternalCallPreDispatchRejected
 from app.temporal_workflows import (
     ActivityResult, CommandExecutionRequest, ReconciliationRequest,
 )
@@ -151,6 +152,55 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state, "dispatching")
         value = result_payload if isinstance(result_payload, dict) else __import__("json").loads(result_payload)
         self.assertEqual(value, {"dispatch_claimed": True})
+
+    async def test_pre_dispatch_rejection_is_committed_before_ack_and_restart_safe(self):
+        operation = await self.reserve()
+        for state in ("queued", "dispatching"):
+            await self.store.transition(
+                operation.tenant_id, operation.command_id, new_state=state,
+                actor_id="test-worker", reason="synthetic dispatch setup",
+            )
+        row = await self.pool.fetchrow(
+            "SELECT payload FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+            operation.tenant_id, str(operation.command_id),
+        )
+        payload = row["payload"] if isinstance(row["payload"], dict) else __import__("json").loads(row["payload"])
+        client_id = payload.pop(AUTHENTICATED_CLIENT_ID_KEY)
+        request = CommandExecutionRequest(**payload, authenticated_client_id=client_id)
+
+        class NoSendAdapter:
+            executions = 0
+            readbacks = 0
+            async def execute(self, _request):
+                self.executions += 1
+                raise VicidialInternalCallPreDispatchRejected("synthetic no-send")
+            async def readback(self, _request):
+                self.readbacks += 1
+                raise AssertionError("committed no-send cancellation needs no readback")
+
+        adapter = NoSendAdapter()
+        first = CommandLedgerWorkflowActivities(
+            self.store, vicidial_internal=adapter,  # type: ignore[arg-type]
+        )
+        result = await first.execute_command(request)
+        self.assertEqual(result.status, "cancelled")
+        command_state, attempt_state, error_code = await self.pool.fetchrow(
+            "SELECT c.state,a.state,a.error_code FROM middleware_commands c "
+            "JOIN middleware_command_attempts a USING (tenant_id,command_id) "
+            "WHERE c.tenant_id=$1 AND c.command_id=$2 ORDER BY a.attempt_number DESC LIMIT 1",
+            operation.tenant_id, str(operation.command_id),
+        )
+        self.assertEqual(
+            (command_state, attempt_state, error_code),
+            ("cancelled", "failed", "pre_dispatch_rejected"),
+        )
+
+        restarted = CommandLedgerWorkflowActivities(
+            self.store, vicidial_internal=adapter,  # type: ignore[arg-type]
+        )
+        replay = await restarted.execute_command(request)
+        self.assertEqual(replay.status, "cancelled")
+        self.assertEqual((adapter.executions, adapter.readbacks), (1, 0))
 
     async def test_completed_hangup_restart_repairs_origin_without_new_mutation(self):
         appolon = principal().model_copy(update={

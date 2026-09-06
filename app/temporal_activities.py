@@ -198,19 +198,20 @@ class CommandLedgerWorkflowActivities:
         if request.target == TARGET:
             claimed = await self._claim_call_dispatch(request)
             if not claimed:
+                cancelled = await self._load_committed_call_cancellation(request)
+                if cancelled is not None:
+                    return cancelled
                 # A previous process may have sent the mutation. Readback is
                 # the only safe continuation; never originate/hang up again.
                 return await adapter.readback(request)
         try:
             return await adapter.execute(request)
         except VicidialInternalCallPreDispatchRejected:
-            # The adapter performs every policy/provenance check before it
-            # constructs or sends the HTTP request. This status is therefore
-            # reserved for a positively known no-send originate outcome.
-            return ActivityResult(
-                "pre_dispatch_rejected",
-                "bounded originate rejected before transport",
-            )
+            # Do not acknowledge the proven no-send outcome until the same
+            # activity has durably cancelled the claimed attempt. If this
+            # transaction fails, Temporal observes an activity failure rather
+            # than a transient status that could be lost before cancellation.
+            return await self.record_call_pre_dispatch_rejection(request)
         except PostlySocialUnknownOutcomeError as exc:
             # Postly has no idempotency key. Retrying an ambiguous publish
             # could put a second post on a real account, so this outcome must
@@ -263,11 +264,12 @@ class CommandLedgerWorkflowActivities:
                         and row["state"] == "cancelled"
                         and attempt["state"] == "failed"
                         and attempt["error_code"] == "pre_dispatch_rejected"
-                        and dict(attempt["result_payload"] or {}) == {"dispatch_claimed": True}):
+                        and self._is_dispatch_claim(attempt["result_payload"])):
                     return ActivityResult(
                         "cancelled", "bounded originate rejected before transport",
                     )
-                if row is None or attempt is None or row["state"] != "dispatching" or dict(attempt["result_payload"] or {}) != {"dispatch_claimed": True}:
+                if (row is None or attempt is None or row["state"] != "dispatching"
+                        or not self._is_dispatch_claim(attempt["result_payload"])):
                     raise ApplicationError(
                         "pre-dispatch rejection does not own the durable dispatch claim",
                         non_retryable=True, type="CommandExecutionRejected",
@@ -369,6 +371,38 @@ class CommandLedgerWorkflowActivities:
                 request.tenant_id, request.command_id,
             )
         return row is not None
+
+    @staticmethod
+    def _is_dispatch_claim(value: Any) -> bool:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return False
+        return isinstance(value, Mapping) and dict(value) == {"dispatch_claimed": True}
+
+    async def _load_committed_call_cancellation(
+        self, request: CommandExecutionRequest,
+    ) -> ActivityResult | None:
+        """Recover a proven no-send cancellation without readback or redial."""
+        async with self.store.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT c.state, a.state AS attempt_state, a.error_code, "
+                "a.result_payload FROM middleware_commands c "
+                "JOIN LATERAL (SELECT state,error_code,result_payload "
+                "FROM middleware_command_attempts WHERE tenant_id=c.tenant_id "
+                "AND command_id=c.command_id ORDER BY attempt_number DESC LIMIT 1) a ON true "
+                "WHERE c.tenant_id=$1 AND c.command_id=$2",
+                request.tenant_id, request.command_id,
+            )
+        if (row is not None and row["state"] == "cancelled"
+                and row["attempt_state"] == "failed"
+                and row["error_code"] == "pre_dispatch_rejected"
+                and self._is_dispatch_claim(row["result_payload"])):
+            return ActivityResult(
+                "cancelled", "bounded originate rejected before transport",
+            )
+        return None
 
     @staticmethod
     def _validated_reconciliation_command(

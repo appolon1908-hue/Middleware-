@@ -355,13 +355,12 @@ class CommandExecutionWorkflow:
             )
 
         if (request.target == TARGET and request.command_type == ORIGINATE
-                and executed.status == "pre_dispatch_rejected"):
-            rejected = await _activity("record_call_pre_dispatch_rejection", request)
+                and executed.status == "cancelled"):
             return WorkflowOutcome(
                 operation_id=request.command_id,
                 workflow_type="command_execution",
-                status=rejected.status,
-                detail=rejected.detail,
+                status=executed.status,
+                detail=executed.detail,
             )
 
         if (request.target == TARGET and request.command_type == ORIGINATE

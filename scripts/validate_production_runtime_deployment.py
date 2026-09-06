@@ -9,7 +9,7 @@ import json
 import re
 import tarfile
 from pathlib import Path, PurePosixPath
-from typing import Mapping
+from typing import Any, Mapping, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "deploy/production/server-command-contract.v1.json"
@@ -69,6 +69,9 @@ def validate_source(root: Path = ROOT) -> None:
     require(isinstance(deployment, dict), "deployment contract section missing")
     require(isinstance(safety, dict), "safety contract section missing")
     require(isinstance(response, dict), "response contract section missing")
+    deployment = cast(dict[str, Any], deployment)
+    safety = cast(dict[str, Any], safety)
+    response = cast(dict[str, Any], response)
     require(deployment.get("command") == "/usr/local/sbin/codestra-middleware-deploy", "command authority drift")
     require(deployment.get("expected_host") == "65.109.65.169", "server authority drift")
     require(deployment.get("restricted_user") == "middleware-deploy", "restricted user drift")
@@ -191,7 +194,7 @@ def validate_source(root: Path = ROOT) -> None:
     ):
         require(item not in workflow, f"workflow contains unsafe SSH behavior: {item}")
     uses = re.findall(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)", workflow)
-    require(uses, "workflow must use pinned actions")
+    require(bool(uses), "workflow must use pinned actions")
     for action in uses:
         require(re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", action) is not None, f"action is not commit-pinned: {action}")
 
@@ -284,7 +287,7 @@ def validate_evidence(
         require(len(result_members) == 1, "evidence result.json missing or duplicated")
         handle = archive.extractfile(result_members[0])
         require(handle is not None, "evidence result.json unreadable")
-        value = json.load(handle)
+        value = json.load(cast(Any, handle))
     require(value.get("schema_version") == "1.0" and value.get("result") == "PASS", "evidence result is not PASS")
     require(value.get("source_sha") == source_sha, "evidence source SHA mismatch")
     require(value.get("image_reference") == image_reference, "evidence image mismatch")

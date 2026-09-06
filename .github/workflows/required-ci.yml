@@ -164,7 +164,10 @@ jobs:
           )
           if ((${#changed_python[@]})); then
             ruff check "${changed_python[@]}" | tee ruff-changed.txt
+            # Keep the changed-file gate scoped to the target commit. Imported
+            # legacy modules retain their existing repository-wide type debt.
             mypy --ignore-missing-imports --explicit-package-bases \
+              --follow-imports=skip \
               "${changed_python[@]}" | tee mypy.txt
           else
             printf 'No Python files changed by target commit.\n' \

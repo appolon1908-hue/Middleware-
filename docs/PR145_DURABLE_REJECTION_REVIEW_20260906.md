@@ -78,3 +78,23 @@ complete; local tests are not substituted for protected merge requirements.
 
 No deployment, live symlink change, activation, account mutation, browser
 enrollment, SIP registration, Odoo call or unrelated delivery occurred.
+
+## Persistence retry follow-up — 2026-09-06T07:55:05Z
+
+Review 3943314127 is addressed with three bounded attempts of the idempotent
+no-send cancellation transaction inside the owning activity. PostgreSQL
+connection/serialization/deadlock and transport timeout failures retain the
+already-proven rejection in memory; the adapter is never retried. A lost database
+commit acknowledgement reloads the committed cancellation without another audit
+record. Exhaustion without durable proof remains uncertain and cannot replenish
+the consumed grant. This does not claim recovery of uncommitted in-memory proof
+after process loss.
+
+Final combined PostgreSQL/Temporal/client/workflow suite: **89 passed, 1 skipped,
+50 subtests passed in 16.27s**. New regressions cover failure before commit,
+ambiguous commit acknowledgement, and retry exhaustion. Rootless namespace
+selected-source pairing plus protected policy tests: **24 passed, 45 subtests
+passed in 1.09s** against source 9ac8ef4840f78ba4ad9b816e4e409298505103ce.
+Changed Python files pass Ruff; git diff --check passes. An additional unscoped
+Ruff run reports 116 existing findings outside the changed files; required CI
+remains authoritative. No lint or security gate was weakened.

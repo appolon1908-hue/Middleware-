@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 from collections.abc import Mapping
 from typing import Any, Protocol
 from uuid import UUID
 
+import asyncpg
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -211,7 +213,17 @@ class CommandLedgerWorkflowActivities:
             # activity has durably cancelled the claimed attempt. If this
             # transaction fails, Temporal observes an activity failure rather
             # than a transient status that could be lost before cancellation.
-            return await self.record_call_pre_dispatch_rejection(request)
+            for attempt in range(3):
+                try:
+                    return await self.record_call_pre_dispatch_rejection(request)
+                except (asyncpg.PostgresConnectionError, asyncpg.InterfaceError,
+                        asyncpg.SerializationError, asyncpg.DeadlockDetectedError,
+                        asyncpg.CannotConnectNowError, ConnectionError, TimeoutError):
+                    if attempt == 2:
+                        raise
+                    # Retain the proven rejection in this owning activity;
+                    # retry only the idempotent transaction, never the adapter.
+                    await asyncio.sleep(0.1 * (2 ** attempt))
         except PostlySocialUnknownOutcomeError as exc:
             # Postly has no idempotency key. Retrying an ambiguous publish
             # could put a second post on a real account, so this outcome must

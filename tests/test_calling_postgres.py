@@ -406,6 +406,74 @@ class CallingPostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replay.status, "cancelled")
         self.assertEqual((adapter.executions, adapter.readbacks), (1, 0))
 
+    async def persistence_retry_case(self, after_commit):
+        from unittest.mock import patch
+        operation = await self.reserve()
+        for state in ("queued", "dispatching"):
+            await self.store.transition(operation.tenant_id, operation.command_id,
+                                        new_state=state, actor_id="test", reason="test")
+        request = await self.execution_request(operation)
+        class Adapter:
+            executions = 0
+            async def execute(self, request):
+                self.executions += 1
+                raise VicidialInternalCallPreDispatchRejected("synthetic rejection")
+            async def readback(self, request):
+                raise AssertionError("persistence retry cannot send/read a provider request")
+        adapter = Adapter()
+        activities = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)
+        original = activities.record_call_pre_dispatch_rejection
+        attempts = 0
+        async def transient(request):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                if after_commit:
+                    await original(request)
+                raise asyncpg.ConnectionDoesNotExistError("synthetic dropped DB connection")
+            return await original(request)
+        with patch.object(activities, "record_call_pre_dispatch_rejection", new=transient):
+            result = await activities.execute_command(request)
+        self.assertEqual(result.status, "cancelled")
+        self.assertEqual((attempts, adapter.executions), (2, 1))
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE new_state='cancelled'"), 1)
+        self.assertEqual((await activities.recover_call_execution(request)).status, "cancelled")
+        with self.assertRaises(CommandConflict):
+            await self.reserve(originate(idempotency_key="test-no-replenishment"))
+
+    async def test_transient_no_send_persistence_failure_retries_without_dispatch(self):
+        await self.persistence_retry_case(False)
+
+    async def test_ambiguous_database_commit_ack_reloads_without_duplicate_audit(self):
+        await self.persistence_retry_case(True)
+
+    async def test_exhausted_persistence_retries_do_not_manufacture_cancellation(self):
+        from unittest.mock import AsyncMock, patch
+        operation = await self.reserve()
+        for state in ("queued", "dispatching"):
+            await self.store.transition(operation.tenant_id, operation.command_id,
+                                        new_state=state, actor_id="test", reason="test")
+        request = await self.execution_request(operation)
+        class Adapter:
+            executions = 0
+            async def execute(self, request):
+                self.executions += 1
+                raise VicidialInternalCallPreDispatchRejected("synthetic rejection")
+        adapter = Adapter()
+        activities = CommandLedgerWorkflowActivities(self.store, vicidial_internal=adapter)
+        with patch.object(activities, "record_call_pre_dispatch_rejection",
+                          new=AsyncMock(side_effect=TimeoutError("synthetic database timeout"))) as persist:
+            with self.assertRaises(TimeoutError):
+                await activities.execute_command(request)
+        self.assertEqual((persist.await_count, adapter.executions), (3, 1))
+        self.assertEqual((await activities.recover_call_execution(request)).status,
+                         "reconciliation_required")
+        self.assertEqual(await self.pool.fetchval(
+            "SELECT count(*) FROM middleware_command_audit WHERE new_state='cancelled'"), 0)
+        with self.assertRaises(CommandConflict):
+            await self.reserve(originate(idempotency_key="test-no-replenishment"))
+
     async def test_completed_hangup_restart_repairs_origin_without_new_mutation(self):
         appolon = principal().model_copy(update={
             "tenant_id": "tenant-test", "subject": "subject-appolon",

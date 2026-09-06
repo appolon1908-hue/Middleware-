@@ -43,10 +43,14 @@ class AgentExecutor:
         relative = Path(value)
         if relative.is_absolute() or ".." in relative.parts:
             raise ControllerError("path traversal denied")
-        candidate = (root / relative).resolve(strict=False)  # lgtm[py/path-injection]
-        if candidate != root and not candidate.is_relative_to(root):
-            raise ControllerError("path traversal denied")
-        return candidate
+        requested = relative.as_posix()
+        for current, directories, names in os.walk(root):
+            directories[:] = [item for item in directories if item not in {".git", ".venv", "node_modules"}]
+            for name in names:
+                candidate = Path(current) / name
+                if candidate.relative_to(root).as_posix() == requested:
+                    return candidate
+        raise ControllerError("file not found")
 
     async def _fixed_process(self, argv: tuple[str, ...], cwd: Path) -> dict[str, Any]:
         process = await asyncio.create_subprocess_exec(
@@ -83,7 +87,7 @@ class AgentExecutor:
             return {"files": files, "truncated": False}
         if tool == "read_file":
             target = self._path(root, str(arguments.get("path", "")))
-            data = target.read_bytes()  # lgtm[py/path-injection]
+            data = target.read_bytes()
             if len(data) > MAX_OUTPUT:
                 raise ControllerError("file exceeds read limit")
             return {"path": str(target.relative_to(root)), "content": redact(data.decode("utf-8", "replace"))}

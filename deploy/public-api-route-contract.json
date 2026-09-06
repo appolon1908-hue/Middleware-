@@ -1,0 +1,11 @@
+{
+  "schema": "codestra.middleware.public-api-route-contract.v1",
+  "service": "middleware-integration-api",
+  "listener_port": 8095,
+  "routes": [
+    {"method": "GET", "path": "/api/v1/callbacks"},
+    {"method": "POST", "path": "/api/v1/control/callbacks"},
+    {"method": "POST", "path": "/api/v1/automation/policy-check"},
+    {"method": "POST", "path": "/api/v1/integrations/n8n/results"}
+  ]
+}

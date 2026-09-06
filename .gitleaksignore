@@ -1,0 +1,12 @@
+# Reviewed immutable source identifiers and synthetic idempotency fixtures.
+# None is a credential or usable authentication token.
+deploy/n8n/lead-automation/schemas/provenance-manifest-v1.json:generic-api-key:6
+deploy/n8n/lead-automation/callback-auth-manifest-v2.json:generic-api-key:26
+deploy/n8n/lead-automation/schema-provenance-v1.json:generic-api-key:6
+deploy/n8n/lead-automation/workflow-manifest-v1.json:generic-api-key:10
+deploy/n8n/lead-automation/lead-automation-generic-v1.json:generic-api-key:13
+tests/test_agent_realtime.py:generic-api-key:16
+tests/test_provider_adapters.py:generic-api-key:27
+tests/test_notifications.py:generic-api-key:128
+tests/test_telephony_command_client.py:generic-api-key:149
+tests/test_telephony_command_client.py:generic-api-key:175

@@ -35,12 +35,19 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.asyncio
-async def test_real_selected_server_b_hmac_routes_policy_and_persistence(tmp_path):
+async def test_real_selected_server_b_hmac_routes_policy_and_persistence(
+    tmp_path, monkeypatch,
+):
     assert os.environ.get("CODESTRA_SELECTED_SERVER_B_SHA") == SERVER_B_SHA
     assert SERVER_B_ROOT is not None
     sys.path.insert(0, str(SERVER_B_ROOT / "vicidial" / "src"))
     sys.path.insert(0, str(SERVER_B_ROOT / "vicidial" / "tests"))
     try:
+        # The selected module constructs its default ASGI app at import time.
+        # Keep that real initialization inside the disposable test directory.
+        monkeypatch.setenv(
+            "CODESTRA_ADAPTER_STATE", str(tmp_path / "import-state.sqlite3"),
+        )
         from codestra_vicidial.app import create_app
         from codestra_vicidial.ami_gateway import (
             AgentBinding, AgentDirectory, LifecycleStore, parse_ami_block,

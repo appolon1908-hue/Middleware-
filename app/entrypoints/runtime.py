@@ -211,10 +211,10 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
                     request.headers.get("Authorization", ""),
                     settings.middleware_secret,
                 )
-            except BearerAuthError as exc:
+            except BearerAuthError:
                 status_code = 503 if not settings.middleware_secret else 401
                 return JSONResponse(
-                    {"detail": str(exc)},
+                    {"detail": "authentication unavailable" if status_code == 503 else "unauthorized"},
                     status_code=status_code,
                     headers={"X-Correlation-ID": correlation_id},
                 )

@@ -195,7 +195,10 @@ def test_workflow_identity_is_exact() -> None:
 
 def test_oidc_issuer_is_exact() -> None:
     script = (ROOT / "scripts/security/verify-security-owner-decision.sh").read_text()
-    assert "https://token.actions.githubusercontent.com" in script
+    assert any(
+        line == "issuer='https://token.actions.githubusercontent.com'"
+        for line in script.splitlines()
+    )
     assert "certificate-oidc-issuer-regexp" not in script
 
 

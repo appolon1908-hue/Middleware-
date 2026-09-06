@@ -1,4 +1,5 @@
 import csv
+import html
 import io
 from typing import Any
 from datetime import datetime
@@ -68,10 +69,12 @@ async def report(
         return Response(output.getvalue(), media_type="text/csv")
     if format == "html":
         rows = "".join(
-            f"<tr><th>{key}</th><td>{value}</td></tr>" for key, value in kpis.items()
+            f"<tr><th>{html.escape(str(key))}</th><td>{html.escape(str(value))}</td></tr>"
+            for key, value in kpis.items()
         )
         return Response(
-            f"<!doctype html><html><body><h1>{report_name}</h1><table>{rows}</table></body></html>",
+            "<!doctype html><html><body>"
+            f"<h1>{html.escape(report_name)}</h1><table>{rows}</table></body></html>",
             media_type="text/html",
         )
     return payload

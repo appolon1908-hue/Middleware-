@@ -223,9 +223,10 @@ async def control_request_guard(request: Request, call_next):
             verify_bearer(
                 request.headers.get("Authorization", ""), settings.middleware_secret
             )
-        except BearerAuthError as exc:
+        except BearerAuthError:
             status_code = 503 if not settings.middleware_secret else 401
-            return JSONResponse({"detail": str(exc)}, status_code=status_code)
+            detail = "authentication unavailable" if status_code == 503 else "unauthorized"
+            return JSONResponse({"detail": detail}, status_code=status_code)
     response = await call_next(request)
     response.headers["X-Correlation-ID"] = (
         request.headers.get("X-Correlation-ID", "") or "generated"

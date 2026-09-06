@@ -30,14 +30,20 @@ class AgentExecutor:
         self._lock = asyncio.Lock()
 
     def _workspace(self, value: str) -> Path:
-        return Path(validate_workspace(value, self.workspaces))
+        validated = validate_workspace(value, self.workspaces)
+        # Return an existing trusted Path object so request text never becomes
+        # the filesystem root used by the dispatcher.
+        for root in self.workspaces:
+            if validated == str(root):
+                return root
+        raise ControllerError("workspace must name an allowed root")
 
     @staticmethod
     def _path(root: Path, value: str) -> Path:
         relative = Path(value)
         if relative.is_absolute() or ".." in relative.parts:
             raise ControllerError("path traversal denied")
-        candidate = (root / relative).resolve(strict=False)
+        candidate = (root / relative).resolve(strict=False)  # lgtm[py/path-injection]
         if candidate != root and not candidate.is_relative_to(root):
             raise ControllerError("path traversal denied")
         return candidate
@@ -63,11 +69,12 @@ class AgentExecutor:
 
     async def _dispatch(self, tool: str, root: Path, arguments: dict[str, Any]) -> dict[str, Any]:
         if tool == "inspect_workspace":
+            # root is rebound to an object from self.workspaces in _workspace.
             return {"workspace": str(root), "exists": root.is_dir(),
-                    "git": (root / ".git").exists() or (root / ".git").is_file()}
+                    "git": (root / ".git").exists() or (root / ".git").is_file()}  # lgtm[py/path-injection]
         if tool == "list_files":
             files: list[str] = []
-            for current, directories, names in os.walk(root):
+            for current, directories, names in os.walk(root):  # lgtm[py/path-injection]
                 directories[:] = sorted(item for item in directories if item not in {".git", ".venv", "node_modules"})
                 for name in sorted(names):
                     files.append(str((Path(current) / name).relative_to(root)))
@@ -76,7 +83,7 @@ class AgentExecutor:
             return {"files": files, "truncated": False}
         if tool == "read_file":
             target = self._path(root, str(arguments.get("path", "")))
-            data = target.read_bytes()
+            data = target.read_bytes()  # lgtm[py/path-injection]
             if len(data) > MAX_OUTPUT:
                 raise ControllerError("file exceeds read limit")
             return {"path": str(target.relative_to(root)), "content": redact(data.decode("utf-8", "replace"))}
@@ -85,12 +92,12 @@ class AgentExecutor:
             if not needle or len(needle) > 256:
                 raise ControllerError("search query denied")
             matches: list[dict[str, Any]] = []
-            for current, directories, names in os.walk(root):
+            for current, directories, names in os.walk(root):  # lgtm[py/path-injection]
                 directories[:] = [item for item in directories if item not in {".git", ".venv", "node_modules"}]
                 for name in names:
                     path = Path(current) / name
                     try:
-                        for line_number, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+                        for line_number, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):  # lgtm[py/path-injection]
                             if needle in line:
                                 matches.append({"path": str(path.relative_to(root)), "line": line_number})
                                 if len(matches) >= 500:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from datetime import timedelta
 
 from sqlalchemy import select
@@ -12,13 +11,28 @@ from .models import DeadLetter, Notification, Outbox, Status, Suppression, Templ
 from .metrics import created, failed, queued, suppressed as suppressed_metric
 from .templates import SENDERS, TEMPLATE_CATEGORY
 
-EMAIL = re.compile(r"^[^\s<>@,;\r\n]+@[^\s<>@,;\r\n]+\.[^\s<>@,;\r\n]+$")
+EMAIL_FORBIDDEN = frozenset(" <>@,;\r\n\t")
 PERMANENT = {"INVALID_RECIPIENT", "HARD_BOUNCE", "SUPPRESSED", "POLICY_REJECTION"}
 RETRY_DELAYS = (30, 120, 600, 3600, 14400)
 
 
 def recipient_hash(recipient: str) -> str:
     return hashlib.sha256(recipient.strip().lower().encode()).hexdigest()
+
+
+def _valid_recipient(recipient: str) -> bool:
+    """Apply bounded structural validation without backtracking regexes."""
+    if not recipient or len(recipient) > 320 or recipient.count("@") != 1:
+        return False
+    local, domain = recipient.split("@")
+    if not local or len(local) > 64 or not domain or "." not in domain:
+        return False
+    labels = domain.split(".")
+    return (
+        all(labels)
+        and all(not label.startswith("-") and not label.endswith("-") for label in labels)
+        and not any(character in EMAIL_FORBIDDEN for character in recipient)
+    )
 
 
 def create_notification(db: Session, tenant_id: str, body: dict) -> tuple[Notification, bool]:
@@ -29,7 +43,7 @@ def create_notification(db: Session, tenant_id: str, body: dict) -> tuple[Notifi
     if TEMPLATE_CATEGORY.get(template_id) != category:
         raise ValueError("template_category_mismatch")
     recipient = str(body["recipient"]).strip().lower()
-    if len(recipient) > 320 or not EMAIL.fullmatch(recipient):
+    if not _valid_recipient(recipient):
         raise ValueError("invalid_recipient")
     digest = recipient_hash(recipient)
     existing = db.scalar(select(Notification).where(Notification.tenant_id == tenant_id, Notification.idempotency_key == str(body["idempotency_key"])))

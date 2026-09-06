@@ -2,11 +2,8 @@
 .github/*
 !.github/workflows/
 .github/workflows/*
-!.github/workflows/production-runtime-certification.yml
-!.github/workflows/integration-main-release-authorities.yml
-!.github/workflows/production-reviewer-access.yml
 !.github/workflows/mirror-codestra-legacy-middleware-images.yml
-!.github/workflows/publish-sign-qwen-auth-verifier.yml
+!.github/workflows/*.yml
 .env
 .env.*
 *.env

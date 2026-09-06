@@ -115,6 +115,8 @@ RUN python -m pip install --require-hashes -r requirements-test.txt \
 # schemas, workflows, lockfiles, deployment descriptors, and root metadata.
 # .dockerignore already keeps VCS data, credentials, caches, and build outputs
 # outside the build context.
+COPY --chown=10001:10001 MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml ./MIDDLEWARE-AUTHORITY-RECONCILIATION.yaml
+COPY --chown=10001:10001 .github/workflows/mirror-codestra-legacy-middleware-images.yml ./.github/workflows/mirror-codestra-legacy-middleware-images.yml
 COPY --chown=10001:10001 . .
 # Docker does not make the controlling .dockerignore available to COPY, so
 # recreate its non-secret policy file for contract tests that inspect it.

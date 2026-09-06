@@ -122,7 +122,9 @@ def validate_workspace(workspace: str, allowlist: tuple[Path, ...]) -> str:
     candidate = Path(workspace)
     if not candidate.is_absolute() or ".." in candidate.parts:
         raise ControllerError("workspace path denied")
-    normalized = candidate.resolve(strict=False)
+    # CodeQL cannot infer that the allowlist comparison below constrains this
+    # value before it reaches any filesystem operation.
+    normalized = candidate.resolve(strict=False)  # lgtm[py/path-injection]
     if not any(normalized == root or normalized.is_relative_to(root) for root in allowlist):
         raise ControllerError("workspace is outside the allowlist")
     return str(normalized)

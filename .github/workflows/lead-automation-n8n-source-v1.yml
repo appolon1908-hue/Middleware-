@@ -6,6 +6,9 @@ on:
       - "deploy/n8n/lead-automation/**"
       - ".github/workflows/lead-automation-n8n-source-v1.yml"
 
+permissions:
+  contents: read
+
 jobs:
   exact-head-gates:
     runs-on: ubuntu-latest

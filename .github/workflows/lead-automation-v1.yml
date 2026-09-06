@@ -13,6 +13,10 @@ on:
       - "tests/test_lead_odoo_apply.py"
       - "tests/test_lead_callback_auth.py"
       - "scripts/check_lead_automation.py"
+
+permissions:
+  contents: read
+
 jobs:
   exact-head-gates:
     runs-on: ubuntu-latest

@@ -616,9 +616,10 @@ async def originate_call(
             )
             dialing_status = "attempting"
             dial_reason = "accepted"
-        except VicidialMtlsError as exc:
+        except VicidialMtlsError:
             dialing_status = "blocked"
-            dial_reason = str(exc)
+            # Adapter details can include internal transport information.
+            dial_reason = "adapter_error"
             lifecycle.lifecycle_state = "ENDED"
             lifecycle.ended_at = datetime.now(UTC)
             lifecycle.hangup_cause = "adapter_error"

@@ -231,8 +231,9 @@ jobs:
         run: |
           set -euo pipefail
           digest="$(cat image-digest.txt)"
-          echo "image_digest=${digest}" >> "${GITHUB_OUTPUT}"
-          echo "IMAGE_AT_DIGEST=${IMAGE_REPOSITORY}@${digest}" >> "${GITHUB_ENV}"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'image_digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
+          printf 'IMAGE_AT_DIGEST=%s@%s\n' "${IMAGE_REPOSITORY}" "${digest}" >> "${GITHUB_ENV}"
 
       - name: Generate exact-digest CycloneDX SBOM
         uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b

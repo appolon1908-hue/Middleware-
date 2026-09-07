@@ -12,7 +12,7 @@ from app.telnexa_provider_adapter import TelnexaProviderAdapterError, TelnexaSms
 from app.temporal_workflows import CommandExecutionRequest
 
 BASE_URL = "https://telnexa.internal.invalid"
-API_KEY = "synthetic-telnexa-api-key-0123456789ab"
+API_KEY = "tnx_" + "a" * 32  # Synthetic fixture; never a provider credential.
 TENANT = "tenant-1"
 ENV = {"TELNEXA_SMS_BASE_URL": BASE_URL, "TELNEXA_SMS_API_KEY": API_KEY}
 

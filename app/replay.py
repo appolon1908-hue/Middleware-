@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import secrets
 from typing import Protocol
@@ -90,12 +91,15 @@ class RedisReplayGuard:
         return token
 
     async def release(self, tenant_id: str, event_id: str, token: str) -> None:
-        await self.client.eval(
+        result = self.client.eval(
             self._RELEASE_SCRIPT,
             1,
             self._key(tenant_id, event_id),
             token,
         )
+        if not inspect.isawaitable(result):
+            raise TypeError("replay guard requires an asynchronous Redis client")
+        await result
 
     async def ready(self) -> bool:
         try:

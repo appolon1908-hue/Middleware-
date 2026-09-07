@@ -20,11 +20,9 @@ from .conftest import FakeTokenVerifier, make_event, signed_headers
 def test_all_contract_routes_are_registered(test_settings, runtime) -> None:
     app = create_app(settings=test_settings, runtime=runtime)
     registered = {
-        route.path
-        for route in app.routes
-        if getattr(route, "methods", None)
-        and "POST" in route.methods
-        and route.path.startswith("/api/v1/")
+        path for path, operations in app.openapi()["paths"].items()
+        if "post" in operations and path.startswith("/api/v1/")
+        and operations["post"]["operationId"].startswith("ingress_")
     }
     assert registered == {item.path for item in WEBHOOK_ROUTES}
 
@@ -338,7 +336,7 @@ def test_health_ready_version(test_settings, runtime) -> None:
         assert version["service"] == "middleware-api"
         assert version["environment"] == "test"
         assert version["runtime_profile_id"] == "local-unlocked"
-        assert version["schema_head"] == "0056_klyrow_delivery_events"
+        assert version["schema_head"] == "0057_platform_service_catalog"
         assert version["git_sha"] == version["source_sha"]
         assert version["schema_version"] == version["schema_head"]
         assert {"release_id", "image_digest", "build_timestamp", "configuration_checksum"} <= set(version)

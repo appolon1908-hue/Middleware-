@@ -144,11 +144,11 @@ class CallPrincipal(StrictModel):
     @classmethod
     def from_claims(cls, claims: Mapping[str, object]) -> CallPrincipal:
         # These values must come from a verified token, never X-Agent-* headers.
-        return cls(
-            tenant_id=claims.get("tenant_id"), subject=claims.get("sub"),
-            employee_id=claims.get("employee_id"), campaign_id=claims.get("campaign_id"),
-            business_unit=claims.get("business_unit"), extension=claims.get("extension"),
-        )
+        return cls.model_validate({
+            "tenant_id": claims.get("tenant_id"), "subject": claims.get("sub"),
+            "employee_id": claims.get("employee_id"), "campaign_id": claims.get("campaign_id"),
+            "business_unit": claims.get("business_unit"), "extension": claims.get("extension"),
+        })
 
 
 class OriginateRequest(StrictModel):

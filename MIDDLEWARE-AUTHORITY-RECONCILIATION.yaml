@@ -12,7 +12,7 @@ decision:
   static_sha_is_authority: false
   single_forward_image_repository: ghcr.io/appolon1908-hue/codestra-middleware
   current_release_authority: config/middleware-forward-release-authority.v1.json
-  required_schema_head: 0056_klyrow_delivery_events
+  required_schema_head: 0057_platform_service_catalog
   candidate_status: PENDING_EXACT_PROTECTED_MERGE_BUILD
   current_signed_candidate: null
   legacy_source_repository: Codestra-SRL/codestra-middleware
@@ -116,7 +116,7 @@ backup:
 next_required_evidence:
   - merge this correction through protected main
   - build and sign the exact protected merge SHA
-  - verify schema head 0056_klyrow_delivery_events in the release manifest
+  - verify schema head 0057_platform_service_catalog in the release manifest
   - record immutable image digest, provenance, SBOM, and vulnerability evidence
   - revalidate all Server A runtime identities
   - mirror or archive all rollback images

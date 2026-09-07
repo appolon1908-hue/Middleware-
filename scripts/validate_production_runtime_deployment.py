@@ -66,15 +66,18 @@ def validate_source(root: Path = ROOT) -> None:
     deployment = contract.get("deployment")
     safety = contract.get("safety")
     response = contract.get("response")
-    require(isinstance(deployment, dict), "deployment contract section missing")
-    require(isinstance(safety, dict), "safety contract section missing")
-    require(isinstance(response, dict), "response contract section missing")
+    if not isinstance(deployment, dict):
+        raise ValidationError("deployment contract section missing")
+    if not isinstance(safety, dict):
+        raise ValidationError("safety contract section missing")
+    if not isinstance(response, dict):
+        raise ValidationError("response contract section missing")
     require(deployment.get("command") == "/usr/local/sbin/codestra-middleware-deploy", "command authority drift")
     require(deployment.get("expected_host") == "65.109.65.169", "server authority drift")
     require(deployment.get("restricted_user") == "middleware-deploy", "restricted user drift")
     require(deployment.get("mode") == "READ_ONLY_CANARY", "deployment mode drift")
     require(deployment.get("source_ref") == "refs/heads/main", "source ref drift")
-    require(deployment.get("schema_head") == "0056_klyrow_delivery_events", "schema head drift")
+    require(deployment.get("schema_head") == "0057_platform_service_catalog", "schema head drift")
     for key in (
         "broad_compose_down_allowed",
         "business_writes_enabled",
@@ -191,7 +194,7 @@ def validate_source(root: Path = ROOT) -> None:
     ):
         require(item not in workflow, f"workflow contains unsafe SSH behavior: {item}")
     uses = re.findall(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)", workflow)
-    require(uses, "workflow must use pinned actions")
+    require(bool(uses), "workflow must use pinned actions")
     for action in uses:
         require(re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", action) is not None, f"action is not commit-pinned: {action}")
 
@@ -241,7 +244,7 @@ def validate_response(
         "RELEASE_ID": release_id,
         "VERSION_SOURCE_SHA": source_sha,
         "VERSION_IMAGE_DIGEST": image_reference.rsplit("@", 1)[1],
-        "VERSION_SCHEMA_HEAD": "0056_klyrow_delivery_events",
+        "VERSION_SCHEMA_HEAD": "0057_platform_service_catalog",
     }
     for key, expected in expected_dynamic.items():
         require(values.get(key) == expected, f"response dynamic value mismatch: {key}")
@@ -283,7 +286,8 @@ def validate_evidence(
         result_members = [item for item in members if PurePosixPath(item.name).name == "result.json"]
         require(len(result_members) == 1, "evidence result.json missing or duplicated")
         handle = archive.extractfile(result_members[0])
-        require(handle is not None, "evidence result.json unreadable")
+        if handle is None:
+            raise ValidationError("evidence result.json unreadable")
         value = json.load(handle)
     require(value.get("schema_version") == "1.0" and value.get("result") == "PASS", "evidence result is not PASS")
     require(value.get("source_sha") == source_sha, "evidence source SHA mismatch")

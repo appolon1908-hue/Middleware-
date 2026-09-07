@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTHORITY_PATH = (
@@ -22,7 +23,7 @@ validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
 
 
-def _authority() -> dict[str, object]:
+def _authority() -> dict[str, Any]:
     value = json.loads(AUTHORITY_PATH.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
@@ -40,7 +41,7 @@ def test_source_resolution_mode_is_mandatory_and_exact() -> None:
 def test_every_named_runtime_evidence_gate_is_mandatory() -> None:
     value = copy.deepcopy(_authority())
     value["runtimeAuthority"]["requiredEvidence"] = [
-        "schema head 0056_klyrow_delivery_events"
+        "schema head 0057_platform_service_catalog"
     ] * 7
 
     errors = validator.validate_forward_authority(value)

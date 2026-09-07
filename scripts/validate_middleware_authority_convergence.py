@@ -30,7 +30,7 @@ SOURCE_RESOLUTION = (
 REQUIRED_RUNTIME_EVIDENCE = (
     "signed release manifest bound to exact protected-main source",
     "immutable image digest and verified provenance",
-    "schema head 0056_klyrow_delivery_events",
+    "schema head 0057_platform_service_catalog",
     "effective source, digest, schema, profile, and capability read-back",
     "backup and isolated restore evidence",
     "rollback rehearsal and data-integrity evidence",
@@ -91,7 +91,7 @@ def validate_forward_authority(authority: dict[str, Any]) -> list[str]:
 # The base document validator resolves this symbol from its own module globals.
 # Replace it before delegating so both direct checks and full-document checks use
 # the strict current-authority contract.
-_BASE.validate_forward_authority = validate_forward_authority
+setattr(_BASE, "validate_forward_authority", validate_forward_authority)
 
 
 def validate_document(

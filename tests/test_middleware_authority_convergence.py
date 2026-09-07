@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "config" / "middleware-authority-convergence.v1.json"
@@ -21,13 +22,13 @@ validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
 
 
-def _document() -> dict[str, object]:
+def _document() -> dict[str, Any]:
     value = json.loads(CATALOG.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
 
 
-def _current_authority() -> dict[str, object]:
+def _current_authority() -> dict[str, Any]:
     value = json.loads(CURRENT_AUTHORITY.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
@@ -41,7 +42,7 @@ def test_reviewed_authority_convergence_record_is_fail_closed() -> None:
 def test_current_authority_requires_schema_0010_and_new_exact_main_build() -> None:
     value = _current_authority()
     artifacts = value["artifactAuthority"]
-    assert artifacts["requiredSchemaHead"] == "0056_klyrow_delivery_events"
+    assert artifacts["requiredSchemaHead"] == "0057_platform_service_catalog"
     assert (
         artifacts["candidateStatus"]
         == "PENDING_EXACT_PROTECTED_MERGE_BUILD"
@@ -121,7 +122,7 @@ def test_snapshot_must_match_historical_predecessor_evidence() -> None:
     value = copy.deepcopy(_document())
     value["forwardAuthority"]["image"]["currentSignedCandidate"][
         "schemaHead"
-    ] = "0056_klyrow_delivery_events"
+    ] = "0057_platform_service_catalog"
     errors = validator.validate_document(value, root=ROOT)
     assert any("snapshot predecessor" in error for error in errors)
 

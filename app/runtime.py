@@ -204,7 +204,7 @@ async def build_runtime(settings: Settings) -> Runtime:
             store=await PostgresCommunicationsStore.connect(
                 settings.database_url
             ),
-            commands=runtime.commands,
+            commands=commands,
             umbrella_controls=settings.umbrella_controls,
         )
     except Exception:

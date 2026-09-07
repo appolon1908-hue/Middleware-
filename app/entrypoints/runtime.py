@@ -16,6 +16,10 @@ from datetime import UTC, datetime
 from typing import TypedDict
 from uuid import uuid4
 
+import httpx
+import jwt
+from redis.asyncio import Redis
+
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -117,6 +121,46 @@ def validate_runtime(service: str, queue: str | None = None) -> None:
         settings.quarantine_reviewer_secret
 
 
+async def integration_dependency_states() -> dict[str, str]:
+    """Probe the manifest's required dependencies without disclosing configuration."""
+    async def database() -> str:
+        try:
+            async with asyncio.timeout(settings.database_pool_timeout_seconds):
+                async with engine.connect() as connection:
+                    await connection.execute(text("SELECT 1"))
+            return "online"
+        except Exception:
+            return "unavailable"
+
+    async def redis() -> str:
+        if not settings.redis_url:
+            return "not_configured"
+        try:
+            async with asyncio.timeout(settings.database_pool_timeout_seconds):
+                async with Redis.from_url(settings.redis_url, socket_timeout=2, socket_connect_timeout=2) as client:
+                    return "online" if await client.ping() else "unavailable"
+        except Exception:
+            return "unavailable"
+
+    async def keycloak() -> str:
+        if not all((settings.keycloak_issuer, settings.keycloak_audience,
+                    settings.keycloak_jwks_url, any(item.strip() for item in settings.keycloak_authorized_parties.split(",")))):
+            return "not_configured"
+        try:
+            async with asyncio.timeout(settings.database_pool_timeout_seconds):
+                async with httpx.AsyncClient(timeout=2, follow_redirects=False, trust_env=False) as client:
+                    response = await client.get(settings.keycloak_jwks_url)
+                    response.raise_for_status()
+                    keys = jwt.PyJWKSet.from_dict(response.json()).keys
+            usable = any(key.key_type == "RSA" and key.algorithm_name == "RS256" and key.public_key_use in (None, "sig") for key in keys)
+            return "online" if usable else "unavailable"
+        except Exception:
+            return "unavailable"
+
+    states = await asyncio.gather(database(), redis(), keycloak())
+    return dict(zip(("postgres", "redis", "keycloak"), states, strict=True))
+
+
 def add_api_runtime(app: FastAPI, service: str) -> None:
     async def database_ready() -> bool:
         try:
@@ -125,7 +169,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
                     await connection.execute(text("SELECT 1"))
             return True
         except Exception:
-            logger.exception("readiness_database_unavailable")
+            logger.warning("readiness_database_unavailable")
             return False
 
     @app.middleware("http")
@@ -235,14 +279,25 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
         )
         return response
 
+    @app.get("/health/live")
     @app.get("/health")
     @app.get("/healthz")
     async def health() -> dict[str, str]:
         return {"status": "ok", "service": service}
 
+    @app.get("/health/ready", response_model=None)
     @app.get("/ready", response_model=None)
     @app.get("/readyz", response_model=None)
     async def readiness() -> dict[str, str] | JSONResponse:
+        if service == "middleware-integration-api":
+            states = await integration_dependency_states()
+            ready = all(value == "online" for value in states.values())
+            return JSONResponse({
+                "status": "ready" if ready else "not-ready", "service": service,
+                "authorization": states["keycloak"], "database": states["postgres"],
+                "redis": states["redis"], "dependencies": states,
+                "delivery": "disabled" if not settings.enable_external_delivery else "enabled",
+            }, status_code=200 if ready else 503)
         if settings.health_require_database and not await database_ready():
             return JSONResponse(
                 {
@@ -304,11 +359,14 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
         }
 
     @app.get("/dependencies")
+    @app.get("/health/dependencies")
     async def dependencies() -> dict[str, object]:
+        states = await integration_dependency_states() if service == "middleware-integration-api" else {}
         return {
             "service": service,
-            "database": "configured",
-            "redis": "configured",
+            "database": states.get("postgres", "not_probed"),
+            "redis": states.get("redis", "not_probed"),
+            "keycloak": states.get("keycloak", "not_probed"),
             "live_writes_enabled": settings.live_writes_enabled,
             "odoo_delivery_enabled": settings.odoo_delivery_enabled,
             "n8n_delivery_enabled": settings.n8n_delivery_enabled,
@@ -403,11 +461,13 @@ def worker_app(service: str, queue: str, cycle: Cycle) -> FastAPI:
 
     @app.get("/health")
     @app.get("/healthz")
+    @app.get("/health/live")
     async def health() -> dict[str, object]:
         return {"status": "ok", "service": service, "stopping": state["stopping"]}
 
     @app.get("/ready")
     @app.get("/readyz")
+    @app.get("/health/ready")
     async def ready() -> dict[str, object]:
         return {
             "status": "ready" if state["ready"] else "not-ready",
@@ -418,6 +478,7 @@ def worker_app(service: str, queue: str, cycle: Cycle) -> FastAPI:
         }
 
     @app.get("/dependencies")
+    @app.get("/health/dependencies")
     async def dependencies() -> dict[str, object]:
         return {
             "database": "configured",

@@ -16,7 +16,7 @@ enable a business/provider effect.
 - Root controller: `/usr/local/sbin/codestra-middleware-deploy`
 - Compose project: `codestra-middleware-production-canary`
 - Runtime service: `middleware-api-canary`
-- Migration head: `0056_klyrow_delivery_events`
+- Migration head: `0057_platform_service_catalog`
 
 The workflow rejects a non-owner actor, another issue, a stale default-branch
 SHA, an unsigned image, a mutable image reference, a failed release or
@@ -121,7 +121,7 @@ both independently prove:
 
 - exact source SHA, image digest, release run, and release ID;
 - backup and isolated restore `PASS`;
-- migration head `0056_klyrow_delivery_events`;
+- migration head `0057_platform_service_catalog`;
 - container `running` and `healthy`;
 - health, readiness, version, and capabilities `PASS`;
 - every external-effect capability false;

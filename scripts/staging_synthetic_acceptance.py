@@ -116,7 +116,7 @@ def validate_runtime_safety(
         raise AcceptanceError("deployed source SHA does not match the approved release")
     if release["image_digest"] != expected_image_digest:
         raise AcceptanceError("deployed image digest does not match the approved release")
-    if release["schema_head"] != "0056_klyrow_delivery_events":
+    if release["schema_head"] != "0057_platform_service_catalog":
         raise AcceptanceError("deployed migration head is not current")
     if persistence != {"in_memory": False}:
         raise AcceptanceError("staging must use durable persistence")
@@ -164,7 +164,7 @@ def build_signed_event(
     event_id = f"synthetic-{generated.hex}"
     timestamp = str(int(time.time()) if now is None else now)
     occurred_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(timestamp)))
-    event = {
+    event: dict[str, Any] = {
         "event_id": event_id,
         "event_type": EVENT_TYPE,
         "event_version": "1.0",
@@ -197,7 +197,7 @@ def build_signed_event(
         )
     ).encode("utf-8")
     signature = hmac.new(secret, canonical, hashlib.sha256).hexdigest()
-    headers = {
+    headers: dict[str, str] = {
         "Content-Type": "application/json",
         "Idempotency-Key": event_id,
         "X-Codestra-Event-Id": event_id,

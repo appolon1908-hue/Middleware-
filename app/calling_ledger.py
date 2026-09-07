@@ -75,6 +75,8 @@ class CallingLedger:
             raise CommandNotFound("calling request was not found")
 
     async def get(self, principal: CallPrincipal, operation_id: UUID) -> tuple[CommandEnvelope, CommandOperation]:
+        document: CommandEnvelope | None
+        original: CommandEnvelope | None
         if isinstance(self.store, PostgresCommandStore):
             async with self.store.pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -216,9 +218,9 @@ class CallingLedger:
                 )
                 for row in candidates:
                     evidence, digest = verify_readback_evidence_digest(row["calling_evidence"], row["calling_digest"])
-                    prior = self.store._operation(row, readback_evidence=evidence,
-                                                  readback_evidence_sha256=digest)
-                    if not _terminal(prior):
+                    prior_operation = self.store._operation(row, readback_evidence=evidence,
+                                                            readback_evidence_sha256=digest)
+                    if not _terminal(prior_operation):
                         raise CommandConflict("agent already has an active or unknown call")
                 return await self.store.submit_on_connection(conn, command, authenticated_client_id=CLIENT_ID)
 

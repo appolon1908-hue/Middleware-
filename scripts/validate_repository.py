@@ -9,6 +9,8 @@ container scan, or application integration tests.
 
 from __future__ import annotations
 
+import ast
+import json
 import re
 import subprocess
 import sys
@@ -23,6 +25,7 @@ REQUIRED_FILES = (
     Path(".dockerignore"),
     Path("config/preproduction-safety.env.example"),
     Path("config/provider-operation-policy.json"),
+    Path("config/middleware-forward-release-authority.v1.json"),
 )
 
 FORBIDDEN_TOP_LEVEL_DIRECTORIES = {
@@ -273,6 +276,68 @@ def validate_workflow_pinning(errors: list[str]) -> None:
                 )
 
 
+def _migration_assignment(path: Path, name: str) -> str | tuple[str, ...] | None:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if not any(isinstance(target, ast.Name) and target.id == name for target in targets):
+            continue
+        if node.value is None:
+            raise ValueError(f"{name} assignment has no value")
+        value = ast.literal_eval(node.value)
+        if value is None or isinstance(value, str):
+            return value
+        if isinstance(value, (tuple, list)) and all(isinstance(item, str) for item in value):
+            return tuple(value)
+        raise ValueError(f"{name} must be a string, string sequence, or None")
+    raise ValueError(f"missing {name} assignment")
+
+
+def validate_production_migration_head(errors: list[str]) -> None:
+    authority_path = ROOT / "config/middleware-forward-release-authority.v1.json"
+    versions_dir = ROOT / "migrations/versions"
+    if not authority_path.is_file() or not versions_dir.is_dir():
+        return
+
+    try:
+        authority = json.loads(authority_path.read_text(encoding="utf-8"))
+        expected = authority["artifactAuthority"]["requiredSchemaHead"]
+        if not isinstance(expected, str) or not expected:
+            raise ValueError("requiredSchemaHead must be a non-empty string")
+
+        revisions: dict[str, Path] = {}
+        parents: set[str] = set()
+        for path in sorted(versions_dir.glob("*.py")):
+            revision = _migration_assignment(path, "revision")
+            down_revision = _migration_assignment(path, "down_revision")
+            if not isinstance(revision, str) or not revision:
+                raise ValueError(f"{path.name}: revision must be a non-empty string")
+            if revision in revisions:
+                raise ValueError(
+                    f"duplicate revision {revision!r} in {revisions[revision].name} and {path.name}"
+                )
+            revisions[revision] = path
+            if isinstance(down_revision, str):
+                parents.add(down_revision)
+            elif isinstance(down_revision, tuple):
+                parents.update(down_revision)
+
+        missing = sorted(parents - revisions.keys())
+        if missing:
+            raise ValueError(f"missing parent revisions: {', '.join(missing)}")
+        heads = sorted(revisions.keys() - parents)
+        if heads != [expected]:
+            errors.append(
+                "production migration head drift: "
+                f"authority requires {expected!r}, repository heads are {heads!r}; "
+                "update the platform tuple through separate protected review before adding a head"
+            )
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, ValueError, SyntaxError) as exc:
+        errors.append(f"invalid production migration authority: {exc}")
+
+
 def main() -> int:
     errors: list[str] = []
     try:
@@ -286,6 +351,7 @@ def main() -> int:
     validate_file_contents(files, errors)
     validate_safety_baseline(errors)
     validate_workflow_pinning(errors)
+    validate_production_migration_head(errors)
 
     if errors:
         print("Middleware repository validation failed:", file=sys.stderr)

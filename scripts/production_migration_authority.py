@@ -1,4 +1,4 @@
-"""Validate the canonical production Alembic history without importing migrations.
+"""Validate canonical production Alembic and SQL history without executing it.
 
 The connector service's 20260828_* lineage is a separate database authority.
 Changing an existing revision's parent or bytes requires an explicit change to
@@ -14,6 +14,8 @@ from pathlib import Path
 
 AUTHORITY_PATH = "config/middleware-forward-release-authority.v1.json"
 HISTORY_KEY = "requiredMigrationHistorySha256"
+SQL_BUNDLES = (("core", "migrations"), ("automation-v2", "migrations/automation"))
+SQL_PATTERN = "[0-9][0-9][0-9][0-9]_*.sql"
 
 
 class AuthorityError(ValueError):
@@ -93,6 +95,22 @@ def migration_history(root: Path) -> tuple[dict[str, tuple[str, ...]], str]:
 
     for revision in graph:
         visit(revision)
+    # Lock exactly the numbered SQL sources consumed by migrate_runtime.py.
+    # Paths bind names and bundle membership; raw-byte hashes detect rewritten
+    # DDL even when version receipts and the terminal Alembic head are unchanged.
+    # Keep order deterministic. Do not execute SQL or update the pin at runtime.
+    for bundle, relative in SQL_BUNDLES:
+        directory = root / relative
+        if directory.is_symlink():
+            raise AuthorityError(f"{relative}: SQL bundle directory must not be a symlink")
+        for path in sorted(directory.glob(SQL_PATTERN)):
+            if path.is_symlink() or not path.is_file():
+                raise AuthorityError(f"{path.name}: SQL migration must be a regular file")
+            history.append({
+                "authority": bundle,
+                "path": path.relative_to(root).as_posix(),
+                "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            })
     payload = json.dumps(history, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return graph, "sha256:" + hashlib.sha256(payload).hexdigest()
 

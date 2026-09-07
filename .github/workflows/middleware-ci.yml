@@ -149,6 +149,16 @@ jobs:
             "codestra-middleware-ci:$SOURCE_SHA" \
             -c "from app.commands import CommandPolicyRegistry; from app.main import create_app; assert CommandPolicyRegistry.load().policies; assert create_app().title == 'Codestra Middleware API'; print('RUNTIME_IMAGE_SMOKE=PASS')"
 
+      - name: Prove the image contains its authorized migration bundle
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          docker run --rm --network none \
+            --entrypoint python \
+            "codestra-middleware-ci:$SOURCE_SHA" \
+            -c "from pathlib import Path; from scripts.production_migration_authority import validate_authority; from scripts.migrate_runtime import migration_sets; validate_authority(Path('/app')); assert migration_sets(); print('RUNTIME_MIGRATION_BUNDLE=PASS')"
+
   docker-test-build:
     name: docker-test-build
     runs-on: ubuntu-24.04

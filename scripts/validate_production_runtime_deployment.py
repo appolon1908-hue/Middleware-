@@ -136,6 +136,12 @@ def validate_source(root: Path = ROOT) -> None:
         "ROLLBACK_STATUS=PASS",
         "EXTERNAL_EFFECTS_ENABLED=NONE",
         "CALLS_PLACED=0",
+        "RUNTIME_SCHEMA_VERIFIED=PASS",
+        "FROM public.alembic_version",
+        "actual_alembic_head_mismatch",
+        "FROM public.middleware_automation_schema_migrations",
+        "automation_schema_head_mismatch",
+        "platform_schema_incomplete",
         "GATEWAY_EXPOSURE=NONE",
     ):
         require(item in controller, f"controller requirement missing: {item}")

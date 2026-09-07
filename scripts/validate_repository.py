@@ -296,46 +296,12 @@ def _migration_assignment(path: Path, name: str) -> str | tuple[str, ...] | None
 
 
 def validate_production_migration_head(errors: list[str]) -> None:
-    authority_path = ROOT / "config/middleware-forward-release-authority.v1.json"
-    versions_dir = ROOT / "migrations/versions"
-    if not authority_path.is_file() or not versions_dir.is_dir():
-        return
-
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from scripts.production_migration_authority import validate_authority
     try:
-        authority = json.loads(authority_path.read_text(encoding="utf-8"))
-        expected = authority["artifactAuthority"]["requiredSchemaHead"]
-        if not isinstance(expected, str) or not expected:
-            raise ValueError("requiredSchemaHead must be a non-empty string")
-
-        revisions: dict[str, Path] = {}
-        parents: set[str] = set()
-        for path in sorted(versions_dir.glob("*.py")):
-            revision = _migration_assignment(path, "revision")
-            down_revision = _migration_assignment(path, "down_revision")
-            if not isinstance(revision, str) or not revision:
-                raise ValueError(f"{path.name}: revision must be a non-empty string")
-            if revision in revisions:
-                raise ValueError(
-                    f"duplicate revision {revision!r} in {revisions[revision].name} and {path.name}"
-                )
-            revisions[revision] = path
-            if isinstance(down_revision, str):
-                parents.add(down_revision)
-            elif isinstance(down_revision, tuple):
-                parents.update(down_revision)
-
-        missing = sorted(parents - revisions.keys())
-        if missing:
-            raise ValueError(f"missing parent revisions: {', '.join(missing)}")
-        heads = sorted(revisions.keys() - parents)
-        if heads != [expected]:
-            errors.append(
-                "production migration head drift: "
-                f"authority requires {expected!r}, repository heads are {heads!r}; "
-                "update the platform tuple through separate protected review before adding a head"
-            )
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, ValueError, SyntaxError) as exc:
-        errors.append(f"invalid production migration authority: {exc}")
+        validate_authority(ROOT)
+    except (OSError, UnicodeError, KeyError, TypeError, ValueError, SyntaxError) as exc:
+        errors.append(str(exc))
 
 
 def main() -> int:

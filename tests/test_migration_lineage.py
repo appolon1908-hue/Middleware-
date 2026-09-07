@@ -99,7 +99,7 @@ async def test_database_with_unknown_revision_is_rejected() -> None:
 def test_runtime_migration_is_self_contained_and_checks_before_sql_execution() -> None:
     source = (ROOT / "scripts" / "migrate_runtime.py").read_text(encoding="utf-8")
     assert "from migration_lineage" not in source
-    assert "config" in source and "migration-lineage.v1.json" in source
+    assert "from scripts.production_migration_authority import validate_authority" in source
     lineage_check = source.index("await verify_database_lineage")
     migration_loop = source.index("for migration in migrations")
     execute_migration = source.index("await conn.execute")

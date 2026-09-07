@@ -1,136 +1,174 @@
 #!/usr/bin/env python3
+"""Apply and read back all canonical runtime migration authorities.
+
+Execution is a database mutation and requires the existing protected deployment
+and backup gates. --verify-only performs read-back without upgrades or SQL DDL.
+The connector-only config/migration-lineage.v1.json is not production authority.
+"""
 from __future__ import annotations
 
+import argparse
 import asyncio
-import json
 import os
+import sys
 from pathlib import Path
-
-import asyncpg
-
+from urllib.parse import parse_qsl, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-LINEAGE_MANIFEST = ROOT / "config" / "migration-lineage.v1.json"
+sys.path.insert(0, str(ROOT))
+from scripts.production_migration_authority import validate_authority
+
 ALEMBIC_VERSION_TABLE = "public.alembic_version"
+MIGRATION_LOCK = 742603070118
+PLATFORM_TABLES = (
+    "platform_services", "platform_service_environments",
+    "platform_provisioning_requests", "platform_provisioning_audit",
+)
+RECEIPT_TABLES = {
+    "core": "public.middleware_schema_migrations",
+    "automation-v2": "public.middleware_automation_schema_migrations",
+}
 
 
-def authorized_revisions() -> set[str]:
-    try:
-        value = json.loads(LINEAGE_MANIFEST.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"RUNTIME_MIGRATION_LINEAGE=FAIL cannot load lineage manifest: {exc}") from exc
-    if not isinstance(value, dict):
-        raise SystemExit("RUNTIME_MIGRATION_LINEAGE=FAIL lineage manifest root must be an object")
-    if value.get("schema_version") != "1.0":
-        raise SystemExit("RUNTIME_MIGRATION_LINEAGE=FAIL unsupported lineage manifest schema")
-    if value.get("authority") != "reviewed-git-source":
-        raise SystemExit("RUNTIME_MIGRATION_LINEAGE=FAIL invalid lineage authority")
-    if value.get("alembic_version_table") != ALEMBIC_VERSION_TABLE:
-        raise SystemExit("RUNTIME_MIGRATION_LINEAGE=FAIL Alembic version-table authority drift")
-    rows = value.get("revisions")
-    if not isinstance(rows, list) or not rows:
-        raise SystemExit("RUNTIME_MIGRATION_LINEAGE=FAIL lineage manifest has no revisions")
-
-    graph: dict[str, tuple[str, ...]] = {}
-    for index, row in enumerate(rows):
-        if not isinstance(row, dict) or set(row) != {"revision", "down_revisions"}:
-            raise SystemExit(
-                f"RUNTIME_MIGRATION_LINEAGE=FAIL invalid lineage revision shape at index {index}"
-            )
-        revision = row["revision"]
-        parents = row["down_revisions"]
-        if not isinstance(revision, str) or not revision:
-            raise SystemExit(
-                f"RUNTIME_MIGRATION_LINEAGE=FAIL invalid revision id at index {index}"
-            )
-        if revision in graph:
-            raise SystemExit(
-                f"RUNTIME_MIGRATION_LINEAGE=FAIL duplicate authorized revision {revision}"
-            )
-        if not isinstance(parents, list) or not all(isinstance(parent, str) and parent for parent in parents):
-            raise SystemExit(
-                f"RUNTIME_MIGRATION_LINEAGE=FAIL invalid parent list for revision {revision}"
-            )
-        graph[revision] = tuple(parents)
-
-    missing = sorted({parent for parents in graph.values() for parent in parents if parent not in graph})
-    if missing:
-        raise SystemExit(
-            "RUNTIME_MIGRATION_LINEAGE=FAIL manifest references missing parent revision(s): "
-            + ",".join(missing)
-        )
-
-    visiting: set[str] = set()
-    visited: set[str] = set()
-
-    def visit(revision: str) -> None:
-        if revision in visited:
-            return
-        if revision in visiting:
-            raise SystemExit(
-                f"RUNTIME_MIGRATION_LINEAGE=FAIL cycle detected at revision {revision}"
-            )
-        visiting.add(revision)
-        for parent in graph[revision]:
-            visit(parent)
-        visiting.remove(revision)
-        visited.add(revision)
-
-    for revision in graph:
-        visit(revision)
-    return set(graph)
+class MigrationError(RuntimeError):
+    """Safe, credential-free migration failure."""
 
 
-async def verify_database_lineage(conn: asyncpg.Connection) -> tuple[str, ...]:
-    allowed = authorized_revisions()
-    table = await conn.fetchval("SELECT to_regclass('public.alembic_version')::text")
-    if table is None:
-        print("RUNTIME_MIGRATION_LINEAGE=PASS ALEMBIC_VERSION_TABLE=ABSENT")
-        return ()
-
-    rows = await conn.fetch(f"SELECT version_num FROM {ALEMBIC_VERSION_TABLE} ORDER BY version_num")
-    observed = tuple(sorted({str(row["version_num"]).strip() for row in rows if str(row["version_num"]).strip()}))
-    if not observed:
-        raise SystemExit("RUNTIME_MIGRATION_LINEAGE=FAIL Alembic version table contains no revision")
-    unknown = tuple(revision for revision in observed if revision not in allowed)
-    if unknown:
-        raise SystemExit(
-            "RUNTIME_MIGRATION_LINEAGE=FAIL database reports unknown Alembic revision(s): "
-            + ",".join(unknown)
-            + "; restore exact historical migration source before any stamp, upgrade, or runtime migration"
-        )
-    print("RUNTIME_MIGRATION_LINEAGE=PASS DATABASE_REVISIONS=" + ",".join(observed))
-    return observed
+def database_urls(value: str) -> tuple[str, str]:
+    """Keep exactly one explicit target; do not use app settings/secret fallbacks."""
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"postgres", "postgresql", "postgresql+asyncpg"}:
+        raise MigrationError("DATABASE_URL must use PostgreSQL")
+    if not parsed.hostname or not parsed.path.strip("/") or parsed.fragment:
+        raise MigrationError("DATABASE_URL requires an explicit host and database")
+    overrides = {"host", "port", "database", "dbname", "user", "password", "dsn", "server_settings"}
+    if any(key.lower() in overrides for key, _ in parse_qsl(parsed.query)):
+        raise MigrationError("DATABASE_URL query must not override its target or schema")
+    suffix = value.split(":", 1)[1]
+    return "postgresql:" + suffix, "postgresql+asyncpg:" + suffix
 
 
 def migration_sets() -> tuple[tuple[str, tuple[Path, ...]], ...]:
     core = tuple(sorted((ROOT / "migrations").glob("[0-9][0-9][0-9][0-9]_*.sql")))
-    automation = tuple(
-        sorted((ROOT / "migrations" / "automation").glob("[0-9][0-9][0-9][0-9]_*.sql"))
-    )
-    if not core:
-        raise SystemExit("no runtime migrations found")
-    if not automation:
-        raise SystemExit("no automation-v2 migrations found")
+    automation = tuple(sorted((ROOT / "migrations/automation").glob("[0-9][0-9][0-9][0-9]_*.sql")))
+    for authority, paths in (("core", core), ("automation-v2", automation)):
+        versions = tuple(int(path.name[:4]) for path in paths)
+        if not versions or versions != tuple(range(1, len(versions) + 1)):
+            raise MigrationError(f"{authority} migration bundle is missing or non-contiguous")
     return (("core", core), ("automation-v2", automation))
 
 
-async def main() -> None:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        raise SystemExit("DATABASE_URL is required")
-    conn = await asyncpg.connect(url, command_timeout=30)
+async def verify_database_lineage(conn, graph: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    table = await conn.fetchval("SELECT to_regclass('public.alembic_version')::text")
+    if table is None:
+        return ()
+    rows = await conn.fetch(f"SELECT version_num FROM {ALEMBIC_VERSION_TABLE} ORDER BY version_num")
+    observed = tuple(row["version_num"] for row in rows)
+    if not observed or any(not isinstance(item, str) or item not in graph for item in observed):
+        raise MigrationError("database Alembic lineage is empty or unknown; no stamp or upgrade allowed")
+    if len(set(observed)) != len(observed):
+        raise MigrationError("database Alembic lineage contains duplicate revisions")
+    # Multiple independent branch heads are legitimate, but a head plus its
+    # own ancestor is not a valid Alembic version-table state.
+    def ancestors(revision: str) -> set[str]:
+        result: set[str] = set()
+        pending = list(graph[revision])
+        while pending:
+            parent = pending.pop()
+            if parent not in result:
+                result.add(parent)
+                pending.extend(graph[parent])
+        return result
+    if any(ancestors(revision).intersection(observed) for revision in observed):
+        raise MigrationError("database Alembic lineage contains redundant ancestor revisions")
+    return observed
+
+
+async def upgrade_alembic(url: str, expected: str) -> None:
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    def upgrade(connection) -> None:
+        config = Config()
+        config.set_main_option("script_location", str(ROOT / "migrations"))
+        config.attributes["connection"] = connection
+        command.upgrade(config, expected)
+
+    engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": "public"}},
+    )
     try:
-        await verify_database_lineage(conn)
-        for authority, migrations in migration_sets():
+        async with engine.connect() as connection:
+            await connection.run_sync(upgrade)
+    finally:
+        await engine.dispose()
+
+
+async def verify_complete_schema(conn, expected: str, graph, bundles) -> None:
+    observed = await verify_database_lineage(conn, graph)
+    if observed != (expected,):
+        raise MigrationError("actual Alembic head does not match the accepted release")
+    for authority, paths in bundles:
+        table = RECEIPT_TABLES[authority]
+        if await conn.fetchval("SELECT to_regclass($1)::text", table) is None:
+            raise MigrationError(f"{authority} migration receipt table is missing")
+        rows = await conn.fetch(f"SELECT version FROM {table} ORDER BY version")
+        actual = tuple(row["version"] for row in rows)
+        required = tuple(int(path.name[:4]) for path in paths)
+        if actual != required:
+            raise MigrationError(f"{authority} migration receipts do not match packaged SQL")
+    for table in PLATFORM_TABLES:
+        if await conn.fetchval("SELECT to_regclass($1)::text", "public." + table) is None:
+            raise MigrationError("required platform service catalog table is missing")
+
+
+async def run_migrations(conn, sqlalchemy_url: str, expected: str, graph, bundles, *, verify_only: bool) -> None:
+    # A non-blocking session lock prevents concurrent instances of this runner
+    # from applying the same DDL. It is released by closing the connection.
+    if not await conn.fetchval("SELECT pg_try_advisory_lock($1)", MIGRATION_LOCK):
+        raise MigrationError("another runtime migration or verification is in progress")
+    await verify_database_lineage(conn, graph)
+    if not verify_only:
+        await upgrade_alembic(sqlalchemy_url, expected)
+        for authority, migrations in bundles:
             for migration in migrations:
                 await conn.execute(migration.read_text(encoding="utf-8"))
                 print(f"RUNTIME_MIGRATION_APPLIED={authority}/{migration.name}")
+    await verify_complete_schema(conn, expected, graph, bundles)
+    print("RUNTIME_ALEMBIC_HEAD=" + expected)
+    print("AUTOMATION_V2_SCHEMA_MIGRATION=PASS")
+    print("RUNTIME_SCHEMA_VERIFIED=PASS")
+    if not verify_only:
+        print("RUNTIME_MIGRATION=PASS")
+
+
+async def main(*, verify_only: bool = False) -> None:
+    expected, graph, history_digest = validate_authority(ROOT)
+    if os.environ.get("SCHEMA_HEAD", expected) != expected:
+        raise MigrationError("SCHEMA_HEAD differs from the protected release authority")
+    bundles = migration_sets()  # Detect missing image assets before connecting.
+    native_url, sqlalchemy_url = database_urls(os.environ.get("DATABASE_URL", ""))
+    import asyncpg
+    conn = await asyncpg.connect(
+        native_url, command_timeout=30, server_settings={"search_path": "public"},
+    )
+    try:
+        await run_migrations(conn, sqlalchemy_url, expected, graph, bundles, verify_only=verify_only)
     finally:
         await conn.close()
-    print("AUTOMATION_V2_SCHEMA_MIGRATION=PASS")
-    print("RUNTIME_MIGRATION=PASS")
+    print("RUNTIME_MIGRATION_HISTORY=" + history_digest)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--verify-only", action="store_true")
+    args = parser.parse_args()
+    try:
+        asyncio.run(main(verify_only=args.verify_only))
+    except Exception as exc:
+        # Driver and SQLAlchemy exceptions may include DSNs, SQL or credentials.
+        # Keep raw exceptions out of protected execution logs.
+        print("RUNTIME_MIGRATION=FAIL ERROR_TYPE=" + type(exc).__name__, file=sys.stderr)
+        raise SystemExit(1) from None

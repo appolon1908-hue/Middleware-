@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTHORITY_PATH = (
@@ -22,7 +23,7 @@ validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
 
 
-def _authority() -> dict[str, object]:
+def _authority() -> dict[str, Any]:
     value = json.loads(AUTHORITY_PATH.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value

@@ -8,11 +8,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .commands import (
     API_OPERATION_STATES,
-    CommandOperation,
     OperationAttempt,
     OperationEvent,
     OperationMutationRequest,
@@ -26,8 +25,30 @@ OperationApiState = Literal["RECEIVED", "QUEUED", "SUBMITTED", "ACCEPTED", "UNKN
 _PERSISTED_BY_API_STATE = {value: key for key, value in API_OPERATION_STATES.items()}
 
 
-class OperationResponse(CommandOperation):
+class OperationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: UUID
+    tenant_id: str
+    command_type: str
+    command_version: str
+    target: str
+    requested_by: str
+    correlation_id: str
+    idempotency_key: str
+    capability: str
     state: OperationApiState
+    provider_operation_id: str | None = None
+    readback_evidence: dict[str, Any] | None = None
+    readback_evidence_sha256: str | None = None
+    last_error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    resource_version: int = 1
+    cancelled_at: datetime | None = None
+    cancellation_reason: str | None = None
+    reconciliation_requested_at: datetime | None = None
+    reconciliation_reason: str | None = None
     duplicate: bool
 
 
@@ -67,7 +88,8 @@ def _encode_cursor(kind: str, values: list[Any]) -> str:
 
 
 def _decode_cursor(value: str | None, kind: str) -> list[Any] | None:
-    if value is None: return None
+    if value is None:
+        return None
     try:
         raw = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
         data = json.loads(raw)
@@ -80,9 +102,11 @@ def _decode_cursor(value: str | None, kind: str) -> list[Any] | None:
 
 async def _context(request: Request):
     active = request.app.state.runtime
-    if active.commands is None: raise StorageError("command ledger is unavailable")
+    if active.commands is None:
+        raise StorageError("command ledger is unavailable")
     tenant_id = request.headers.get("X-Tenant-ID", "")
-    if not tenant_id: raise RequestValidationError("X-Tenant-ID is required")
+    if not tenant_id:
+        raise RequestValidationError("X-Tenant-ID is required")
     authorization = request.headers.get("Authorization", "")
     caller = caller_for_authorization(authorization)
     claims = await active.tokens.verify(authorization, expected_client_id=caller.client_id, required_scope=caller.status_scope)
@@ -92,7 +116,8 @@ async def _context(request: Request):
 
 async def _mutation_context(request: Request):
     active = request.app.state.runtime
-    if active.commands is None: raise StorageError("command ledger is unavailable")
+    if active.commands is None:
+        raise StorageError("command ledger is unavailable")
     tenant_id = request.headers.get("X-Tenant-ID", "")
     correlation_id = request.headers.get("X-Correlation-ID", "")
     idempotency_key = request.headers.get("Idempotency-Key", "")
@@ -103,7 +128,8 @@ async def _mutation_context(request: Request):
     claims = await active.tokens.verify(authorization, expected_client_id=caller.client_id, required_scope=caller.command_scope)
     authorize_tenant(claims, tenant_id)
     actor_id = claims.get("sub")
-    if not isinstance(actor_id, str) or not actor_id: raise RequestValidationError("token subject is required")
+    if not isinstance(actor_id, str) or not actor_id:
+        raise RequestValidationError("token subject is required")
     return active.commands, tenant_id, actor_id, idempotency_key
 
 
@@ -111,8 +137,12 @@ async def _mutation_context(request: Request):
 async def list_operations(request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None, state: OperationApiState | None = None, command_type: str | None = Query(None, min_length=1, max_length=180)) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "operations")
-    try: position = (datetime.fromisoformat(decoded[0]), UUID(decoded[1])) if decoded else None
-    except (ValueError, TypeError) as exc: raise RequestValidationError("cursor is malformed") from exc
+    try:
+        position = (
+            (datetime.fromisoformat(decoded[0]), UUID(decoded[1])) if decoded else None
+        )
+    except (ValueError, TypeError) as exc:
+        raise RequestValidationError("cursor is malformed") from exc
     rows = await service.list_operations(tenant_id, limit=limit + 1, position=position, state=_PERSISTED_BY_API_STATE[state] if state else None, command_type=command_type)
     more = len(rows) > limit
     items = rows[:limit]
@@ -131,8 +161,12 @@ async def get_operation(command_id: UUID, request: Request) -> JSONResponse:
 async def list_events(command_id: UUID, request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "events")
-    try: position = (datetime.fromisoformat(decoded[0]), int(decoded[1])) if decoded else None
-    except (ValueError, TypeError) as exc: raise RequestValidationError("cursor is malformed") from exc
+    try:
+        position = (
+            (datetime.fromisoformat(decoded[0]), int(decoded[1])) if decoded else None
+        )
+    except (ValueError, TypeError) as exc:
+        raise RequestValidationError("cursor is malformed") from exc
     rows = await service.list_events(tenant_id, command_id, limit=limit + 1, position=position)
     items, more = rows[:limit], len(rows) > limit
     next_cursor = _encode_cursor("events", [items[-1].created_at.isoformat(), items[-1].event_id]) if more else None
@@ -149,8 +183,10 @@ async def list_events(command_id: UUID, request: Request, limit: int = Query(50,
 async def list_attempts(command_id: UUID, request: Request, limit: int = Query(50, ge=1, le=100), cursor: str | None = None) -> JSONResponse:
     service, tenant_id = await _context(request)
     decoded = _decode_cursor(cursor, "attempts")
-    try: position = (int(decoded[0]), int(decoded[1])) if decoded else None
-    except (ValueError, TypeError) as exc: raise RequestValidationError("cursor is malformed") from exc
+    try:
+        position = (int(decoded[0]), int(decoded[1])) if decoded else None
+    except (ValueError, TypeError) as exc:
+        raise RequestValidationError("cursor is malformed") from exc
     rows = await service.list_attempts(tenant_id, command_id, limit=limit + 1, position=position)
     items, more = rows[:limit], len(rows) > limit
     next_cursor = _encode_cursor("attempts", [items[-1].attempt_number, items[-1].attempt_id]) if more else None

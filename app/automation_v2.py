@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Mapping, Protocol
-from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
+from uuid import UUID, uuid5, NAMESPACE_URL
 
 import asyncpg
 from fastapi import APIRouter, Request
@@ -28,7 +28,6 @@ from .models import EventEnvelope, IngressResult
 from .storage import (
     NATS_JETSTREAM_DESTINATION,
     ZERO_LEDGER_HASH,
-    MemoryInboxStore,
     PostgresInboxStore,
     ReplayConflict,
     StorageError,
@@ -2265,6 +2264,8 @@ class AutomationService:
         body_sha256: str,
         semantic_sha256: str,
     ) -> IngressResult:
+        if not isinstance(self.store, PostgresAutomationStore):
+            raise StorageError("atomic event acceptance requires the PostgreSQL automation store")
         payload = envelope.model_dump(mode="json")
         if canonical_payload_sha256(payload) != semantic_sha256:
             raise StorageError("semantic hash does not match canonical event payload")
@@ -2399,7 +2400,7 @@ class AutomationService:
 async def _assert_store_lease(
     store: AutomationStore,
     job_id: UUID,
-    body: LeaseMutation,
+    body: LeaseMutation | AutomationCommandRequest,
     *,
     client_id: str,
 ) -> AutomationJob:

@@ -19,9 +19,7 @@ from .communications import (
     CommunicationMessage,
     CommunicationMessagePage,
     CommunicationUsageReport,
-    CommunicationsConflict,
     CommunicationsError,
-    CommunicationsNotFound,
     CommunicationsService,
     CreateMessageRequest,
     MemoryCommunicationsStore,
@@ -848,11 +846,12 @@ def create_app(
                 }
         return schema
 
-    app.openapi = canonical_openapi
+    setattr(app, "openapi", canonical_openapi)
 
     return app
 
 
+app: FastAPI | None
 try:
     app = create_app()
 except ConfigurationError:

@@ -27,6 +27,9 @@ python3 scripts/validate_repository_governance.py
 printf '==> Validating live-governance applier source plan\n'
 python3 scripts/apply_repository_governance.py
 
+printf '==> Validating all Codestra service contracts\n'
+python3 scripts/validate_codestra_manifest.py
+
 printf '==> Validating strict automation v2 route conformance\n'
 python3 scripts/validate_automation_contract_conformance.py
 

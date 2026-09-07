@@ -22,7 +22,7 @@ decision:
 protected_main_baseline_before_correction:
   merge_sha: eb526e05a7b76a24e85ba8a0b96a48622d45afe2
   git_tree_id: 4b32907ebce65147be67d6528b008886dba2069c
-  schema_head: 0057_platform_service_catalog
+  schema_head: 0056_klyrow_delivery_events
   role: observed_baseline_not_static_authority
 
 historical_signed_predecessor:
@@ -41,7 +41,7 @@ historical_signed_predecessor:
   vulnerability_gate: PASS
   deployment_status: NOT_EXECUTED
   reason_not_current: >-
-    The artifact predates migration 0057_platform_service_catalog, PR #140, and the
+    The artifact predates migration 0056_klyrow_delivery_events, PR #140, and the
     authority correction. It is retained for audit and rollback analysis only.
 
 observed_legacy_source:

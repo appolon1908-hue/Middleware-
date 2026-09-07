@@ -91,7 +91,7 @@ def validate_forward_authority(authority: dict[str, Any]) -> list[str]:
 # The base document validator resolves this symbol from its own module globals.
 # Replace it before delegating so both direct checks and full-document checks use
 # the strict current-authority contract.
-_BASE.validate_forward_authority = validate_forward_authority
+setattr(_BASE, "validate_forward_authority", validate_forward_authority)
 
 
 def validate_document(

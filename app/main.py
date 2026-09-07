@@ -212,7 +212,6 @@ async def control_request_guard(request: Request, call_next):
         (
             request.url.path.startswith("/api/")
             or request.url.path.startswith("/v1/")
-            or request.url.path.startswith("/platform/")
         )
         and request.url.path not in SIGNED_WEBHOOK_PATHS
         and not RECORDING_EXPORTER_PATH.fullmatch(request.url.path)

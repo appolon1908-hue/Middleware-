@@ -326,15 +326,22 @@ _SENSITIVE_METADATA_PARTS = ("authorization", "token", "password", "secret", "cr
 
 def redact_metadata(value: object) -> dict[str, Any]:
     if isinstance(value, str):
-        try: value = json.loads(value)
-        except ValueError: return {}
-    if not isinstance(value, Mapping): return {}
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return {}
+    if not isinstance(value, Mapping):
+        return {}
+
     def clean(item: object) -> object:
         if isinstance(item, Mapping):
             return {str(key): "[REDACTED]" if any(part in str(key).lower() for part in _SENSITIVE_METADATA_PARTS) else clean(child) for key, child in item.items()}
-        if isinstance(item, list): return [clean(child) for child in item]
+        if isinstance(item, list):
+            return [clean(child) for child in item]
         return item
-    return dict(clean(value))
+    cleaned = clean(value)
+    assert isinstance(cleaned, dict)  # The Mapping branch always constructs a dict.
+    return cleaned
 
 
 class CommandStore(Protocol):
@@ -433,45 +440,74 @@ class MemoryCommandStore:
 
     async def list_operations(self, tenant_id: str, *, limit: int, position: tuple[datetime, UUID] | None = None, state: str | None = None, command_type: str | None = None) -> list[CommandOperation]:
         rows = [entry[1] for (row_tenant, _), entry in self._commands.items() if row_tenant == tenant_id]
-        if state is not None: rows = [row for row in rows if row.state == state]
-        if command_type is not None: rows = [row for row in rows if row.command_type == command_type]
+        if state is not None:
+            rows = [row for row in rows if row.state == state]
+        if command_type is not None:
+            rows = [row for row in rows if row.command_type == command_type]
         rows.sort(key=lambda row: (row.created_at, row.command_id.int), reverse=True)
-        if position is not None: rows = [row for row in rows if (row.created_at, row.command_id.int) < (position[0], position[1].int)]
+        if position is not None:
+            rows = [
+                row
+                for row in rows
+                if (row.created_at, row.command_id.int) < (position[0], position[1].int)
+            ]
         return rows[:limit]
 
     async def list_events(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[datetime, int] | None = None) -> list[OperationEvent]:
         await self.get(tenant_id, command_id)
         rows = list(self._events.get((tenant_id, command_id), []))
-        if position is not None: rows = [row for row in rows if (row.created_at, row.event_id) > position]
+        if position is not None:
+            rows = [row for row in rows if (row.created_at, row.event_id) > position]
         return [row.model_copy(update={"safe_metadata": redact_metadata(row.safe_metadata)}) for row in rows[:limit]]
 
     async def list_attempts(self, tenant_id: str, command_id: UUID, *, limit: int, position: tuple[int, int] | None = None) -> list[OperationAttempt]:
         await self.get(tenant_id, command_id)
         rows = list(self._attempts.get((tenant_id, command_id), []))
-        if position is not None: rows = [row for row in rows if (row.attempt_number, row.attempt_id) > position]
+        if position is not None:
+            rows = [
+                row for row in rows if (row.attempt_number, row.attempt_id) > position
+            ]
         return rows[:limit]
 
     async def mutate_operation(self, tenant_id: str, command_id: UUID, *, action: Literal["cancel", "reconcile", "retry"], actor_id: str, idempotency_key: str, expected_version: int, reason: str) -> CommandOperation:
         key = (tenant_id, command_id)
         entry = self._commands.get(key)
-        if entry is None: raise CommandNotFound("command operation was not found")
+        if entry is None:
+            raise CommandNotFound("command operation was not found")
         request_digest = hashlib.sha256(json.dumps({"expected_version": expected_version, "reason": reason}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         mutation_key = (tenant_id, command_id, action, actor_id, idempotency_key)
         replay = self._mutations.get(mutation_key)
         if replay:
-            if replay[0] != request_digest: raise CommandConflict("idempotency key was reused with different mutation content")
+            if replay[0] != request_digest:
+                raise CommandConflict(
+                    "idempotency key was reused with different mutation content"
+                )
             return replay[1].model_copy(update={"duplicate": True})
         digest, operation = entry
-        if operation.resource_version != expected_version: raise CommandConflict("expected_version is stale")
+        if operation.resource_version != expected_version:
+            raise CommandConflict("expected_version is stale")
         if action == "cancel":
-            if operation.state in {"completed", "failed", "reconciliation_required", "dead_lettered"}: raise CommandConflict("operation is not cancellable")
+            if operation.state in {
+                "completed",
+                "failed",
+                "reconciliation_required",
+                "dead_lettered",
+            }:
+                raise CommandConflict("operation is not cancellable")
             state = "cancelled" if operation.state in {"persisted", "queued"} else "reconciliation_required"
             updates = {"state": state, "cancelled_at": datetime.now().astimezone() if state == "cancelled" else None, "cancellation_reason": reason}
         elif action == "reconcile":
-            if operation.state not in {"dispatching", "accepted", "readback_pending", "reconciliation_required"}: raise CommandConflict("operation is not reconcilable")
+            if operation.state not in {
+                "dispatching",
+                "accepted",
+                "readback_pending",
+                "reconciliation_required",
+            }:
+                raise CommandConflict("operation is not reconcilable")
             updates = {"state": "reconciliation_required", "reconciliation_requested_at": datetime.now().astimezone(), "reconciliation_reason": reason}
         else:
-            if operation.state != "failed": raise CommandConflict("operation is not safely retryable")
+            if operation.state != "failed":
+                raise CommandConflict("operation is not safely retryable")
             updates = {"state": "queued", "last_error": None}
         now = datetime.now().astimezone()
         updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
@@ -867,22 +903,35 @@ class PostgresCommandStore:
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 current = await conn.fetchrow("SELECT * FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2 FOR UPDATE", tenant_id, str(command_id))
-                if current is None: raise CommandNotFound("command operation was not found")
+                if current is None:
+                    raise CommandNotFound("command operation was not found")
                 replay = await conn.fetchrow("""SELECT request_sha256, response_payload FROM middleware_operation_mutations
                     WHERE tenant_id=$1 AND command_id=$2 AND action=$3 AND actor_id=$4 AND idempotency_key=$5""", tenant_id, str(command_id), action, actor_id, idempotency_key)
                 if replay:
-                    if replay["request_sha256"] != request_digest: raise CommandConflict("idempotency key was reused with different mutation content")
+                    if replay["request_sha256"] != request_digest:
+                        raise CommandConflict(
+                            "idempotency key was reused with different mutation content"
+                        )
                     payload = json.loads(replay["response_payload"]) if isinstance(replay["response_payload"], str) else dict(replay["response_payload"])
                     return CommandOperation.model_validate(payload).model_copy(update={"duplicate": True})
-                if current["resource_version"] != expected_version: raise CommandConflict("expected_version is stale")
+                if current["resource_version"] != expected_version:
+                    raise CommandConflict("expected_version is stale")
                 previous = current["state"]
                 new_state = previous
                 if action == "cancel":
-                    if previous in {"completed", "failed", "reconciliation_required", "dead_lettered", "cancelled"}: raise CommandConflict("operation is not cancellable")
+                    if previous in {
+                        "completed",
+                        "failed",
+                        "reconciliation_required",
+                        "dead_lettered",
+                        "cancelled",
+                    }:
+                        raise CommandConflict("operation is not cancellable")
                     if previous in {"persisted", "queued"}:
                         active_lease = await conn.fetchval("""SELECT EXISTS(SELECT 1 FROM middleware_outbox WHERE tenant_id=$1 AND command_id=$2 AND lease_owner IS NOT NULL AND lease_until > now() AND completed_at IS NULL)""", tenant_id, str(command_id))
                         new_state = "reconciliation_required" if active_lease else "cancelled"
-                    else: new_state = "reconciliation_required"
+                    else:
+                        new_state = "reconciliation_required"
                     row = await conn.fetchrow("""UPDATE middleware_commands SET state=$3, resource_version=resource_version+1,
                         cancelled_at=CASE WHEN $3='cancelled' THEN now() ELSE cancelled_at END,
                         cancellation_reason=$4, updated_at=now() WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id), new_state, reason)
@@ -890,7 +939,13 @@ class PostgresCommandStore:
                         await conn.execute("""UPDATE middleware_outbox SET cancelled_at=now(), lease_owner=NULL, lease_until=NULL
                             WHERE tenant_id=$1 AND command_id=$2 AND completed_at IS NULL AND lease_owner IS NULL""", tenant_id, str(command_id))
                 elif action == "reconcile":
-                    if previous not in {"dispatching", "accepted", "readback_pending", "reconciliation_required"}: raise CommandConflict("operation is not reconcilable")
+                    if previous not in {
+                        "dispatching",
+                        "accepted",
+                        "readback_pending",
+                        "reconciliation_required",
+                    }:
+                        raise CommandConflict("operation is not reconcilable")
                     new_state = "reconciliation_required"
                     row = await conn.fetchrow("""UPDATE middleware_commands SET state=$3, resource_version=resource_version+1,
                         reconciliation_requested_at=now(), reconciliation_reason=$4, updated_at=now()
@@ -899,7 +954,8 @@ class PostgresCommandStore:
                     await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
                         VALUES ($1,$2,$3,'operation.reconcile.v1',$4::jsonb,$5) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, json.dumps({"command_id": str(command_id), "action": "reconcile", "reason": reason}), work_key)
                 else:
-                    if previous != "failed": raise CommandConflict("operation is not safely retryable")
+                    if previous != "failed":
+                        raise CommandConflict("operation is not safely retryable")
                     new_state = "queued"
                     work_key = "operation-retry:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
                     retry_envelope = json.loads(current["payload"]) if isinstance(current["payload"], str) else dict(current["payload"])
@@ -1143,7 +1199,7 @@ class PostgresCommandStore:
             # report unready; its required schema was introduced at v9.
             if head is None or head < 9:
                 return False
-            observed_columns = {
+            observed_columns: dict[str, set[str]] = {
                 table: set() for table in self.REQUIRED_COLUMNS
             }
             for row in column_rows:

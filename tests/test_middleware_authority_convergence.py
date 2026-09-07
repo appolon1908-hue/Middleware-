@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "config" / "middleware-authority-convergence.v1.json"
@@ -21,13 +22,13 @@ validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
 
 
-def _document() -> dict[str, object]:
+def _document() -> dict[str, Any]:
     value = json.loads(CATALOG.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
 
 
-def _current_authority() -> dict[str, object]:
+def _current_authority() -> dict[str, Any]:
     value = json.loads(CURRENT_AUTHORITY.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value

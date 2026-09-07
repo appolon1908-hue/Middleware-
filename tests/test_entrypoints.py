@@ -130,7 +130,7 @@ def test_api_runtime_readiness_fails_when_required_database_is_unavailable(
 
 def test_api_runtime_readiness_documents_optional_database(monkeypatch):
     monkeypatch.setattr(settings, "health_require_database", False)
-    response = TestClient(integration_api.app).get("/readyz")
+    response = TestClient(policy_engine.app).get("/readyz")
     assert response.status_code == 200
     assert response.json()["database"] == "not-required"
 

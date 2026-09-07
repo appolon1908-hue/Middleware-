@@ -49,7 +49,8 @@ def test_platform_migration_extends_the_actual_alembic_head() -> None:
 
 def test_provisioning_transitions_bind_principals_and_update_atomically() -> None:
     source = inspect.getsource(platform)
-    assert 'alias="X-Codestra-Principal"' in source
+    assert 'alias="X-Codestra-Principal"' not in source
+    assert "require_platform_scope" in source
     assert 'principal == current["requested_by"]' in source
     assert "state=ANY(CAST(:allowed AS text[])) RETURNING id" in source
     assert 'body.environment not in service["environments"]' in source

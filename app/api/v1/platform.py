@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.platform_auth import PlatformPrincipal, require_platform_scope
 from app.db.session import get_session
 
 router = APIRouter(prefix="/platform/v1", tags=["platform-service-catalog"])
@@ -126,7 +127,7 @@ def audit_hash(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
-@router.post("/services", status_code=status.HTTP_201_CREATED)
+@router.post("/services", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_platform_scope("platform.services.write", frozenset({"platform_admin"})))])
 async def create_service(body: ServiceCreate, db: AsyncSession = Depends(get_session)):
     service_uuid = uuid4()
     try:
@@ -147,13 +148,13 @@ async def create_service(body: ServiceCreate, db: AsyncSession = Depends(get_ses
     return {"service_id": body.service_id, "state": "registered", "catalog_id": str(service_uuid)}
 
 
-@router.get("/services")
+@router.get("/services", dependencies=[Depends(require_platform_scope("platform.services.read"))])
 async def list_services(db: AsyncSession = Depends(get_session)):
     rows = (await db.execute(text("SELECT service_id,owner,tenant_mode,service_type,repository,environments,dependencies,data_classification,slo_profile,alert_profile,state,updated_at FROM platform_services ORDER BY service_id"))).mappings().all()
     return {"items": [dict(row) for row in rows]}
 
 
-@router.get("/services/{service_id}")
+@router.get("/services/{service_id}", dependencies=[Depends(require_platform_scope("platform.services.read"))])
 async def get_service(service_id: str, db: AsyncSession = Depends(get_session)):
     row = (await db.execute(text("SELECT * FROM platform_services WHERE service_id=:id"), {"id": service_id})).mappings().one_or_none()
     if row is None:
@@ -163,7 +164,7 @@ async def get_service(service_id: str, db: AsyncSession = Depends(get_session)):
     return result
 
 
-@router.patch("/services/{service_id}")
+@router.patch("/services/{service_id}", dependencies=[Depends(require_platform_scope("platform.services.write", frozenset({"platform_admin"})))])
 async def patch_service(service_id: str, body: ServicePatch, db: AsyncSession = Depends(get_session)):
     changes = body.model_dump(exclude_none=True)
     if not changes:
@@ -178,7 +179,7 @@ async def patch_service(service_id: str, body: ServicePatch, db: AsyncSession = 
     return {"service_id": service_id, "state": current["state"]}
 
 
-@router.post("/services/{service_id}/environments", status_code=201)
+@router.post("/services/{service_id}/environments", status_code=201, dependencies=[Depends(require_platform_scope("platform.services.write", frozenset({"platform_admin"})))])
 async def add_environment(service_id: str, body: EnvironmentCreate, db: AsyncSession = Depends(get_session)):
     service = await get_service(service_id, db)
     if body.environment not in service["environments"]:
@@ -199,36 +200,34 @@ async def service_state(service_id: str, target: str, role: str, db: AsyncSessio
 
 
 @router.post("/services/{service_id}/activate")
-async def activate_service(service_id: str, x_codestra_role: str = Header("", alias="X-Codestra-Role"), db: AsyncSession = Depends(get_session)):
-    return await service_state(service_id, "active", x_codestra_role, db)
+async def activate_service(service_id: str, actor: PlatformPrincipal = Depends(require_platform_scope("platform.services.write", frozenset({"platform_admin"}))), db: AsyncSession = Depends(get_session)):
+    return await service_state(service_id, "active", actor.role, db)
 
 
 @router.post("/services/{service_id}/decommission")
-async def decommission_service(service_id: str, x_codestra_role: str = Header("", alias="X-Codestra-Role"), db: AsyncSession = Depends(get_session)):
-    return await service_state(service_id, "decommissioned", x_codestra_role, db)
+async def decommission_service(service_id: str, actor: PlatformPrincipal = Depends(require_platform_scope("platform.services.write", frozenset({"platform_admin"}))), db: AsyncSession = Depends(get_session)):
+    return await service_state(service_id, "decommissioned", actor.role, db)
 
 
 @router.post("/provisioning/requests", status_code=202)
 async def create_provisioning(
     body: ProvisioningCreate,
     x_correlation_id: str = Header("", alias="X-Correlation-ID"),
-    x_codestra_principal: str = Header("", alias="X-Codestra-Principal"),
+    actor: PlatformPrincipal = Depends(require_platform_scope("platform.provisioning.request", frozenset({"platform_admin", "platform_operator"}))),
     db: AsyncSession = Depends(get_session),
 ):
-    if not x_codestra_principal:
-        raise HTTPException(401, "authenticated principal is required")
     request_id = uuid4()
     service = await get_service(body.service_id, db)
     if body.environment not in service["environments"]:
         raise HTTPException(409, "environment is not declared by the service")
     payload = body.model_dump(mode="json")
     await db.execute(text("""INSERT INTO platform_provisioning_requests(id,service_id,environment,state,request_json,manifest_sha256,git_sha,correlation_id,requested_by,created_at,updated_at)
-      SELECT :uuid,id,:env,'requested',CAST(:request AS jsonb),:manifest,:git,:correlation,:principal,:now,:now FROM platform_services WHERE service_id=:service_id"""), {"uuid": request_id, "service_id": body.service_id, "env": body.environment, "request": json.dumps(payload), "manifest": body.manifest_sha256, "git": body.git_sha, "correlation": x_correlation_id or str(request_id), "principal": x_codestra_principal, "now": now()})
+      SELECT :uuid,id,:env,'requested',CAST(:request AS jsonb),:manifest,:git,:correlation,:principal,:now,:now FROM platform_services WHERE service_id=:service_id"""), {"uuid": request_id, "service_id": body.service_id, "env": body.environment, "request": json.dumps(payload), "manifest": body.manifest_sha256, "git": body.git_sha, "correlation": x_correlation_id or str(request_id), "principal": actor.subject, "now": now()})
     await db.commit()
     return {"request_id": str(request_id), "state": "requested", "apply_authorized": False}
 
 
-@router.get("/provisioning/requests/{request_id}")
+@router.get("/provisioning/requests/{request_id}", dependencies=[Depends(require_platform_scope("platform.provisioning.read"))])
 async def get_provisioning(request_id: UUID, db: AsyncSession = Depends(get_session)):
     row = (await db.execute(text("SELECT id,environment,state,request_json,manifest_sha256,git_sha,correlation_id,requested_by,validation_json,approved_by,created_at,updated_at FROM platform_provisioning_requests WHERE id=:id"), {"id": request_id})).mappings().one_or_none()
     if row is None:
@@ -272,24 +271,24 @@ async def transition(
 
 
 @router.post("/provisioning/requests/{request_id}/validate")
-async def validate_provisioning(request_id: UUID, body: CertificationSubmission, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
+async def validate_provisioning(request_id: UUID, body: CertificationSubmission, actor: PlatformPrincipal = Depends(require_platform_scope("platform.provisioning.validate", frozenset({"platform_admin", "platform_reviewer"}))), db: AsyncSession = Depends(get_session)):
     evidence = body.evidence()
     failed = sorted(name for name, passed in evidence.items() if not passed)
     if failed:
         raise HTTPException(422, {"message": "certification gates failed", "failed_gates": failed})
-    return await transition(request_id, {"requested"}, "validated", body, role, principal, db, evidence)
+    return await transition(request_id, {"requested"}, "validated", body, actor.role, actor.subject, db, evidence)
 
 
 @router.post("/provisioning/requests/{request_id}/approve")
-async def approve_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
-    return await transition(request_id, {"validated"}, "approved", body, role, principal, db)
+async def approve_provisioning(request_id: UUID, body: Transition, actor: PlatformPrincipal = Depends(require_platform_scope("platform.provisioning.approve", frozenset({"platform_admin", "platform_reviewer"}))), db: AsyncSession = Depends(get_session)):
+    return await transition(request_id, {"validated"}, "approved", body, actor.role, actor.subject, db)
 
 
 @router.post("/provisioning/requests/{request_id}/apply")
-async def apply_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
-    return await transition(request_id, {"approved"}, "apply_requested", body, role, principal, db)
+async def apply_provisioning(request_id: UUID, body: Transition, actor: PlatformPrincipal = Depends(require_platform_scope("platform.provisioning.apply", frozenset({"platform_admin"}))), db: AsyncSession = Depends(get_session)):
+    return await transition(request_id, {"approved"}, "apply_requested", body, actor.role, actor.subject, db)
 
 
 @router.post("/provisioning/requests/{request_id}/rollback")
-async def rollback_provisioning(request_id: UUID, body: Transition, role: str = Header("", alias="X-Codestra-Role"), principal: str = Header("", alias="X-Codestra-Principal"), db: AsyncSession = Depends(get_session)):
-    return await transition(request_id, {"applied", "failed"}, "rollback_requested", body, role, principal, db)
+async def rollback_provisioning(request_id: UUID, body: Transition, actor: PlatformPrincipal = Depends(require_platform_scope("platform.provisioning.rollback", frozenset({"platform_admin"}))), db: AsyncSession = Depends(get_session)):
+    return await transition(request_id, {"applied", "failed"}, "rollback_requested", body, actor.role, actor.subject, db)

@@ -20,11 +20,9 @@ from .conftest import FakeTokenVerifier, make_event, signed_headers
 def test_all_contract_routes_are_registered(test_settings, runtime) -> None:
     app = create_app(settings=test_settings, runtime=runtime)
     registered = {
-        route.path
-        for route in app.routes
-        if getattr(route, "methods", None)
-        and "POST" in route.methods
-        and route.path.startswith("/api/v1/")
+        path for path, operations in app.openapi()["paths"].items()
+        if "post" in operations and path.startswith("/api/v1/")
+        and operations["post"]["operationId"].startswith("ingress_")
     }
     assert registered == {item.path for item in WEBHOOK_ROUTES}
 

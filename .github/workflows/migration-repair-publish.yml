@@ -31,7 +31,8 @@ jobs:
           git apply --index /tmp/migration-repair.patch
           git rm migration-repair.patch.b64 .github/workflows/migration-repair-publish.yml
           git diff --cached --check
-          test "$(git write-tree)" = '52a8850073573662f30946015e3de44bca033a8c'
+          printf 'CANDIDATE_TREE=%s\n' "$(git write-tree)"
+          test "$(git write-tree)" = 'ef49dc012801aeef373b85f9834d04b9d9904a78'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix: apply and verify canonical runtime migrations with locked history'

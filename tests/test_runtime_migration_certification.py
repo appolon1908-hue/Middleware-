@@ -206,3 +206,11 @@ def test_distroless_image_carries_authority_helper_and_sql_source_exceptions():
 def test_query_cannot_override_verified_database_identity(parameter):
     with pytest.raises(runner.MigrationError, match="override"):
         runner.database_urls("postgresql://u@localhost/approved?" + parameter + "=other")
+
+
+def test_test_image_preserves_the_complete_dockerignore_policy():
+    dockerfile = (ROOT / "Dockerfile.runtime").read_text()
+    block = dockerfile.split("RUN printf '%s\\n' ", 1)[1].split("      > .dockerignore", 1)[0]
+    # This copy is inspected from inside the test image as well as from source.
+    reconstructed = [line.strip().split("'", 2)[1] for line in block.splitlines() if "'" in line]
+    assert reconstructed == (ROOT / ".dockerignore").read_text().splitlines()

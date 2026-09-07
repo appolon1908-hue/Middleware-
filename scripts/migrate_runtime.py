@@ -15,8 +15,6 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-from scripts.production_migration_authority import validate_authority
 
 ALEMBIC_VERSION_TABLE = "public.alembic_version"
 MIGRATION_LOCK = 742603070118
@@ -145,6 +143,11 @@ async def run_migrations(conn, sqlalchemy_url: str, expected: str, graph, bundle
 
 
 async def main(*, verify_only: bool = False) -> None:
+    # Script entrypoints start with scripts/ on sys.path; resolve the packaged
+    # repository import here without an out-of-order module-level import.
+    sys.path.insert(0, str(ROOT))
+    from scripts.production_migration_authority import validate_authority
+
     expected, graph, history_digest = validate_authority(ROOT)
     if os.environ.get("SCHEMA_HEAD", expected) != expected:
         raise MigrationError("SCHEMA_HEAD differs from the protected release authority")

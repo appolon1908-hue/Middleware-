@@ -50,6 +50,7 @@ def migration_history(root: Path) -> tuple[dict[str, tuple[str, ...]], str]:
         if "down_revision" not in values:
             raise AuthorityError(f"{path.name}: missing down_revision")
         parent = values["down_revision"]
+        parents: tuple[str, ...]
         if parent is None:
             parents = ()
         elif isinstance(parent, str) and parent:

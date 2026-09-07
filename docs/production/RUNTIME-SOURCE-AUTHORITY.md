@@ -33,7 +33,7 @@ certified.
 The current source requires migration head:
 
 ```text
-0056_klyrow_delivery_events
+0057_platform_service_catalog
 ```
 
 The current signed candidate state is:
@@ -46,13 +46,13 @@ PENDING_EXACT_PROTECTED_MERGE_BUILD
 its eventual protected squash-merge SHA or immutable image digest in advance.
 The field may be populated only by a separately reviewed evidence update after
 the exact protected-main merge has been built, signed, scanned, and verified with
-schema `0056_klyrow_delivery_events`.
+schema `0057_platform_service_catalog`.
 
 The prior signed image from source
 `b03b378f3a358de333e37cf6cc7a37668f004b4f` and digest
 `sha256:dfdcfb92538242df9c9e81c27f15f9bd14b2cb840ea4c16d91dccc8f0eed7a3c`
 remains a **historical predecessor**. It carries schema
-`0009_observability_incidents`, predates migration `0056_klyrow_delivery_events`, and
+`0009_observability_incidents`, predates migration `0057_platform_service_catalog`, and
 has `promotionAuthorized=false`. It is useful for audit and rollback analysis,
 but it is not a current release candidate.
 
@@ -66,7 +66,7 @@ must include:
 - exact source SHA and source tree;
 - immutable image digest and verified provenance;
 - signed release manifest and SBOM;
-- schema head `0056_klyrow_delivery_events`;
+- schema head `0057_platform_service_catalog`;
 - locked runtime profile;
 - effective source/digest/schema/profile and capability read-back;
 - backup and isolated restore;

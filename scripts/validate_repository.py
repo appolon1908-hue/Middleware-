@@ -284,6 +284,8 @@ def _migration_assignment(path: Path, name: str) -> str | tuple[str, ...] | None
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
         if not any(isinstance(target, ast.Name) and target.id == name for target in targets):
             continue
+        if node.value is None:
+            raise ValueError(f"{name} assignment has no value")
         value = ast.literal_eval(node.value)
         if value is None or isinstance(value, str):
             return value

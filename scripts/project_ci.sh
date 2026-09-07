@@ -16,6 +16,9 @@ python -m pip install --disable-pip-version-check --no-input --quiet --upgrade p
 python -m pip install --disable-pip-version-check --no-input --quiet \
   --require-hashes -r requirements-test.txt
 
+printf '==> Validating all Codestra service contracts in the locked environment\n'
+python scripts/validate_codestra_manifest.py
+
 python -m compileall -q app workers tests scripts/validate_platform_control_plane.py scripts/validate_calling_contract_pin.py
 python scripts/validate_platform_control_plane.py
 python scripts/validate_calling_contract_pin.py

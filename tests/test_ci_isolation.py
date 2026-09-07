@@ -60,3 +60,14 @@ def test_readiness_ci_preserves_positive_and_all_dependency_failure_cases():
     for name in ("wrong-credential", "dns-failure", "tcp-failure", "redis-failure", "keycloak-failure"):
         assert f"audit_case {name}" in source
         assert source.count(f"readiness-{name}.json") == 2
+
+
+def test_manifest_gate_runs_after_locked_dependencies_and_before_pytest():
+    source = (ROOT / "scripts/project_ci.sh").read_text()
+    bootstrap = (ROOT / "scripts/run_ci.sh").read_text()
+    install = source.index("--require-hashes -r requirements-test.txt")
+    validate = source.index("python scripts/validate_codestra_manifest.py")
+    tests = source.index("pytest -q tests")
+    assert install < validate < tests
+    assert "scripts/project_ci.sh" in bootstrap
+    assert "python3 scripts/validate_codestra_manifest.py" not in bootstrap

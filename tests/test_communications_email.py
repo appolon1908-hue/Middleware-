@@ -15,6 +15,7 @@ from app.commands import (
     CommandPolicy,
     CommandPolicyRegistry,
     CommandService,
+    CommandState,
     MemoryCommandStore,
 )
 from app.communications import CommunicationsService, MemoryCommunicationsStore
@@ -196,6 +197,7 @@ def test_email_message_lifecycle_idempotency_and_timeline(test_settings) -> None
         assert [item["status"] for item in timeline.json()["items"]] == ["accepted", "queued"]
         assert runtime.communications is not None
         assert len(runtime.communications.store.messages) == 1
+        assert runtime.commands is not None
         assert isinstance(runtime.commands.store, MemoryCommandStore)
         assert len(runtime.commands.store._commands) == 1
 
@@ -234,6 +236,7 @@ def test_email_contract_validation_sender_policy_and_kill_switch(test_settings) 
         assert rejected.status_code == 403
     assert disabled.communications is not None
     assert disabled.communications.store.messages == {}
+    assert disabled.commands is not None
     assert isinstance(disabled.commands.store, MemoryCommandStore)
     assert disabled.commands.store._commands == {}
 
@@ -376,18 +379,21 @@ def test_email_unknown_command_outcome_is_indeterminate_without_resubmission(
             headers=_headers(key="unknown-outcome"),
         ).json()
 
+        assert runtime.commands is not None
         assert isinstance(runtime.commands.store, MemoryCommandStore)
         command_id = UUID(created["operationId"])
 
         async def make_outcome_uncertain() -> None:
-            for state, reason in (
+            assert runtime.commands is not None
+            transitions: tuple[tuple[CommandState, str], ...] = (
                 ("queued", "workflow accepted durable intent"),
                 ("dispatching", "provider call started"),
                 (
                     "reconciliation_required",
                     "provider timed out after possible acceptance",
                 ),
-            ):
+            )
+            for state, reason in transitions:
                 await runtime.commands.store.transition(
                     "tenant-1",
                     command_id,

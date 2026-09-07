@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import httpx
 import pytest
-
-from app.config import ConfigurationError
+from app.config import ConfigurationError, Settings
 from app.telnexa_provider_adapter import TelnexaProviderAdapterError, TelnexaSmsAdapter
 from app.temporal_workflows import CommandExecutionRequest
 
@@ -24,6 +23,12 @@ class StubSettings:
     def __init__(self, *, app_env: str = "staging", sms_enabled: bool = True) -> None:
         self.app_env = app_env
         self.sms_delivery_enabled = sms_enabled
+
+
+def settings_stub(*, app_env: str = "staging", sms_enabled: bool = True) -> Settings:
+    # This unit fixture deliberately supplies only the adapter's two settings.
+    # Production code continues to require the complete validated Settings object.
+    return cast(Settings, StubSettings(app_env=app_env, sms_enabled=sms_enabled))
 
 
 def execution_request(**overrides: Any) -> CommandExecutionRequest:
@@ -129,7 +134,7 @@ async def test_execute_submits_the_projected_body_and_security_headers() -> None
 
     set_handler(handler)
     command = execution_request()
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(command)  # type: ignore[arg-type]
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(command)
     assert result.status == "accepted" and result.provider_operation_id == "msg-1"
     assert seen["url"] == f"{BASE_URL}/api/v1/messages"
     assert seen["headers"]["x-api-key"] == API_KEY
@@ -150,7 +155,7 @@ async def test_execute_submits_the_projected_body_and_security_headers() -> None
 @pytest.mark.asyncio
 async def test_execute_is_refused_while_the_capability_is_closed() -> None:
     set_handler(lambda request: pytest.fail("disabled execution contacted provider"))
-    adapter = TelnexaSmsAdapter(StubSettings(sms_enabled=False), env=ENV)  # type: ignore[arg-type]
+    adapter = TelnexaSmsAdapter(settings_stub(sms_enabled=False), env=ENV)
     with pytest.raises(TelnexaProviderAdapterError, match="SMS delivery is disabled"):
         await adapter.execute(execution_request())
 
@@ -158,7 +163,7 @@ async def test_execute_is_refused_while_the_capability_is_closed() -> None:
 @pytest.mark.asyncio
 async def test_execute_rejects_a_command_it_does_not_own() -> None:
     set_handler(lambda request: pytest.fail("invalid identity contacted provider"))
-    adapter = TelnexaSmsAdapter(StubSettings(), env=ENV)  # type: ignore[arg-type]
+    adapter = TelnexaSmsAdapter(settings_stub(), env=ENV)
     for change, pattern in (
         ({"target": "odoo-19"}, "does not own"),
         ({"capability": "ODOO_WRITE"}, "capability"),
@@ -171,23 +176,17 @@ async def test_execute_rejects_a_command_it_does_not_own() -> None:
 @pytest.mark.asyncio
 async def test_execute_rejects_a_payload_that_violates_the_canonical_contract() -> None:
     set_handler(lambda request: pytest.fail("invalid payload contacted provider"))
-    adapter = TelnexaSmsAdapter(StubSettings(), env=ENV)  # type: ignore[arg-type]
+    adapter = TelnexaSmsAdapter(settings_stub(), env=ENV)
     with pytest.raises(TelnexaProviderAdapterError, match="canonical contract"):
-        await adapter.execute(
-            execution_request(payload_overrides={"destination": "not-a-number"})
-        )
+        await adapter.execute(execution_request(payload_overrides={"destination": "not-a-number"}))
 
 
 @pytest.mark.asyncio
 async def test_execute_refuses_to_forward_secret_bearing_payload_keys() -> None:
-    set_handler(
-        lambda request: pytest.fail("secret-bearing payload contacted provider")
-    )
-    adapter = TelnexaSmsAdapter(StubSettings(), env=ENV)  # type: ignore[arg-type]
+    set_handler(lambda request: pytest.fail("secret-bearing payload contacted provider"))
+    adapter = TelnexaSmsAdapter(settings_stub(), env=ENV)
     with pytest.raises(TelnexaProviderAdapterError):
-        await adapter.execute(
-            execution_request(payload_overrides={"provider_token": "leaked"})
-        )
+        await adapter.execute(execution_request(payload_overrides={"provider_token": "leaked"}))
 
 
 @pytest.mark.asyncio
@@ -197,7 +196,7 @@ async def test_connection_failure_before_send_is_not_an_unknown_outcome() -> Non
 
     set_handler(handler)
     with pytest.raises(TelnexaProviderAdapterError, match="before the submission"):
-        await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(execution_request())  # type: ignore[arg-type]
+        await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(execution_request())
 
 
 @pytest.mark.asyncio
@@ -213,7 +212,7 @@ async def test_timeout_is_resolved_by_get_without_second_post() -> None:
         return httpx.Response(200, json=readback_body(command))
 
     set_handler(handler)
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(command)  # type: ignore[arg-type]
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(command)
     assert result.status == "accepted" and "unknown" in result.detail
     assert [request.method for request in calls] == ["POST", "GET"]
     assert str(calls[1].url) == f"{BASE_URL}/api/v1/messages/by-idempotency"
@@ -235,7 +234,7 @@ async def test_gateway_5xx_is_reconciled_rather_than_resubmitted() -> None:
         )
 
     set_handler(handler)
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(command)  # type: ignore[arg-type]
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(command)
     assert result.status == "accepted" and calls == ["POST", "GET"]
 
 
@@ -248,23 +247,21 @@ async def test_idempotency_conflict_on_readback_stays_quarantined() -> None:
 
     set_handler(handler)
     with pytest.raises(TelnexaProviderAdapterError, match="already bound"):
-        await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(execution_request())  # type: ignore[arg-type]
+        await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(execution_request())
 
 
 @pytest.mark.asyncio
 async def test_provider_rejection_is_a_hard_failure() -> None:
-    set_handler(
-        lambda request: httpx.Response(409, json={"detail": "sender_not_approved"})
-    )
+    set_handler(lambda request: httpx.Response(409, json={"detail": "sender_not_approved"}))
     with pytest.raises(TelnexaProviderAdapterError, match="sender_not_approved"):
-        await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(execution_request())  # type: ignore[arg-type]
+        await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(execution_request())
 
 
 @pytest.mark.asyncio
 async def test_readback_reports_a_match_without_claiming_carrier_delivery() -> None:
     command = execution_request()
     set_handler(lambda request: httpx.Response(200, json=readback_body(command)))
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).readback(command)  # type: ignore[arg-type]
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).readback(command)
     assert result.status == "matched" and result.provider_operation_id == "msg-1"
     assert "carrier delivery is not implied" in result.detail
 
@@ -272,36 +269,30 @@ async def test_readback_reports_a_match_without_claiming_carrier_delivery() -> N
 @pytest.mark.asyncio
 async def test_readback_reports_mismatch_for_an_unexpected_status() -> None:
     set_handler(lambda request: httpx.Response(500, json={"detail": "boom"}))
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).readback(
-        execution_request()
-    )  # type: ignore[arg-type]
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).readback(execution_request())
     assert result.status == "mismatch" and "500" in result.detail
 
 
 @pytest.mark.asyncio
 async def test_missing_configuration_is_refused() -> None:
-    set_handler(
-        lambda request: pytest.fail("unconfigured transport contacted provider")
-    )
+    set_handler(lambda request: pytest.fail("unconfigured transport contacted provider"))
     with pytest.raises(ConfigurationError, match="TELNEXA_SMS_BASE_URL"):
-        await TelnexaSmsAdapter(StubSettings(), env={}).execute(execution_request())  # type: ignore[arg-type]
+        await TelnexaSmsAdapter(settings_stub(), env={}).execute(execution_request())
 
 
 @pytest.mark.asyncio
 async def test_production_requires_https() -> None:
     set_handler(lambda request: pytest.fail("insecure transport contacted provider"))
     adapter = TelnexaSmsAdapter(
-        StubSettings(app_env="production"),
+        settings_stub(app_env="production"),
         env={**ENV, "TELNEXA_SMS_BASE_URL": "http://telnexa.internal.invalid"},
-    )  # type: ignore[arg-type]
+    )
     with pytest.raises(ConfigurationError, match="requires HTTPS"):
         await adapter.execute(execution_request())
 
 
 @pytest.mark.asyncio
-async def test_readback_is_get_only_even_with_delivery_disabled_and_no_existing_record() -> (
-    None
-):
+async def test_readback_is_get_only_even_with_delivery_disabled_and_no_existing_record() -> None:
     calls: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -309,9 +300,9 @@ async def test_readback_is_get_only_even_with_delivery_disabled_and_no_existing_
         return httpx.Response(404, json={"detail": "submission_not_found"})
 
     set_handler(handler)
-    result = await TelnexaSmsAdapter(StubSettings(sms_enabled=False), env=ENV).readback(
+    result = await TelnexaSmsAdapter(settings_stub(sms_enabled=False), env=ENV).readback(
         execution_request()
-    )  # type: ignore[arg-type]
+    )
     assert result.status == "mismatch" and result.provider_operation_id is None
     assert len(calls) == 1 and calls[0].method == "GET" and calls[0].content == b""
 
@@ -328,7 +319,7 @@ async def test_timeout_then_missing_readback_does_not_post_again() -> None:
 
     set_handler(handler)
     with pytest.raises(TelnexaProviderAdapterError, match="outcome unknown"):
-        await TelnexaSmsAdapter(StubSettings(), env=ENV).execute(execution_request())  # type: ignore[arg-type]
+        await TelnexaSmsAdapter(settings_stub(), env=ENV).execute(execution_request())
     assert calls == ["POST", "GET"]
 
 
@@ -351,10 +342,8 @@ async def test_readback_rejects_unbound_or_unconfirmed_records(
     overrides: dict[str, Any],
 ) -> None:
     command = execution_request()
-    set_handler(
-        lambda request: httpx.Response(200, json=readback_body(command, **overrides))
-    )
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).readback(command)  # type: ignore[arg-type]
+    set_handler(lambda request: httpx.Response(200, json=readback_body(command, **overrides)))
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).readback(command)
     assert result.status == "mismatch" and result.provider_operation_id is None
 
 
@@ -367,9 +356,7 @@ async def test_readback_does_not_follow_redirects() -> None:
         return httpx.Response(307, headers={"Location": "https://unapproved.invalid"})
 
     set_handler(handler)
-    result = await TelnexaSmsAdapter(StubSettings(), env=ENV).readback(
-        execution_request()
-    )  # type: ignore[arg-type]
+    result = await TelnexaSmsAdapter(settings_stub(), env=ENV).readback(execution_request())
     assert result.status == "mismatch" and len(calls) == 1
 
 

@@ -1,0 +1,47 @@
+name: Middleware issue source audit
+on:
+  push:
+    branches: [fix/middleware-issues-audit-20260907]
+    paths: [.github/workflows/middleware-issues-source-audit.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: d93f1c83141580a984a91c7736fb448ca9195f17
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact source and history without executing repository code
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = d93f1c83141580a984a91c7736fb448ca9195f17
+          test -z "$(git status --porcelain)"
+          out="$RUNNER_TEMP/middleware-issues-source"
+          mkdir -p "$out"
+          git branch audit-main d5fb2355af94717e91447fa8e0de44f4e570e58b
+          git branch audit-pr155 d93f1c83141580a984a91c7736fb448ca9195f17
+          git bundle create "$out/source.bundle" audit-main audit-pr155
+          git ls-tree -r --name-only HEAD | grep -E '(^|/)AGENTS.md$' > "$out/instruction-paths.txt" || true
+          git show -s --format='%H %T' audit-main audit-pr155 > "$out/source-identities.txt"
+          echo 'PRODUCTION_CHANGED=NO'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - name: Download hash-locked wheels for offline regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m pip download --require-hashes --only-binary=:all: \
+            -r requirements.lock -r requirements-test.lock \
+            --dest "$RUNNER_TEMP/middleware-issues-source/wheels"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: middleware-issues-source-${{ github.sha }}
+          path: ${{ runner.temp }}/middleware-issues-source/
+          if-no-files-found: error
+          retention-days: 7

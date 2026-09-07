@@ -82,6 +82,23 @@ async def verify_database_lineage(conn, graph: dict[str, tuple[str, ...]]) -> tu
     return observed
 
 
+def alembic_engine_options(url: str) -> tuple[str, dict[str, object]]:
+    """Pass the validated native DSN to asyncpg, including its TLS semantics.
+
+    The SQLAlchemy asyncpg dialect forwards URL query keys as driver keyword
+    arguments. sslmode/sslrootcert/sslcert/sslkey are DSN parameters, not asyncpg
+    connect() keywords. A credential-free dialect URL plus the complete native
+    DSN preserves verify-full, client certificates, and escaped credentials on
+    both connections without translating or dropping any TLS policy.
+    """
+    native_url, _ = database_urls(url)
+    return "postgresql+asyncpg://", {
+        "dsn": native_url,
+        "command_timeout": 30,
+        "server_settings": {"search_path": "public"},
+    }
+
+
 async def upgrade_alembic(url: str, expected: str) -> None:
     from alembic import command
     from alembic.config import Config
@@ -94,9 +111,8 @@ async def upgrade_alembic(url: str, expected: str) -> None:
         config.attributes["connection"] = connection
         command.upgrade(config, expected)
 
-    engine = create_async_engine(
-        url, poolclass=NullPool, connect_args={"server_settings": {"search_path": "public"}},
-    )
+    engine_url, connect_args = alembic_engine_options(url)
+    engine = create_async_engine(engine_url, poolclass=NullPool, connect_args=connect_args)
     try:
         async with engine.connect() as connection:
             await connection.run_sync(upgrade)

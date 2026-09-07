@@ -131,7 +131,8 @@
         "codestra.email.message.bounced",
         "codestra.email.message.complained",
         "codestra.email.message.delivered",
-        "codestra.email.message.inbound"
+        "codestra.email.message.inbound",
+        "codestra.email.message.unsubscribed"
       ],
       "delivery": "at_least_once"
     },

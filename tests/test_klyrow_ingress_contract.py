@@ -106,3 +106,23 @@ def test_ingress_still_rejects_an_uncontracted_event_type(
         response = _post(client, event)
     assert response.status_code == 422, response.text
     assert response.json()["error"]["code"] == "event_type_not_allowed"
+
+
+def test_unsubscribe_is_accepted(test_settings, runtime) -> None:
+    """Pins the exact regression, independent of the config-derived tests.
+
+    The two tests above both read the contract, so deleting the unsubscribe
+    entry and its mapping row together would leave them self-consistent and
+    green while the defect returned. This one names the event type literally,
+    so the reintroduced bug fails here even if the authorities agree with each
+    other.
+    """
+    event = make_event(
+        producer=KLYROW_PRODUCER,
+        event_type="codestra.email.message.unsubscribed",
+        event_id="evt-unsubscribe0001",
+    )
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        response = _post(client, event)
+    assert response.status_code == 202, response.text

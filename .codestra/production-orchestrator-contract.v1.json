@@ -36,6 +36,7 @@
     "require_provenance": true,
     "require_signature": true,
     "attestation_verifier": "cosign",
+    "attestation_storage": "oci",
     "signer_workflow": ".github/workflows/release.yml"
   },
   "environments": {},

@@ -34,6 +34,7 @@ EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
         "Disposable NATS JetStream integration",
         "Temporal critical workflow integration",
         "Synthetic no-effect acceptance E2E",
+        "orchestrator-contract",
     }
 )
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")

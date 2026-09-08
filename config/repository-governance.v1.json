@@ -61,7 +61,8 @@
       "Disposable PostgreSQL Redis integration",
       "Disposable NATS JetStream integration",
       "Temporal critical workflow integration",
-      "Synthetic no-effect acceptance E2E"
+      "Synthetic no-effect acceptance E2E",
+      "orchestrator-contract"
     ]
   },
   "actions_policy": {

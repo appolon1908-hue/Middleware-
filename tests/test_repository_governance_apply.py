@@ -106,6 +106,9 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     assert [item["context"] for item in status["required_status_checks"]] == policy[
         "default_branch_ruleset"
     ]["required_status_checks"]
+    assert {
+        item["integration_id"] for item in status["required_status_checks"]
+    } == {15368}
 
 
 def test_ruleset_rejects_duplicate_status_checks(policy: dict) -> None:

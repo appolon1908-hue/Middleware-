@@ -6,7 +6,9 @@
   "role": "canonical-middleware",
   "release_intent_workflow": ".github/workflows/manual-release-intent.yml",
   "deployment_authority": false,
+  "runtime_mutation_authority": false,
   "require_verified_commit": true,
+  "required_check_app_id": 15368,
   "required_checks": [
     "orchestrator-contract",
     "validate",
@@ -24,12 +26,17 @@
   "artifact_policy": {
     "minimum_images": 1,
     "maximum_images": 1,
+    "image_repositories": [
+      "ghcr.io/appolon1908-hue/codestra-middleware"
+    ],
     "require_digest": true,
     "allow_rebuild_after_staging": false,
     "allow_retag_after_staging": false,
     "require_sbom": true,
     "require_provenance": true,
-    "require_signature": true
+    "require_signature": true,
+    "attestation_verifier": "cosign",
+    "signer_workflow": ".github/workflows/release.yml"
   },
   "environments": {},
   "native_workflows": {

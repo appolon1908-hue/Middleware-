@@ -20,6 +20,7 @@ CODEOWNERS_PATH = ROOT / ".github" / "CODEOWNERS"
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
+REQUIRED_CHECK_APP_ID = 15368
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -34,6 +35,7 @@ EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
         "Disposable NATS JetStream integration",
         "Temporal critical workflow integration",
         "Synthetic no-effect acceptance E2E",
+        "orchestrator-contract",
     }
 )
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -60,6 +62,24 @@ def load_json(path: Path) -> dict[str, Any]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise GovernanceError(message)
+
+
+def require_mapping(value: Any, message: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise GovernanceError(message)
+    return value
+
+
+def require_list(value: Any, message: str, *, nonempty: bool = False) -> list[Any]:
+    if not isinstance(value, list) or (nonempty and not value):
+        raise GovernanceError(message)
+    return value
+
+
+def require_string(value: Any, message: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise GovernanceError(message)
+    return value
 
 
 def require_exact_strings(
@@ -93,8 +113,7 @@ def validate_source_policy() -> dict[str, Any]:
         "repository authority drift",
     )
 
-    authority = policy.get("authority")
-    require(isinstance(authority, dict), "authority policy is missing")
+    authority = require_mapping(policy.get("authority"), "authority policy is missing")
     require(authority.get("default_branch") == "main", "main must remain the default branch")
     for key in (
         "deployment_from_unreviewed_ref_allowed",
@@ -104,8 +123,7 @@ def validate_source_policy() -> dict[str, Any]:
     ):
         require(authority.get(key) is False, f"{key} must remain false")
 
-    merge = policy.get("merge_policy")
-    require(isinstance(merge, dict), "merge policy is missing")
+    merge = require_mapping(policy.get("merge_policy"), "merge policy is missing")
     expected_merge = {
         "allow_squash_merge": True,
         "allow_merge_commit": False,
@@ -117,8 +135,10 @@ def validate_source_policy() -> dict[str, Any]:
     }
     require(merge == expected_merge, "merge policy drift")
 
-    rules = policy.get("default_branch_ruleset")
-    require(isinstance(rules, dict), "default branch ruleset is missing")
+    rules = require_mapping(
+        policy.get("default_branch_ruleset"),
+        "default branch ruleset is missing",
+    )
     require(rules.get("pattern") == "main", "ruleset must target main")
     require(rules.get("enforcement") == "active", "ruleset must be active")
     for key in (
@@ -207,30 +227,35 @@ def validate_source_policy() -> dict[str, Any]:
 def validate_skip_register() -> None:
     register = load_json(SKIP_REGISTER_PATH)
     require(register.get("schema_version") == "1.0", "unsupported skip-register schema")
-    entries = register.get("registered_files")
-    require(isinstance(entries, list) and entries, "skip register is empty")
+    entries = require_list(
+        register.get("registered_files"),
+        "skip register is empty",
+        nonempty=True,
+    )
     registered: dict[str, dict[str, Any]] = {}
-    for item in entries:
-        require(isinstance(item, dict), "invalid skip-register entry")
-        path = item.get("path")
-        require(isinstance(path, str) and path, "skip-register path is invalid")
-        require(path not in registered, f"duplicate skip-register entry: {path}")
-        require(isinstance(item.get("gate"), str) and item["gate"], f"{path}: gate is required")
+    for value in entries:
+        item = require_mapping(value, "invalid skip-register entry")
+        registered_path = require_string(item.get("path"), "skip-register path is invalid")
         require(
-            isinstance(item.get("required_job"), str) and item["required_job"],
-            f"{path}: required_job is required",
+            registered_path not in registered,
+            f"duplicate skip-register entry: {registered_path}",
         )
-        registered[path] = item
+        require_string(item.get("gate"), f"{registered_path}: gate is required")
+        require_string(
+            item.get("required_job"),
+            f"{registered_path}: required_job is required",
+        )
+        registered[registered_path] = item
 
     observed: set[str] = set()
     roots = (ROOT / "tests", ROOT / "services" / "connector-runtime" / "tests")
     for test_root in roots:
         if not test_root.exists():
             continue
-        for path in sorted(test_root.rglob("test_*.py")):
-            text = path.read_text(encoding="utf-8")
+        for test_path in sorted(test_root.rglob("test_*.py")):
+            text = test_path.read_text(encoding="utf-8")
             if SKIP_TOKEN.search(text):
-                observed.add(path.relative_to(ROOT).as_posix())
+                observed.add(test_path.relative_to(ROOT).as_posix())
 
     missing = observed - set(registered)
     stale = set(registered) - observed
@@ -240,10 +265,10 @@ def validate_skip_register() -> None:
     workflow_text = "\n".join(
         path.read_text(encoding="utf-8") for path in sorted(WORKFLOW_DIR.glob("*.y*ml"))
     )
-    for path, item in registered.items():
+    for registered_path, item in registered.items():
         require(
             item["required_job"] in workflow_text,
-            f"{path}: required CI job is not present",
+            f"{registered_path}: required CI job is not present",
         )
 
 
@@ -267,13 +292,11 @@ def api_get(url: str, token: str) -> Any:
 
 
 def rules_by_type(ruleset: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    rules = ruleset.get("rules")
-    require(isinstance(rules, list), "live ruleset rules are unavailable")
+    rules = require_list(ruleset.get("rules"), "live ruleset rules are unavailable")
     result: dict[str, dict[str, Any]] = {}
-    for item in rules:
-        require(isinstance(item, dict), "live ruleset contains an invalid rule")
-        rule_type = item.get("type")
-        require(isinstance(rule_type, str) and rule_type, "live ruleset rule type is invalid")
+    for value in rules:
+        item = require_mapping(value, "live ruleset contains an invalid rule")
+        rule_type = require_string(item.get("type"), "live ruleset rule type is invalid")
         require(rule_type not in result, f"live ruleset has duplicate rule type: {rule_type}")
         result[rule_type] = item
     return result
@@ -298,14 +321,22 @@ def validate_live_ruleset(
     require("bypass_actors" in ruleset, "admin token cannot inspect live ruleset bypass actors")
     require(ruleset.get("bypass_actors") == [], "live ruleset permits bypass actors")
 
-    conditions = ruleset.get("conditions")
-    require(isinstance(conditions, dict), "live ruleset conditions are unavailable")
-    ref_name = conditions.get("ref_name")
-    require(isinstance(ref_name, dict), "live ruleset ref-name condition is unavailable")
-    includes = ref_name.get("include")
-    excludes = ref_name.get("exclude")
-    require(isinstance(includes, list), "live ruleset include condition is invalid")
-    require(isinstance(excludes, list), "live ruleset exclude condition is invalid")
+    conditions = require_mapping(
+        ruleset.get("conditions"),
+        "live ruleset conditions are unavailable",
+    )
+    ref_name = require_mapping(
+        conditions.get("ref_name"),
+        "live ruleset ref-name condition is unavailable",
+    )
+    includes = require_list(
+        ref_name.get("include"),
+        "live ruleset include condition is invalid",
+    )
+    excludes = require_list(
+        ref_name.get("exclude"),
+        "live ruleset exclude condition is invalid",
+    )
     allowed_targets = {"~DEFAULT_BRANCH", "refs/heads/main"}
     include_set = set(includes)
     require(
@@ -328,9 +359,8 @@ def validate_live_ruleset(
         "live ruleset missing controls: " + ", ".join(sorted(missing_rule_types)),
     )
 
-    pull_request_parameters = observed_rules["pull_request"].get("parameters")
-    require(
-        isinstance(pull_request_parameters, dict),
+    pull_request_parameters = require_mapping(
+        observed_rules["pull_request"].get("parameters"),
         "live pull-request rule parameters are unavailable",
     )
     require(
@@ -349,9 +379,8 @@ def validate_live_ruleset(
         "live review-thread resolution drift",
     )
 
-    status_parameters = observed_rules["required_status_checks"].get("parameters")
-    require(
-        isinstance(status_parameters, dict),
+    status_parameters = require_mapping(
+        observed_rules["required_status_checks"].get("parameters"),
         "live status-check rule parameters are unavailable",
     )
     require(
@@ -359,18 +388,30 @@ def validate_live_ruleset(
         is encoded.get("require_branch_up_to_date"),
         "live branch-up-to-date requirement drift",
     )
-    required_checks = status_parameters.get("required_status_checks")
-    require(isinstance(required_checks, list), "live required status checks are unavailable")
-    contexts: list[str] = []
-    for item in required_checks:
-        require(isinstance(item, dict), "live required status check is invalid")
-        context = item.get("context")
-        require(isinstance(context, str) and context, "live status-check context is invalid")
-        contexts.append(context)
+    required_checks = require_list(
+        status_parameters.get("required_status_checks"),
+        "live required status checks are unavailable",
+    )
+    check_bindings: list[tuple[str, int]] = []
+    for value in required_checks:
+        item = require_mapping(value, "live required status check is invalid")
+        context = require_string(item.get("context"), "live status-check context is invalid")
+        integration_id = item.get("integration_id")
+        if not isinstance(integration_id, int) or integration_id <= 0:
+            raise GovernanceError("live status-check integration ID is invalid")
+        check_bindings.append((context, integration_id))
     require_exact_strings(
-        contexts,
+        [context for context, _ in check_bindings],
         EXPECTED_REQUIRED_STATUS_CHECKS,
         label="live required status checks",
+    )
+    require(
+        set(check_bindings)
+        == {
+            (context, REQUIRED_CHECK_APP_ID)
+            for context in EXPECTED_REQUIRED_STATUS_CHECKS
+        },
+        "live required status-check app binding drift",
     )
 
 
@@ -378,16 +419,22 @@ def validate_live(policy: dict[str, Any]) -> None:
     token = os.environ.get("CODESTRA_REPOSITORY_ADMIN_TOKEN", "")
     require(bool(token), "CODESTRA_REPOSITORY_ADMIN_TOKEN is required for --live")
     base = "https://api.github.com/repos/appolon1908-hue/Middleware-"
-    repo = api_get(base, token)
-    merge = policy["merge_policy"]
+    repo = require_mapping(api_get(base, token), "live repository response is invalid")
+    merge = require_mapping(policy["merge_policy"], "merge policy is missing")
     for key, expected in merge.items():
         require(repo.get(key) is expected, f"live repository setting drift: {key}")
 
-    branch = api_get(f"{base}/branches/main", token)
+    branch = require_mapping(
+        api_get(f"{base}/branches/main", token),
+        "live branch response is invalid",
+    )
     require(branch.get("protected") is True, "live main branch is not protected")
 
-    rulesets = api_get(f"{base}/rulesets?per_page=100", token)
-    require(isinstance(rulesets, list) and rulesets, "live repository has no ruleset")
+    rulesets = require_list(
+        api_get(f"{base}/rulesets?per_page=100", token),
+        "live repository has no ruleset",
+        nonempty=True,
+    )
     matching = [
         item
         for item in rulesets

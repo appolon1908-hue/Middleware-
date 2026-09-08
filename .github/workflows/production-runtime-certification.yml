@@ -17,14 +17,9 @@ concurrency:
 
 jobs:
   certify:
-    if: >-
-      github.repository == 'appolon1908-hue/Middleware-' &&
-      github.event.issue.number == 118 &&
-      github.event.issue.pull_request == null &&
-      github.event.comment.user.login == 'appolon1908-hue' &&
-      github.event.comment.user.id == 275410064 &&
-      github.event.comment.author_association == 'OWNER' &&
-      github.event.comment.body == '/deploy-middleware-production-readonly v1'
+    # RUNTIME_MUTATION_DISABLED=true
+    # Infustruction-repo is the sole infrastructure runtime authority.
+    if: ${{ false }}
     name: Deploy and certify exact immutable production canary
     runs-on: ubuntu-24.04
     timeout-minutes: 60

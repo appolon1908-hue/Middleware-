@@ -58,6 +58,17 @@ image digest. Recording a fabricated candidate would weaken the exact-source
 release gate. Therefore `PENDING_EXACT_PROTECTED_MERGE_BUILD` is the only valid
 state at this stage.
 
+Two later signed `0057_platform_service_catalog` bundles are recorded as
+non-authoritative evidence: source `164969b4824fb4d2eb38b232bfb7abc18e33d8ac`
+with digest `sha256:18017a1a40a7969495661446badd8b43d1d4153c2036d89b0fb3065469e27941`,
+and its previous release source
+`4668de7d7ddc6f98968c06b7dc02d7650ff5e88a` with digest
+`sha256:41ae78d368b5e2db2e9fe9be50fd5041b3f1a07ae4837170a76a68889be565e6`.
+Their signatures, provenance, SBOMs, and vulnerability reports pass independent
+verification. The records are deliberately not promoted: the protected merge
+created by this change must receive its own exact-head release, and recovery
+and runtime certification remain separate gates.
+
 ## Historical signed predecessor
 
 The following artifact remains valid evidence for the earlier release path, but

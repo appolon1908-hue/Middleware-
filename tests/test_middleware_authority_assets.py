@@ -65,6 +65,21 @@ def test_current_candidate_must_remain_pending_and_null(tmp_path: Path) -> None:
     assert any("must be null" in error for error in errors)
 
 
+def test_observed_signed_evidence_must_use_current_schema_and_remain_non_authoritative(
+    tmp_path: Path,
+) -> None:
+    _copy_assets(tmp_path)
+    path = tmp_path / validator.CURRENT_AUTHORITY_PATH
+    value = json.loads(path.read_text(encoding="utf-8"))
+    evidence = value["artifactAuthority"]["latestVerifiedSignedEvidence"]
+    evidence["schemaHead"] = "0056_klyrow_delivery_events"
+    evidence["promotionAuthorized"] = True
+    path.write_text(json.dumps(value), encoding="utf-8")
+    errors = validator.validate_assets(tmp_path)
+    assert any("schema head must be 0057_platform_service_catalog" in error for error in errors)
+    assert any("promotion must be forbidden" in error for error in errors)
+
+
 def test_historical_predecessor_cannot_authorize_promotion(
     tmp_path: Path,
 ) -> None:

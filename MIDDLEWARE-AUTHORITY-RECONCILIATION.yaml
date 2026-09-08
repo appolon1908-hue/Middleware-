@@ -1,5 +1,5 @@
 schema: codestra.middleware-authority-reconciliation.v3
-captured_at: '2026-09-04T22:07:12Z'
+captured_at: '2026-09-08T15:52:26Z'
 snapshot_role: historical_observed_inventory_not_deployment_authority
 supersedes_snapshot:
   canonical_anchor: f3437709c06747249586598590145234ea2c7327
@@ -15,6 +15,52 @@ decision:
   required_schema_head: 0057_platform_service_catalog
   candidate_status: PENDING_EXACT_PROTECTED_MERGE_BUILD
   current_signed_candidate: null
+  latest_verified_signed_evidence:
+    role: observed_signed_evidence_not_static_authority
+    promotion_authorized: false
+    source_sha: 164969b4824fb4d2eb38b232bfb7abc18e33d8ac
+    git_tree_id: 682858ff10dfdcf4c42e7dd352cc8874d9cc7dc6
+    release_id: 164969b4824f-18017a1a40a7
+    workflow_run_id: 34236130828
+    workflow_run_attempt: 1
+    artifact_id: 10060015854
+    artifact_archive_digest: sha256:f940575a8f45f7ddae47d67ef539eb1dbe3f4b663198845b4b8062598fb925ee
+    image: ghcr.io/appolon1908-hue/codestra-middleware@sha256:18017a1a40a7969495661446badd8b43d1d4153c2036d89b0fb3065469e27941
+    image_digest: sha256:18017a1a40a7969495661446badd8b43d1d4153c2036d89b0fb3065469e27941
+    schema_head: 0057_platform_service_catalog
+    release_manifest_sha256: sha256:250c0b6a916c2b18a6f7b46e17a83b23d327e11c13e0354924b28fd4be1caf1b
+    sigstore_bundle_sha256: sha256:ab097f5e7547d63b67cc80b0b2d3998d53d7c91dc5db3081fee7772c14ea7400
+    sbom_sha256: sha256:59f01d88604b1fd03e6ded7d70cfd80acf249b6c033e3f358de45242ff365986
+    vulnerability_report_sha256: sha256:8d94caa3fbf4ca94e1a873c1b9c709d1d0e2a621f2c88e61055c6f5c9e63e851
+    signature: sigstore_keyless_verified
+    provenance: slsa_v1_verified
+    sbom: spdx_2_3_verified
+    vulnerability_gate: PASS
+    deployment_status: NOT_EXECUTED
+    verification: PASS
+  previous_verified_signed_evidence:
+    role: observed_signed_evidence_not_static_authority
+    promotion_authorized: false
+    source_sha: 4668de7d7ddc6f98968c06b7dc02d7650ff5e88a
+    git_tree_id: 478e89c1e47b71e6619b015926f7337660f7f6b8
+    release_id: 4668de7d7ddc-41ae78d368b5
+    workflow_run_id: 34173524024
+    workflow_run_attempt: 1
+    artifact_id: 10036514846
+    artifact_archive_digest: sha256:0a678bdb2d8796bb2d09d3203bb92a5eefeac447c76e49156917c5e5c5bf7adf
+    image: ghcr.io/appolon1908-hue/codestra-middleware@sha256:41ae78d368b5e2db2e9fe9be50fd5041b3f1a07ae4837170a76a68889be565e6
+    image_digest: sha256:41ae78d368b5e2db2e9fe9be50fd5041b3f1a07ae4837170a76a68889be565e6
+    schema_head: 0057_platform_service_catalog
+    release_manifest_sha256: sha256:64564dfb72fea44a14e24dddbdfbfb069d7c1543b1005575a5a0d89ccb8a4232
+    sigstore_bundle_sha256: sha256:2f8a0de014a06d5a3c4b522de8a28e8a422a19877d23124d43da4fc1fe3eadd4
+    sbom_sha256: sha256:2ab69f32336a37b4f44990b31b108e3be79eea2c938e4b8079d3446f253b3a8a
+    vulnerability_report_sha256: sha256:3d1d22286c66070a2a6215f7768092af40e98ef2dc8db1a6ff7936322c9622c2
+    signature: sigstore_keyless_verified
+    provenance: slsa_v1_verified
+    sbom: spdx_2_3_verified
+    vulnerability_gate: PASS
+    rollback_rehearsal_status: NOT_EXECUTED
+    verification: PASS
   legacy_source_repository: Codestra-SRL/codestra-middleware
   legacy_role: rollback_only
   blind_whole_fleet_replacement: false
@@ -114,10 +160,8 @@ backup:
   rollback_rehearsal_status: NOT_EXECUTED
 
 next_required_evidence:
-  - merge this correction through protected main
-  - build and sign the exact protected merge SHA
-  - verify schema head 0057_platform_service_catalog in the release manifest
-  - record immutable image digest, provenance, SBOM, and vulnerability evidence
+  - merge the canonical orchestrator contract through protected main
+  - build and sign the exact protected merge SHA before candidate admission
   - revalidate all Server A runtime identities
   - mirror or archive all rollback images
   - prove isolated restore and rollback

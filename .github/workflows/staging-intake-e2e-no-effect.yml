@@ -25,7 +25,9 @@ env:
 
 jobs:
   certify-no-effect:
-    if: github.ref == 'refs/heads/main'
+    # RUNTIME_MUTATION_DISABLED=true
+    # This job contacts staging APIs; repository preparation does not authorize it.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     environment: intake-staging-certification
     timeout-minutes: 10

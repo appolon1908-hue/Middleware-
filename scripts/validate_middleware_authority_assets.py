@@ -30,6 +30,8 @@ EXPECTED_LOCAL_BACKUPS = 11
 CURRENT_SCHEMA_HEAD = "0057_platform_service_catalog"
 PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+SHA40 = re.compile(r"^[0-9a-f]{40}$")
+CANONICAL_IMAGE = "ghcr.io/appolon1908-hue/codestra-middleware"
 
 
 def _read(root: Path, relative: Path, errors: list[str]) -> str:
@@ -62,6 +64,55 @@ def _load_object(
     if not isinstance(value, dict):
         errors.append(f"{label} root must be an object")
         return {}
+    return value
+
+
+def _validate_observed_signed_evidence(
+    value: Any,
+    *,
+    label: str,
+    errors: list[str],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        errors.append(f"{label} must be an object")
+        return {}
+    if value.get("role") != "observed-signed-evidence-not-static-authority":
+        errors.append(f"{label} role must deny static authority")
+    if value.get("promotionAuthorized") is not False:
+        errors.append(f"{label} promotion must be forbidden")
+    if not isinstance(value.get("sourceSha"), str) or SHA40.fullmatch(value["sourceSha"]) is None:
+        errors.append(f"{label} source SHA is malformed")
+    if not isinstance(value.get("gitTreeId"), str) or SHA40.fullmatch(value["gitTreeId"]) is None:
+        errors.append(f"{label} Git tree ID is malformed")
+    digest = value.get("imageDigest")
+    if not isinstance(digest, str) or DIGEST.fullmatch(digest) is None:
+        errors.append(f"{label} image digest is malformed")
+    if value.get("imageReference") != f"{CANONICAL_IMAGE}@{digest}":
+        errors.append(f"{label} image reference is not canonical and digest-bound")
+    if value.get("schemaHead") != CURRENT_SCHEMA_HEAD:
+        errors.append(f"{label} schema head must be {CURRENT_SCHEMA_HEAD}")
+    for field in (
+        "artifactArchiveDigest",
+        "releaseManifestSha256",
+        "sigstoreBundleSha256",
+        "sbomSha256",
+        "vulnerabilityReportSha256",
+    ):
+        if not isinstance(value.get(field), str) or DIGEST.fullmatch(value[field]) is None:
+            errors.append(f"{label} {field} is malformed")
+    for field in ("workflowRunId", "workflowRunAttempt", "artifactId"):
+        if not isinstance(value.get(field), int) or value[field] <= 0:
+            errors.append(f"{label} {field} is invalid")
+    expected = {
+        "signature": "sigstore-keyless-verified",
+        "provenance": "slsa-v1-verified",
+        "sbom": "spdx-2.3-verified",
+        "vulnerabilityGate": "PASS",
+        "verification": "PASS",
+    }
+    for field, expected_value in expected.items():
+        if value.get(field) != expected_value:
+            errors.append(f"{label} {field} evidence mismatch")
     return value
 
 
@@ -166,6 +217,20 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         errors.append("current candidate status must remain exact-main-build pending")
     if artifacts.get("currentSignedCandidate") is not None:
         errors.append("current signed candidate must be null before exact-main build")
+    latest = _validate_observed_signed_evidence(
+        artifacts.get("latestVerifiedSignedEvidence"),
+        label="latest verified signed evidence",
+        errors=errors,
+    )
+    previous = _validate_observed_signed_evidence(
+        artifacts.get("previousVerifiedSignedEvidence"),
+        label="previous verified signed evidence",
+        errors=errors,
+    )
+    if latest.get("sourceSha") == previous.get("sourceSha"):
+        errors.append("latest and previous signed evidence must use distinct source SHAs")
+    if latest.get("imageDigest") == previous.get("imageDigest"):
+        errors.append("latest and previous signed evidence must use distinct image digests")
     predecessor = artifacts.get("historicalSignedPredecessor", {})
     if not isinstance(predecessor, dict):
         errors.append("historicalSignedPredecessor must be an object")

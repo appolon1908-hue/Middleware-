@@ -10,6 +10,10 @@ from scripts.apply_repository_governance import (
     repository_patch,
     ruleset_payload,
 )
+from scripts.validate_repository_governance import (
+    GovernanceError,
+    validate_live_ruleset,
+)
 
 
 @pytest.fixture()
@@ -48,6 +52,7 @@ def policy() -> dict:
             "require_review_thread_resolution": True,
             "require_branch_up_to_date": True,
             "required_status_checks": [
+                "validate",
                 "Validate middleware source head",
                 "Validate middleware merge result",
                 "docker-runtime-build",
@@ -58,6 +63,7 @@ def policy() -> dict:
                 "Disposable NATS JetStream integration",
                 "Temporal critical workflow integration",
                 "Synthetic no-effect acceptance E2E",
+                "orchestrator-contract",
             ],
         },
     }
@@ -106,6 +112,9 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     assert [item["context"] for item in status["required_status_checks"]] == policy[
         "default_branch_ruleset"
     ]["required_status_checks"]
+    assert {
+        item["integration_id"] for item in status["required_status_checks"]
+    } == {15368}
 
 
 def test_ruleset_rejects_duplicate_status_checks(policy: dict) -> None:
@@ -116,6 +125,23 @@ def test_ruleset_rejects_duplicate_status_checks(policy: dict) -> None:
 
     with pytest.raises(GovernanceApplyError, match="duplicates"):
         ruleset_payload(broken)
+
+
+def test_live_ruleset_requires_github_actions_app_binding(policy: dict) -> None:
+    payload = ruleset_payload(policy)
+    live = {
+        **payload,
+        "source_type": "Repository",
+        "source": "appolon1908-hue/Middleware-",
+    }
+    validate_live_ruleset(live, policy["default_branch_ruleset"])
+
+    checks = next(
+        item for item in live["rules"] if item["type"] == "required_status_checks"
+    )["parameters"]["required_status_checks"]
+    checks[0]["integration_id"] = 1
+    with pytest.raises(GovernanceError, match="app binding drift"):
+        validate_live_ruleset(live, policy["default_branch_ruleset"])
 
 
 def test_production_environment_uses_automated_gates_without_reviewers() -> None:

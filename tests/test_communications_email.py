@@ -364,6 +364,91 @@ def test_klyrow_signed_event_updates_canonical_read_model(test_settings) -> None
         assert after_conflict.json()["status"] == "delivered"
 
 
+def test_klyrow_unsubscribe_suppresses_recipient_before_ack(test_settings) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(to=["person@codestra.co"]),
+            headers=_headers(key="unsubscribe-source"),
+        ).json()
+        event_id = str(uuid4())
+        event = {
+            "event_id": event_id,
+            "event_type": "codestra.email.message.unsubscribed",
+            "event_version": "1.0",
+            "occurred_at": "2026-09-08T00:00:00Z",
+            "received_at": "2026-09-08T00:00:01Z",
+            "source": "klyrow-gateway",
+            "tenant_id": "tenant-1",
+            "correlation_id": "email-correlation-1",
+            "causation_id": created["messageId"],
+            "idempotency_key": event_id,
+            "payload": {
+                "messageId": created["messageId"],
+                "recipient": "PERSON@codestra.co",
+                "status": "unsubscribed",
+            },
+            "metadata": {},
+        }
+        response = client.post(
+            "/api/v1/klyrow/events",
+            content=json.dumps(event, separators=(",", ":"), sort_keys=True),
+            headers=_sign(event),
+        )
+        assert response.status_code == 202, response.text
+        assert ("tenant-1", "email", "person@codestra.co") in (
+            runtime.communications.store.suppressions
+        )
+        fetched = client.get(
+            f"/v1/communications/messages/{created['messageId']}",
+            headers=_headers(scope="klyrow.middleware.status.read"),
+        )
+        assert fetched.json()["status"] == "suppressed"
+        blocked = client.post(
+            "/v1/communications/messages",
+            json=_message(to=["person@codestra.co"]),
+            headers=_headers(key="unsubscribe-blocked"),
+        )
+        assert blocked.status_code == 202
+        assert blocked.json()["status"] == "suppressed"
+        assert blocked.json()["failureCode"] == "recipient_suppressed"
+
+
+def test_klyrow_unsubscribe_without_recipient_is_rejected(test_settings) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="unsubscribe-missing-source"),
+        ).json()
+        event_id = str(uuid4())
+        event = {
+            "event_id": event_id,
+            "event_type": "codestra.email.message.unsubscribed",
+            "event_version": "1.0",
+            "occurred_at": "2026-09-08T00:00:00Z",
+            "received_at": "2026-09-08T00:00:01Z",
+            "source": "klyrow-gateway",
+            "tenant_id": "tenant-1",
+            "correlation_id": "email-correlation-1",
+            "causation_id": created["messageId"],
+            "idempotency_key": event_id,
+            "payload": {"messageId": created["messageId"], "status": "unsubscribed"},
+            "metadata": {},
+        }
+        response = client.post(
+            "/api/v1/klyrow/events",
+            content=json.dumps(event, separators=(",", ":"), sort_keys=True),
+            headers=_sign(event),
+        )
+        assert response.status_code == 400, response.text
+        assert runtime.communications.store.suppressions == set()
+
+
 def test_email_unknown_command_outcome_is_indeterminate_without_resubmission(
     test_settings,
 ) -> None:

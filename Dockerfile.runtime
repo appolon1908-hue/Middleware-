@@ -39,6 +39,7 @@ COPY --chown=65532:65532 contracts ./contracts
 COPY --chown=65532:65532 migrations ./migrations
 COPY --chown=65532:65532 scripts/migrate_runtime.py ./scripts/migrate_runtime.py
 COPY --chown=65532:65532 scripts/production_migration_authority.py ./scripts/production_migration_authority.py
+COPY --chown=65532:65532 scripts/runtime_sql_schema.py ./scripts/runtime_sql_schema.py
 USER 65532:65532
 
 FROM runtime-common AS runtime

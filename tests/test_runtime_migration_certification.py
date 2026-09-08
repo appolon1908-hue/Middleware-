@@ -21,6 +21,8 @@ class Database:
         self.tables.update(runner.RECEIPT_TABLES.values())
         self.receipts = {"core": list(range(1, 11)), "automation-v2": [1]}
         self.executed = []
+        self.structural_checks = 0
+        self.structural_error = False
 
     async def fetchval(self, query, *args):
         if "pg_try_advisory_lock" in query:
@@ -40,6 +42,22 @@ class Database:
 
     async def execute(self, sql):
         self.executed.append(sql)
+
+
+@pytest.fixture(autouse=True)
+def structural_verifier_for_ordering_unit_tests(monkeypatch):
+    # These tests use an in-memory connection to test runner sequencing only.
+    # The catalog verifier has independent unit and real-PostgreSQL tests.
+    from scripts import runtime_sql_schema
+
+    async def verify(conn, root):
+        assert isinstance(conn, Database)
+        assert root == ROOT
+        conn.structural_checks += 1
+        if conn.structural_error:
+            raise runtime_sql_schema.SchemaDriftError("damaged SQL-managed table")
+
+    monkeypatch.setattr(runtime_sql_schema, "verify_sql_schema", verify)
 
 
 def run(database, *, verify_only=False):
@@ -104,6 +122,7 @@ def test_migration_applies_alembic_then_sql_then_actual_readback(monkeypatch, ca
     monkeypatch.setattr(runner, "upgrade_alembic", upgrade)
     run(database)
     assert upgraded == [HEAD]
+    assert database.structural_checks == 1
     assert len(database.executed) == 11
     assert "RUNTIME_SCHEMA_VERIFIED=PASS" in capsys.readouterr().out
 
@@ -162,6 +181,7 @@ def test_verify_only_never_invokes_upgrade_or_ddl(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "RUNTIME_SCHEMA_VERIFIED=PASS" in output
     assert "RUNTIME_MIGRATION=PASS" not in output
+    assert database.structural_checks == 1
 
 
 def test_concurrent_runner_cannot_apply(monkeypatch):
@@ -214,3 +234,22 @@ def test_test_image_preserves_the_complete_dockerignore_policy():
     # This copy is inspected from inside the test image as well as from source.
     reconstructed = [line.strip().split("'", 2)[1] for line in block.splitlines() if "'" in line]
     assert reconstructed == (ROOT / ".dockerignore").read_text().splitlines()
+
+
+@pytest.mark.parametrize("verify_only", [False, True])
+def test_structural_failure_never_reports_schema_success(monkeypatch, capsys, verify_only):
+    from scripts.runtime_sql_schema import SchemaDriftError
+
+    database = Database([HEAD])
+    database.structural_error = True
+
+    async def upgrade(*args):
+        pass
+
+    monkeypatch.setattr(runner, "upgrade_alembic", upgrade)
+    with pytest.raises(SchemaDriftError, match="damaged"):
+        run(database, verify_only=verify_only)
+    assert database.structural_checks == 1
+    assert "=PASS" not in capsys.readouterr().out
+    if verify_only:
+        assert database.executed == []

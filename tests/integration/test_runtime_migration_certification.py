@@ -69,3 +69,77 @@ def test_real_fresh_and_predecessor_migrations(predecessor, monkeypatch):
             await admin.close()
 
     asyncio.run(scenario())
+
+
+SQL_CORRUPTIONS = {
+    "table": "DROP TABLE public.middleware_realtime_tickets",
+    "column": "ALTER TABLE public.middleware_automation_jobs DROP COLUMN safe_terminal_result",
+    "column_type": "ALTER TABLE public.middleware_automation_jobs ALTER COLUMN safe_terminal_result TYPE text USING safe_terminal_result::text",
+    "nullability": "ALTER TABLE public.middleware_automation_jobs ALTER COLUMN actor_context DROP NOT NULL",
+    "default": "ALTER TABLE public.middleware_automation_jobs ALTER COLUMN max_attempts SET DEFAULT 9",
+    "constraint": "ALTER TABLE public.middleware_automation_jobs DROP CONSTRAINT middleware_automation_jobs_workflow_version_check",
+    "index": "DROP INDEX public.middleware_automation_jobs_event_idx",
+    "trigger": "ALTER TABLE public.middleware_automation_audit DISABLE TRIGGER middleware_automation_audit_immutable",
+    "trigger_function": "CREATE OR REPLACE FUNCTION public.middleware_reject_automation_evidence_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END; $$",
+    "fk_enforcement": "ALTER TABLE public.middleware_automation_dispatch_outbox DISABLE TRIGGER ALL",
+    "sequence": "ALTER SEQUENCE public.middleware_outbox_id_seq INCREMENT BY 2",
+    "rls": "ALTER TABLE public.middleware_automation_jobs ENABLE ROW LEVEL SECURITY",
+}
+
+
+@pytest.mark.parametrize("corruption", sorted(SQL_CORRUPTIONS))
+def test_actual_sql_structure_cannot_be_certified_from_intact_receipts(corruption, monkeypatch, capsys):
+    import asyncpg
+    from scripts.runtime_sql_schema import SchemaDriftError
+
+    async def scenario():
+        base = os.environ["DATABASE_URL"]
+        parsed = urlsplit(base)
+        assert os.getenv("RUNTIME_INTEGRATION_ALLOW_DISPOSABLE") == "YES"
+        assert parsed.scheme in {"postgres", "postgresql"}
+        assert parsed.hostname in {"localhost", "127.0.0.1"}
+        assert not parsed.query and not parsed.fragment
+        assert re.fullmatch(r"middleware_test_[A-Za-z0-9_]+", unquote(parsed.path.lstrip("/")))
+        name = "middleware_test_schema_" + uuid4().hex
+        url = urlunsplit((parsed.scheme, parsed.netloc, "/" + name, "", ""))
+        admin = await asyncpg.connect(base)
+        created = False
+        try:
+            await admin.execute(f'CREATE DATABASE "{name}"')
+            created = True
+            monkeypatch.setenv("DATABASE_URL", url)
+            head, _, _ = validate_authority(runner.ROOT)
+            monkeypatch.setenv("SCHEMA_HEAD", head)
+            await runner.main()
+            conn = await asyncpg.connect(url)
+            try:
+                # Sequence *values* are data, not structural drift.
+                await conn.fetchval("SELECT nextval('public.middleware_outbox_id_seq')")
+                await runner.main(verify_only=True)
+                receipts_before = await conn.fetch("SELECT * FROM public.middleware_automation_schema_migrations")
+                await conn.execute(SQL_CORRUPTIONS[corruption])
+                assert await conn.fetchval("SELECT version_num FROM public.alembic_version") == head
+                assert await conn.fetchval("SELECT count(*) FROM public.middleware_schema_migrations") == 10
+                assert await conn.fetch("SELECT * FROM public.middleware_automation_schema_migrations") == receipts_before
+                capsys.readouterr()
+                with pytest.raises(SchemaDriftError):
+                    await runner.main(verify_only=True)
+                assert "=PASS" not in capsys.readouterr().out
+                if corruption == "column":
+                    # IF NOT EXISTS does not restore this dropped, unindexed
+                    # column. A normal rerun must reject the damage too.
+                    with pytest.raises(SchemaDriftError, match="structure mismatch"):
+                        await runner.main()
+                    assert "=PASS" not in capsys.readouterr().out
+                    assert await conn.fetchval(
+                        "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' "
+                        "AND table_name='middleware_automation_jobs' AND column_name='safe_terminal_result'"
+                    ) == 0
+            finally:
+                await conn.close()
+        finally:
+            if created:
+                await admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+            await admin.close()
+
+    asyncio.run(scenario())

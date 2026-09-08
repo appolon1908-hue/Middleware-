@@ -121,6 +121,8 @@ async def upgrade_alembic(url: str, expected: str) -> None:
 
 
 async def verify_complete_schema(conn, expected: str, graph, bundles) -> None:
+    from scripts.runtime_sql_schema import verify_sql_schema
+
     observed = await verify_database_lineage(conn, graph)
     if observed != (expected,):
         raise MigrationError("actual Alembic head does not match the accepted release")
@@ -136,6 +138,7 @@ async def verify_complete_schema(conn, expected: str, graph, bundles) -> None:
     for table in PLATFORM_TABLES:
         if await conn.fetchval("SELECT to_regclass($1)::text", "public." + table) is None:
             raise MigrationError("required platform service catalog table is missing")
+    await verify_sql_schema(conn, ROOT)
 
 
 async def run_migrations(conn, sqlalchemy_url: str, expected: str, graph, bundles, *, verify_only: bool) -> None:
@@ -164,7 +167,10 @@ async def main(*, verify_only: bool = False) -> None:
     sys.path.insert(0, str(ROOT))
     from scripts.production_migration_authority import validate_authority
 
+    from scripts.runtime_sql_schema import load_contract
+
     expected, graph, history_digest = validate_authority(ROOT)
+    load_contract(ROOT, history_digest)  # Reject missing/stale baseline before any DB access.
     if os.environ.get("SCHEMA_HEAD", expected) != expected:
         raise MigrationError("SCHEMA_HEAD differs from the protected release authority")
     bundles = migration_sets()  # Detect missing image assets before connecting.

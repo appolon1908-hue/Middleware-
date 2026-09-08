@@ -98,6 +98,21 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         status["parameters"]["required_status_checks"][0].pop("integration_id")
         self.assertFalse(MODULE.ruleset_meets_baseline(weakened, effective))
 
+    def test_merge_repairs_missing_baseline_rule_type(self) -> None:
+        baseline, existing = self.stronger_live_ruleset()
+        existing["rules"] = [
+            rule
+            for rule in existing["rules"]
+            if rule["type"] != "required_status_checks"
+        ]
+
+        self.assertFalse(MODULE.ruleset_meets_baseline(existing, baseline))
+        merged = MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+        normalized = MODULE.normalize_ruleset(merged)
+
+        self.assertIn("required_status_checks", normalized["rules"])
+        self.assertIn("required_signatures", normalized["additional_rules"])
+
     def test_weaker_live_ruleset_fails_baseline(self) -> None:
         baseline, existing = self.stronger_live_ruleset()
         status = next(

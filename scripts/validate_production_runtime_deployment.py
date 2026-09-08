@@ -36,6 +36,52 @@ def require(condition: bool, message: str) -> None:
         raise ValidationError(message)
 
 
+def validate_runtime_workflow(workflow: str) -> None:
+    """Require the repository-local runtime workflow to remain inert.
+
+    Middleware supplies signed source/image evidence.  It is not a runtime
+    mutation authority, so retaining the historical certification procedure is
+    safe only while its sole job is unconditionally disabled.
+    """
+    require(workflow.count("\njobs:\n") == 1, "runtime workflow must define one jobs section")
+    jobs_section = workflow.partition("\njobs:\n")[2]
+    jobs = re.findall(r"(?m)^  ([A-Za-z0-9_-]+):\s*$", jobs_section)
+    require(jobs == ["certify"], "runtime workflow must contain only the disabled certify job")
+    require(
+        re.search(r"(?m)^    if:\s*\$\{\{\s*false\s*\}\}\s*$", workflow) is not None,
+        "runtime workflow certify job must remain unconditionally disabled",
+    )
+    for item in (
+        "RUNTIME_MUTATION_DISABLED=true",
+        "Infustruction-repo is the sole infrastructure runtime authority.",
+        "environment: middleware-runtime-certification",
+        "MIDDLEWARE_DEPLOY_HOST",
+        "MIDDLEWARE_DEPLOY_SSH_KEY",
+        "MIDDLEWARE_DEPLOY_HOST_KEY",
+        "StrictHostKeyChecking=yes",
+        "UserKnownHostsFile=",
+        "ssh_options=(",
+        "scp_options=(",
+        '-p "$DEPLOY_PORT"',
+        '-P "$DEPLOY_PORT"',
+        'scp "${scp_options[@]}" "$BUNDLE_ARCHIVE"',
+        'scp "${scp_options[@]}" "$remote:$evidence_remote"',
+        "codestra-middleware-deploy",
+    ):
+        require(item in workflow, f"workflow requirement missing: {item}")
+    for item in (
+        "ssh-keyscan",
+        "appleboy/ssh-action",
+        "StrictHostKeyChecking=no",
+        'scp "${ssh_options[@]}"',
+    ):
+        require(item not in workflow, f"workflow contains unsafe SSH behavior: {item}")
+    uses = re.findall(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)", workflow)
+    require(bool(uses), "workflow must use pinned actions")
+    for action in uses:
+        require(re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", action) is not None, f"action is not commit-pinned: {action}")
+
+
 def load_contract() -> dict[str, object]:
     value = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     require(isinstance(value, dict), "contract must be an object")
@@ -170,39 +216,7 @@ def validate_source(root: Path = ROOT) -> None:
     for item in ("authorized_keys", "sshd_config", "ssh-keygen"):
         require(item not in install.lower(), f"installer contains SSH mutation: {item}")
 
-    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-    for item in (
-        "github.event.issue.number == 118",
-        "github.event.comment.user.login == 'appolon1908-hue'",
-        "github.event.comment.user.id == 275410064",
-        "github.event.comment.author_association == 'OWNER'",
-        "github.event.comment.body == '/deploy-middleware-production-readonly v1'",
-        "environment: middleware-runtime-certification",
-        "MIDDLEWARE_DEPLOY_HOST",
-        "MIDDLEWARE_DEPLOY_SSH_KEY",
-        "MIDDLEWARE_DEPLOY_HOST_KEY",
-        "StrictHostKeyChecking=yes",
-        "UserKnownHostsFile=",
-        "ssh_options=(",
-        "scp_options=(",
-        '-p "$DEPLOY_PORT"',
-        '-P "$DEPLOY_PORT"',
-        'scp "${scp_options[@]}" "$BUNDLE_ARCHIVE"',
-        'scp "${scp_options[@]}" "$remote:$evidence_remote"',
-        "codestra-middleware-deploy",
-    ):
-        require(item in workflow, f"workflow requirement missing: {item}")
-    for item in (
-        "ssh-keyscan",
-        "appleboy/ssh-action",
-        "StrictHostKeyChecking=no",
-        'scp "${ssh_options[@]}"',
-    ):
-        require(item not in workflow, f"workflow contains unsafe SSH behavior: {item}")
-    uses = re.findall(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)", workflow)
-    require(bool(uses), "workflow must use pinned actions")
-    for action in uses:
-        require(re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", action) is not None, f"action is not commit-pinned: {action}")
+    validate_runtime_workflow(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
 
 def parse_response(path: Path) -> dict[str, str]:

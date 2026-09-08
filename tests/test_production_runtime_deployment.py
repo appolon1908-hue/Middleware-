@@ -56,6 +56,33 @@ def test_source_contract_is_fail_closed() -> None:
     validator.validate_source(ROOT)
 
 
+def test_runtime_workflow_rejects_reenabled_certification_job() -> None:
+    workflow = validator.WORKFLOW_PATH.read_text(encoding="utf-8").replace(
+        "    if: ${{ false }}",
+        "    if: ${{ true }}",
+        1,
+    )
+    with pytest.raises(validator.ValidationError, match="unconditionally disabled"):
+        validator.validate_runtime_workflow(workflow)
+
+
+def test_runtime_workflow_rejects_an_enabled_second_job() -> None:
+    workflow = validator.WORKFLOW_PATH.read_text(encoding="utf-8")
+    workflow += "\n  deploy:\n    runs-on: ubuntu-24.04\n    steps: []\n"
+    with pytest.raises(validator.ValidationError, match="only the disabled certify job"):
+        validator.validate_runtime_workflow(workflow)
+
+
+def test_runtime_workflow_requires_authority_marker() -> None:
+    workflow = validator.WORKFLOW_PATH.read_text(encoding="utf-8").replace(
+        "RUNTIME_MUTATION_DISABLED=true",
+        "RUNTIME_MUTATION_DISABLED=false",
+        1,
+    )
+    with pytest.raises(validator.ValidationError, match="RUNTIME_MUTATION_DISABLED"):
+        validator.validate_runtime_workflow(workflow)
+
+
 def test_response_accepts_exact_contract(tmp_path: Path) -> None:
     path = tmp_path / "response.txt"
     write_response(path, valid_response())

@@ -28,8 +28,6 @@ def load_json(path: Path) -> object:
 def main() -> int:
     errors: list[str] = []
     manifest_dir = ROOT / "connectors" / "manifests"
-    files = sorted(manifest_dir.glob("*.connector.json"))
-
     registry = ConnectorRegistry()
     try:
         records = registry.load_directory(

@@ -20,6 +20,7 @@ CODEOWNERS_PATH = ROOT / ".github" / "CODEOWNERS"
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
+REQUIRED_CHECK_APP_ID = 15368
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -391,15 +392,26 @@ def validate_live_ruleset(
         status_parameters.get("required_status_checks"),
         "live required status checks are unavailable",
     )
-    contexts: list[str] = []
+    check_bindings: list[tuple[str, int]] = []
     for value in required_checks:
         item = require_mapping(value, "live required status check is invalid")
         context = require_string(item.get("context"), "live status-check context is invalid")
-        contexts.append(context)
+        integration_id = item.get("integration_id")
+        if not isinstance(integration_id, int) or integration_id <= 0:
+            raise GovernanceError("live status-check integration ID is invalid")
+        check_bindings.append((context, integration_id))
     require_exact_strings(
-        contexts,
+        [context for context, _ in check_bindings],
         EXPECTED_REQUIRED_STATUS_CHECKS,
         label="live required status checks",
+    )
+    require(
+        set(check_bindings)
+        == {
+            (context, REQUIRED_CHECK_APP_ID)
+            for context in EXPECTED_REQUIRED_STATUS_CHECKS
+        },
+        "live required status-check app binding drift",
     )
 
 

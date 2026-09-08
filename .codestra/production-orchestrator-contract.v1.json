@@ -3,11 +3,12 @@
   "repository": "appolon1908-hue/Middleware-",
   "repository_id": 1347559071,
   "default_branch": "main",
-  "role": "transitional-middleware",
+  "role": "canonical-middleware",
   "release_intent_workflow": ".github/workflows/manual-release-intent.yml",
   "deployment_authority": false,
   "require_verified_commit": true,
   "required_checks": [
+    "orchestrator-contract",
     "validate",
     "docker-test-build",
     "docker-runtime-build",
@@ -21,13 +22,13 @@
     "plan"
   ],
   "artifact_policy": {
-    "minimum_images": 0,
-    "maximum_images": 2,
+    "minimum_images": 1,
+    "maximum_images": 1,
     "require_digest": true,
     "allow_rebuild_after_staging": false,
     "allow_retag_after_staging": false,
-    "require_sbom": false,
-    "require_provenance": false,
+    "require_sbom": true,
+    "require_provenance": true,
     "require_signature": true
   },
   "environments": {},
@@ -46,6 +47,6 @@
     "payment_execution": false
   },
   "blockers": [
-    "This repository is verified as transitional evidence and is not the canonical production Middleware deployment authority."
+    "Infustruction-repo remains the sole infrastructure runtime authority; this canonical Middleware repository supplies source and signed image evidence through plan-only intent."
   ]
 }

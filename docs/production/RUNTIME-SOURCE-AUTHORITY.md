@@ -48,6 +48,18 @@ The field may be populated only by a separately reviewed evidence update after
 the exact protected-main merge has been built, signed, scanned, and verified with
 schema `0057_platform_service_catalog`.
 
+The authority record separately preserves two verified, non-authoritative
+`0057_platform_service_catalog` bundles. `latestVerifiedSignedEvidence` binds
+source `164969b4824fb4d2eb38b232bfb7abc18e33d8ac` to immutable image digest
+`sha256:18017a1a40a7969495661446badd8b43d1d4153c2036d89b0fb3065469e27941`;
+`previousVerifiedSignedEvidence` binds source
+`4668de7d7ddc6f98968c06b7dc02d7650ff5e88a` to digest
+`sha256:41ae78d368b5e2db2e9fe9be50fd5041b3f1a07ae4837170a76a68889be565e6`.
+Both manifests, image signatures, SLSA attestations, SPDX SBOMs, and scan
+reports were independently verified. Both records retain
+`promotionAuthorized=false`; neither replaces exact protected-head resolution
+or runtime recovery evidence.
+
 The prior signed image from source
 `b03b378f3a358de333e37cf6cc7a37668f004b4f` and digest
 `sha256:dfdcfb92538242df9c9e81c27f15f9bd14b2cb840ea4c16d91dccc8f0eed7a3c`

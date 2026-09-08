@@ -1,3 +1,4 @@
+# mypy: disable_error_code="union-attr,arg-type"
 from __future__ import annotations
 
 import asyncio

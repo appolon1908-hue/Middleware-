@@ -240,7 +240,7 @@ def _provider_status_to_canonical(status: str) -> MessageStatus:
         "enroute",
     }:
         return "dispatched"
-    if normalized in {"suppressed"}:
+    if normalized in {"suppressed", "unsubscribed"}:
         return "suppressed"
     if normalized in {"cancelled", "canceled"}:
         return "cancelled"
@@ -996,12 +996,33 @@ class CommunicationsService:
             or envelope.event_type.rsplit(".", 1)[-1]
         )
         status = _provider_status_to_canonical(raw_status)
+        is_email_unsubscribe = (
+            envelope.event_type == "codestra.email.message.unsubscribed"
+        )
+        if is_email_unsubscribe:
+            raw_recipient = (
+                payload.get("recipient")
+                or payload.get("recipient_email")
+                or payload.get("destination")
+                or payload.get("email")
+            )
+            try:
+                recipient = str(EMAIL_ADDRESS.validate_python(raw_recipient)).lower()
+            except ValidationError as exc:
+                raise RequestValidationError(
+                    "email unsubscribe event requires a valid recipient"
+                ) from exc
+            self.store.suppressions.add((tenant_id, "email", recipient))
         provider_reference = (
             payload.get("providerReference")
             or payload.get("provider_reference")
             or payload.get("provider_message_id")
         )
-        ignored_transition = message.status == "delivered" and status != "delivered"
+        ignored_transition = (
+            message.status == "delivered"
+            and status != "delivered"
+            and not is_email_unsubscribe
+        )
         effective_status = message.status if ignored_transition else status
         now = datetime.now(UTC)
         updated = message.model_copy(
@@ -1048,6 +1069,7 @@ class CommunicationsService:
                 "providerStatus": raw_status,
                 "providerOccurredAt": envelope.occurred_at.isoformat(),
                 "ignoredTransition": ignored_transition,
+                "suppressionApplied": is_email_unsubscribe,
             },
             event_id=_provider_event_uuid(tenant_id, event_id),
         )

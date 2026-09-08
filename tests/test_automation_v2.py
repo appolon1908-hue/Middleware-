@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,7 +20,6 @@ from app.automation_v2 import (
     JobClaimRequest,
     MemoryAutomationStore,
     StepRecord,
-    TerminalResult,
     WorkflowRoute,
     WorkflowRouter,
 )

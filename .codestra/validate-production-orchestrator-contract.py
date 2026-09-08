@@ -106,7 +106,8 @@ def validate(contract: dict[str, Any]) -> None:
     artifacts = require_mapping(contract.get("artifact_policy"), "artifact policy is missing")
     minimum = artifacts.get("minimum_images")
     maximum = artifacts.get("maximum_images")
-    require(isinstance(minimum, int) and isinstance(maximum, int), "image bounds must be integers")
+    if not isinstance(minimum, int) or not isinstance(maximum, int):
+        raise ContractError("image bounds must be integers")
     require(0 <= minimum <= maximum, "image bounds are invalid")
     require(artifacts.get("require_digest") is True, "digest-only images are mandatory")
     require(artifacts.get("allow_rebuild_after_staging") is False, "rebuild after staging is forbidden")

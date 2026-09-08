@@ -308,7 +308,6 @@ def merge_ruleset_preserving_stronger_controls(
 ) -> dict[str, Any]:
     """Apply the baseline without deleting stronger live protection."""
 
-    normalize_ruleset(existing)
     normalize_ruleset(baseline)
     merged = copy.deepcopy(dict(baseline))
     existing_rules = rules_by_type(existing)
@@ -319,50 +318,55 @@ def merge_ruleset_preserving_stronger_controls(
             cast_rules = require_list(merged.get("rules"), "merged rules missing")
             cast_rules.append(copy.deepcopy(dict(rule)))
 
-    existing_pull = require_mapping(
-        existing_rules["pull_request"].get("parameters"),
-        "existing pull request parameters missing",
-    )
     merged_pull_value = merged_rules["pull_request"].get("parameters")
     if not isinstance(merged_pull_value, dict):
         raise PolicyError("merged pull request parameters missing")
     merged_pull = merged_pull_value
-    for key, value in existing_pull.items():
-        if key not in merged_pull:
-            merged_pull[key] = copy.deepcopy(value)
-    for key in (
-        "dismiss_stale_reviews_on_push",
-        "require_code_owner_review",
-        "require_extra_approval_for_unattributed_changes",
-        "require_last_push_approval",
-        "required_review_thread_resolution",
-    ):
-        if existing_pull.get(key) is True:
-            merged_pull[key] = True
-    existing_count = existing_pull.get("required_approving_review_count", 0)
-    if not isinstance(existing_count, int) or isinstance(existing_count, bool):
-        raise PolicyError("existing approving-review count invalid")
-    merged_pull["required_approving_review_count"] = max(
-        int(merged_pull["required_approving_review_count"]),
-        existing_count,
-    )
+    existing_pull_rule = existing_rules.get("pull_request")
+    if existing_pull_rule is not None:
+        existing_pull = require_mapping(
+            existing_pull_rule.get("parameters"),
+            "existing pull request parameters missing",
+        )
+        for key, value in existing_pull.items():
+            if key not in merged_pull:
+                merged_pull[key] = copy.deepcopy(value)
+        for key in (
+            "dismiss_stale_reviews_on_push",
+            "require_code_owner_review",
+            "require_extra_approval_for_unattributed_changes",
+            "require_last_push_approval",
+            "required_review_thread_resolution",
+        ):
+            if existing_pull.get(key) is True:
+                merged_pull[key] = True
+        existing_count = existing_pull.get("required_approving_review_count", 0)
+        if not isinstance(existing_count, int) or isinstance(existing_count, bool):
+            raise PolicyError("existing approving-review count invalid")
+        merged_pull["required_approving_review_count"] = max(
+            int(merged_pull["required_approving_review_count"]),
+            existing_count,
+        )
 
-    existing_status = require_mapping(
-        existing_rules["required_status_checks"].get("parameters"),
-        "existing status parameters missing",
-    )
     merged_status_value = merged_rules["required_status_checks"].get("parameters")
     if not isinstance(merged_status_value, dict):
         raise PolicyError("merged status parameters missing")
     merged_status = merged_status_value
-    existing_checks = require_list(
-        existing_status.get("required_status_checks"),
-        "existing status checks missing",
-    )
     baseline_checks = require_list(
         merged_status.get("required_status_checks"),
         "baseline status checks missing",
     )
+    existing_checks: list[Any] = []
+    existing_status_rule = existing_rules.get("required_status_checks")
+    if existing_status_rule is not None:
+        existing_status = require_mapping(
+            existing_status_rule.get("parameters"),
+            "existing status parameters missing",
+        )
+        existing_checks = require_list(
+            existing_status.get("required_status_checks"),
+            "existing status checks missing",
+        )
 
     by_context: dict[str, Mapping[str, Any]] = {}
     for row_value in existing_checks:
@@ -406,7 +410,10 @@ def ruleset_meets_baseline(
     baseline: Mapping[str, Any],
 ) -> bool:
     effective = merge_ruleset_preserving_stronger_controls(actual, baseline)
-    return normalize_ruleset(actual) == normalize_ruleset(effective)
+    try:
+        return normalize_ruleset(actual) == normalize_ruleset(effective)
+    except PolicyError:
+        return False
 
 
 class GitHubApi:
@@ -648,7 +655,7 @@ def execute(mode: str, confirmation: str) -> dict[str, Any]:
             if existing is None:
                 api.request("POST", f"/repos/{encoded}/rulesets", effective)
             else:
-                if normalize_ruleset(current) != normalize_ruleset(effective):
+                if not ruleset_meets_baseline(current, effective):
                     api.request(
                         "PUT",
                         f"/repos/{encoded}/rulesets/{existing_ruleset_id}",

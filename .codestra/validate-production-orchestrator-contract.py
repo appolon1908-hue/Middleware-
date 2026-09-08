@@ -47,6 +47,23 @@ def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def require_mapping(value: object, message: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ContractError(message)
+    return value
+
+
+def require_string_list(
+    value: object, message: str, *, nonempty: bool = False
+) -> list[str]:
+    if not isinstance(value, list):
+        raise ContractError(message)
+    require(not nonempty or bool(value), message)
+    if not all(isinstance(item, str) and item for item in value):
+        raise ContractError(message)
+    return [item for item in value if isinstance(item, str)]
+
+
 def load_contract() -> dict[str, Any]:
     require(CONTRACT_PATH.is_file() and not CONTRACT_PATH.is_symlink(), "contract is missing or unsafe")
     value = json.loads(
@@ -72,9 +89,11 @@ def validate(contract: dict[str, Any]) -> None:
     require(contract.get("require_verified_commit") is True, "verified commits must be required")
     require(isinstance(contract.get("role"), str) and contract["role"], "role is missing")
 
-    checks = contract.get("required_checks")
-    require(isinstance(checks, list) and checks, "at least one exact-head check is required")
-    require(all(isinstance(item, str) and item for item in checks), "required check is invalid")
+    checks = require_string_list(
+        contract.get("required_checks"),
+        "at least one valid exact-head check is required",
+        nonempty=True,
+    )
     require(len(checks) == len(set(checks)), "required checks contain duplicates")
 
     deployment_authority = contract.get("deployment_authority") is True
@@ -84,8 +103,7 @@ def validate(contract: dict[str, Any]) -> None:
     else:
         require(supported == ["plan"], "non-deployment authority must be plan-only")
 
-    artifacts = contract.get("artifact_policy")
-    require(isinstance(artifacts, dict), "artifact policy is missing")
+    artifacts = require_mapping(contract.get("artifact_policy"), "artifact policy is missing")
     minimum = artifacts.get("minimum_images")
     maximum = artifacts.get("maximum_images")
     require(isinstance(minimum, int) and isinstance(maximum, int), "image bounds must be integers")
@@ -96,8 +114,7 @@ def validate(contract: dict[str, Any]) -> None:
     for field in ("require_sbom", "require_provenance", "require_signature"):
         require(type(artifacts.get(field)) is bool, f"{field} must be boolean")
 
-    environments = contract.get("environments")
-    require(isinstance(environments, dict), "environment policy is missing")
+    environments = require_mapping(contract.get("environments"), "environment policy is missing")
     expected_environments = {
         "staging": "staging-readonly",
         "canary": "production-readonly-canary",
@@ -108,19 +125,17 @@ def validate(contract: dict[str, Any]) -> None:
         "protected environment policy mismatch",
     )
 
-    safety = contract.get("safety")
-    require(isinstance(safety, dict) and set(safety) == SAFETY_KEYS, "safety controls are incomplete or unexpected")
+    safety = require_mapping(contract.get("safety"), "safety controls are missing")
+    require(set(safety) == SAFETY_KEYS, "safety controls are incomplete or unexpected")
     require(all(value is False for value in safety.values()), "every external/live effect must remain disabled")
 
-    native = contract.get("native_workflows")
-    require(isinstance(native, dict), "native workflow policy must be an object")
+    native = require_mapping(contract.get("native_workflows"), "native workflow policy must be an object")
     for value in native.values():
         require(isinstance(value, str) and value.startswith(".github/workflows/") and value.endswith((".yml", ".yaml")), "native workflow path is invalid")
         path = ROOT / value
         require(path.is_file() and not path.is_symlink(), f"native workflow is missing or unsafe: {value}")
 
-    blockers = contract.get("blockers")
-    require(isinstance(blockers, list) and all(isinstance(item, str) and item for item in blockers), "blockers must be non-empty strings")
+    require_string_list(contract.get("blockers"), "blockers must be non-empty strings")
 
     require(INTENT_PATH.is_file() and not INTENT_PATH.is_symlink(), "manual release-intent workflow is missing or unsafe")
     intent = INTENT_PATH.read_text(encoding="utf-8")
@@ -129,6 +144,7 @@ def validate(contract: dict[str, Any]) -> None:
         "production_changed\": False",
         "external_effects_enabled\": False",
         "persist-credentials: false",
+        "[\"git\", \"rev-parse\", \"HEAD\"]",
     ):
         require(marker in intent, f"release-intent safety marker is missing: {marker}")
     require(RUNTIME_COMMAND.search(intent) is None, "release-intent workflow contains a runtime/deployment command")

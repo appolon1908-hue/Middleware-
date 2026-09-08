@@ -446,6 +446,7 @@ async def test_odoo_command_is_authenticated_but_blocked_with_zero_effect(test_s
             )
     assert command.status_code == 403, command.text
     assert command.json()["error"]["code"] == "capability_disabled"
+    assert isinstance(commands.store, MemoryCommandStore)
     assert commands.store._commands == {}
 
 

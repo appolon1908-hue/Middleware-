@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from tests.conftest import make_event, signed_headers
+from tests.test_communications_email import _headers, _message, _runtime, _sign
 
 KLYROW_ROUTE_PATH = "/api/v1/klyrow/events"
 KLYROW_PRODUCER = "klyrow-gateway"
@@ -126,3 +127,47 @@ def test_unsubscribe_is_accepted(test_settings, runtime) -> None:
     with TestClient(app) as client:
         response = _post(client, event)
     assert response.status_code == 202, response.text
+
+
+def test_unsubscribe_suppresses_recipient_before_ack(test_settings) -> None:
+    runtime = _runtime(test_settings)
+    assert runtime.communications is not None
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(to=["person@codestra.co"]),
+            headers=_headers(key="unsubscribe-source"),
+        ).json()
+        event = make_event(
+            producer=KLYROW_PRODUCER,
+            event_type="codestra.email.message.unsubscribed",
+            event_id="evt-unsubscribe0002",
+            data={
+                "messageId": created["messageId"],
+                "recipient": "PERSON@codestra.co",
+                "status": "unsubscribed",
+            },
+        )
+        response = client.post(
+            KLYROW_ROUTE_PATH,
+            content=json.dumps(event, separators=(",", ":"), sort_keys=True),
+            headers=_sign(event),
+        )
+        assert response.status_code == 202, response.text
+        assert ("tenant-1", "email", "person@codestra.co") in (
+            runtime.communications.store.suppressions
+        )
+        fetched = client.get(
+            f"/v1/communications/messages/{created['messageId']}",
+            headers=_headers(scope="klyrow.middleware.status.read"),
+        )
+        assert fetched.json()["status"] == "suppressed"
+        blocked = client.post(
+            "/v1/communications/messages",
+            json=_message(to=["person@codestra.co"]),
+            headers=_headers(key="unsubscribe-blocked"),
+        )
+        assert blocked.status_code == 202
+        assert blocked.json()["status"] == "suppressed"
+        assert blocked.json()["failureCode"] == "recipient_suppressed"

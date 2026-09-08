@@ -88,6 +88,16 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             MODULE.normalize_ruleset(merged),
         )
 
+    def test_effective_policy_rejects_dropped_provider_binding(self) -> None:
+        baseline, existing = self.stronger_live_ruleset()
+        effective = MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+        weakened = copy.deepcopy(effective)
+        status = next(
+            rule for rule in weakened["rules"] if rule["type"] == "required_status_checks"
+        )
+        status["parameters"]["required_status_checks"][0].pop("integration_id")
+        self.assertFalse(MODULE.ruleset_meets_baseline(weakened, effective))
+
     def test_weaker_live_ruleset_fails_baseline(self) -> None:
         baseline, existing = self.stronger_live_ruleset()
         status = next(

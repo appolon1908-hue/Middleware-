@@ -135,6 +135,11 @@
       "path": "tests/integration/test_automation_v2_store.py",
       "gate": "RUNTIME_INTEGRATION_TESTS",
       "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/integration/test_runtime_migration_certification.py",
+      "gate": "RUNTIME_INTEGRATION_TESTS",
+      "required_job": "Disposable PostgreSQL Redis integration"
     }
   ],
   "policy": {

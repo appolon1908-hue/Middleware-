@@ -506,6 +506,27 @@ migration_versions="$(
     --command="SELECT string_agg(version::text, ',' ORDER BY version) FROM middleware_schema_migrations"
 )"
 [[ "$migration_versions" == "1,2,3,4,5,6,7,8,9,10" ]] || fail "middleware_migration_head_mismatch"
+# A reported schema label or core SQL receipt cannot certify the Alembic graph.
+grep -q '^RUNTIME_SCHEMA_VERIFIED=PASS$' "$EVIDENCE_RUN_DIR/migration.log" || fail "schema_verification_marker_missing"
+actual_alembic_head="$(
+  docker exec -u postgres "$POSTGRES_CONTAINER" \
+    psql -X -v ON_ERROR_STOP=1 --dbname="$POSTGRES_DATABASE" --tuples-only --no-align \
+    --command="SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version"
+)" || fail "alembic_readback_failed"
+[[ "$actual_alembic_head" == "$EXPECTED_SCHEMA_HEAD" ]] || fail "actual_alembic_head_mismatch"
+automation_versions="$(
+  docker exec -u postgres "$POSTGRES_CONTAINER" \
+    psql -X -v ON_ERROR_STOP=1 --dbname="$POSTGRES_DATABASE" --tuples-only --no-align \
+    --command="SELECT string_agg(version::text, ',' ORDER BY version) FROM public.middleware_automation_schema_migrations"
+)" || fail "automation_schema_readback_failed"
+[[ "$automation_versions" == "1" ]] || fail "automation_schema_head_mismatch"
+platform_table_count="$(
+  docker exec -u postgres "$POSTGRES_CONTAINER" \
+    psql -X -v ON_ERROR_STOP=1 --dbname="$POSTGRES_DATABASE" --tuples-only --no-align \
+    --command="SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename IN ('platform_services', 'platform_service_environments', 'platform_provisioning_requests', 'platform_provisioning_audit')"
+)" || fail "platform_schema_readback_failed"
+[[ "$platform_table_count" == "4" ]] || fail "platform_schema_incomplete"
+
 
 snapshot_counts() {
   local output="$1"
@@ -513,7 +534,7 @@ snapshot_counts() {
   mapfile -t tables < <(
     docker exec -u postgres "$POSTGRES_CONTAINER" \
       psql -X -v ON_ERROR_STOP=1 --dbname="$POSTGRES_DATABASE" --tuples-only --no-align \
-      --command="SELECT tablename FROM pg_tables WHERE schemaname='public' AND (tablename LIKE 'middleware_%' OR tablename LIKE 'observability_%') ORDER BY tablename"
+      --command="SELECT tablename FROM pg_tables WHERE schemaname='public' AND (tablename LIKE 'middleware_%' OR tablename LIKE 'observability_%' OR tablename LIKE 'platform_%') ORDER BY tablename"
   )
   local table count
   for table in "${tables[@]}"; do

@@ -80,14 +80,20 @@ EXPECTED_REPOSITORIES = {
 def configure_base() -> None:
     """Make the preserved engine use the current seven-repository authority."""
 
-    BASE.EXPECTED_REPOSITORIES = EXPECTED_REPOSITORIES
+    setattr(BASE, "EXPECTED_REPOSITORIES", EXPECTED_REPOSITORIES)
+
+
+def require_mapping(value: object, message: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        BASE.require(False, message)
+        raise AssertionError(message)
+    return value
 
 
 def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
     BASE.require(event.get("action") == "created", "issue command action drift")
-    repository = event.get("repository")
-    BASE.require(
-        isinstance(repository, Mapping),
+    repository = require_mapping(
+        event.get("repository"),
         "issue command repository missing",
     )
     BASE.require(
@@ -102,8 +108,10 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
         repository.get("default_branch") == "main",
         "issue command default branch drift",
     )
-    owner = repository.get("owner")
-    BASE.require(isinstance(owner, Mapping), "issue command owner missing")
+    owner = require_mapping(
+        repository.get("owner"),
+        "issue command owner missing",
+    )
     BASE.require(
         owner.get("login") == EXPECTED_OWNER,
         "issue command owner login drift",
@@ -113,8 +121,10 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
         "issue command owner ID drift",
     )
 
-    issue = event.get("issue")
-    BASE.require(isinstance(issue, Mapping), "issue command issue missing")
+    issue = require_mapping(
+        event.get("issue"),
+        "issue command issue missing",
+    )
     BASE.require(
         issue.get("number") == EXPECTED_ISSUE_NUMBER,
         "issue command number drift",
@@ -124,13 +134,16 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
         "issue command cannot originate from a pull request",
     )
 
-    sender = event.get("sender")
-    comment = event.get("comment")
-    BASE.require(isinstance(sender, Mapping), "issue command sender missing")
-    BASE.require(isinstance(comment, Mapping), "issue command comment missing")
-    comment_user = comment.get("user")
-    BASE.require(
-        isinstance(comment_user, Mapping),
+    sender = require_mapping(
+        event.get("sender"),
+        "issue command sender missing",
+    )
+    comment = require_mapping(
+        event.get("comment"),
+        "issue command comment missing",
+    )
+    comment_user = require_mapping(
+        comment.get("user"),
         "issue command comment user missing",
     )
     for actor, label in ((sender, "sender"), (comment_user, "comment user")):

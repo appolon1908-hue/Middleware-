@@ -295,8 +295,8 @@ def main() -> int:
             "CONNECTOR_SDK_VALIDATION=FAIL",
             file=sys.stderr,
         )
-        for error in errors:
-            print(f"ERROR={error}", file=sys.stderr)
+        for validation_error in errors:
+            print(f"ERROR={validation_error}", file=sys.stderr)
         return 1
 
     print(

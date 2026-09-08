@@ -350,8 +350,11 @@ def merge_ruleset_preserving_stronger_controls(
         require(isinstance(context, str) and context, "invalid baseline status context")
         require(context not in baseline_contexts, f"duplicate baseline status context: {context}")
         baseline_contexts.add(context)
-        source = by_context.get(context, row)
-        combined_checks.append(copy.deepcopy(dict(source)))
+        source = copy.deepcopy(dict(by_context.get(context, row)))
+        baseline_integration_id = row.get("integration_id")
+        if baseline_integration_id is not None:
+            source["integration_id"] = baseline_integration_id
+        combined_checks.append(source)
     for row in existing_checks:
         context = row.get("context")
         if context not in baseline_contexts:
@@ -451,7 +454,7 @@ def verify_ruleset(
     )
     if exact_expected is not None:
         require(
-            normalize_ruleset(payload) == normalize_ruleset(exact_expected),
+            ruleset_meets_baseline(payload, exact_expected),
             f"{repository}: stronger live ruleset controls changed during apply",
         )
     return ruleset_id

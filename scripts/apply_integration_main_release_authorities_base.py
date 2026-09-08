@@ -69,6 +69,24 @@ def require(condition: bool, message: str) -> None:
         raise PolicyError(message)
 
 
+def require_mapping(value: object, message: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise PolicyError(message)
+    return value
+
+
+def require_list(value: object, message: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise PolicyError(message)
+    return value
+
+
+def require_string(value: object, message: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise PolicyError(message)
+    return value
+
+
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -101,24 +119,25 @@ def validate_config(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     require(config.get("allowed_merge_methods") == ["squash"], "squash-only drift")
     require(config.get("bypass_actors") == [], "bypass actors are forbidden")
 
-    rows = config.get("repositories")
-    require(isinstance(rows, list), "repositories must be a list")
+    rows = require_list(config.get("repositories"), "repositories must be a list")
     require(len(rows) == len(EXPECTED_REPOSITORIES), "repository count drift")
     observed: set[str] = set()
     normalized: list[dict[str, Any]] = []
-    for raw in rows:
-        require(isinstance(raw, dict), "repository record must be an object")
-        name = raw.get("repository")
-        require(isinstance(name, str) and name in EXPECTED_REPOSITORIES, "unknown repository")
+    for raw_value in rows:
+        raw = require_mapping(raw_value, "repository record must be an object")
+        name = require_string(raw.get("repository"), "repository name missing")
+        require(name in EXPECTED_REPOSITORIES, "unknown repository")
         require(name not in observed, f"duplicate repository: {name}")
         observed.add(name)
         expected_id, expected_checks = EXPECTED_REPOSITORIES[name]
         require(raw.get("repository_id") == expected_id, f"{name}: stable ID drift")
         require(raw.get("default_branch") == "main", f"{name}: default branch drift")
-        checks = raw.get("required_status_checks")
+        checks = require_list(
+            raw.get("required_status_checks"),
+            f"{name}: required status checks missing",
+        )
         require(
-            isinstance(checks, list)
-            and tuple(checks) == expected_checks
+            tuple(checks) == expected_checks
             and len(checks) == len(set(checks)),
             f"{name}: required status check drift",
         )
@@ -170,18 +189,17 @@ def desired_ruleset(repository: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
-    conditions = value.get("conditions")
-    require(isinstance(conditions, Mapping), "ruleset conditions missing")
-    ref_name = conditions.get("ref_name")
-    require(isinstance(ref_name, Mapping), "ruleset ref conditions missing")
-    rules = value.get("rules")
-    require(isinstance(rules, list), "ruleset rules missing")
+    conditions = require_mapping(value.get("conditions"), "ruleset conditions missing")
+    ref_name = require_mapping(
+        conditions.get("ref_name"),
+        "ruleset ref conditions missing",
+    )
+    rules = require_list(value.get("rules"), "ruleset rules missing")
 
     by_type: dict[str, Mapping[str, Any]] = {}
-    for raw in rules:
-        require(isinstance(raw, Mapping), "invalid ruleset rule")
-        kind = raw.get("type")
-        require(isinstance(kind, str) and kind, "invalid ruleset rule type")
+    for raw_value in rules:
+        raw = require_mapping(raw_value, "invalid ruleset rule")
+        kind = require_string(raw.get("type"), "invalid ruleset rule type")
         require(kind not in by_type, f"duplicate ruleset rule: {kind}")
         by_type[kind] = raw
     required_rule_types = {
@@ -196,29 +214,34 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
         "required ruleset rule missing",
     )
 
-    pull = by_type["pull_request"].get("parameters")
-    status = by_type["required_status_checks"].get("parameters")
-    require(isinstance(pull, Mapping), "pull request parameters missing")
-    require(isinstance(status, Mapping), "status check parameters missing")
-    raw_checks = status.get("required_status_checks")
-    require(isinstance(raw_checks, list), "status checks missing")
+    pull = require_mapping(
+        by_type["pull_request"].get("parameters"),
+        "pull request parameters missing",
+    )
+    status = require_mapping(
+        by_type["required_status_checks"].get("parameters"),
+        "status check parameters missing",
+    )
+    raw_checks = require_list(
+        status.get("required_status_checks"),
+        "status checks missing",
+    )
     checks: list[dict[str, Any]] = []
     observed_contexts: set[str] = set()
-    for row in raw_checks:
-        require(isinstance(row, Mapping), "invalid status check")
-        context = row.get("context")
-        require(isinstance(context, str) and context, "invalid status context")
+    for row_value in raw_checks:
+        row = require_mapping(row_value, "invalid status check")
+        context = require_string(row.get("context"), "invalid status context")
         require(context not in observed_contexts, f"duplicate status context: {context}")
         observed_contexts.add(context)
         check = {"context": context}
         integration_id = row.get("integration_id")
         if integration_id is not None:
-            require(
-                isinstance(integration_id, int)
-                and not isinstance(integration_id, bool)
-                and integration_id > 0,
-                f"{context}: invalid status-check integration ID",
-            )
+            if (
+                not isinstance(integration_id, int)
+                or isinstance(integration_id, bool)
+                or integration_id <= 0
+            ):
+                raise PolicyError(f"{context}: invalid status-check integration ID")
             check["integration_id"] = integration_id
         checks.append(check)
 
@@ -269,13 +292,11 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def rules_by_type(ruleset: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
-    rules = ruleset.get("rules")
-    require(isinstance(rules, list), "ruleset rules missing")
+    rules = require_list(ruleset.get("rules"), "ruleset rules missing")
     result: dict[str, Mapping[str, Any]] = {}
-    for raw in rules:
-        require(isinstance(raw, Mapping), "invalid ruleset rule")
-        kind = raw.get("type")
-        require(isinstance(kind, str) and kind, "invalid ruleset rule type")
+    for raw_value in rules:
+        raw = require_mapping(raw_value, "invalid ruleset rule")
+        kind = require_string(raw.get("type"), "invalid ruleset rule type")
         require(kind not in result, f"duplicate ruleset rule: {kind}")
         result[kind] = raw
     return result
@@ -295,14 +316,17 @@ def merge_ruleset_preserving_stronger_controls(
 
     for kind, rule in existing_rules.items():
         if kind not in merged_rules:
-            cast_rules = merged.get("rules")
-            require(isinstance(cast_rules, list), "merged rules missing")
+            cast_rules = require_list(merged.get("rules"), "merged rules missing")
             cast_rules.append(copy.deepcopy(dict(rule)))
 
-    existing_pull = existing_rules["pull_request"].get("parameters")
-    merged_pull = merged_rules["pull_request"].get("parameters")
-    require(isinstance(existing_pull, Mapping), "existing pull request parameters missing")
-    require(isinstance(merged_pull, dict), "merged pull request parameters missing")
+    existing_pull = require_mapping(
+        existing_rules["pull_request"].get("parameters"),
+        "existing pull request parameters missing",
+    )
+    merged_pull_value = merged_rules["pull_request"].get("parameters")
+    if not isinstance(merged_pull_value, dict):
+        raise PolicyError("merged pull request parameters missing")
+    merged_pull = merged_pull_value
     for key, value in existing_pull.items():
         if key not in merged_pull:
             merged_pull[key] = copy.deepcopy(value)
@@ -316,38 +340,48 @@ def merge_ruleset_preserving_stronger_controls(
         if existing_pull.get(key) is True:
             merged_pull[key] = True
     existing_count = existing_pull.get("required_approving_review_count", 0)
-    require(
-        isinstance(existing_count, int) and not isinstance(existing_count, bool),
-        "existing approving-review count invalid",
-    )
+    if not isinstance(existing_count, int) or isinstance(existing_count, bool):
+        raise PolicyError("existing approving-review count invalid")
     merged_pull["required_approving_review_count"] = max(
         int(merged_pull["required_approving_review_count"]),
         existing_count,
     )
 
-    existing_status = existing_rules["required_status_checks"].get("parameters")
-    merged_status = merged_rules["required_status_checks"].get("parameters")
-    require(isinstance(existing_status, Mapping), "existing status parameters missing")
-    require(isinstance(merged_status, dict), "merged status parameters missing")
-    existing_checks = existing_status.get("required_status_checks")
-    baseline_checks = merged_status.get("required_status_checks")
-    require(isinstance(existing_checks, list), "existing status checks missing")
-    require(isinstance(baseline_checks, list), "baseline status checks missing")
+    existing_status = require_mapping(
+        existing_rules["required_status_checks"].get("parameters"),
+        "existing status parameters missing",
+    )
+    merged_status_value = merged_rules["required_status_checks"].get("parameters")
+    if not isinstance(merged_status_value, dict):
+        raise PolicyError("merged status parameters missing")
+    merged_status = merged_status_value
+    existing_checks = require_list(
+        existing_status.get("required_status_checks"),
+        "existing status checks missing",
+    )
+    baseline_checks = require_list(
+        merged_status.get("required_status_checks"),
+        "baseline status checks missing",
+    )
 
     by_context: dict[str, Mapping[str, Any]] = {}
-    for row in existing_checks:
-        require(isinstance(row, Mapping), "invalid existing status check")
-        context = row.get("context")
-        require(isinstance(context, str) and context, "invalid existing status context")
+    for row_value in existing_checks:
+        row = require_mapping(row_value, "invalid existing status check")
+        context = require_string(
+            row.get("context"),
+            "invalid existing status context",
+        )
         require(context not in by_context, f"duplicate existing status context: {context}")
         by_context[context] = row
 
     combined_checks: list[dict[str, Any]] = []
     baseline_contexts: set[str] = set()
-    for row in baseline_checks:
-        require(isinstance(row, Mapping), "invalid baseline status check")
-        context = row.get("context")
-        require(isinstance(context, str) and context, "invalid baseline status context")
+    for row_value in baseline_checks:
+        row = require_mapping(row_value, "invalid baseline status check")
+        context = require_string(
+            row.get("context"),
+            "invalid baseline status context",
+        )
         require(context not in baseline_contexts, f"duplicate baseline status context: {context}")
         baseline_contexts.add(context)
         source = copy.deepcopy(dict(by_context.get(context, row)))
@@ -355,8 +389,12 @@ def merge_ruleset_preserving_stronger_controls(
         if baseline_integration_id is not None:
             source["integration_id"] = baseline_integration_id
         combined_checks.append(source)
-    for row in existing_checks:
-        context = row.get("context")
+    for row_value in existing_checks:
+        row = require_mapping(row_value, "invalid existing status check")
+        context = require_string(
+            row.get("context"),
+            "invalid existing status context",
+        )
         if context not in baseline_contexts:
             combined_checks.append(copy.deepcopy(dict(row)))
     merged_status["required_status_checks"] = combined_checks
@@ -416,11 +454,11 @@ def repo_path(name: str) -> str:
 
 
 def find_ruleset(api: GitHubApi, repository: str) -> dict[str, Any] | None:
-    _, payload = api.request(
+    _, payload_value = api.request(
         "GET",
         f"/repos/{repo_path(repository)}/rulesets?includes_parents=false&per_page=100",
     )
-    require(isinstance(payload, list), f"{repository}: ruleset list invalid")
+    payload = require_list(payload_value, f"{repository}: ruleset list invalid")
     matches = [
         row
         for row in payload
@@ -440,14 +478,19 @@ def verify_ruleset(
     exact_expected: Mapping[str, Any] | None = None,
 ) -> int:
     found = find_ruleset(api, repository)
-    require(found is not None, f"{repository}: integration ruleset missing")
+    if found is None:
+        raise PolicyError(f"{repository}: integration ruleset missing")
     ruleset_id = found.get("id")
-    require(isinstance(ruleset_id, int), f"{repository}: ruleset ID invalid")
-    _, payload = api.request(
+    if not isinstance(ruleset_id, int) or isinstance(ruleset_id, bool):
+        raise PolicyError(f"{repository}: ruleset ID invalid")
+    _, payload_value = api.request(
         "GET",
         f"/repos/{repo_path(repository)}/rulesets/{ruleset_id}",
     )
-    require(isinstance(payload, Mapping), f"{repository}: ruleset readback invalid")
+    payload = require_mapping(
+        payload_value,
+        f"{repository}: ruleset readback invalid",
+    )
     require(
         ruleset_meets_baseline(payload, expected),
         f"{repository}: live integration ruleset is weaker than committed policy",

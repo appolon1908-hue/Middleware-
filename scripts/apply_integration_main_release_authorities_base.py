@@ -233,7 +233,8 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
         context = require_string(row.get("context"), "invalid status context")
         require(context not in observed_contexts, f"duplicate status context: {context}")
         observed_contexts.add(context)
-        check = {"context": context}
+        check = copy.deepcopy(dict(row))
+        check["context"] = context
         integration_id = row.get("integration_id")
         if integration_id is not None:
             if (
@@ -244,6 +245,21 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 raise PolicyError(f"{context}: invalid status-check integration ID")
             check["integration_id"] = integration_id
         checks.append(check)
+
+    known_pull_parameters = {
+        "allowed_merge_methods",
+        "dismiss_stale_reviews_on_push",
+        "require_code_owner_review",
+        "require_extra_approval_for_unattributed_changes",
+        "require_last_push_approval",
+        "required_approving_review_count",
+        "required_review_thread_resolution",
+    }
+    known_status_parameters = {
+        "do_not_enforce_on_create",
+        "required_status_checks",
+        "strict_required_status_checks_policy",
+    }
 
     return {
         "name": value.get("name"),
@@ -274,6 +290,10 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 "required_review_thread_resolution": pull.get(
                     "required_review_thread_resolution"
                 ),
+                "additional_parameters": {
+                    key: copy.deepcopy(pull[key])
+                    for key in sorted(set(pull) - known_pull_parameters)
+                },
             },
             "required_status_checks": {
                 "do_not_enforce_on_create": status.get("do_not_enforce_on_create"),
@@ -282,6 +302,10 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 "strict_required_status_checks_policy": status.get(
                     "strict_required_status_checks_policy"
                 ),
+                "additional_parameters": {
+                    key: copy.deepcopy(status[key])
+                    for key in sorted(set(status) - known_status_parameters)
+                },
             },
         },
         "additional_rules": {
@@ -363,6 +387,9 @@ def merge_ruleset_preserving_stronger_controls(
             existing_status_rule.get("parameters"),
             "existing status parameters missing",
         )
+        for key, value in existing_status.items():
+            if key not in merged_status:
+                merged_status[key] = copy.deepcopy(value)
         existing_checks = require_list(
             existing_status.get("required_status_checks"),
             "existing status checks missing",
@@ -388,10 +415,12 @@ def merge_ruleset_preserving_stronger_controls(
         )
         require(context not in baseline_contexts, f"duplicate baseline status context: {context}")
         baseline_contexts.add(context)
-        source = copy.deepcopy(dict(by_context.get(context, row)))
-        baseline_integration_id = row.get("integration_id")
-        if baseline_integration_id is not None:
-            source["integration_id"] = baseline_integration_id
+        source = copy.deepcopy(dict(row))
+        existing_row = by_context.get(context)
+        if existing_row is not None:
+            for key, value in existing_row.items():
+                if key not in source:
+                    source[key] = copy.deepcopy(value)
         combined_checks.append(source)
     for row_value in existing_checks:
         row = require_mapping(row_value, "invalid existing status check")

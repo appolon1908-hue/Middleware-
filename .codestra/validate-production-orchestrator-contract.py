@@ -702,16 +702,14 @@ APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
                 "618e05a5109c6ee7f16c698cff719897"
             ),
             "scripts/apply_portfolio_main_release_authorities.py": (
-                "add2e51cc09b0c4a6a3cf09944ec4b42"
-                "a2f15c37a6972a16dd77e123946103f0"
+                "65ba1a42cea34871d735cb19dd99145533e1d01615504b44769ac76f5200d2a5"
             ),
             "scripts/apply_portfolio_release_reviewer_access.py": (
                 "f9ba7034692118c427555fab41b1b6e14"
                 "a8698a761eb18ef6c957e1fb386c27a"
             ),
             "tests/test_portfolio_main_release_authorities.py": (
-                "69cec2a13ac7da3d5ddf72d6d9db78bc"
-                "b053bd4a43863ffe1fe5d135966f72d6"
+                "69b746f85daf964f6b6f9efce362d9f703bf686de0abb2808d87b20870a199d6"
             ),
             "tests/test_portfolio_release_reviewer_access.py": (
                 "1f5fe17545344ae89daed538be0b44a07"
@@ -769,7 +767,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
     },
     "appolon1908-hue/Middleware-": {
         "scripts/apply_portfolio_main_release_authorities.py": (
-            "add2e51cc09b0c4a6a3cf09944ec4b42a2f15c37a6972a16dd77e123946103f0",
+            "65ba1a42cea34871d735cb19dd99145533e1d01615504b44769ac76f5200d2a5",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_portfolio_release_reviewer_access.py": (

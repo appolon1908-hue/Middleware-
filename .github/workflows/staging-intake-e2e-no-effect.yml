@@ -11,6 +11,11 @@ on:
         description: Synthetic staging tenant identifier
         required: true
         type: string
+      confirm_no_effect:
+        description: Confirm this run is limited to isolated staging no-effect certification
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -25,13 +30,29 @@ env:
 
 jobs:
   certify-no-effect:
-    # RUNTIME_MUTATION_DISABLED=true
-    # This job contacts staging APIs; repository preparation does not authorize it.
-    if: ${{ false }}
+    # Contacts only the protected isolated staging authority after explicit owner intent.
+    if: >-
+      github.repository == 'appolon1908-hue/Middleware-' &&
+      github.actor == 'appolon1908-hue' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.confirm_no_effect == true
     runs-on: ubuntu-24.04
     environment: intake-staging-certification
     timeout-minutes: 10
     steps:
+      - name: Prove protected manual authorization boundary
+        env:
+          REQUEST_REPOSITORY: ${{ github.repository }}
+          REQUEST_ACTOR: ${{ github.actor }}
+          REQUEST_REF: ${{ github.ref }}
+          CONFIRM_NO_EFFECT: ${{ inputs.confirm_no_effect }}
+        run: |
+          set -Eeuo pipefail
+          test "$REQUEST_REPOSITORY" = 'appolon1908-hue/Middleware-'
+          test "$REQUEST_ACTOR" = 'appolon1908-hue'
+          test "$REQUEST_REF" = 'refs/heads/main'
+          test "$CONFIRM_NO_EFFECT" = 'true'
+
       - name: Check out exact protected-main source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,6 +62,7 @@ jobs:
 
       - name: Prove exact protected-main identity
         run: |
+          set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
           test -z "$(git status --porcelain)"
 
@@ -50,6 +72,7 @@ jobs:
           INTAKE_TOKEN: ${{ secrets.STAGING_SDK_INTAKE_TOKEN }}
           SAFETY_TOKEN: ${{ secrets.STAGING_RUNTIME_SAFETY_TOKEN }}
         run: |
+          set -Eeuo pipefail
           test -n "$APPROVED_HOST"
           test -n "$INTAKE_TOKEN"
           test -n "$SAFETY_TOKEN"
@@ -63,6 +86,7 @@ jobs:
           TENANT_ID: ${{ inputs.tenant_id }}
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
         run: |
+          set -Eeuo pipefail
           python3 scripts/staging-intake-e2e-no-effect.py \
             --base-url "$BASE_URL" \
             --tenant "$TENANT_ID" \

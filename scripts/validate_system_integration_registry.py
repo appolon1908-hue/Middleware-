@@ -160,6 +160,69 @@ EXPECTED_REPOSITORY_IDENTITIES = {
     "platform-documentation": (1350724356, "appolon1908-hue/documentaions"),
     "platform-infrastructure": (1350724865, "appolon1908-hue/Infustruction-repo"),
 }
+EXPECTED_CANONICAL_ADAPTER_OWNERS = {
+    "ai-provider": "appolon1908-hue/Codestra-AI",
+    "beyvra-nonfinancial": "appolon1908-hue/beyvra-backend",
+    "klyrow-alert-email": "appolon1908-hue/klyrow.com",
+    "klyrow-email": "appolon1908-hue/klyrow.com",
+    "kyqra-crawler": "appolon1908-hue/kyqra-crawler",
+    "marketing-provider": "appolon1908-hue/Codestra-Marketing-",
+    "odoo-19": "appolon1908-hue/Odoo",
+    "postly-social": "appolon1908-hue/social.codestra.co",
+    "provisioning-service": "appolon1908-hue/codestra-provisioning-service",
+    "telnexa-sms": "appolon1908-hue/telnexa",
+    "vicidial-restricted": "appolon1908-hue/Vicidialer-Codestra",
+}
+EXPECTED_ADAPTER_BOUND_SYSTEMS = {
+    "beyvra-backend": (
+        "beyvra-nonfinancial",
+        "financial-isolated",
+        "product-adapter-nonfinancial",
+        "caller-and-target",
+    ),
+    "klyrow-email": (
+        "klyrow-email",
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "kyqra-crawler": (
+        "kyqra-crawler",
+        "crawler",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "odoo": (
+        "odoo-19",
+        "communications",
+        "business-system-adapter",
+        "target-and-event-source",
+    ),
+    "provisioning": (
+        "provisioning-service",
+        "core-control-plane",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "social": (
+        "postly-social",
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "telnexa-sms": (
+        "telnexa-sms",
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "vicidial-asterisk": (
+        "vicidial-restricted",
+        "telephony-restricted",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+}
 
 JsonObject = dict[str, Any]
 
@@ -376,6 +439,16 @@ def validate(
         canonical_adapter_by_id[adapter_id] = adapter_row
 
     require(bool(canonical_adapter_by_id), "canonical adapter registry is empty")
+    require(
+        set(canonical_adapter_by_id) == set(EXPECTED_CANONICAL_ADAPTER_OWNERS),
+        "canonical adapter inventory differs from approved ownership",
+    )
+    for adapter_id, expected_repository in EXPECTED_CANONICAL_ADAPTER_OWNERS.items():
+        require(
+            canonical_adapter_by_id[adapter_id].get("repository")
+            == expected_repository,
+            f"canonical adapter ownership mismatch: {adapter_id}",
+        )
     for adapter_id in adapter_ids:
         selected_adapter = canonical_adapter_by_id.get(adapter_id)
         if selected_adapter is None:
@@ -593,15 +666,16 @@ def validate(
             item.get("name_aliases"),
             f"registry aliases for id {repository_id}",
         )
-        mapping = alias_by_id.get(repository_id)
-        if mapping is None:
+        selected_mapping = alias_by_id.get(repository_id)
+        if selected_mapping is None:
             require(
                 not registry_aliases,
                 f"unregistered alias attached to repository id {repository_id}",
             )
             continue
         require(
-            item.get("current_repository") == mapping.get("current_repository"),
+            item.get("current_repository")
+            == selected_mapping.get("current_repository"),
             f"alias current name mismatch: {repository_id}",
         )
         require(
@@ -614,22 +688,22 @@ def validate(
         )
         require(
             registry_alias.get("repository")
-            == mapping.get("target_repository_after_cutover"),
+            == selected_mapping.get("target_repository_after_cutover"),
             f"registry alias target mismatch: {repository_id}",
         )
         require(
-            registry_alias.get("status") == mapping.get("status"),
+            registry_alias.get("status") == selected_mapping.get("status"),
             f"registry alias status mismatch: {repository_id}",
         )
         component = str(item["component"])
         authority = authority_by_component[component]
         require(
             authority.get("target_repository_after_cutover")
-            == mapping.get("target_repository_after_cutover"),
+            == selected_mapping.get("target_repository_after_cutover"),
             f"authority alias target mismatch: {component}",
         )
         require(
-            authority.get("rename_status") == mapping.get("status"),
+            authority.get("rename_status") == selected_mapping.get("status"),
             f"authority alias status mismatch: {component}",
         )
 
@@ -735,6 +809,23 @@ def validate(
             raise RegistryError(
                 f"unexpected adapter binding for integration mode {mode}: {component}"
             )
+
+    for component, adapter_policy in EXPECTED_ADAPTER_BOUND_SYSTEMS.items():
+        adapter_id, cell, mode, relationship = adapter_policy
+        owner_item = system_by_component[component]
+        require(
+            owner_item.get("adapter_id") == adapter_id,
+            f"canonical adapter binding mismatch: {component}",
+        )
+        require(
+            (
+                owner_item.get("cell"),
+                owner_item.get("integration_mode"),
+                owner_item.get("middleware_relationship"),
+            )
+            == (cell, mode, relationship),
+            f"canonical adapter owner security classification mismatch: {component}",
+        )
 
     return {
         "systems": len(systems),

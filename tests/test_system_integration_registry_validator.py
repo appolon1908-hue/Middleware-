@@ -220,6 +220,36 @@ def test_invented_adapter_binding_is_rejected(validator: ModuleType, documents) 
     assert_rejected(validator, registry, authorities, aliases, "unknown adapter binding")
 
 
+def test_canonical_adapter_owner_cannot_be_relabelled_as_client(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    telnexa = system(registry, "telnexa-sms")
+    telnexa["integration_mode"] = "product-client"
+    telnexa["middleware_relationship"] = "caller"
+    telnexa["adapter_id"] = None
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "canonical adapter binding mismatch: telnexa-sms",
+    )
+
+
+def test_canonical_adapter_ownership_cannot_move_between_repositories(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    adapters = validator.load_object(validator.ADAPTER_PATH)
+    next(item for item in adapters["adapters"] if item["id"] == "telnexa-sms")[
+        "repository"
+    ] = "appolon1908-hue/Codestra-AI"
+
+    with pytest.raises(validator.RegistryError, match="canonical adapter ownership mismatch"):
+        validator.validate(registry, authorities, aliases, adapters)
+
+
 def test_canonical_adapter_cannot_bypass_middleware(
     validator: ModuleType, documents
 ) -> None:

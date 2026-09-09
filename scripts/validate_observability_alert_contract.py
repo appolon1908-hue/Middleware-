@@ -155,7 +155,6 @@ CONNECTOR_ID_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 COMMAND_PREFIX_PATTERN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*\.\Z")
 CAPABILITY_PATTERN = re.compile(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*\Z")
 
-
 def fail(message: str) -> Never:
     raise SystemExit(f"OBSERVABILITY_ALERT_CONTRACT=FAIL {message}")
 

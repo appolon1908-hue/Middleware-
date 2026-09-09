@@ -1,6 +1,11 @@
-import hashlib, json, os
+import hashlib
+import json
+import os
 from pathlib import Path
-import asyncpg, httpx, pytest
+
+import asyncpg
+import httpx
+import pytest
 from app.main import create_app
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
@@ -14,8 +19,10 @@ async def test_durable_inbox_outbox_control_api_is_tenant_scoped_and_idempotent(
     pool=await asyncpg.create_pool(os.environ["DATABASE_URL"])
     try:
         async with pool.acquire() as conn:
-            for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql")): await conn.execute(path.read_text())
-            payload={"event_id":"full-api-event-1","tenant_id":"tenant-1"}; digest=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+            for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql")):
+                await conn.execute(path.read_text())
+            payload={"event_id":"full-api-event-1","tenant_id":"tenant-1"}
+            digest=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":")).encode()).hexdigest()
             await conn.execute("""INSERT INTO middleware_inbox(event_id,tenant_id,source_client_id,event_type,body_sha256,semantic_sha256,idempotency_key,correlation_id,payload,status) VALUES('full-api-event-1','tenant-1','odoo-integration','codestra.odoo.lead.updated',$1,$1,'full-api-event-1','full-api-correlation',$2::jsonb,'accepted') ON CONFLICT DO NOTHING""",digest,json.dumps(payload))
             await conn.execute("""INSERT INTO middleware_inbox(event_id,tenant_id,source_client_id,event_type,body_sha256,semantic_sha256,idempotency_key,correlation_id,payload,status,quarantined_at,quarantine_reason) VALUES('full-api-event-2','tenant-1','odoo-integration','codestra.odoo.lead.updated',$1,$1,'full-api-event-2','full-api-correlation-2',$2::jsonb,'rejected',now() - interval '1 second','operator_review') ON CONFLICT DO NOTHING""",digest,json.dumps(payload))
             await conn.execute("""INSERT INTO middleware_event_ledger(tenant_id,tenant_sequence,event_id,event_type,event_version,source_client_id,correlation_id,causation_id,idempotency_key,semantic_sha256,previous_entry_hash,entry_hash,payload) VALUES('tenant-1',999999,'full-api-event-1','codestra.odoo.lead.updated','1.0','odoo-integration','full-api-correlation','full-api-cause','full-api-event-1',$1,$2,$2,$3::jsonb) ON CONFLICT DO NOTHING""",digest,"0"*64,json.dumps(payload))

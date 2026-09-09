@@ -1303,6 +1303,8 @@ def python_source_has_runtime_mutation(
                 "create_connection",
                 "create_datagram_endpoint",
                 "create_server",
+                "create_subprocess_exec",
+                "create_subprocess_shell",
                 "open_connection",
                 "open_unix_connection",
                 "start_server",
@@ -1599,10 +1601,11 @@ def javascript_source_has_runtime_contact(source: str) -> bool:
         # Dynamic imports can return a destructured or renamed network
         # primitive whose eventual call has no statically attributable receiver.
         return True
-    if re.search(r"\brequire\s*\(", lower):
+    if re.search(r"\brequire\b", lower):
         # CommonJS imports can compute a module name, execute module-level
-        # effects, and freely rename the result. Without a JavaScript AST and
-        # dependency closure they are not provably contact-free.
+        # effects, freely rename the result, and place comments between the
+        # callee and opening parenthesis. Without a JavaScript AST and dependency
+        # closure, any unresolved use of the identifier is not contact-free.
         return True
     return bool(
         re.search(r"\bfetch\b", lower)
@@ -2046,21 +2049,33 @@ def inline_interpreter_payload_has_runtime_mutation(
 def shell_tokens_have_network_device_redirect(tokens: list[str]) -> bool:
     """Recognize Bash's socket-opening /dev/tcp and /dev/udp redirections."""
 
-    combined = re.compile(
-        r"^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?(?:<>|>>?|<)"
-        r"/dev/(?:tcp|udp)/"
+    redirect = re.compile(
+        r"^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?"
+        r"(?:<>|>>?|<|&>>?|>\|)(?P<path>.*)$"
     )
-    operator = re.compile(
-        r"^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?(?:<>|>>?|<)$"
-    )
+    variable = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+    def resolve_path(path: str, bindings: dict[str, str]) -> str:
+        def replacement(match: re.Match[str]) -> str:
+            return bindings.get(match.group(1) or match.group(2), match.group(0))
+
+        return variable.sub(replacement, path)
+
     for index, token in enumerate(tokens):
-        if combined.match(token):
+        match = redirect.match(token)
+        if match is None:
+            continue
+        path = match.group("path")
+        if not path and index + 1 < len(tokens):
+            path = tokens[index + 1]
+        resolved = resolve_path(path, shell_command_bindings(tokens, index))
+        if resolved.startswith(("/dev/tcp/", "/dev/udp/")):
             return True
-        if (
-            operator.fullmatch(token)
-            and index + 1 < len(tokens)
-            and tokens[index + 1].startswith(("/dev/tcp/", "/dev/udp/"))
-        ):
+        approved_dynamic = resolved in {"$GITHUB_OUTPUT", "${GITHUB_OUTPUT}"} or (
+            resolved.startswith(("$RUNNER_TEMP/", "${RUNNER_TEMP}/"))
+        )
+        if "$" in resolved and not approved_dynamic:
+            # An unresolved redirect target can synthesize /dev/tcp or /dev/udp.
+            # The release workflow only needs runner-owned output paths.
             return True
     return False
 
@@ -2071,12 +2086,10 @@ def inline_interpreter_payload_has_runtime_contact(
 ) -> bool:
     """Fail closed on any unproved contact from an inline program."""
 
-    if "$" in payload:
+    if interpreter in SCRIPT_INTERPRETERS:
+        # Plan-only intent admits one separately operation-verified repository
+        # validator, not arbitrary inline programs in Turing-complete languages.
         return True
-    if interpreter in {"python", "python3"}:
-        return python_source_has_runtime_contact(payload)
-    if interpreter == "node":
-        return javascript_source_has_runtime_contact(payload)
     if interpreter in SHELL_INTERPRETERS:
         return contains_runtime_command(payload) or contains_runtime_mutation(payload)
     # Perl, PHP, and Ruby inline programs are not statically admitted.
@@ -2852,10 +2865,11 @@ def step_has_runtime_contact(
         if not isinstance(shell, str) or "${{" in shell or "$" in shell:
             return True
         shell_name = executable_name(shell.split()[0]).lower() if shell.split() else ""
-        if shell_name in {"python", "python3"}:
-            return python_source_has_runtime_contact(run)
-        if shell_name == "node":
-            return javascript_source_has_runtime_contact(run)
+        if shell_name in SCRIPT_INTERPRETERS:
+            # The exact repository validator remains available as a normal
+            # shell command and is checked through its dedicated operation
+            # contract. Arbitrary declared script-language shells are unproved.
+            return True
         if shell_name not in {"bash", "dash", "sh", "zsh"}:
             return True
     if contains_runtime_command(run) or step_has_runtime_mutation(
@@ -4087,6 +4101,23 @@ jobs:
         ),
         "Python-launched generic network client escaped contact classification",
     )
+    asyncio_subprocess_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import asyncio
+          asyncio.run(asyncio.create_subprocess_exec("curl", "https://runtime.example"))
+"""
+    require(
+        workflow_has_runtime_command(
+            asyncio_subprocess_contact,
+            "synthetic-release-intent-asyncio-subprocess-read.yml",
+        ),
+        "asyncio subprocess runtime contact escaped classification",
+    )
     computed_commonjs_contact = """name: synthetic
 jobs:
   inspect:
@@ -4104,6 +4135,23 @@ jobs:
         ),
         "computed CommonJS network import escaped contact classification",
     )
+    commented_commonjs_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: |
+          const transport = require /*comment*/ ("https");
+          transport.get(process.env.RUNTIME_URL);
+"""
+    require(
+        workflow_has_runtime_command(
+            commented_commonjs_contact,
+            "synthetic-release-intent-commented-commonjs-runtime-read.yml",
+        ),
+        "comment-separated CommonJS import escaped contact classification",
+    )
     bash_network_device_contact = """name: synthetic
 jobs:
   inspect:
@@ -4118,6 +4166,27 @@ jobs:
             "synthetic-release-intent-bash-network-device-read.yml",
         ),
         "Bash network-device redirection escaped contact classification",
+    )
+    expanded_bash_network_device_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: proto=tcp; exec 3<>/dev/$proto/runtime.example/443
+"""
+    require(
+        workflow_has_runtime_command(
+            expanded_bash_network_device_contact,
+            "synthetic-release-intent-expanded-bash-network-device-read.yml",
+        ),
+        "expanded Bash network-device redirection escaped contact classification",
+    )
+    require(
+        not contains_runtime_command(
+            'printf %s "$EVIDENCE" > "$RUNNER_TEMP/release-intent.json"'
+        ),
+        "approved runner-temporary redirect was treated as runtime contact",
     )
     reusable_mutation = """name: synthetic
 jobs:

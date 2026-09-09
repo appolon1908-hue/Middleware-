@@ -4985,6 +4985,8 @@ paths:
         required: false
         schema:
           type: integer
+          maximum: 100
+          minimum: 1
           default: 50
           title: Limit
       - name: cursor
@@ -5020,6 +5022,8 @@ paths:
         schema:
           anyOf:
           - type: string
+            minLength: 1
+            maxLength: 180
           - type: 'null'
           title: Command Type
       - *id001
@@ -5244,6 +5248,7 @@ paths:
         content:
           application/json:
             schema:
+              additionalProperties: true
               type: object
               title: Document
         required: true
@@ -5286,6 +5291,7 @@ paths:
         content:
           application/json:
             schema:
+              additionalProperties: true
               type: object
               title: Document
         required: true
@@ -6234,6 +6240,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
   /v1/intake/surveys/responses:
     post:
       summary: Submit Survey Response
@@ -6260,6 +6270,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
   /v1/commands:
     post:
       summary: Submit Command
@@ -6888,6 +6902,7 @@ components:
           format: date-time
           title: Occurred At
         payload:
+          additionalProperties: true
           type: object
           title: Payload
       additionalProperties: false
@@ -7029,6 +7044,7 @@ components:
           pattern: ^[A-Z][A-Z0-9_]{2,100}$
           title: Capability
         payload:
+          additionalProperties: true
           type: object
           title: Payload
       additionalProperties: false
@@ -7155,6 +7171,7 @@ components:
           format: date-time
           title: Updatedat
         metadata:
+          additionalProperties: true
           type: object
           title: Metadata
       additionalProperties: false
@@ -7198,6 +7215,7 @@ components:
           title: To
         totals:
           items:
+            additionalProperties: true
             type: object
           type: array
           title: Totals
@@ -7269,6 +7287,7 @@ components:
           - type: 'null'
           title: Scheduledat
         metadata:
+          additionalProperties: true
           type: object
           title: Metadata
       additionalProperties: false
@@ -7367,6 +7386,7 @@ components:
           title: Unknown Outcome
           default: false
         safe_error:
+          additionalProperties: true
           type: object
           title: Safe Error
       additionalProperties: false
@@ -7510,7 +7530,8 @@ components:
           title: Templateversion
         variables:
           anyOf:
-          - type: object
+          - additionalProperties: true
+            type: object
           - type: 'null'
           title: Variables
         mediaUrls:
@@ -7565,6 +7586,7 @@ components:
           - type: 'null'
           title: Providerreference
         metadata:
+          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -7732,6 +7754,7 @@ components:
           type: string
           title: Reason
         safe_metadata:
+          additionalProperties: true
           type: object
           title: Safe Metadata
         created_at:
@@ -7834,7 +7857,8 @@ components:
           title: Provider Operation Id
         readback_evidence:
           anyOf:
-          - type: object
+          - additionalProperties: true
+            type: object
           - type: 'null'
           title: Readback Evidence
         readback_evidence_sha256:
@@ -8024,6 +8048,7 @@ components:
           format: uuid
           title: Operation Id
         payload:
+          additionalProperties: true
           type: object
           title: Payload
       additionalProperties: false
@@ -8083,7 +8108,8 @@ components:
           title: Provider Operation Id
         readback_evidence:
           anyOf:
-          - type: object
+          - additionalProperties: true
+            type: object
           - type: 'null'
           title: Readback Evidence
         readback_evidence_sha256:
@@ -8170,6 +8196,7 @@ components:
           title: Checkedat
         providers:
           items:
+            additionalProperties: true
             type: object
           type: array
           title: Providers
@@ -8190,11 +8217,13 @@ components:
           title: Checkedat
         domains:
           items:
+            additionalProperties: true
             type: object
           type: array
           title: Domains
         providers:
           items:
+            additionalProperties: true
             type: object
           type: array
           title: Providers
@@ -8472,6 +8501,7 @@ components:
           format: date-time
           title: Recorded At
         safe_metadata:
+          additionalProperties: true
           type: object
           title: Safe Metadata
       additionalProperties: false
@@ -8519,6 +8549,7 @@ components:
           pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]*$
           title: Result Code
         safe_result:
+          additionalProperties: true
           type: object
           title: Safe Result
       additionalProperties: false

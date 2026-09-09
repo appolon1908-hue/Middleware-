@@ -245,6 +245,7 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 raise PolicyError(f"{context}: invalid status-check integration ID")
             check["integration_id"] = integration_id
         checks.append(check)
+    checks.sort(key=lambda check: str(check["context"]))
 
     known_pull_parameters = {
         "allowed_merge_methods",

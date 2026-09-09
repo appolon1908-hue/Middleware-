@@ -370,7 +370,7 @@ class CommandExecutionWorkflow:
                 detail=executed.detail,
             )
 
-        if (request.target == TARGET and request.command_type == ORIGINATE
+        if (request.target == TARGET and request.command_type in {ORIGINATE, HANGUP}
                 and executed.status == "dispatch_unknown"):
             await _command_transition(
                 CommandTransitionRequest(
@@ -378,7 +378,7 @@ class CommandExecutionWorkflow:
                     request.tenant_id,
                     "reconciliation_required",
                     actor,
-                    "originate dispatch outcome is unknown; reconcile without redial",
+                    "calling dispatch outcome is unknown; reconcile without redispatch",
                     executed.provider_operation_id,
                 )
             )
@@ -386,7 +386,7 @@ class CommandExecutionWorkflow:
                 operation_id=request.command_id,
                 workflow_type="command_execution",
                 status="reconciliation_required",
-                detail="originate dispatch outcome requires authoritative read-back",
+                detail="calling dispatch outcome requires authoritative read-back",
             )
 
         await _command_transition(

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate the stable-ID system integration registry against current authorities."""
+
 from __future__ import annotations
 
 import json
@@ -65,6 +66,24 @@ ALIAS_MAPPING_KEYS = {
     "status",
 }
 REGISTRY_ALIAS_KEYS = {"repository", "status"}
+AUTHORITY_TOP_LEVEL_KEYS = {
+    "schema_version",
+    "policy",
+    "middleware_owned",
+    "reference_only",
+    "authorities",
+}
+ALIAS_TOP_LEVEL_KEYS = {
+    "schema_version",
+    "status",
+    "identity_key",
+    "historical_evidence_immutable",
+    "documentation_authority",
+    "mappings",
+}
+ADAPTER_TOP_LEVEL_KEYS = {"schema_version", "adapters"}
+ADAPTER_KEYS = {"id", "cell", "repository", "command_prefixes", "direct_n8n"}
+ADAPTER_KEYS_WITH_FORBIDDEN_PREFIXES = ADAPTER_KEYS | {"forbidden_prefixes"}
 ALLOWED_CELLS = {
     "middleware-core",
     "edge-identity",
@@ -160,6 +179,324 @@ EXPECTED_REPOSITORY_IDENTITIES = {
     "platform-documentation": (1350724356, "appolon1908-hue/documentaions"),
     "platform-infrastructure": (1350724865, "appolon1908-hue/Infustruction-repo"),
 }
+EXPECTED_SYSTEM_SECURITY_PROFILES = {
+    "middleware": (
+        "cross-system-control-plane",
+        "active",
+        "middleware-core",
+        "middleware-authority",
+        "authority",
+        None,
+    ),
+    "caddy": (
+        "shared-edge-tls-reverse-proxy",
+        "active",
+        "edge-identity",
+        "edge-compatibility",
+        "compatibility",
+        None,
+    ),
+    "kong": (
+        "api-gateway-policy-routes-plugins",
+        "active",
+        "edge-identity",
+        "gateway-compatibility",
+        "compatibility",
+        None,
+    ),
+    "keycloak": (
+        "identity-clients-scopes-token-issuance",
+        "active",
+        "edge-identity",
+        "identity-compatibility",
+        "identity-authority",
+        None,
+    ),
+    "n8n": (
+        "automation-workflow-source",
+        "active",
+        "automation",
+        "orchestration-client",
+        "caller",
+        None,
+    ),
+    "odoo": (
+        "odoo-modules-business-crm-source",
+        "active",
+        "communications",
+        "business-system-adapter",
+        "target-and-event-source",
+        "odoo-19",
+    ),
+    "telnexa-sms": (
+        "jasmin-sms-runtime-billing-webhooks",
+        "active",
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+        "telnexa-sms",
+    ),
+    "telnexa-web": (
+        "telnexa-public-website-onboarding",
+        "active",
+        "product-clients",
+        "public-intake-client",
+        "caller",
+        None,
+    ),
+    "klyrow-email": (
+        "email-postal-mautic-runtime",
+        "active",
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+        "klyrow-email",
+    ),
+    "klyrow-web": (
+        "klyrow-public-marketing-frontend",
+        "active",
+        "product-clients",
+        "public-intake-client",
+        "caller",
+        None,
+    ),
+    "kyqra-crawler": (
+        "canonical-crawler-runtime",
+        "active",
+        "crawler",
+        "provider-adapter",
+        "target-and-event-source",
+        "kyqra-crawler",
+    ),
+    "kyqra-legacy": (
+        "legacy-reference-only",
+        "deprecated",
+        "legacy-disabled",
+        "disabled",
+        "none",
+        None,
+    ),
+    "vicidial-asterisk": (
+        "voice-contact-center-connector-runtime",
+        "active",
+        "telephony-restricted",
+        "provider-adapter",
+        "target-and-event-source",
+        "vicidial-restricted",
+    ),
+    "provisioning": (
+        "identity-access-provisioning-runtime",
+        "active",
+        "core-control-plane",
+        "provider-adapter",
+        "target-and-event-source",
+        "provisioning-service",
+    ),
+    "sdk": (
+        "developer-facing-contracts-sdks-connector-kit",
+        "active",
+        "governance",
+        "contract-authority",
+        "governance",
+        None,
+    ),
+    "social": (
+        "social-postiz-product-source",
+        "active",
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+        "postly-social",
+    ),
+    "ai": (
+        "ai-provider-product-source",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "marketing": (
+        "marketing-provider-product-source",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "scrapper": (
+        "legacy-business-scrapper-source-and-migration-evidence",
+        "legacy-migration",
+        "legacy-disabled",
+        "disabled",
+        "none",
+        None,
+    ),
+    "beyvra-backend": (
+        "independent-product-backend",
+        "active",
+        "financial-isolated",
+        "product-adapter-nonfinancial",
+        "caller-and-target",
+        "beyvra-nonfinancial",
+    ),
+    "beyvra-frontend": (
+        "independent-product-frontend",
+        "active",
+        "financial-isolated",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "moneybee-backend": (
+        "independent-product-backend",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "moneybee-frontend": (
+        "independent-product-frontend",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "breero": (
+        "independent-product",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "larim-a-backend": (
+        "independent-product-backend",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "larim-a-frontend": (
+        "independent-product-frontend",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "booked4seasons": (
+        "independent-product",
+        "active",
+        "product-clients",
+        "public-intake-client",
+        "caller",
+        None,
+    ),
+    "codestra-public-site": (
+        "public-site-source",
+        "active",
+        "product-clients",
+        "public-intake-client",
+        "caller",
+        None,
+    ),
+    "restaurant-frontend": (
+        "independent-product-frontend",
+        "active",
+        "product-clients",
+        "public-intake-client",
+        "caller",
+        None,
+    ),
+    "freight-platform-frontend": (
+        "independent-product-frontend",
+        "active",
+        "product-clients",
+        "product-client",
+        "caller",
+        None,
+    ),
+    "social-control-plane": (
+        "provider-neutral-social-control-plane-architecture",
+        "planned-name-review",
+        "planned-control-planes",
+        "planned-client",
+        "caller",
+        None,
+    ),
+    "platform-documentation": (
+        "cross-repository-documentation-authority",
+        "active",
+        "governance",
+        "documentation-reference",
+        "governance",
+        None,
+    ),
+    "platform-infrastructure": (
+        "shared-infrastructure-and-release-governance",
+        "active",
+        "governance",
+        "infrastructure-coordinator",
+        "governance",
+        None,
+    ),
+}
+EXPECTED_REPOSITORY_RENAMES = {
+    1221155447: (
+        "appolon1908-hue/Frontend-Resturant-",
+        "appolon1908-hue/restaurant-frontend",
+        "PREPARED_NOT_RENAMED",
+    ),
+    1343761049: (
+        "appolon1908-hue/transportaion-Frontend",
+        "appolon1908-hue/freight-platform-frontend",
+        "PREPARED_NOT_RENAMED",
+    ),
+    1343962199: (
+        "appolon1908-hue/LARIM-A-Fornt-end",
+        "appolon1908-hue/LARIM-A-Frontend",
+        "PREPARED_NOT_RENAMED",
+    ),
+    1351353723: (
+        "appolon1908-hue/Codesrea-Social-",
+        "appolon1908-hue/Codestra-Social-Control-Plane",
+        "PREPARED_NOT_RENAMED",
+    ),
+    1350724356: (
+        "appolon1908-hue/documentaions",
+        "appolon1908-hue/Codestra-Documentation",
+        "PREPARED_NOT_RENAMED",
+    ),
+    1350724865: (
+        "appolon1908-hue/Infustruction-repo",
+        "appolon1908-hue/Codestra-Infrastructure",
+        "PREPARED_NOT_RENAMED",
+    ),
+}
+EXPECTED_AUTHORITY_POLICY = {
+    "middleware_repository": "appolon1908-hue/Middleware-",
+    "reference_repository": "appolon1908-hue/codestra-production-platform",
+    "reference_repository_role": "historical-runtime-deployment-reconciliation-evidence-only",
+    "owning_repository_is_principal": True,
+    "central_release_authority": False,
+    "cross_repository_coupling": "versioned-contracts-and-release-evidence",
+    "repository_identity_key": "github_repository_id",
+    "repository_name_migration_manifest": "config/repository-name-aliases.v1.json",
+}
+EXPECTED_MIDDLEWARE_OWNED = (
+    "cross-system command and event contracts",
+    "tenant-scoped command ledger and durable integration state",
+    "Middleware API and workers",
+    "Temporal command orchestration owned by Middleware",
+    "trusted provider adapters and read-back/reconciliation logic",
+    "Middleware Connector Runtime",
+    "cross-repository compatibility contracts",
+    "combined cross-repository release evidence",
+)
 EXPECTED_CANONICAL_ADAPTER_OWNERS = {
     "ai-provider": "appolon1908-hue/Codestra-AI",
     "beyvra-nonfinancial": "appolon1908-hue/beyvra-backend",
@@ -172,6 +509,73 @@ EXPECTED_CANONICAL_ADAPTER_OWNERS = {
     "provisioning-service": "appolon1908-hue/codestra-provisioning-service",
     "telnexa-sms": "appolon1908-hue/telnexa",
     "vicidial-restricted": "appolon1908-hue/Vicidialer-Codestra",
+}
+EXPECTED_CANONICAL_ADAPTER_PROFILES = {
+    "ai-provider": ("core-communications", "appolon1908-hue/Codestra-AI", ("ai.",), ()),
+    "beyvra-nonfinancial": (
+        "beyvra-financial",
+        "appolon1908-hue/beyvra-backend",
+        ("beyvra.operations.",),
+        (
+            "trade.",
+            "order.",
+            "wallet.",
+            "ledger.",
+            "hold.",
+            "payment.",
+            "withdrawal.",
+            "deposit.",
+            "transfer.",
+            "custody.",
+            "chain.",
+            "broker.",
+            "provider.",
+        ),
+    ),
+    "klyrow-alert-email": (
+        "core-communications",
+        "appolon1908-hue/klyrow.com",
+        ("observability.alert.",),
+        (),
+    ),
+    "klyrow-email": (
+        "core-communications",
+        "appolon1908-hue/klyrow.com",
+        ("email.",),
+        (),
+    ),
+    "kyqra-crawler": (
+        "core-communications",
+        "appolon1908-hue/kyqra-crawler",
+        ("crawler.",),
+        (),
+    ),
+    "marketing-provider": (
+        "core-communications",
+        "appolon1908-hue/Codestra-Marketing-",
+        ("marketing.",),
+        (),
+    ),
+    "odoo-19": ("core-communications", "appolon1908-hue/Odoo", ("crm.",), ()),
+    "postly-social": (
+        "core-communications",
+        "appolon1908-hue/social.codestra.co",
+        ("social.",),
+        (),
+    ),
+    "provisioning-service": (
+        "core-communications",
+        "appolon1908-hue/codestra-provisioning-service",
+        ("provisioning.",),
+        (),
+    ),
+    "telnexa-sms": ("core-communications", "appolon1908-hue/telnexa", ("sms.",), ()),
+    "vicidial-restricted": (
+        "telephony-private",
+        "appolon1908-hue/Vicidialer-Codestra",
+        ("telephony.", "telephony-internal."),
+        (),
+    ),
 }
 EXPECTED_ADAPTER_BOUND_SYSTEMS = {
     "beyvra-backend": (
@@ -353,7 +757,17 @@ def validate(
     aliases: JsonObject,
     adapter_registry: JsonObject | None = None,
 ) -> dict[str, int]:
-    require(set(registry) == REGISTRY_KEYS, "registry top-level field inventory mismatch")
+    require(
+        set(registry) == REGISTRY_KEYS, "registry top-level field inventory mismatch"
+    )
+    require(
+        set(authorities) == AUTHORITY_TOP_LEVEL_KEYS,
+        "repository authority top-level field inventory mismatch",
+    )
+    require(
+        set(aliases) == ALIAS_TOP_LEVEL_KEYS,
+        "repository alias top-level field inventory mismatch",
+    )
     require(registry.get("schema_version") == "4.0", "registry schema version mismatch")
     require(
         registry.get("identity_key") == "github_repository_id",
@@ -388,7 +802,10 @@ def validate(
 
     for index, raw in enumerate(systems_raw):
         item = as_object(raw, f"registry system {index}")
-        require(set(item) == SYSTEM_KEYS, f"registry system {index} field inventory mismatch")
+        require(
+            set(item) == SYSTEM_KEYS,
+            f"registry system {index} field inventory mismatch",
+        )
         component = item.get("component")
         repository_id = item.get("github_repository_id")
         repository = item.get("current_repository")
@@ -398,15 +815,22 @@ def validate(
         mode = item.get("integration_mode")
         relationship = item.get("middleware_relationship")
         adapter = item.get("adapter_id")
-        name_aliases = as_list(item.get("name_aliases"), f"registry aliases for {component}")
+        name_aliases = as_list(
+            item.get("name_aliases"), f"registry aliases for {component}"
+        )
 
         if not isinstance(component, str) or not component:
             raise RegistryError(f"invalid component at index {index}")
-        require(component not in system_by_component, f"duplicate component: {component}")
+        require(
+            component not in system_by_component, f"duplicate component: {component}"
+        )
         if not positive_repository_id(repository_id):
             raise RegistryError(f"invalid repository id for {component}")
         assert isinstance(repository_id, int)
-        require(repository_id not in system_by_id, f"duplicate repository id: {repository_id}")
+        require(
+            repository_id not in system_by_id,
+            f"duplicate repository id: {repository_id}",
+        )
         if not valid_repository(repository):
             raise RegistryError(f"invalid repository name for {component}")
         assert isinstance(repository, str)
@@ -464,7 +888,10 @@ def validate(
         set(system_by_component) == set(EXPECTED_REPOSITORY_IDENTITIES),
         "registry and authoritative repository identity coverage differ",
     )
-    for component, (expected_id, expected_repository) in EXPECTED_REPOSITORY_IDENTITIES.items():
+    for component, (
+        expected_id,
+        expected_repository,
+    ) in EXPECTED_REPOSITORY_IDENTITIES.items():
         item = system_by_component[component]
         require(
             item.get("github_repository_id") == expected_id,
@@ -479,10 +906,16 @@ def validate(
         load_object(ADAPTER_PATH) if adapter_registry is None else adapter_registry
     )
     require(
+        set(canonical_adapters) == ADAPTER_TOP_LEVEL_KEYS,
+        "adapter registry top-level field inventory mismatch",
+    )
+    require(
         canonical_adapters.get("schema_version") == "2.0",
         "adapter registry schema version mismatch",
     )
-    adapter_rows = as_list(canonical_adapters.get("adapters"), "canonical adapter registry")
+    adapter_rows = as_list(
+        canonical_adapters.get("adapters"), "canonical adapter registry"
+    )
     canonical_adapter_by_id: dict[str, JsonObject] = {}
     for index, raw in enumerate(adapter_rows):
         adapter_row = as_object(raw, f"canonical adapter {index}")
@@ -494,8 +927,25 @@ def validate(
             adapter_id not in canonical_adapter_by_id,
             f"duplicate canonical adapter id: {adapter_id}",
         )
+        expected_profile = EXPECTED_CANONICAL_ADAPTER_PROFILES.get(adapter_id)
+        require(
+            expected_profile is not None,
+            f"unapproved canonical adapter: {adapter_id}",
+        )
+        assert expected_profile is not None
+        expected_fields = (
+            ADAPTER_KEYS_WITH_FORBIDDEN_PREFIXES
+            if expected_profile[3]
+            else ADAPTER_KEYS
+        )
+        require(
+            set(adapter_row) == expected_fields,
+            f"canonical adapter field inventory mismatch: {adapter_id}",
+        )
         if not valid_repository(adapter_repository):
-            raise RegistryError(f"canonical adapter repository has no system: {adapter_id}")
+            raise RegistryError(
+                f"canonical adapter repository has no system: {adapter_id}"
+            )
         assert isinstance(adapter_repository, str)
         require(
             adapter_repository in repository_names,
@@ -518,6 +968,28 @@ def validate(
             == expected_repository,
             f"canonical adapter ownership mismatch: {adapter_id}",
         )
+    for adapter_id, expected_profile in EXPECTED_CANONICAL_ADAPTER_PROFILES.items():
+        adapter_row = canonical_adapter_by_id[adapter_id]
+        require(
+            (
+                adapter_row.get("cell"),
+                adapter_row.get("repository"),
+                tuple(
+                    as_list(
+                        adapter_row.get("command_prefixes"),
+                        f"canonical adapter command prefixes: {adapter_id}",
+                    )
+                ),
+                tuple(
+                    as_list(
+                        adapter_row.get("forbidden_prefixes", []),
+                        f"canonical adapter forbidden prefixes: {adapter_id}",
+                    )
+                ),
+            )
+            == expected_profile,
+            f"canonical adapter security profile mismatch: {adapter_id}",
+        )
     for adapter_id in adapter_ids:
         selected_adapter = canonical_adapter_by_id.get(adapter_id)
         if selected_adapter is None:
@@ -526,11 +998,29 @@ def validate(
             item for item in systems if item.get("adapter_id") == adapter_id
         )
         require(
-            selected_adapter.get("repository") == owning_system.get("current_repository"),
+            selected_adapter.get("repository")
+            == owning_system.get("current_repository"),
             f"adapter repository mismatch: {adapter_id}",
         )
 
-    authority_policy = as_object(authorities.get("policy"), "repository authority policy")
+    require(
+        authorities.get("schema_version") == "1.0",
+        "repository authority schema version mismatch",
+    )
+    authority_policy = as_object(
+        authorities.get("policy"), "repository authority policy"
+    )
+    require(
+        authority_policy == EXPECTED_AUTHORITY_POLICY,
+        "repository authority policy mismatch",
+    )
+    middleware_owned = as_list(
+        authorities.get("middleware_owned"), "middleware-owned scope"
+    )
+    require(
+        tuple(middleware_owned) == EXPECTED_MIDDLEWARE_OWNED,
+        "middleware-owned scope mismatch",
+    )
     require(
         authority_policy.get("repository_identity_key") == registry.get("identity_key"),
         "authority identity key differs from registry",
@@ -541,7 +1031,9 @@ def validate(
         "authority rename manifest differs from registry",
     )
 
-    reference_rows = as_list(authorities.get("reference_only"), "reference-only repositories")
+    reference_rows = as_list(
+        authorities.get("reference_only"), "reference-only repositories"
+    )
     reference_only_names: set[str] = set()
     for index, raw in enumerate(reference_rows):
         reference = as_object(raw, f"reference-only repository {index}")
@@ -592,17 +1084,32 @@ def validate(
     authority_rename_ids: set[int] = set()
     for index, raw in enumerate(authority_rows):
         authority = as_object(raw, f"authority {index}")
-        require(
-            set(authority) <= AUTHORITY_KEYS,
-            f"authority {index} contains unsupported fields",
-        )
-        require(
-            {"component", "principal_repository", "role"} <= set(authority),
-            f"authority {index} is incomplete",
-        )
         component = authority.get("component")
         if not isinstance(component, str) or not component:
             raise RegistryError(f"invalid authority component at {index}")
+        if "github_repository_id" not in authority:
+            raise RegistryError(f"authority stable repository id missing: {component}")
+        expected_authority_fields = {
+            "component",
+            "principal_repository",
+            "role",
+            "github_repository_id",
+        }
+        if component == "kyqra-legacy":
+            expected_authority_fields.add("status")
+        expected_identity = EXPECTED_REPOSITORY_IDENTITIES.get(component)
+        if (
+            expected_identity is not None
+            and expected_identity[0] in EXPECTED_REPOSITORY_RENAMES
+        ):
+            expected_authority_fields |= {
+                "target_repository_after_cutover",
+                "rename_status",
+            }
+        require(
+            set(authority) == expected_authority_fields,
+            f"authority field inventory mismatch: {component}",
+        )
         require(
             component not in authority_by_component,
             f"duplicate authority component: {component}",
@@ -615,8 +1122,6 @@ def validate(
             isinstance(authority.get("role"), str) and bool(authority.get("role")),
             f"invalid authority role: {component}",
         )
-        if "github_repository_id" not in authority:
-            raise RegistryError(f"authority stable repository id missing: {component}")
         repository_id = authority.get("github_repository_id")
         if not positive_repository_id(repository_id):
             raise RegistryError(f"invalid authority repository id: {component}")
@@ -635,6 +1140,15 @@ def validate(
         require(
             authority.get("principal_repository") == expected[1],
             f"authority repository mismatch: {component}",
+        )
+        require(
+            authority.get("role") == EXPECTED_SYSTEM_SECURITY_PROFILES[component][0],
+            f"approved authority role mismatch: {component}",
+        )
+        require(
+            authority.get("status")
+            == ("deprecated" if component == "kyqra-legacy" else None),
+            f"approved authority status mismatch: {component}",
         )
         authority_ids.add(repository_id)
         authority_by_component[component] = authority
@@ -692,6 +1206,11 @@ def validate(
     require(
         aliases.get("historical_evidence_immutable") is True,
         "alias history immutability must be true",
+    )
+    require(
+        aliases.get("documentation_authority")
+        == "appolon1908-hue/documentaions:repository-name-migration.v1.json",
+        "alias documentation authority mismatch",
     )
     alias_rows = as_list(aliases.get("mappings"), "repository alias mappings")
     alias_by_id: dict[int, JsonObject] = {}
@@ -800,6 +1319,22 @@ def validate(
             f"authority alias status mismatch: {component}",
         )
 
+    require(
+        set(alias_by_id) == set(EXPECTED_REPOSITORY_RENAMES),
+        "alias mappings and approved rename inventory differ",
+    )
+    for repository_id, expected_rename in EXPECTED_REPOSITORY_RENAMES.items():
+        mapping = alias_by_id[repository_id]
+        require(
+            (
+                mapping.get("current_repository"),
+                mapping.get("target_repository_after_cutover"),
+                mapping.get("status"),
+            )
+            == expected_rename,
+            f"approved repository rename mismatch: {repository_id}",
+        )
+
     middleware = system_by_component.get("middleware")
     if middleware is None:
         raise RegistryError("middleware registry row is missing")
@@ -842,7 +1377,9 @@ def validate(
         relationship = item["middleware_relationship"]
         adapter = item["adapter_id"]
         if mode == "provider-adapter":
-            require(lifecycle == "active", f"provider adapter is not active: {component}")
+            require(
+                lifecycle == "active", f"provider adapter is not active: {component}"
+            )
             require(
                 cell in PROVIDER_CELLS,
                 f"provider adapter is in an invalid cell: {component}",
@@ -930,11 +1467,13 @@ def validate(
         if str(item["current_repository"]).casefold() in canonical_owner_repositories
     }
     require(
-        canonical_owner_components
-        == set(EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY),
+        canonical_owner_components == set(EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY),
         "canonical adapter owner security inventory mismatch",
     )
-    for component, expected_security in EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY.items():
+    for (
+        component,
+        expected_security,
+    ) in EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY.items():
         owner_item = system_by_component[component]
         require(
             (
@@ -945,6 +1484,21 @@ def validate(
             )
             == expected_security,
             f"canonical adapter owner security classification mismatch: {component}",
+        )
+
+    for component, expected_system_profile in EXPECTED_SYSTEM_SECURITY_PROFILES.items():
+        item = system_by_component[component]
+        require(
+            (
+                item.get("authority_role"),
+                item.get("lifecycle"),
+                item.get("cell"),
+                item.get("integration_mode"),
+                item.get("middleware_relationship"),
+                item.get("adapter_id"),
+            )
+            == expected_system_profile,
+            f"approved system security profile mismatch: {component}",
         )
 
     return {

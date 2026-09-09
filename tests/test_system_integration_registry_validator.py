@@ -14,7 +14,9 @@ SCRIPT = ROOT / "scripts/validate_system_integration_registry.py"
 
 
 def load_validator() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("system_integration_registry_validator", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "system_integration_registry_validator", SCRIPT
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -27,7 +29,9 @@ def validator() -> ModuleType:
 
 
 @pytest.fixture
-def documents(validator: ModuleType) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+def documents(
+    validator: ModuleType,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     return (
         validator.load_object(validator.REGISTRY_PATH),
         validator.load_object(validator.AUTHORITY_PATH),
@@ -40,7 +44,9 @@ def system(registry: dict[str, Any], component: str) -> dict[str, Any]:
 
 
 def authority(authorities: dict[str, Any], component: str) -> dict[str, Any]:
-    return next(item for item in authorities["authorities"] if item["component"] == component)
+    return next(
+        item for item in authorities["authorities"] if item["component"] == component
+    )
 
 
 def assert_rejected(
@@ -54,7 +60,9 @@ def assert_rejected(
         validator.validate(registry, authorities, aliases)
 
 
-def test_current_registry_passes_and_derives_counts(validator: ModuleType, documents) -> None:
+def test_current_registry_passes_and_derives_counts(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = documents
     summary = validator.validate(registry, authorities, aliases)
     adapter_registry = validator.load_object(validator.ADAPTER_PATH)
@@ -66,8 +74,12 @@ def test_current_registry_passes_and_derives_counts(validator: ModuleType, docum
 
 def test_duplicate_repository_id_is_rejected(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
-    registry["systems"][1]["github_repository_id"] = registry["systems"][0]["github_repository_id"]
-    assert_rejected(validator, registry, authorities, aliases, "duplicate repository id")
+    registry["systems"][1]["github_repository_id"] = registry["systems"][0][
+        "github_repository_id"
+    ]
+    assert_rejected(
+        validator, registry, authorities, aliases, "duplicate repository id"
+    )
 
 
 def test_repository_id_must_match_independent_authority(
@@ -84,28 +96,80 @@ def test_repository_id_must_match_independent_authority(
     )
 
 
-def test_duplicate_current_repository_name_is_rejected(validator: ModuleType, documents) -> None:
+def test_duplicate_current_repository_name_is_rejected(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
-    registry["systems"][1]["current_repository"] = registry["systems"][0]["current_repository"]
-    assert_rejected(validator, registry, authorities, aliases, "duplicate repository name")
+    registry["systems"][1]["current_repository"] = registry["systems"][0][
+        "current_repository"
+    ]
+    assert_rejected(
+        validator, registry, authorities, aliases, "duplicate repository name"
+    )
 
 
-def test_missing_authority_component_is_rejected(validator: ModuleType, documents) -> None:
+def test_missing_authority_component_is_rejected(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     authorities["authorities"] = authorities["authorities"][:-1]
-    assert_rejected(validator, registry, authorities, aliases, "component coverage differ")
+    assert_rejected(
+        validator, registry, authorities, aliases, "component coverage differ"
+    )
 
 
 def test_authority_role_drift_is_rejected(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     authority(authorities, "odoo")["role"] = "untrusted-central-runtime"
-    assert_rejected(validator, registry, authorities, aliases, "authority role mismatch: odoo")
+    assert_rejected(
+        validator, registry, authorities, aliases, "authority role mismatch: odoo"
+    )
 
 
-def test_authority_repository_name_drift_is_rejected(validator: ModuleType, documents) -> None:
+def test_coordinated_authority_role_drift_is_rejected(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
-    authority(authorities, "n8n")["principal_repository"] = "appolon1908-hue/Middleware-"
-    assert_rejected(validator, registry, authorities, aliases, "authority repository mismatch: n8n")
+    replacement_role = "central-release-authority"
+    system(registry, "platform-infrastructure")["authority_role"] = replacement_role
+    authority(authorities, "platform-infrastructure")["role"] = replacement_role
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "approved authority role mismatch: platform-infrastructure",
+    )
+
+
+def test_critical_identity_system_coordinated_reclassification_is_rejected(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    keycloak = system(registry, "keycloak")
+    keycloak["lifecycle"] = "deprecated"
+    keycloak["cell"] = "product-clients"
+    keycloak["integration_mode"] = "product-client"
+    keycloak["middleware_relationship"] = "caller"
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "approved system security profile mismatch: keycloak",
+    )
+
+
+def test_authority_repository_name_drift_is_rejected(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    authority(authorities, "n8n")["principal_repository"] = (
+        "appolon1908-hue/Middleware-"
+    )
+    assert_rejected(
+        validator, registry, authorities, aliases, "authority repository mismatch: n8n"
+    )
 
 
 def test_every_authority_requires_stable_repository_id(
@@ -122,16 +186,51 @@ def test_every_authority_requires_stable_repository_id(
     )
 
 
-def test_controlled_rename_id_misbinding_is_rejected(validator: ModuleType, documents) -> None:
+def test_controlled_rename_id_misbinding_is_rejected(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     authority(authorities, "platform-infrastructure")["github_repository_id"] = 1
-    assert_rejected(validator, registry, authorities, aliases, "authority repository id mismatch")
+    assert_rejected(
+        validator, registry, authorities, aliases, "authority repository id mismatch"
+    )
 
 
 def test_alias_target_drift_is_rejected(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
-    aliases["mappings"][0]["target_repository_after_cutover"] = "appolon1908-hue/other-target"
-    assert_rejected(validator, registry, authorities, aliases, "registry alias target mismatch")
+    aliases["mappings"][0]["target_repository_after_cutover"] = (
+        "appolon1908-hue/other-target"
+    )
+    assert_rejected(
+        validator, registry, authorities, aliases, "registry alias target mismatch"
+    )
+
+
+def test_coordinated_alias_target_drift_is_rejected(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    repository_id = 1350724356
+    replacement_target = "appolon1908-hue/Codestra-Docs-Replacement"
+    mapping = next(
+        item
+        for item in aliases["mappings"]
+        if item["github_repository_id"] == repository_id
+    )
+    mapping["target_repository_after_cutover"] = replacement_target
+    authority(authorities, "platform-documentation")[
+        "target_repository_after_cutover"
+    ] = replacement_target
+    system(registry, "platform-documentation")["name_aliases"][0]["repository"] = (
+        replacement_target
+    )
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        f"approved repository rename mismatch: {repository_id}",
+    )
 
 
 def test_alias_target_cannot_collide_with_current_repository(
@@ -141,7 +240,9 @@ def test_alias_target_cannot_collide_with_current_repository(
     repository_id = 1350724356
     target = "appolon1908-hue/Middleware-"
     alias = next(
-        item for item in aliases["mappings"] if item["github_repository_id"] == repository_id
+        item
+        for item in aliases["mappings"]
+        if item["github_repository_id"] == repository_id
     )
     alias["target_repository_after_cutover"] = target
     authority(authorities, "platform-documentation")[
@@ -164,7 +265,9 @@ def test_alias_target_cannot_collide_with_reference_only_repository(
     repository_id = 1350724356
     target = "appolon1908-hue/codestra-production-platform"
     alias = next(
-        item for item in aliases["mappings"] if item["github_repository_id"] == repository_id
+        item
+        for item in aliases["mappings"]
+        if item["github_repository_id"] == repository_id
     )
     alias["target_repository_after_cutover"] = target
     authority(authorities, "platform-documentation")[
@@ -180,10 +283,14 @@ def test_alias_target_cannot_collide_with_reference_only_repository(
     )
 
 
-def test_alias_status_must_remain_prepared_not_renamed(validator: ModuleType, documents) -> None:
+def test_alias_status_must_remain_prepared_not_renamed(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     aliases["mappings"][0]["status"] = "RENAMED"
-    assert_rejected(validator, registry, authorities, aliases, "invalid alias mapping status")
+    assert_rejected(
+        validator, registry, authorities, aliases, "invalid alias mapping status"
+    )
 
 
 def test_n8n_cannot_become_provider_adapter(validator: ModuleType, documents) -> None:
@@ -193,31 +300,55 @@ def test_n8n_cannot_become_provider_adapter(validator: ModuleType, documents) ->
     n8n["integration_mode"] = "provider-adapter"
     n8n["middleware_relationship"] = "target-and-event-source"
     n8n["adapter_id"] = None
-    assert_rejected(validator, registry, authorities, aliases, "n8n must remain in the automation cell")
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "n8n must remain in the automation cell",
+    )
 
 
-def test_provider_adapter_requires_adapter_binding(validator: ModuleType, documents) -> None:
+def test_provider_adapter_requires_adapter_binding(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     system(registry, "telnexa-sms")["adapter_id"] = None
-    assert_rejected(validator, registry, authorities, aliases, "provider adapter lacks adapter id")
+    assert_rejected(
+        validator, registry, authorities, aliases, "provider adapter lacks adapter id"
+    )
 
 
-def test_provider_adapter_cannot_bypass_middleware_relationship(validator: ModuleType, documents) -> None:
+def test_provider_adapter_cannot_bypass_middleware_relationship(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     system(registry, "klyrow-email")["middleware_relationship"] = "caller"
-    assert_rejected(validator, registry, authorities, aliases, "provider adapter bypass relationship")
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "provider adapter bypass relationship",
+    )
 
 
-def test_duplicate_adapter_binding_is_rejected(validator: ModuleType, documents) -> None:
+def test_duplicate_adapter_binding_is_rejected(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
-    system(registry, "social")["adapter_id"] = system(registry, "telnexa-sms")["adapter_id"]
+    system(registry, "social")["adapter_id"] = system(registry, "telnexa-sms")[
+        "adapter_id"
+    ]
     assert_rejected(validator, registry, authorities, aliases, "duplicate adapter id")
 
 
 def test_invented_adapter_binding_is_rejected(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     system(registry, "telnexa-sms")["adapter_id"] = "invented-sms-adapter"
-    assert_rejected(validator, registry, authorities, aliases, "unknown adapter binding")
+    assert_rejected(
+        validator, registry, authorities, aliases, "unknown adapter binding"
+    )
 
 
 def test_canonical_adapter_owner_cannot_be_relabelled_as_client(
@@ -307,7 +438,9 @@ def test_canonical_adapter_ownership_cannot_move_between_repositories(
         "repository"
     ] = "appolon1908-hue/Codestra-AI"
 
-    with pytest.raises(validator.RegistryError, match="canonical adapter ownership mismatch"):
+    with pytest.raises(
+        validator.RegistryError, match="canonical adapter ownership mismatch"
+    ):
         validator.validate(registry, authorities, aliases, adapters)
 
 
@@ -320,14 +453,40 @@ def test_canonical_adapter_cannot_bypass_middleware(
         "direct_n8n"
     ] = True
 
-    with pytest.raises(validator.RegistryError, match="canonical adapter permits direct n8n"):
+    with pytest.raises(
+        validator.RegistryError, match="canonical adapter permits direct n8n"
+    ):
         validator.validate(registry, authorities, aliases, adapters)
 
 
-def test_disabled_legacy_system_cannot_retain_write_relationship(validator: ModuleType, documents) -> None:
+def test_canonical_adapter_command_boundary_cannot_drift(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    adapters = validator.load_object(validator.ADAPTER_PATH)
+    next(item for item in adapters["adapters"] if item["id"] == "telnexa-sms")[
+        "command_prefixes"
+    ] = ["sms.", "telephony."]
+
+    with pytest.raises(
+        validator.RegistryError,
+        match="canonical adapter security profile mismatch: telnexa-sms",
+    ):
+        validator.validate(registry, authorities, aliases, adapters)
+
+
+def test_disabled_legacy_system_cannot_retain_write_relationship(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     system(registry, "scrapper")["middleware_relationship"] = "caller"
-    assert_rejected(validator, registry, authorities, aliases, "disabled system retains Middleware relationship")
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "disabled system retains Middleware relationship",
+    )
 
 
 def test_unknown_cell_is_rejected(validator: ModuleType, documents) -> None:
@@ -336,19 +495,33 @@ def test_unknown_cell_is_rejected(validator: ModuleType, documents) -> None:
     assert_rejected(validator, registry, authorities, aliases, "unsupported cell")
 
 
-def test_fail_closed_policy_cannot_be_disabled(validator: ModuleType, documents) -> None:
+def test_fail_closed_policy_cannot_be_disabled(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     registry["policy"]["runtime_certification_is_not_embedded"] = False
-    assert_rejected(validator, registry, authorities, aliases, "registry policy must fail closed")
+    assert_rejected(
+        validator, registry, authorities, aliases, "registry policy must fail closed"
+    )
 
 
-def test_hard_coded_inventory_count_is_rejected_as_schema_drift(validator: ModuleType, documents) -> None:
+def test_hard_coded_inventory_count_is_rejected_as_schema_drift(
+    validator: ModuleType, documents
+) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     registry["repository_count"] = len(registry["systems"])
-    assert_rejected(validator, registry, authorities, aliases, "registry top-level field inventory mismatch")
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "registry top-level field inventory mismatch",
+    )
 
 
-def test_duplicate_json_keys_are_rejected(validator: ModuleType, tmp_path: Path) -> None:
+def test_duplicate_json_keys_are_rejected(
+    validator: ModuleType, tmp_path: Path
+) -> None:
     ambiguous = tmp_path / "ambiguous.json"
     ambiguous.write_text(
         '{"github_repository_id": 1, "github_repository_id": 2}',

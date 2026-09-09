@@ -24,8 +24,8 @@ CONTRACT_PATH = ROOT / ".codestra/production-orchestrator-contract.v1.json"
 INTENT_PATH = ROOT / ".github/workflows/manual-release-intent.yml"
 RELEASE_VALIDATOR_PATH = ROOT / ".codestra/validate-release-intent.py"
 MANUAL_RELEASE_INTENT_SHA256 = (
-    "403b22585d0c5a1bd327f5384d306e69"
-    "84c980323c59cca885f75990e9105c15"
+    "43056c26b11fe5ba9664d4b271932132"
+    "f366895a892084da6449798f92606081"
 )
 SCHEMA = "codestra.production-orchestrator-contract.v1"
 PHASES = ["plan", "staging", "canary", "production"]
@@ -61,16 +61,23 @@ SHELL_WRAPPERS = {
     "!",
     "builtin",
     "command",
+    "chrt",
     "env",
     "exec",
+    "flock",
+    "ionice",
     "nice",
     "nohup",
     "setsid",
+    "stdbuf",
     "sudo",
+    "taskset",
     "time",
     "timeout",
+    "unshare",
     "watch",
 }
+SHELL_SEPARATORS = {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}
 GENERIC_NETWORK_CLIENTS = {
     "curl",
     "ftp",
@@ -410,6 +417,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
         "scripts/ci/validate-breero-scope.sh": "f8ffb8a3953c56d7d6722938825bfb33fced802ba162f4cefd3d12be8ffb9a1e",
     },
     "appolon1908-hue/Moneybee-Backend": {
+        "scripts/generate_endpoint_catalog.py": "174a22ef99c72a9432ede92e1c5117e7092aaf2f9e6dbf40af79087503c30f0a",
         "ops/stage-bank-credential-references.py": (
             "ea78c91ccc0d779260b13ccead92ca31"
             "16b5b0ac5f3ede028e86a8aa197e3cca"
@@ -419,6 +427,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "62b60fa9fb0331d5227b51b9b2c542d"
             "4ec96da9f683a5f678a60d5f27996c692"
         ),
+        "scripts/verify_openapi_contract.py": "b4dd40045e2781a6a741787b0c1a51d30b96248027a0e058f0123a9853a784a0",
     },
     "appolon1908-hue/Telnexa-web": {
         "deployment/scripts/validate-compliance.sh": "a29fa2c3586332016ec468a710487bca7e5362244c6feec63ae1bde47f4f0f75",
@@ -519,7 +528,7 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
         ".github/workflows/connector-runtime-api-ci.yml": "917ab06febf30f0d81146fc147794dace9510f7bb0a6fb903dd69b2244d4e1d0",
         ".github/workflows/connector-storage-ci.yml": "eada698e8756b76431a43f8d54d1aa192b9d964bca9a5e76d90476f35135bc7a",
         ".github/workflows/lead-automation-v1.yml": "9cdf5b9ce21f528bb8d0cb29b170586d212f5dfeb0e4ad237bb531a41bd89274",
-        ".github/workflows/odoo-calling-contract.yml": "a186063edd3d780a5f813090b7364edb9af23e3dba845dc49c476e62acd44fd9",
+        ".github/workflows/odoo-calling-contract.yml": "01b0808e99d8c5f20040f89fdb53c405f91149239bfbfdd2b477112e388611e7",
     },
     "appolon1908-hue/beyvra-backend": {
         ".github/workflows/email-boundary-ci.yml": "13ec97e8fb3cf77dcea400c2c8d4d5f089a567852ebcfa7f8efc581efa6f1fd6",
@@ -869,6 +878,10 @@ def shell_tokens(script: str) -> list[str]:
         return re.findall(r"[A-Za-z0-9_./@${}:+-]+", script)
 
 
+def shell_separator_token(token: str) -> bool:
+    return token in SHELL_SEPARATORS or bool(token) and set(token) == {"\n"}
+
+
 def executable_name(token: str) -> str:
     return token.strip("$(){}[]").rsplit("/", 1)[-1]
 
@@ -897,11 +910,10 @@ def shell_command_bindings(
     bindings: dict[str, str] = {}
     expect_command = True
     control = {"coproc", "do", "elif", "else", "if", "then", "until", "while"}
-    separators = {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}
     for index, token in enumerate(tokens):
         if before_index is not None and index >= before_index:
             break
-        if token in separators:
+        if shell_separator_token(token):
             expect_command = True
             continue
         if token in control:
@@ -1051,7 +1063,6 @@ def command_indexes(tokens: list[str]) -> list[int]:
     indexes: list[int] = []
     expect_command = True
     control = {"coproc", "do", "elif", "else", "if", "then", "until", "while"}
-    separators = {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}
     skip_through = -1
     for index, token in enumerate(tokens):
         if index <= skip_through:
@@ -1063,7 +1074,7 @@ def command_indexes(tokens: list[str]) -> list[int]:
                 indexes.append(index)
                 expect_command = False
             continue
-        if token in separators:
+        if shell_separator_token(token):
             expect_command = True
             continue
         if token in control:
@@ -1152,7 +1163,7 @@ def wrapped_executable_index(tokens: list[str], start: int) -> int | None:
             token = tokens[index]
             lower = token.lower()
             option_key = lower if token.startswith("--") else token
-            if token in {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}:
+            if shell_separator_token(token):
                 return None
             if wrapper == "env" and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", token):
                 index += 1
@@ -1182,10 +1193,9 @@ def wrapped_executable_index(tokens: list[str], start: int) -> int | None:
 
 
 def raw_command_arguments(tokens: list[str], index: int) -> list[str]:
-    separators = {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}
     arguments: list[str] = []
     for token in tokens[index + 1 :]:
-        if token in separators:
+        if shell_separator_token(token):
             break
         arguments.append(token)
     return arguments
@@ -1551,9 +1561,7 @@ def python_source_has_runtime_mutation(
             "globals",
             "importlib.import_module",
             "locals",
-            "object.__setattr__",
             "setattr",
-            "type.__setattr__",
         }:
             # Dynamic imports, code execution, and attribute lookup can hide a
             # process or network primitive from the qualified-name analysis.
@@ -1806,6 +1814,9 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
         # Destructuring and ordinary assignments can rename every launcher;
         # without a JavaScript AST, child-process access is not provably safe.
         return True
+    if "getbuiltinmodule" in lower:
+        # Dynamic built-in access can recover child_process without an import.
+        return True
     for match in re.finditer(r"\bfetch\b", lower):
         open_index = match.end()
         while open_index < len(source) and source[open_index].isspace():
@@ -1818,6 +1829,8 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
             return True
         parts = split_top_level(arguments)
         if parts is None or not parts or len(parts) > 2:
+            return True
+        if any(part.lstrip().startswith("...") for part in parts):
             return True
         if len(parts) == 2:
             options = parts[1].strip()
@@ -2147,6 +2160,109 @@ def approved_read_only_script_invocation(
     )
 
 
+def repository_python_import_paths(
+    source: str,
+    current: Path,
+    working_directory: Path,
+) -> set[Path] | None:
+    """Resolve repository-local Python imports for recursive policy scanning."""
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    targets: set[Path] = set()
+
+    def add_module(base: Path, parts: list[str]) -> None:
+        if not parts:
+            return
+        stem = base.joinpath(*parts)
+        for candidate in (stem.with_suffix(".py"), stem / "__init__.py"):
+            try:
+                resolved = candidate.resolve(strict=True)
+                resolved.relative_to(ROOT.resolve())
+            except (OSError, ValueError):
+                continue
+            if resolved.is_file() and not resolved.is_symlink():
+                targets.add(resolved)
+                return
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                for base in (current.parent, working_directory, ROOT):
+                    add_module(base, alias.name.split("."))
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = current.parent
+                for _ in range(node.level - 1):
+                    base = base.parent
+                module_parts = node.module.split(".") if node.module else []
+                add_module(base, module_parts)
+                if not module_parts:
+                    for alias in node.names:
+                        if alias.name != "*":
+                            add_module(base, alias.name.split("."))
+            elif node.module:
+                for base in (current.parent, working_directory, ROOT):
+                    module_parts = node.module.split(".")
+                    add_module(base, module_parts)
+                    for alias in node.names:
+                        if alias.name != "*":
+                            add_module(base, [*module_parts, *alias.name.split(".")])
+    return targets
+
+
+def repository_python_import_has_runtime_mutation(
+    candidate: Path,
+    seen_scripts: set[Path],
+    script_aliases: dict[str, str] | None,
+    working_directory: Path,
+) -> bool:
+    """Scan import-time effects without treating dormant definitions as calls."""
+
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(ROOT.resolve())
+    except (OSError, ValueError):
+        return True
+    if resolved in seen_scripts:
+        return False
+    if not resolved.is_file() or resolved.is_symlink():
+        return True
+    try:
+        source = resolved.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (OSError, UnicodeError, SyntaxError):
+        return True
+    import_time_body: list[ast.stmt] = []
+    for statement in tree.body:
+        copied = deepcopy(statement)
+        if isinstance(copied, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            copied.body = [ast.Pass()]
+        import_time_body.append(copied)
+    import_time = ast.Module(body=import_time_body, type_ignores=[])
+    ast.fix_missing_locations(import_time)
+    if python_source_has_runtime_mutation(ast.unparse(import_time)):
+        return True
+    import_paths = repository_python_import_paths(
+        source,
+        resolved,
+        working_directory,
+    )
+    if import_paths is None:
+        return True
+    return any(
+        repository_python_import_has_runtime_mutation(
+            imported,
+            seen_scripts | {resolved},
+            script_aliases,
+            working_directory,
+        )
+        for imported in import_paths
+    )
+
+
 def repository_script_path_has_runtime_mutation(
     candidate: Path,
     seen_scripts: set[Path],
@@ -2210,7 +2326,24 @@ def repository_script_path_has_runtime_mutation(
             )
         return False
     if suffix == ".py":
-        return python_source_has_runtime_mutation(source)
+        if python_source_has_runtime_mutation(source):
+            return True
+        import_paths = repository_python_import_paths(
+            source,
+            resolved,
+            working_directory,
+        )
+        if import_paths is None:
+            return True
+        return any(
+            repository_python_import_has_runtime_mutation(
+                imported,
+                seen_scripts | {resolved},
+                script_aliases,
+                working_directory,
+            )
+            for imported in import_paths
+        )
     if suffix in {".cjs", ".js", ".mjs"}:
         return javascript_source_has_runtime_mutation(source)
     if suffix not in {".bash", ".sh"}:
@@ -2237,7 +2370,7 @@ def direct_repository_script_target(
     arguments = tokens[index + 1 :]
     if name in {".", "source"}:
         for token in arguments:
-            if token in {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}:
+            if shell_separator_token(token):
                 break
             if not token.startswith("-"):
                 return token
@@ -2267,7 +2400,7 @@ def interpreter_module_target(
         return None
     for option_index in range(index + 1, len(tokens)):
         token = tokens[option_index]
-        if token in {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}:
+        if shell_separator_token(token):
             break
         if token != "-m":
             continue
@@ -2288,7 +2421,7 @@ def interpreter_module_target(
 def interpreter_module_arguments(tokens: list[str], index: int) -> list[str]:
     for option_index in range(index + 1, len(tokens)):
         token = tokens[option_index]
-        if token in {"\n", "&", "&&", "(", ")", ";", "|", "||", "{", "}"}:
+        if shell_separator_token(token):
             break
         if token != "-m":
             continue
@@ -2742,7 +2875,24 @@ def contains_runtime_command(script: str) -> bool:
             return True
         if command_token_has_dynamic_executable(command_token):
             return True
+        if command_token == "SUBSTITUTION":
+            return True
         if absolute_executable_is_unproved(command_token):
+            return True
+        if name == "xargs":
+            payload = xargs_payload(raw_arguments)
+            if payload is None or payload and (
+                contains_runtime_mutation(payload)
+                or command_consumes_pipeline(tokens, index)
+                and contains_runtime_command(payload)
+            ):
+                return True
+        if name == "trap" and raw_arguments and contains_runtime_command(raw_arguments[0]):
+            return True
+        if name == "git" and (
+            any(key.upper().startswith("GIT_") for key in bindings)
+            or any("ext::" in token.lower() for token in raw_arguments)
+        ):
             return True
         if (
             name in RUNTIME_TOOLS
@@ -2873,6 +3023,8 @@ def contains_runtime_mutation(
             return True
         if command_token_has_dynamic_executable(command_token) and direct_target is None:
             return True
+        if command_token == "SUBSTITUTION":
+            return True
         if absolute_executable_is_unproved(command_token):
             return True
         unproved_stdin = (
@@ -2922,13 +3074,29 @@ def contains_runtime_mutation(
             return True
         if name == "xargs":
             payload = xargs_payload(raw_tail)
-            if payload is None or payload and contains_runtime_mutation(
-                payload,
-                seen_scripts,
-                script_aliases,
-                working_directory,
+            if payload is None or payload and (
+                contains_runtime_mutation(
+                    payload,
+                    seen_scripts,
+                    script_aliases,
+                    working_directory,
+                )
+                or command_consumes_pipeline(tokens, index)
+                and contains_runtime_command(payload)
             ):
                 return True
+        if name == "trap" and raw_tail and contains_runtime_mutation(
+            raw_tail[0],
+            seen_scripts,
+            script_aliases,
+            working_directory,
+        ):
+            return True
+        if name == "git" and (
+            any(key.upper().startswith("GIT_") for key in bindings)
+            or any("ext::" in token.lower() for token in raw_tail)
+        ):
+            return True
         if name in {"ansible-playbook", "scp", "ssh"}:
             return True
         if name in {"helm", "kubectl", "terraform", "tofu"} and (
@@ -3204,7 +3372,10 @@ def contains_runtime_action(step: dict[str, Any]) -> bool:
             )
         ):
             return True
-        if re.search(r"\bgithub\s*\[", script) or re.search(
+        if re.search(
+            r"\bgithub(?:\s*\.\s*[a-z_$][a-z0-9_$]*)*\s*\[",
+            script,
+        ) or re.search(
             r"\b(?:const|let|var)\s*\{[^}]+\}\s*=\s*github\b",
             script,
         ):
@@ -3282,6 +3453,10 @@ def contains_image_publication(step: dict[str, Any]) -> bool:
             continue
         arguments = [token.lower() for token in raw_command_arguments(raw_tokens, index)]
         if "push" in arguments[:4]:
+            return True
+        if arguments[:2] == ["buildx", "bake"]:
+            # Bake targets can carry registry outputs in repository HCL; an
+            # unparsed bake invocation cannot prove that it is build-only.
             return True
         if not (arguments[:2] == ["buildx", "build"] or arguments[:1] == ["build"]):
             continue
@@ -3783,12 +3958,13 @@ def validate_protected_job_recheck(intent: str) -> None:
         "PREVIOUS_IMAGES_JSON": "${{ inputs.previous_images_json }}",
         "PRIOR_EVIDENCE_SHA256": "${{ inputs.prior_evidence_sha256 }}",
         "PRIOR_EVIDENCE_RUN_ID": "${{ inputs.prior_evidence_run_id }}",
+        "PREAPPROVAL_EVIDENCE_B64": "${{ needs.verify.outputs.evidence_b64 }}",
     }
     require(recheck.get("env") == expected_env, "protected job policy recheck inputs are incomplete")
 
 
 def validate_release_validator_gate_rechecks(source: str) -> None:
-    """Require exact gates after all slow evidence validation paths."""
+    """Require reachable, ordered exact-gate checks on every successful path."""
 
     try:
         tree = ast.parse(source, filename=str(RELEASE_VALIDATOR_PATH))
@@ -3799,58 +3975,127 @@ def validate_release_validator_gate_rechecks(source: str) -> None:
         for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
+
+    def statement_named_call(statement: ast.stmt) -> tuple[str, str | None] | None:
+        value: ast.expr | None = None
+        target: str | None = None
+        if isinstance(statement, ast.Expr):
+            value = statement.value
+        elif isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            value = statement.value
+            if isinstance(statement.targets[0], ast.Name):
+                target = statement.targets[0].id
+        elif isinstance(statement, ast.AnnAssign):
+            value = statement.value
+            if isinstance(statement.target, ast.Name):
+                target = statement.target.id
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+        ):
+            return value.func.id, target
+        return None
+
+    def require_compares_heads(statement: ast.stmt, observed: str) -> bool:
+        call = statement.value if isinstance(statement, ast.Expr) else None
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "require"
+            and call.args
+            and isinstance(call.args[0], ast.Compare)
+        ):
+            return False
+        comparison = call.args[0]
+        if len(comparison.ops) != 1 or not isinstance(comparison.ops[0], ast.Eq):
+            return False
+        names = {
+            item.id
+            for item in [comparison.left, *comparison.comparators]
+            if isinstance(item, ast.Name)
+        }
+        return names == {observed, "controller_candidate_head"}
+
     for function_name in ("main", "recheck_protected_gates"):
         function = functions.get(function_name)
         if function is None:
             raise ContractError(f"release-intent {function_name} function is missing")
+        returns = [node for node in ast.walk(function) if isinstance(node, ast.Return)]
+        require(
+            len(returns) == 1
+            and function.body
+            and function.body[-1] is returns[0],
+            f"release-intent {function_name} has an early or hidden success return",
+        )
         named_calls = [
             (node, node.func.id)
             for node in ast.walk(function)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         ]
-        gate_lines = [
-            node.lineno
-            for node, name in named_calls
+        top_level_calls = [
+            (index, call)
+            for index, statement in enumerate(function.body)
+            if (call := statement_named_call(statement)) is not None
+        ]
+        gate_indexes = [
+            index for index, (name, _) in top_level_calls
             if name == "validate_repository_gates"
         ]
         require(
-            len(gate_lines) >= 2,
+            len(gate_indexes) >= 2,
             f"release-intent {function_name} lacks final exact-head gate revalidation",
         )
-        controller_lines = [
-            node.lineno
-            for node, name in named_calls
+        controller_indexes = [
+            index for index, (name, _) in top_level_calls
             if name == "download_and_validate_candidate"
         ]
         require(
-            len(controller_lines) >= 2,
-            f"release-intent {function_name} lacks final controller gate revalidation",
+            len(controller_indexes) >= 3,
+            f"release-intent {function_name} lacks controller stability revalidation",
         )
-        slow_lines = [
-            node.lineno
-            for node, name in named_calls
-            if name
-            in {
-                "download_and_validate_candidate",
-                "download_prior_evidence",
-                "validate_prior",
-                "verify_supply_chain",
-            }
-        ]
+        final_gate = gate_indexes[-1]
+        before_gate_controller = controller_indexes[-2]
+        after_gate_controller = controller_indexes[-1]
         require(
-            bool(slow_lines) and max(gate_lines) > max(slow_lines),
-            f"release-intent {function_name} revalidates gates before evidence verification finishes",
+            before_gate_controller < final_gate < after_gate_controller,
+            f"release-intent {function_name} does not sandwich its final source gate with controller checks",
+        )
+        before_call = statement_named_call(function.body[before_gate_controller])
+        after_call = statement_named_call(function.body[after_gate_controller])
+        require(
+            before_call == (
+                "download_and_validate_candidate",
+                "final_controller_candidate_head",
+            )
+            and after_call == (
+                "download_and_validate_candidate",
+                "post_gate_controller_candidate_head",
+            ),
+            f"release-intent {function_name} controller rechecks are not bound to named observations",
+        )
+        require(
+            before_gate_controller + 1 < len(function.body)
+            and require_compares_heads(
+                function.body[before_gate_controller + 1],
+                "final_controller_candidate_head",
+            )
+            and after_gate_controller + 1 < len(function.body)
+            and require_compares_heads(
+                function.body[after_gate_controller + 1],
+                "post_gate_controller_candidate_head",
+            ),
+            f"release-intent {function_name} does not compare reachable controller observations",
         )
         non_controller_slow_lines = [
             node.lineno
             for node, name in named_calls
-            if name
-            in {"download_prior_evidence", "validate_prior", "verify_supply_chain"}
+            if name in {"download_prior_evidence", "validate_prior", "verify_supply_chain"}
         ]
         require(
             bool(non_controller_slow_lines)
-            and max(controller_lines) > max(non_controller_slow_lines),
-            f"release-intent {function_name} revalidates the controller before evidence verification finishes",
+            and function.body[before_gate_controller].lineno
+            > max(non_controller_slow_lines),
+            f"release-intent {function_name} revalidates gates before evidence verification finishes",
         )
         require(
             any(name == "download_prior_evidence" for _, name in named_calls)
@@ -4228,27 +4473,36 @@ def validate_release_validator_operations(source: str) -> None:
                     "builtins.__import__",
                     "builtins.compile",
                     "builtins.eval",
+                    "builtins.exit",
                     "builtins.exec",
                     "builtins.getattr",
                     "builtins.globals",
                     "builtins.locals",
+                    "builtins.quit",
                     "builtins.setattr",
                     "builtins.vars",
                     "compile",
                     "eval",
+                    "exit",
                     "exec",
                     "getattr",
                     "globals",
                     "importlib.import_module",
                     "locals",
+                    "os._exit",
                     "object.__setattr__",
                     "os.putenv",
                     "os.unsetenv",
+                    "quit",
                     "setattr",
+                    "sys.exit",
                     "type.__setattr__",
                     "vars",
                 }
                 and qualified not in {"os.popen", "os.system"}
+                and not qualified.endswith(
+                    (".__delattr__", ".__delitem__", ".__setattr__", ".__setitem__")
+                )
                 and not is_os_process_launcher(qualified),
                 "release-intent validator contains dynamic command execution",
             )
@@ -4666,6 +4920,24 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
 
 def validate_intent_negative_regressions() -> None:
     intent = INTENT_PATH.read_text(encoding="utf-8")
+    release_validator = RELEASE_VALIDATOR_PATH.read_text(encoding="utf-8")
+    unreachable_recheck = release_validator.replace(
+        "\n    final_controller_candidate_head = download_and_validate_candidate(",
+        "\n    if False:\n        final_controller_candidate_head = download_and_validate_candidate(",
+        1,
+    )
+    require(
+        unreachable_recheck != release_validator,
+        "unreachable gate-recheck fixture is missing",
+    )
+    try:
+        validate_release_validator_gate_rechecks(unreachable_recheck)
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: unreachable final gate recheck"
+        )
     unsafe_intents = (
         intent.replace(
             "ref: ${{ github.sha }}",
@@ -4710,6 +4982,7 @@ def validate_intent_negative_regressions() -> None:
     for binding in (
         "          PRIOR_EVIDENCE_SHA256: ${{ inputs.prior_evidence_sha256 }}\n",
         "          PRIOR_EVIDENCE_RUN_ID: ${{ inputs.prior_evidence_run_id }}\n",
+        "          PREAPPROVAL_EVIDENCE_B64: ${{ needs.verify.outputs.evidence_b64 }}\n",
     ):
         prefix, separator, suffix = intent.rpartition(binding)
         require(bool(separator), "protected prior evidence binding fixture is missing")
@@ -4736,7 +5009,13 @@ def validate_intent_negative_regressions() -> None:
         "sh -c 'terraform apply'",
         "eval 'helm upgrade release chart'",
         "nice kubectl apply -f runtime.yml",
+        "ionice kubectl apply -f runtime.yml",
         "setsid kubectl apply -f runtime.yml",
+        "TOOL=$(echo kubectl); \"$TOOL\" apply -f runtime.yml",
+        "echo validation\n\ngh api --method POST repos/example/runtime/dispatches",
+        "GIT_ALLOW_PROTOCOL=ext git fetch ext::sh\\ -c\\ id",
+        "printf './deploy.sh\\n' | xargs bash",
+        "trap 'kubectl apply -f runtime.yml' EXIT",
         "sh -s <<< 'kubectl apply -f runtime.yml'",
     ):
         require(
@@ -4979,6 +5258,10 @@ jobs:
             "destructured GitHub REST mutation",
             "const {createDeployment} = github.rest.repos; "
             "await createDeployment({owner, repo, ref})",
+        ),
+        (
+            "computed GitHub workflow dispatch",
+            "await github.rest.actions['create' + 'WorkflowDispatch']({owner, repo})",
         ),
     ):
         workflow = f"""name: synthetic
@@ -5415,6 +5698,7 @@ jobs:
         )
         module_directory = working_directory / "ops"
         module_directory.mkdir()
+        (module_directory / "__init__.py").write_text("", encoding="utf-8")
         (module_directory / "deploy.py").write_text(
             "import subprocess\n"
             "subprocess.run(['kubectl', 'apply', '-f', 'runtime.yml'], check=True)\n",
@@ -5433,6 +5717,17 @@ jobs:
                 working_directory=working_directory,
             ),
             "negative long-option Python module regression passed",
+        )
+        (working_directory / "wrapper.py").write_text(
+            "from ops import deploy\n",
+            encoding="utf-8",
+        )
+        require(
+            contains_runtime_mutation(
+                "python3 wrapper.py",
+                working_directory=working_directory,
+            ),
+            "negative imported local Python module regression passed",
         )
         (working_directory / "package.json").write_text(
             json.dumps(
@@ -5669,6 +5964,8 @@ PY
         "https.request({method: 'POST'}, callback).end()\n",
         'const {exec: run} = require("node:child_process"); '
         'run("kubectl apply -f runtime.yml")\n',
+        "fetch(...args)\n",
+        "process.getBuiltinModule('child_process').exec('kubectl apply')\n",
     ):
         require(
             javascript_source_has_runtime_mutation(javascript_mutation),
@@ -5939,6 +6236,9 @@ open_url("https://runtime.example/mutate")
             "request.__dict__['method'] = 'POST'",
             "request.__dict__['data'] = b'payload'",
             "object.__setattr__(request, 'method', 'POST')",
+            "request.__setattr__('method', 'POST')",
+            "request.__setattr__('data', b'payload')",
+            "request.__setitem__('method', 'POST')",
         ):
             unsafe = (
                 "import urllib.request\n"
@@ -6092,6 +6392,7 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
         "result=`kubectl apply -f runtime.yml`",
         'result="$(kubectl apply -f runtime.yml)"',
         'tool=kubectl; "$tool" apply -f runtime.yml',
+        'TOOL=$(echo kubectl); "$TOOL" apply -f runtime.yml',
         'tool=kubectl; "$tool" apply -f runtime.yml; tool=echo',
         'tool=kubectl; echo tool=echo; "$tool" apply -f runtime.yml',
         'kubectl "$ACTION" -f runtime.yml',
@@ -6103,6 +6404,10 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
         "sh -c '{} apply -f runtime.yml'",
         "printf '%s\\0' 'kubectl apply -f runtime.yml' | xargs -0 sh -c",
         "printf './deploy.sh\\n' | xargs bash",
+        "echo validation\n\ngh api --method POST repos/example/runtime/dispatches",
+        "ionice kubectl apply -f runtime.yml",
+        "GIT_ALLOW_PROTOCOL=ext git fetch ext::sh\\ -c\\ id",
+        "trap 'kubectl apply -f runtime.yml' EXIT",
         "find . -exec kubectl apply -f runtime.yml {} \\;",
         'ACTION=-exec; find . "$ACTION" kubectl apply -f runtime.yml {} \\;',
         'find . "${ACTION}" kubectl apply -f runtime.yml {} \\;',
@@ -6131,6 +6436,7 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
         "docker buildx build --push -t ghcr.io/example/image .",
         "docker buildx build --output=type=registry,name=ghcr.io/example/image .",
         "docker buildx build -o type=image,name=ghcr.io/example/image,push=true .",
+        "docker buildx bake --push",
     ):
         require(
             contains_image_publication({"run": run}),

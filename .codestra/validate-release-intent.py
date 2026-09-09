@@ -375,8 +375,8 @@ EXPECTED_REQUIRED_CHECK_SOURCE_CLOSURE_SHA256 = {
         "f1b423679732b91fa9d2d9ecffcb7cbcf"
     ),
     "appolon1908-hue/Keycloak": (
-        "562c2c8aa9d472405b8efeddfb49da33"
-        "778153017724f5dd7cf54019fd9124a8"
+        "6e359c5cfe3f0b6c34d10c8744f2a159"
+        "26ff3dcb339662f86bd3e8862b93ae47"
     ),
     "appolon1908-hue/Middleware-": (
         "13997b8f42c5926c725d0f76d95a9c41"

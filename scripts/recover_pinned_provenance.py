@@ -12,11 +12,15 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-try:
+if TYPE_CHECKING:
     from scripts.release_manifest import load_manifest, validate_manifest
-except ModuleNotFoundError:
-    from release_manifest import load_manifest, validate_manifest
+else:
+    try:
+        from scripts.release_manifest import load_manifest, validate_manifest
+    except ModuleNotFoundError:
+        from release_manifest import load_manifest, validate_manifest
 
 SOURCE = "29b25cba8302cd15ef4d87b68f501da6347f2f17"
 DIGEST = "sha256:0f5a5b3b1c8166d6509b228541bee01533f5feb1dbef24ed2d241194ba610802"

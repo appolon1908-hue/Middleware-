@@ -4,7 +4,8 @@ import asyncio
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
+from unittest.mock import Mock
+from app.vicidial_odoo_projection import ProjectionSettings, OdooCallEventDispatcher
 
 import pytest
 
@@ -142,9 +143,9 @@ async def test_fetched_batch_starts_all_messages_without_ack_wait_queueing(
     dispatcher = ConcurrentDispatcher()
     await process_batch(
         messages,
-        settings=SimpleNamespace(synthetic_only=True),
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=ProjectionState(tmp_path / "projection.sqlite3"),
-        dispatcher=dispatcher,
+        dispatcher=Mock(spec=OdooCallEventDispatcher, wraps=dispatcher),
     )
     assert dispatcher.maximum_active == 4
     assert [message.acks for message in messages] == [1, 1, 1, 1]
@@ -168,9 +169,9 @@ async def test_crash_after_possible_post_redelivers_into_readback_only(
     ):
         await handle_message(
             first_message,
-            settings=SimpleNamespace(synthetic_only=True),
+            settings=Mock(spec=ProjectionSettings, synthetic_only=True),
             state=state,
-            dispatcher=first_dispatcher,
+            dispatcher=Mock(spec=OdooCallEventDispatcher, wraps=first_dispatcher),
         )
 
     projected = project_envelope(source, synthetic_only=True)
@@ -185,9 +186,9 @@ async def test_crash_after_possible_post_redelivers_into_readback_only(
     readback = SuccessfulReadBackDispatcher()
     await handle_message(
         redelivery,
-        settings=SimpleNamespace(synthetic_only=True),
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
-        dispatcher=readback,
+        dispatcher=Mock(spec=OdooCallEventDispatcher, wraps=readback),
     )
 
     assert readback.submit_calls == 0

@@ -9,6 +9,7 @@ from uuid import UUID
 
 import jwt
 import yaml
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.commands import (
@@ -1388,6 +1389,7 @@ def test_delivery_callback_uses_durable_inbox_and_is_replay_safe() -> None:
         assert first.json()["status"] == "accepted"
         assert first.json()["authoritative_completion"] == "provider-readback"
 
+        assert isinstance(client.app, FastAPI)
         stored = client.app.state.runtime.inbox
         assert stored.ledger_records[-1].payload["event_type"] == (
             "codestra.observability.alert_delivery.v1"

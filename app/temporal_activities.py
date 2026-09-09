@@ -224,6 +224,7 @@ class CommandLedgerWorkflowActivities:
                     # Retain the proven rejection in this owning activity;
                     # retry only the idempotent transaction, never the adapter.
                     await asyncio.sleep(0.1 * (2 ** attempt))
+            raise RuntimeError("pre-dispatch rejection persistence did not complete")
         except PostlySocialUnknownOutcomeError as exc:
             # Postly has no idempotency key. Retrying an ambiguous publish
             # could put a second post on a real account, so this outcome must

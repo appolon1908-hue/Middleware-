@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import create_autospec
+from app.config import Settings
+from app.commands import PostgresCommandStore
 
 from workers import run_temporal
 
 
 def test_temporal_worker_wires_all_reviewed_provider_adapters(monkeypatch: Any) -> None:
-    settings = object()
-    command_store = object()
+    settings = create_autospec(Settings, instance=True)
+    command_store = create_autospec(PostgresCommandStore, instance=True)
     markers: dict[str, object] = {}
 
     def adapter_factory(name: str):

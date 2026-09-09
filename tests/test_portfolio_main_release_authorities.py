@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import copy
 import importlib.util
 import os
@@ -15,7 +17,10 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "apply_portfolio_main_release_authorities.py"
 sys.path.insert(0, str(ROOT / "scripts"))
-from portfolio_ruleset import github_api  # noqa: E402
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset import github_api  # noqa: E402
+else:
+    from portfolio_ruleset import github_api  # noqa: E402
 
 SPEC = importlib.util.spec_from_file_location("portfolio_main_release_authorities", SCRIPT)
 assert SPEC and SPEC.loader

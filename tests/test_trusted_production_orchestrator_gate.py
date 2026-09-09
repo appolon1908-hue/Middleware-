@@ -13,6 +13,7 @@ LAUNCHER = ROOT / ".codestra/run-trusted-production-orchestrator.py"
 ORCHESTRATOR = ROOT / ".codestra/validate-production-orchestrator-contract.py"
 GOVERNANCE_VALIDATOR = ROOT / "scripts/validate_repository_governance.py"
 GATE = ROOT / ".github/workflows/trusted-production-orchestrator-gate.yml"
+CODEOWNERS = ROOT / ".github/CODEOWNERS"
 
 
 def load_launcher() -> ModuleType:
@@ -38,18 +39,17 @@ def test_gate_runs_only_from_protected_pull_request_target_source() -> None:
     assert "\n  pull_request_target:\n" in text
     assert "\n  pull_request:\n" not in text
     assert "github.event.pull_request.head.repo.full_name == github.repository" in text
-    assert "checks: write" in text
+    assert "checks: write" not in text
     assert "persist-credentials: false" in text
 
 
-def test_gate_publishes_required_context_on_exact_candidate_head() -> None:
+def test_gate_validates_exact_candidate_without_publishing_a_spoofable_context() -> None:
     text = GATE.read_text(encoding="utf-8")
     assert "EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}" in text
     assert "COMPARISON_SHA: ${{ github.event.pull_request.base.sha }}" in text
-    assert "name: 'orchestrator-contract'" in text
-    assert "head_sha: headSha" in text
-    assert "VALIDATION_OUTCOME: ${{ steps.validation.outcome }}" in text
-    assert "conclusion: passed ? 'success' : 'failure'" in text
+    assert "checks.create" not in text
+    assert "checks.update" not in text
+    assert "continue-on-error" not in text
 
 
 def test_gate_uses_commit_pinned_actions() -> None:
@@ -57,13 +57,10 @@ def test_gate_uses_commit_pinned_actions() -> None:
     assert (
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in text
     )
-    assert (
-        "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd"
-        in text
-    )
+    assert "actions/github-script@" not in text
 
 
-def test_launcher_protects_itself_and_status_publisher() -> None:
+def test_launcher_protects_itself_and_evidence_workflow() -> None:
     launcher = load_launcher()
     assert launcher.TRUST_GATE_WORKFLOW_PATH == Path(
         ".github/workflows/trusted-production-orchestrator-gate.yml"
@@ -71,6 +68,13 @@ def test_launcher_protects_itself_and_status_publisher() -> None:
     source = LAUNCHER.read_text(encoding="utf-8")
     assert "require_unchanged_trust_file(LAUNCHER_PATH.relative_to(TRUST_ROOT), root)" in source
     assert "require_unchanged_trust_file(TRUST_GATE_WORKFLOW_PATH, root)" in source
+
+
+def test_launcher_does_not_allow_replay_of_candidate_controlled_bootstrap() -> None:
+    launcher = load_launcher()
+    assert launcher.APPROVED_TRUST_WORKFLOW_SHA256 == {
+        "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f"
+    }
 
 
 def test_trust_file_comparison_rejects_candidate_drift(
@@ -104,13 +108,26 @@ def test_governance_accepts_only_the_exact_gate_workflow() -> None:
         )
 
 
-def test_orchestrator_accepts_only_the_exact_candidate_status_gate() -> None:
+def test_governance_requires_independent_ownership_of_every_trust_path() -> None:
+    governance = load_governance_validator()
+    text = CODEOWNERS.read_text(encoding="utf-8")
+
+    governance.validate_codeowners(text)
+    with pytest.raises(
+        governance.GovernanceError,
+        match="independent security CODEOWNER drift",
+    ):
+        governance.validate_codeowners(
+            text.replace(
+                "/.codestra/validate-release-intent.py @kazan555",
+                "/.codestra/validate-release-intent.py @appolon1908-hue",
+            )
+        )
+
+
+def test_orchestrator_classifies_the_evidence_gate_as_read_only() -> None:
     orchestrator = runpy.run_path(str(ORCHESTRATOR))
-    validate = orchestrator["require_mutating_jobs_disabled"]
-    error = orchestrator["ContractError"]
     text = GATE.read_text(encoding="utf-8")
     relative = GATE.relative_to(ROOT).as_posix()
 
-    validate(text, relative)
-    with pytest.raises(error, match="mutating job lacks disable marker"):
-        validate(text + "\n# candidate gate mutation\n", relative)
+    assert orchestrator["workflow_has_runtime_mutation"](text, relative) is False

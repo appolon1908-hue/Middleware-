@@ -4,7 +4,7 @@
 This launcher is executed from protected-base workflow source. Candidate source
 is inert data until its workflow and validator bytes match policies already
 approved on protected main. Candidate changes cannot replace this launcher or
-the trusted status-publisher workflow in the same pull request.
+the trusted evidence workflow in the same pull request.
 """
 
 from __future__ import annotations
@@ -28,25 +28,24 @@ ORCHESTRATOR_PATH = Path(".codestra/validate-production-orchestrator-contract.py
 RELEASE_VALIDATOR_PATH = Path(".codestra/validate-release-intent.py")
 SHA = re.compile(r"[0-9a-f]{40}")
 
-# The key is the exact orchestrator validator. The bootstrap generation binds
+# The key is the exact orchestrator validator. The current generation binds
 # its release validator byte-for-byte. The successor binds its normalized
 # security fingerprint, permitting reviewed source-closure/hash value updates
 # without permitting release-policy logic to change in the same pull request.
 APPROVED_VALIDATOR_POLICIES = {
-    "221a8eeb06eea682062b12dc9ea9018d09013625762f5c2b26c547203a8bd0c4": (
+    "4be8302e9c383b1da8a9afc7e25c371910ae963ed9a40d5bcf9a4091ab818d76": (
         "raw",
         "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497",
     ),
-    "f8f18d3c34079d05c6ada7b9a945c83411121ed291553d6f690de43bad1df753": (
+    "ae57aceba59cdf9ae2419b7403f7ebc9d46582848c69ca18c02b4e70191621a5": (
         "security-fingerprint",
         "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec",
     ),
 }
 APPROVED_TRUST_WORKFLOW_SHA256 = frozenset(
     {
-        # Bootstrap generation used only by the already-open trust-root PR.
-        "67bdd8254210a260f65a83807f448b7a1c42fef99b12651447da09169d567148",
-        # Steady state: protected-base pull_request_target and main push only.
+        # Steady state only: the candidate-controlled pull_request generation
+        # is intentionally not replayable after this launcher reaches main.
         "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f",
     }
 )

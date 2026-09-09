@@ -277,3 +277,44 @@ async def test_approval_preserves_terminal_job_state(automation_pool: asyncpg.Po
     assert duplicate.approval_id == approval.approval_id
     async with automation_pool.acquire() as conn:
         assert await conn.fetchrow('SELECT * FROM middleware_automation_jobs WHERE job_id=$1', before['job_id']) == after
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('different_content', [False, True])
+async def test_concurrent_reconciliation_is_idempotent(
+    automation_pool: asyncpg.Pool, different_content: bool,
+) -> None:
+    from app.automation_v2 import ReconciliationRequest, ReconciliationRun
+
+    # Delay insertion so both transactions have observed an absent record.
+    async with automation_pool.acquire() as conn:
+        await conn.execute("""
+            CREATE OR REPLACE FUNCTION test_delay_reconciliation() RETURNS trigger
+            LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.1); RETURN NEW; END $$;
+            CREATE TRIGGER test_delay_reconciliation BEFORE INSERT
+            ON middleware_automation_reconciliation_runs FOR EACH ROW
+            EXECUTE FUNCTION test_delay_reconciliation();
+        """)
+    store = PostgresAutomationStore(automation_pool, owns_pool=False)
+    first = ReconciliationRequest(
+        tenant_id='tenant-race', correlation_id='correlation-race',
+        idempotency_key='reconcile-race-key', mode='READ',
+    )
+    second = first.model_copy(update={'mode': 'PLAN'}) if different_content else first
+    results = await asyncio.gather(
+        store.reconcile(first, requested_by='operator'),
+        store.reconcile(second, requested_by='operator'),
+        return_exceptions=True,
+    )
+    errors = [result for result in results if isinstance(result, BaseException)]
+    if different_content:
+        assert len(errors) == 1
+        assert isinstance(errors[0], AutomationConflict)
+    else:
+        assert not errors
+        successes = [result for result in results if isinstance(result, ReconciliationRun)]
+        assert len(successes) == 2
+        assert sorted(result.duplicate for result in successes) == [False, True]
+        assert successes[0].model_dump(exclude={'duplicate'}) == successes[1].model_dump(exclude={'duplicate'})
+    async with automation_pool.acquire() as conn:
+        assert await conn.fetchval('SELECT count(*) FROM middleware_automation_reconciliation_runs') == 1

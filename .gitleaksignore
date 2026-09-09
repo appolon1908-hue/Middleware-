@@ -47,3 +47,7 @@ tests/test_automation_v2.py:generic-api-key:457
 tests/test_automation_v2.py:generic-api-key:479
 tests/test_automation_v2.py:generic-api-key:494
 8dde7b7670d544afe2091014fdf53da8cf6a50b6:.codestra/validate-production-orchestrator-contract.py:generic-api-key:430
+# Reviewed SHA-256 release-policy mappings; exact historical false positives.
+cb1ac83e711ed623cb0229bee58758aa588165c3:.codestra/validate-production-orchestrator-contract.py:generic-api-key:483
+cb1ac83e711ed623cb0229bee58758aa588165c3:.codestra/validate-production-orchestrator-contract.py:generic-api-key:617
+cb1ac83e711ed623cb0229bee58758aa588165c3:.codestra/validate-production-orchestrator-contract.py:generic-api-key:620

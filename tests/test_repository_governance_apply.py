@@ -89,17 +89,33 @@ def test_repository_patch_is_squash_only_and_secret_scanning_enabled(policy: dic
     }
 
 
-def test_dependabot_security_update_verifier_accepts_no_content_success() -> None:
+def test_dependabot_security_update_verifier_accepts_enabled_unpaused_state() -> None:
     api = Mock(spec=GitHubApi)
-    api.request.return_value = ApiResponse(status=204, payload=None)
+    api.request.return_value = ApiResponse(status=200, payload={"enabled": True, "paused": False})
 
     verify_automated_security_fixes(api)
 
     api.request.assert_called_once_with(
         "GET",
         "/automated-security-fixes",
-        expected=(204,),
+        expected=(200,),
     )
+
+
+@pytest.mark.parametrize("payload", [
+    None, [], {}, {"enabled": True}, {"paused": False},
+    {"enabled": False, "paused": False},
+    {"enabled": True, "paused": True},
+    {"enabled": 1, "paused": False},
+    {"enabled": True, "paused": 0},
+    {"enabled": "true", "paused": "false"},
+])
+def test_dependabot_security_update_verifier_rejects_inactive_or_invalid_state(payload) -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.return_value = ApiResponse(status=200, payload=payload)
+
+    with pytest.raises(GovernanceApplyError):
+        verify_automated_security_fixes(api)
 
 
 def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:

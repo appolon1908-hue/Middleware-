@@ -3,7 +3,7 @@
 import hashlib
 import json
 from datetime import datetime
-from typing import Literal, cast
+from typing import Literal, cast, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -86,7 +86,7 @@ class PredictiveThrottled(StrictModel):
     reason_code: str = Field(min_length=1, max_length=64)
 
 
-PAYLOADS = {
+PAYLOADS: dict[str, type[StrictModel]] = {
     "vicidial.call.started": LifecyclePayload,
     "vicidial.call.connected": LifecyclePayload,
     "vicidial.call.ended": CallEnded,
@@ -129,7 +129,14 @@ class Envelope(StrictModel):
     payload: dict
 
 
-REGISTRY = {
+class EventDefinition(TypedDict):
+    version: str
+    model: type[StrictModel]
+    deprecated: bool
+    production_enabled: bool
+
+
+REGISTRY: dict[str, EventDefinition] = {
     name: {
         "version": "1.0",
         "model": model,

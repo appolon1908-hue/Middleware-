@@ -24,6 +24,7 @@ from .observability_alert_contract import (
     OPERATOR_CLIENT_ID,
     AlertDeliveryEvent,
     AlertPolicy,
+    AlertOperationView,
     AlertSubmissionResponse,
     AlertmanagerWebhook,
     activation_enabled,
@@ -35,6 +36,7 @@ from .observability_incidents import (
     IncidentConflict,
     IncidentMutationRequest,
     IncidentService,
+    IncidentStore,
     IncidentState,
     MemoryIncidentStore,
     PostgresIncidentStore,
@@ -151,6 +153,7 @@ def create_app(
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
         active.commands.policies.capabilities[COMMAND_CAPABILITY] = delivery_enabled
+        incident_store: IncidentStore
         if isinstance(active.commands.store, MemoryCommandStore):
             incident_store = MemoryIncidentStore(active.commands)
         elif isinstance(active.commands.store, PostgresCommandStore):
@@ -329,7 +332,7 @@ def create_app(
             policy_id=active_policy.policy_id,
             recipient_policy_id=active_policy.recipient_policy_id,
             sender_policy_id=active_policy.sender_policy_id,
-            operations=operations,
+            operations=[AlertOperationView.model_validate(item) for item in operations],
         )
         duplicate = all(item["duplicate"] for item in operations)
         return JSONResponse(

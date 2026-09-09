@@ -4,7 +4,7 @@ import json
 from contextlib import AbstractAsyncContextManager
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -13,6 +13,7 @@ from temporalio.exceptions import ApplicationError
 from app.commands import (
     AUTHENTICATED_CLIENT_ID_KEY,
     CommandEnvelope,
+    PostgresCommandStore,
     authenticated_command_digest,
 )
 from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, TARGET
@@ -212,7 +213,7 @@ async def test_matched_reconciliation_reads_back_and_completes_durably() -> None
         )
     )
     activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
-        store,
+        Mock(spec=PostgresCommandStore, wraps=store, pool=store.pool),
         odoo=adapter,  # type: ignore[arg-type]
     )
 
@@ -251,7 +252,7 @@ async def test_mismatch_is_persisted_without_blind_provider_resubmission() -> No
         )
     )
     activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
-        store,
+        Mock(spec=PostgresCommandStore, wraps=store, pool=store.pool),
         odoo=adapter,  # type: ignore[arg-type]
     )
 
@@ -279,7 +280,7 @@ async def test_missing_durable_client_provenance_fails_closed() -> None:
     del payload[AUTHENTICATED_CLIENT_ID_KEY]
     row["payload"] = payload
     activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
-        FakeStore(row),
+        Mock(spec=PostgresCommandStore, wraps=FakeStore(row), pool=FakePool(FakeConnection(row))),
         odoo=FakeAdapter(ActivityResult("matched", "unused")),  # type: ignore[arg-type]
     )
 
@@ -301,7 +302,7 @@ async def test_tampered_durable_payload_digest_fails_before_provider_readback() 
     row["payload"] = json.dumps(payload)
     adapter = FakeAdapter(ActivityResult("matched", "must not run"))
     activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
-        FakeStore(row),
+        Mock(spec=PostgresCommandStore, wraps=FakeStore(row), pool=FakePool(FakeConnection(row))),
         odoo=adapter,  # type: ignore[arg-type]
     )
 
@@ -329,7 +330,7 @@ async def test_command_change_during_readback_cannot_complete_operation() -> Non
         store.pool.connection.row,
     )
     activities = CommandLedgerWorkflowActivities(  # type: ignore[arg-type]
-        store,
+        Mock(spec=PostgresCommandStore, wraps=store, pool=store.pool),
         odoo=adapter,  # type: ignore[arg-type]
     )
 

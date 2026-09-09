@@ -1719,19 +1719,62 @@ def script_dependencies_have_runtime_mutation(
 ) -> bool:
     tokens = shell_tokens(script)
     for index in command_indexes(tokens):
-        targets = (
-            interpreter_script_target(tokens, index),
-            interpreter_module_target(tokens, index, working_directory),
-            direct_repository_script_target(tokens, index, working_directory),
-        )
-        for target in targets:
-            if target is not None and repository_script_has_runtime_mutation(
-                target,
+        raw_tail = raw_command_arguments(tokens, index)
+        interpreter_target = interpreter_script_target(tokens, index)
+        if interpreter_target is not None:
+            invocation_arguments: list[str] = []
+            for target_index, token in enumerate(raw_tail):
+                if (
+                    token.removeprefix("./")
+                    == interpreter_target.removeprefix("./")
+                ):
+                    invocation_arguments = raw_tail[target_index + 1 :]
+                    break
+            if not approved_read_only_script_invocation(
+                interpreter_target,
+                invocation_arguments,
+                working_directory,
+            ) and repository_script_has_runtime_mutation(
+                interpreter_target,
                 set(),
                 script_aliases,
                 working_directory,
             ):
                 return True
+
+        module_target = interpreter_module_target(
+            tokens,
+            index,
+            working_directory,
+        )
+        if module_target is not None and repository_script_has_runtime_mutation(
+            module_target,
+            set(),
+            script_aliases,
+            working_directory,
+        ):
+            return True
+
+        direct_target = direct_repository_script_target(
+            tokens,
+            index,
+            working_directory,
+        )
+        if (
+            direct_target is not None
+            and not approved_read_only_script_invocation(
+                direct_target,
+                raw_tail,
+                working_directory,
+            )
+            and repository_script_has_runtime_mutation(
+                direct_target,
+                set(),
+                script_aliases,
+                working_directory,
+            )
+        ):
+            return True
     return False
 
 
@@ -3147,6 +3190,10 @@ def validate_intent_negative_regressions() -> None:
             "python3 scripts/apply_repository_governance.py --verify-live"
         ),
         "read-only governance verification was treated as runtime mutation",
+    )
+    require(
+        not contains_runtime_mutation("bash scripts/run_ci.sh"),
+        "validation script dependency chain was treated as runtime mutation",
     )
     enabled_mutation = """name: synthetic
 jobs:

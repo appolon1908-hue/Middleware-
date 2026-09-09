@@ -335,13 +335,16 @@ def _matching_rulesets(api: GitHubApi) -> list[Mapping[str, Any]]:
 
 
 def verify_automated_security_fixes(api: GitHubApi) -> None:
-    """Require GitHub's documented no-content success for this feature."""
+    """Require enabled, unpaused security updates from GitHub's read-back."""
 
-    api.request(
+    response = api.request(
         "GET",
         "/automated-security-fixes",
-        expected=(204,),
+        expected=(200,),
     )
+    state = _require_mapping(response.payload, "Dependabot security update state is invalid")
+    require(state.get("enabled") is True, "Dependabot security updates are not enabled")
+    require(state.get("paused") is False, "Dependabot security updates are paused or unknown")
 
 
 def apply_ruleset(api: GitHubApi, policy: Mapping[str, Any]) -> int:

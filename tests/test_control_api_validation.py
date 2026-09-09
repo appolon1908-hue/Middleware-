@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -12,6 +13,8 @@ from app.api_inputs import authorization_header, optional_header, required_heade
 from app.config import Settings
 from app.control_api import (
     MAX_BIGINT,
+    _audit_cursor,
+    _audit_next,
     _cursor,
     _next,
 )
@@ -97,6 +100,32 @@ def test_cursor_rejects_duplicate_json_fields() -> None:
     duplicate = base64.urlsafe_b64encode(b'{"v":1,"id":1,"id":2}').decode().rstrip("=")
     with pytest.raises(RequestValidationError, match="cursor is malformed"):
         _cursor(duplicate)
+
+
+def test_audit_cursor_round_trip_preserves_total_order_position() -> None:
+    created_at = datetime(2026, 9, 9, 12, 30, 45, 123456, tzinfo=UTC)
+    encoded = _audit_next(created_at, "control", MAX_BIGINT)
+    assert _audit_cursor(encoded) == (created_at, "control", MAX_BIGINT)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        _encode({"v": 1, "ts": "2026-09-09T12:30:45Z", "authority": "other", "id": 1}),
+        _encode({"v": 1, "ts": "2026-09-09T12:30:45", "authority": "control", "id": 1}),
+        _encode({"v": 1, "ts": "invalid", "authority": "control", "id": 1}),
+        _encode(
+            {"v": 1, "ts": "2026-09-09T12:30:45Z", "authority": "command", "id": 0}
+        ),
+        _encode(
+            {"v": 2, "ts": "2026-09-09T12:30:45Z", "authority": "command", "id": 1}
+        ),
+    ],
+)
+def test_audit_cursor_rejects_malformed_positions(value: str) -> None:
+    with pytest.raises(RequestValidationError, match="audit cursor is malformed"):
+        _audit_cursor(value)
 
 
 def test_required_header_accepts_one_canonical_value() -> None:

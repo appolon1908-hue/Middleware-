@@ -2179,6 +2179,14 @@ paths:
           minimum: 1
           default: 50
           title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
       - *id001
       responses:
         '200':

@@ -534,7 +534,7 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
         ".github/workflows/connector-runtime-api-ci.yml": "917ab06febf30f0d81146fc147794dace9510f7bb0a6fb903dd69b2244d4e1d0",
         ".github/workflows/connector-storage-ci.yml": "eada698e8756b76431a43f8d54d1aa192b9d964bca9a5e76d90476f35135bc7a",
         ".github/workflows/lead-automation-v1.yml": "9cdf5b9ce21f528bb8d0cb29b170586d212f5dfeb0e4ad237bb531a41bd89274",
-        ".github/workflows/odoo-calling-contract.yml": "01b0808e99d8c5f20040f89fdb53c405f91149239bfbfdd2b477112e388611e7",
+        ".github/workflows/odoo-calling-contract.yml": "8aed58831f2ffcfc3d6621651ed5002091c388f41cfaa59436b24784fc148bcd",
     },
     "appolon1908-hue/beyvra-backend": {
         ".github/workflows/email-boundary-ci.yml": "13ec97e8fb3cf77dcea400c2c8d4d5f089a567852ebcfa7f8efc581efa6f1fd6",

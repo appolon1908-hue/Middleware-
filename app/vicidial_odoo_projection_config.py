@@ -164,20 +164,13 @@ def _validate_projection_runtime_authority(
             _validate_hmac_path(raw, prefix=prefix, name=name)
 
 
-_ORIGINAL_VALIDATE = _BASE.ProjectionSettings.validate
+class ProjectionSettings(_BASE.ProjectionSettings):
+    """Projection settings with immutable runtime-authority validation."""
 
-
-def _strict_validate(
-    self: Any,
-    source: Mapping[str, str],
-) -> None:
-    _ORIGINAL_VALIDATE(self, source)
-    if self.enabled:
-        _validate_projection_runtime_authority(self, source)
-
-
-_BASE.ProjectionSettings.validate = _strict_validate
-ProjectionSettings = _BASE.ProjectionSettings
+    def validate(self, source: Mapping[str, str]) -> None:
+        super().validate(source)
+        if self.enabled:
+            _validate_projection_runtime_authority(self, source)
 
 
 def __getattr__(name: str) -> Any:

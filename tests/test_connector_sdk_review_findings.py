@@ -9,7 +9,6 @@ import json
 import time
 import unittest
 import uuid
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 

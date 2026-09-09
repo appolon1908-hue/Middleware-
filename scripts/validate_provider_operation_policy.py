@@ -143,7 +143,9 @@ def validate(value: dict, identity: dict, safety_baseline: dict[str, str]) -> No
         )
         if exact_operation != EXPECTED_OPERATIONS.get(identifier):
             fail(f"operation authority mismatch: {identifier}")
-        identifiers.add(identifier); routes.add(route); callers.add(operation["caller"])
+        identifiers.add(identifier)
+        routes.add(route)
+        callers.add(operation["caller"])
         if operation["externalEffect"]:
             if operation["durability"] != "transactional_outbox":
                 fail(f"external effect bypasses transactional outbox: {identifier}")

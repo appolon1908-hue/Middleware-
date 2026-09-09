@@ -50,15 +50,24 @@ async def test_real_selected_server_b_hmac_routes_policy_and_persistence(
         monkeypatch.setenv(
             "CODESTRA_ADAPTER_STATE", str(tmp_path / "import-state.sqlite3"),
         )
-        from codestra_vicidial.app import create_app
-        from codestra_vicidial.ami_gateway import (
-            AgentBinding, AgentDirectory, LifecycleStore, parse_ami_block,
-        )
-        from codestra_vicidial.repository import MemoryRepository
-        from codestra_vicidial.security import RequestAuthenticator
-        from codestra_vicidial.service import AdapterService, FeatureFlags
-        from codestra_vicidial.state import StateStore
-        from test_internal_calling import executor, seed_connected
+        # These modules belong to the separately pinned optional checkout.
+        from importlib import import_module
+
+        create_app = import_module("codestra_vicidial.app").create_app
+        ami_module = import_module("codestra_vicidial.ami_gateway")
+        AgentBinding = ami_module.AgentBinding
+        AgentDirectory = ami_module.AgentDirectory
+        LifecycleStore = ami_module.LifecycleStore
+        parse_ami_block = ami_module.parse_ami_block
+        MemoryRepository = import_module("codestra_vicidial.repository").MemoryRepository
+        RequestAuthenticator = import_module("codestra_vicidial.security").RequestAuthenticator
+        service_module = import_module("codestra_vicidial.service")
+        AdapterService = service_module.AdapterService
+        FeatureFlags = service_module.FeatureFlags
+        StateStore = import_module("codestra_vicidial.state").StateStore
+        calling_tests = import_module("test_internal_calling")
+        executor = calling_tests.executor
+        seed_connected = calling_tests.seed_connected
 
         server_root = tmp_path / "server-b"
         middleware_root = tmp_path / "middleware"

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import argparse
 import copy
 import datetime as dt
@@ -13,8 +15,14 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Mapping
 
-from portfolio_ruleset.github_api import GitHubApi
-from portfolio_ruleset.common import RolloutError
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.github_api import GitHubApi
+else:
+    from portfolio_ruleset.github_api import GitHubApi
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.common import RolloutError
+else:
+    from portfolio_ruleset.common import RolloutError
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "portfolio-main-release-authorities.v1.json"

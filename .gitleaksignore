@@ -51,3 +51,15 @@ tests/test_automation_v2.py:generic-api-key:494
 cb1ac83e711ed623cb0229bee58758aa588165c3:.codestra/validate-production-orchestrator-contract.py:generic-api-key:483
 cb1ac83e711ed623cb0229bee58758aa588165c3:.codestra/validate-production-orchestrator-contract.py:generic-api-key:617
 cb1ac83e711ed623cb0229bee58758aa588165c3:.codestra/validate-production-orchestrator-contract.py:generic-api-key:620
+
+tests/integration/test_postgres_redis.py:generic-api-key:498
+tests/integration/test_postgres_redis.py:generic-api-key:523
+tests/test_reconciliation_activity.py:generic-api-key:131
+tests/test_worker.py:generic-api-key:54
+tests/test_worker.py:generic-api-key:229
+tests/test_temporal_transport.py:generic-api-key:35
+tests/test_temporal_transport.py:generic-api-key:44
+tests/test_temporal_transport.py:generic-api-key:246
+tests/test_observability_alerts.py:generic-api-key:508
+tests/test_observability_alerts.py:generic-api-key:548
+tests/test_observability_alerts.py:generic-api-key:952

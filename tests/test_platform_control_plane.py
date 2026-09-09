@@ -4,7 +4,8 @@ import asyncio
 import json
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
+from unittest.mock import Mock
+from app.config import Settings
 from typing import Any
 from uuid import uuid4
 
@@ -188,7 +189,7 @@ def _request(command_type: str = "crm.lead.upsert") -> CommandExecutionRequest:
 
 
 def _adapter() -> OdooProviderAdapter:
-    settings = SimpleNamespace(
+    settings = Mock(spec=Settings,
         app_env="test",
         external_effects={"ODOO_WRITE": True},
         umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
@@ -204,7 +205,7 @@ def _adapter() -> OdooProviderAdapter:
 
 
 def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
-    settings = SimpleNamespace(
+    settings = Mock(spec=Settings,
         app_env="test",
         external_effects={"ODOO_WRITE": False},
         umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
@@ -216,7 +217,7 @@ def test_odoo_adapter_fails_closed_when_write_capability_is_off() -> None:
 
 
 def test_odoo_adapter_rechecks_n8n_kill_switch_at_execution() -> None:
-    settings = SimpleNamespace(
+    settings = Mock(spec=Settings,
         app_env="test",
         external_effects={"ODOO_WRITE": True},
         umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": False},
@@ -245,7 +246,7 @@ def test_odoo_adapter_rejects_legacy_workflow_without_client_provenance() -> Non
 
 
 def test_odoo_adapter_enforces_canonical_source_gate_on_legacy_temporal_rows() -> None:
-    settings = SimpleNamespace(
+    settings = Mock(spec=Settings,
         app_env="test",
         external_effects={"ODOO_WRITE": True},
         umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
@@ -261,7 +262,7 @@ def test_odoo_adapter_enforces_canonical_source_gate_on_legacy_temporal_rows() -
 
 
 def test_odoo_readback_identity_validation_does_not_require_write_gate() -> None:
-    settings = SimpleNamespace(
+    settings = Mock(spec=Settings,
         app_env="test",
         external_effects={"ODOO_WRITE": False},
         umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},
@@ -377,7 +378,7 @@ def test_odoo_adapter_keeps_timeout_unknown_when_status_mismatches(monkeypatch) 
 
 def test_odoo_hmac_matches_cross_repository_golden_vector() -> None:
     document = json.loads(HMAC_VECTOR["body_utf8"])
-    settings = SimpleNamespace(
+    settings = Mock(spec=Settings,
         app_env="test",
         external_effects={"ODOO_WRITE": True},
         umbrella_controls={"N8N_EXTERNAL_PROVIDER_WRITES": True},

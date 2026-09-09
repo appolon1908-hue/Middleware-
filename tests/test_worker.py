@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
-from app.storage import OutboxRecord
+from app.storage import OutboxRecord, PostgresOutboxStore
 from app.worker import KnownSafeRetryError, OutboxWorker
 
 
 class FakeStore:
     def __init__(self, record: OutboxRecord | None) -> None:
         self.record = record
-        self.claim_args = None
-        self.failed = []
-        self.quarantined = []
-        self.renewed = []
-        self.resolved = []
-        self.events = []
+        self.claim_args: dict[str, Any] | None = None
+        self.failed: list[tuple[int, dict[str, Any]]] = []
+        self.quarantined: list[tuple[int, dict[str, Any]]] = []
+        self.renewed: list[tuple[int, dict[str, Any]]] = []
+        self.resolved: list[tuple[int, dict[str, Any]]] = []
+        self.events: list[str] = []
         self.quarantine_error: Exception | None = None
 
     async def claim(self, **kwargs):
@@ -119,6 +121,7 @@ async def test_handler_timeout_leaves_precommitted_active_quarantine() -> None:
     assert not store.failed
     assert not store.resolved
     assert store.events[:2] == ["quarantine", "handler"]
+    assert store.claim_args is not None
     assert store.claim_args["max_attempts"] == 8
     assert store.claim_args["lease_seconds"] == 0.1
 
@@ -215,3 +218,22 @@ async def test_explicit_known_safe_retry_resolves_quarantine_as_owner() -> None:
     assert store.resolved[0][1]["max_attempts"] == 8
     assert store.resolved[0][1]["worker_id"] == worker.worker_id
     assert store.events[-1] == "resolve:retry"
+
+
+@pytest.mark.asyncio
+async def test_handler_returning_future_completes_under_owned_quarantine() -> None:
+    store = FakeStore(record())
+    future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+
+    def handler(item: OutboxRecord) -> asyncio.Future[None]:
+        assert item.idempotency_key == "idem-12345678"
+        store.events.append("handler")
+        asyncio.get_running_loop().call_soon(future.set_result, None)
+        return future
+
+    worker = OutboxWorker(Mock(spec=PostgresOutboxStore, wraps=store), {"provider": handler})
+    assert await worker.run_once() is True
+    assert future.done()
+    assert store.events[:2] == ["quarantine", "handler"]
+    assert store.events[-1] == "resolve:complete"
+    assert store.resolved[0][1]["worker_id"] == worker.worker_id

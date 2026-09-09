@@ -12,11 +12,12 @@ from datetime import datetime, timedelta, timezone
 import asyncpg
 import httpx
 import websockets
+from websockets.typing import Origin
 
 PUBLIC_API = os.getenv("PUBLIC_API", "https://api.codestra.agency")
 PUBLIC_WS = os.getenv("PUBLIC_WS", "wss://api.codestra.agency/ws/agent")
 INTERNAL_API = os.getenv("INTERNAL_API", "http://codestra-websocket-gateway-gateway-1:8080")
-ORIGIN = "https://phone.codestra.agency"
+ORIGIN = Origin("https://phone.codestra.agency")
 
 
 def read(path: str) -> str:

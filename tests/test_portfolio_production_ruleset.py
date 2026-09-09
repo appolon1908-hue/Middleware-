@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import json
 import sys
 import tempfile
@@ -9,16 +11,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from portfolio_ruleset.common import (  # noqa: E402
-    RolloutError,
-    load_policy,
-    normalize_ruleset_payload,
-    validate_ruleset_payload,
-)
-from portfolio_ruleset.rollout import (  # noqa: E402
-    select_active_repositories,
-    write_evidence,
-)
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.common import (  # noqa: E402
+        RolloutError,
+        load_policy,
+        normalize_ruleset_payload,
+        validate_ruleset_payload,
+    )
+else:
+    from portfolio_ruleset.common import (  # noqa: E402
+        RolloutError,
+        load_policy,
+        normalize_ruleset_payload,
+        validate_ruleset_payload,
+    )
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.rollout import (  # noqa: E402
+        select_active_repositories,
+        write_evidence,
+    )
+else:
+    from portfolio_ruleset.rollout import (  # noqa: E402
+        select_active_repositories,
+        write_evidence,
+    )
 
 
 class PortfolioProductionRulesetTests(unittest.TestCase):

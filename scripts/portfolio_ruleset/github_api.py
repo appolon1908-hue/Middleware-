@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import dataclasses
 import json
 import time
@@ -8,7 +10,10 @@ import urllib.parse
 import urllib.request
 from typing import Any, Iterable, Mapping
 
-from portfolio_ruleset.common import API_VERSION, RolloutError, TOKEN_ENV, require
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.common import API_VERSION, RolloutError, TOKEN_ENV, require
+else:
+    from portfolio_ruleset.common import API_VERSION, RolloutError, TOKEN_ENV, require
 
 
 @dataclasses.dataclass(frozen=True)

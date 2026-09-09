@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import asyncio
 import hashlib
 import json
@@ -93,7 +95,7 @@ async def pool() -> asyncpg.Pool:
 
 
 @pytest_asyncio.fixture
-async def redis_client() -> Redis:
+async def redis_client() -> AsyncIterator[Redis]:
     assert REDIS_URL, "REDIS_URL is required"
     client = Redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
     await client.flushdb()

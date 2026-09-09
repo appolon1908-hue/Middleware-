@@ -13,19 +13,22 @@ import json
 import sys
 import urllib.parse
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, TYPE_CHECKING
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_SCRIPT = ROOT / "scripts" / "apply_production_reviewer_access_base.py"
 
-spec = importlib.util.spec_from_file_location(
-    "production_reviewer_access_base",
-    BASE_SCRIPT,
-)
-if spec is None or spec.loader is None:
-    raise RuntimeError("cannot load production reviewer-access base")
-BASE = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(BASE)
+if TYPE_CHECKING:
+    from scripts import apply_production_reviewer_access_base as BASE
+else:
+    spec = importlib.util.spec_from_file_location(
+        "production_reviewer_access_base",
+        BASE_SCRIPT,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load production reviewer-access base")
+    BASE = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(BASE)
 
 EXPECTED_REPOSITORIES = {
     "appolon1908-hue/codestra-production-platform": 1314230781,
@@ -108,7 +111,8 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
     )
 
     rows = config.get("repositories")
-    BASE.require(isinstance(rows, list), "repositories must be a list")
+    if not isinstance(rows, list):
+        raise BASE.AccessError("repositories must be a list")
     BASE.require(
         len(rows) == len(EXPECTED_REPOSITORIES),
         "fixed repository coverage drift",
@@ -203,15 +207,15 @@ class GitHubApi(BASE.GitHubApi):
                 f"{repository}: full-name readback drift",
             )
 
-        repository = _collaborator_repository(path)
-        if method == "PUT" and repository is not None and status == 204:
+        collaborator_repository = _collaborator_repository(path)
+        if method == "PUT" and collaborator_repository is not None and status == 204:
             permission_status, permission = super().request(
                 "GET",
                 f"{path}/permission",
             )
             BASE.require(
                 permission_status == 200 and permission_is_write(permission),
-                f"{repository}: collaborator permission did not read back as exact write",
+                f"{collaborator_repository}: collaborator permission did not read back as exact write",
             )
 
         return status, value
@@ -220,7 +224,8 @@ class GitHubApi(BASE.GitHubApi):
 BASE.load_config = load_config
 BASE.validate_config = validate_config
 BASE.permission_is_write = permission_is_write
-BASE.GitHubApi = GitHubApi
+if not TYPE_CHECKING:
+    BASE.GitHubApi = GitHubApi
 BASE.EXPECTED_REPOSITORIES = set(EXPECTED_REPOSITORIES)
 
 execute = BASE.execute

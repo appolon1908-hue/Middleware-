@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import Mock
+from app.commands import CommandService
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -50,7 +52,7 @@ def test_malformed_odoo_payload_is_rejected_before_submit(test_settings) -> None
         inbox=MemoryInboxStore(),
         replay=MemoryReplayGuard(),
         tokens=N8nTokenVerifier(),
-        commands=commands,
+        commands=Mock(spec=CommandService, wraps=commands),
     )
     body = {
         "command_id": str(uuid4()),

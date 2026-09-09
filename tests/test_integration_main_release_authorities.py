@@ -53,10 +53,13 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         pull["parameters"]["require_code_owner_review"] = True
         pull["parameters"]["require_extra_approval_for_unattributed_changes"] = True
         pull["parameters"]["required_approving_review_count"] = 2
+        pull["parameters"]["automatic_copilot_code_review_enabled"] = True
         status = next(
             rule for rule in existing["rules"] if rule["type"] == "required_status_checks"
         )
+        status["parameters"]["future_enforcement_mode"] = "strict"
         status["parameters"]["required_status_checks"][0]["integration_id"] = 98765
+        status["parameters"]["required_status_checks"][0]["provider_slug"] = "github-actions"
         status["parameters"]["required_status_checks"].append(
             {"context": "existing-security-gate", "integration_id": 54321}
         )
@@ -71,8 +74,17 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         self.assertTrue(pull["require_code_owner_review"])
         self.assertTrue(pull["require_extra_approval_for_unattributed_changes"])
         self.assertEqual(pull["required_approving_review_count"], 2)
-        checks = normalized["rules"]["required_status_checks"]["checks"]
+        self.assertTrue(
+            pull["additional_parameters"]["automatic_copilot_code_review_enabled"]
+        )
+        status = normalized["rules"]["required_status_checks"]
+        self.assertEqual(
+            status["additional_parameters"]["future_enforcement_mode"],
+            "strict",
+        )
+        checks = status["checks"]
         self.assertEqual(checks[0]["integration_id"], 98765)
+        self.assertEqual(checks[0]["provider_slug"], "github-actions")
         self.assertIn(
             {"context": "existing-security-gate", "integration_id": 54321},
             checks,
@@ -87,6 +99,35 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             MODULE.normalize_ruleset(existing),
             MODULE.normalize_ruleset(merged),
         )
+
+    def test_effective_policy_rejects_dropped_extension_controls(self) -> None:
+        baseline, existing = self.stronger_live_ruleset()
+        effective = MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+
+        weakened_pull = copy.deepcopy(effective)
+        pull = next(
+            rule for rule in weakened_pull["rules"] if rule["type"] == "pull_request"
+        )
+        pull["parameters"].pop("automatic_copilot_code_review_enabled")
+        self.assertFalse(MODULE.ruleset_meets_baseline(weakened_pull, effective))
+
+        weakened_status = copy.deepcopy(effective)
+        status = next(
+            rule
+            for rule in weakened_status["rules"]
+            if rule["type"] == "required_status_checks"
+        )
+        status["parameters"].pop("future_enforcement_mode")
+        self.assertFalse(MODULE.ruleset_meets_baseline(weakened_status, effective))
+
+        weakened_check = copy.deepcopy(effective)
+        status = next(
+            rule
+            for rule in weakened_check["rules"]
+            if rule["type"] == "required_status_checks"
+        )
+        status["parameters"]["required_status_checks"][0].pop("provider_slug")
+        self.assertFalse(MODULE.ruleset_meets_baseline(weakened_check, effective))
 
     def test_effective_policy_rejects_dropped_provider_binding(self) -> None:
         baseline, existing = self.stronger_live_ruleset()

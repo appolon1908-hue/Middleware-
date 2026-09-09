@@ -2630,7 +2630,12 @@ def workflow_has_runtime_command(workflow: str, path: str) -> bool:
     jobs = workflow_jobs(workflow, path)
     script_aliases = workflow_script_aliases(workflow, path)
     return any(
-        step_has_runtime_mutation(job, step, path, script_aliases)
+        # Release-intent evidence promises that no runtime was contacted, so
+        # even a read-only runtime command is forbidden here. Keep that
+        # stronger boundary while layering the shell/script-aware mutation
+        # classifier on top for indirection and generated-command coverage.
+        contains_runtime_command(str(step.get("run", "")))
+        or step_has_runtime_mutation(job, step, path, script_aliases)
         for job in jobs.values()
         for step in workflow_steps(job, path)
     )
@@ -3664,6 +3669,22 @@ jobs:
             "synthetic-release-intent-python-shell.yml",
         ),
         "negative release-intent Python shell regression passed",
+    )
+    read_only_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          kubectl get pods
+          docker inspect middleware-api
+"""
+    require(
+        workflow_has_runtime_command(
+            read_only_runtime_contact,
+            "synthetic-release-intent-runtime-read.yml",
+        ),
+        "negative release-intent read-only runtime regression passed",
     )
     reusable_mutation = """name: synthetic
 jobs:

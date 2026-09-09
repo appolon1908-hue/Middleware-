@@ -37,8 +37,8 @@ STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "7097a4de22d799a21ce5e8d3c90aac47"
 )
 MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "f0a3c7e325c6b11ad960f9a52f1bac38"
-    "ef834591ce866f4621133533373fef39"
+    "8abee4eb254b40fb56125d4cc07b6ce2"
+    "e45063a0379f37ae2fa0e02bee34edf8"
 )
 BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "c80de65ea7435ccaf592c712cb482326"
@@ -748,7 +748,12 @@ def release_validator_security_fingerprint(source: str) -> str:
         tree = ast.parse(source, filename=str(RELEASE_VALIDATOR_PATH))
     except SyntaxError as error:
         raise ContractError("release-intent validator is not valid Python") from error
-    replacements: list[tuple[int, int, str]] = []
+    source_bytes = source.encode("utf-8")
+    line_starts = [0]
+    for line in source_bytes.splitlines(keepends=True):
+        line_starts.append(line_starts[-1] + len(line))
+
+    replacements: list[tuple[int, int, bytes]] = []
     seen: set[str] = set()
     for node in tree.body:
         names: list[str] = []
@@ -815,14 +820,20 @@ def release_validator_security_fingerprint(source: str) -> str:
                 and re.fullmatch(r"[0-9a-f]{64}", literal_value) is not None,
                 "release-validator contract hash binding is invalid",
             )
-        end_lineno = node.end_lineno
-        if not isinstance(end_lineno, int):
+        end_lineno = binding_value.end_lineno
+        end_col_offset = binding_value.end_col_offset
+        if not isinstance(end_lineno, int) or not isinstance(end_col_offset, int):
             raise ContractError("release-validator trust binding location is unavailable")
+        require(
+            1 <= binding_value.lineno <= len(line_starts)
+            and 1 <= end_lineno <= len(line_starts),
+            "release-validator trust binding location is invalid",
+        )
         replacements.append(
             (
-                node.lineno - 1,
-                end_lineno,
-                f'{name} = "<normalized-independent-trust-binding>"\n',
+                line_starts[binding_value.lineno - 1] + binding_value.col_offset,
+                line_starts[end_lineno - 1] + end_col_offset,
+                b'"<normalized-independent-trust-binding>"',
             )
         )
         seen.add(name)
@@ -830,10 +841,13 @@ def release_validator_security_fingerprint(source: str) -> str:
         seen == RELEASE_VALIDATOR_NON_SELF_REFERENTIAL_BINDINGS,
         "release-validator non-self-referential trust bindings are incomplete",
     )
-    lines = source.splitlines(keepends=True)
     for start, end, replacement in sorted(replacements, reverse=True):
-        lines[start:end] = [replacement]
-    return hashlib.sha256("".join(lines).encode()).hexdigest()
+        require(
+            0 <= start < end <= len(source_bytes),
+            "release-validator trust binding byte range is invalid",
+        )
+        source_bytes = source_bytes[:start] + replacement + source_bytes[end:]
+    return hashlib.sha256(source_bytes).hexdigest()
 
 
 def validate_release_validator_trust_root(source: str, repository: object) -> None:
@@ -5635,6 +5649,27 @@ def validate_intent_negative_regressions(contract: dict[str, Any]) -> None:
     else:
         raise ContractError(
             "negative regression unexpectedly passed: executable release-validator trust binding"
+        )
+    shared_line_injection = re.sub(
+        r'(SHARED_PRODUCTION_VALIDATOR_SHA256 = \(\n(?:    "[0-9a-f]{32}"\n){2}\))',
+        r"\1; INDEPENDENT_REVIEWER_ID = 1",
+        release_validator,
+        count=1,
+    )
+    require(
+        shared_line_injection != release_validator,
+        "shared-line trust-binding fixture is missing",
+    )
+    try:
+        validate_release_validator_trust_root(
+            shared_line_injection,
+            contract.get("repository"),
+        )
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: shared-line trust-binding injection"
         )
     supply_chain_bypass = release_validator.replace(
         ") -> None:\n    require_sbom = policy.get(\"require_sbom\")",

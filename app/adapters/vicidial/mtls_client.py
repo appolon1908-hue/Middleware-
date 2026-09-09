@@ -55,29 +55,41 @@ class VicidialMtlsClient:
         self,
         settings: Settings,
         *,
-        transport: httpx.BaseTransport | None = None,
+        transport_factory: Callable[[], httpx.BaseTransport] | None = None,
         resolver: Callable[[str], Sequence[str]] | None = None,
     ):
         self._settings = settings
         self._resolver = resolver or self._resolve_addresses
         self._ensure_configured()
         ssl_context = self._build_ssl_context()
-        if transport is None:
-            transport = httpx.HTTPTransport(verify=ssl_context, retries=0)
-        self._client = httpx.Client(
-            transport=transport,
-            timeout=httpx.Timeout(
-                connect=CONNECT_TIMEOUT_SECONDS,
-                read=RESPONSE_TIMEOUT_SECONDS,
-                write=RESPONSE_TIMEOUT_SECONDS,
-                pool=CONNECT_TIMEOUT_SECONDS,
-            ),
-            follow_redirects=False,
-            trust_env=False,
-        )
+        if transport_factory is None:
+
+            def factory() -> httpx.BaseTransport:
+                return httpx.HTTPTransport(verify=ssl_context, retries=0)
+
+        else:
+            factory = transport_factory
+        # A transport pool is scoped to one governed DNS identity. Two names
+        # may resolve to one private IP, but must never reuse a TLS connection
+        # whose certificate was verified under the other name.
+        self._clients = {
+            hostname: httpx.Client(
+                transport=factory(),
+                timeout=httpx.Timeout(
+                    connect=CONNECT_TIMEOUT_SECONDS,
+                    read=RESPONSE_TIMEOUT_SECONDS,
+                    write=RESPONSE_TIMEOUT_SECONDS,
+                    pool=CONNECT_TIMEOUT_SECONDS,
+                ),
+                follow_redirects=False,
+                trust_env=False,
+            )
+            for hostname in sorted(VICIDIAL_PRIVATE_HOSTS)
+        }
 
     def close(self) -> None:
-        self._client.close()
+        for client in self._clients.values():
+            client.close()
 
     def __enter__(self) -> VicidialMtlsClient:
         return self
@@ -209,7 +221,7 @@ class VicidialMtlsClient:
             },
         )
         try:
-            with self._client.stream(
+            with self._clients[parsed.hostname].stream(
                 "POST",
                 pinned_url,
                 content=body,

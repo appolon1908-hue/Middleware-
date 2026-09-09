@@ -4985,6 +4985,8 @@ paths:
         required: false
         schema:
           type: integer
+          maximum: 100
+          minimum: 1
           default: 50
           title: Limit
       - name: cursor
@@ -5020,6 +5022,8 @@ paths:
         schema:
           anyOf:
           - type: string
+            minLength: 1
+            maxLength: 180
           - type: 'null'
           title: Command Type
       - *id001
@@ -6234,6 +6238,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
   /v1/intake/surveys/responses:
     post:
       summary: Submit Survey Response
@@ -6260,6 +6268,10 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
   /v1/commands:
     post:
       summary: Submit Command

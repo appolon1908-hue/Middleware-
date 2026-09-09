@@ -103,6 +103,7 @@ DOMAIN_PATTERN = re.compile(
     r"[a-z]{2,63}\Z"
 )
 ENV_NAME_PATTERN = re.compile(r"[A-Z][A-Z0-9_]*\Z")
+SENSITIVE_ENV_NAME_PATTERN = re.compile(r"(?:PASSWORD|PRIVATE_KEY|SECRET|TOKEN)")
 
 
 def fail(message: str) -> None:
@@ -195,6 +196,8 @@ def load_safety_flags(path: Path) -> dict[str, str]:
             or value != value.strip()
         ):
             fail(f"malformed_safety_line:{line_number}")
+        if SENSITIVE_ENV_NAME_PATTERN.search(name) is not None:
+            fail(f"forbidden_safety_secret_name:{name}")
         if name in flags:
             fail(f"duplicate_safety_flag:{name}")
         flags[name] = value

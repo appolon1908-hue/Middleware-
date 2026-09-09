@@ -122,6 +122,11 @@ class PostalDomainRegistryTests(unittest.TestCase):
             safety_file.write("\nEMAIL_DELIVERY_ENABLED=true\n")
         self.assert_rejected("duplicate_safety_flag:EMAIL_DELIVERY_ENABLED")
 
+    def test_credential_shaped_safety_variable_fails_closed(self) -> None:
+        with self.safety_path.open("a", encoding="utf-8") as safety_file:
+            safety_file.write("\nPOSTAL_API_TOKEN=placeholder\n")
+        self.assert_rejected("forbidden_safety_secret_name:POSTAL_API_TOKEN")
+
     def test_enabled_safety_flag_fails_closed(self) -> None:
         safety = self.safety_path.read_text(encoding="utf-8")
         self.safety_path.write_text(

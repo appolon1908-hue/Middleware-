@@ -44,9 +44,9 @@ APPROVED_TRUST_WORKFLOW_SHA256 = frozenset(
     {
         # Bootstrap generation: keeps the ordinary PR trigger long enough for
         # this first trust-root change to satisfy the existing required check.
-        "20def40798f7b5a1b31febfdd1187e9a7ee607a685c8986ef695f3575eaedb94",
+        "67bdd8254210a260f65a83807f448b7a1c42fef99b12651447da09169d567148",
         # Steady state: protected-base pull_request_target and main push only.
-        "319862b3075f88381ed953ac7d066505a4201baedb81388ef0561311d7c0f180",
+        "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f",
     }
 )
 

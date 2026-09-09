@@ -478,3 +478,26 @@ async def test_matching_terminal_readback_succeeds(tmp_path):
         ).readback(hangup_command(grant))
     assert result.status == "matched"
     assert result.readback_evidence["authorization_reference"] == grant.authorization_reference
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['originate', 'hangup', 'denial'])
+@pytest.mark.parametrize('malformed', [[], {}])
+async def test_unhashable_response_fields_remain_classified(tmp_path, kind, malformed):
+    grant, env = environment(tmp_path)
+    attempts = []
+
+    async def endpoint(request):
+        attempts.append(request)
+        if kind == 'denial':
+            return httpx.Response(403, json={'detail': malformed}, request=request)
+        result = lifecycle_evidence(grant) | {'status': 'accepted', 'hangup': 'requested'}
+        result['hangup' if kind == 'hangup' else 'status'] = malformed
+        return httpx.Response(200, json=result, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
+        expected = VicidialInternalCallError if kind == 'denial' else VicidialInternalCallUnknown
+        with pytest.raises(expected):
+            await adapter.execute(hangup_command(grant) if kind == 'hangup' else command(grant))
+    assert len(attempts) == 1

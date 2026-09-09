@@ -167,7 +167,7 @@ class VicidialInternalCallAdapter:
             except (ValueError, UnicodeError):
                 rejection = None
             detail = rejection.get("detail") if isinstance(rejection, dict) else None
-            if response.status_code == 403 and detail in conclusive_denials:
+            if response.status_code == 403 and isinstance(detail, str) and detail in conclusive_denials:
                 raise VicidialInternalCallPreDispatchRejected(
                     "Server B conclusively rejected originate before AMI dispatch"
                 )
@@ -233,6 +233,7 @@ class VicidialInternalCallAdapter:
                                         }))
             uniqueid = value.get("asterisk_uniqueid")
             if (value.get("operation_id") != request.command_id
+                    or not isinstance(value.get("status"), str)
                     or value.get("status") not in {"accepted", "dispatch_unknown"}
                     or not isinstance(uniqueid, str) or not uniqueid.strip()):
                 raise VicidialInternalCallUnknown("Server B originate acknowledgement was invalid")
@@ -279,6 +280,7 @@ class VicidialInternalCallAdapter:
                     or value.get("internal_only") is not True
                     or value.get("external_dialing") is not False
                     or value.get("authorization_reference") != request.payload["authorization_reference"]
+                    or not isinstance(value.get("hangup"), str)
                     or value.get("hangup") not in {"requested", "dispatch_unknown", "already_terminal"}):
                 raise VicidialInternalCallUnknown("Server B hangup acknowledgement was invalid")
             return ActivityResult(

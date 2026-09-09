@@ -84,6 +84,7 @@ UNVERIFIED_DOMAIN_FIELDS = COMMON_DOMAIN_FIELDS | {
     "outgoing_configured",
 }
 REQUIRED_DISABLED_FLAGS = {
+    "ALLOW_LIVE_EMAIL",
     "ENABLE_EXTERNAL_DELIVERY",
     "EXTERNAL_DELIVERY_ENABLED",
     "EMAIL_DELIVERY_ENABLED",
@@ -103,7 +104,11 @@ DOMAIN_PATTERN = re.compile(
     r"[a-z]{2,63}\Z"
 )
 ENV_NAME_PATTERN = re.compile(r"[A-Z][A-Z0-9_]*\Z")
-SENSITIVE_ENV_NAME_PATTERN = re.compile(r"(?:PASSWORD|PRIVATE_KEY|SECRET|TOKEN)")
+SENSITIVE_ENV_NAME_PATTERN = re.compile(
+    r"(?:^|_)(?:ACCESS_KEY|API_KEY|CREDENTIALS?|PASSWORD|PRIVATE_KEY|SECRETS?|TOKENS?)(?:_|$)"
+)
+DELIVERY_FLAG_PATTERN = re.compile(r"(?:EMAIL|DELIVERY)")
+ENABLED_VALUES = {"1", "enabled", "on", "true", "yes"}
 
 
 def fail(message: str) -> None:
@@ -198,8 +203,14 @@ def load_safety_flags(path: Path) -> dict[str, str]:
             fail(f"malformed_safety_line:{line_number}")
         if SENSITIVE_ENV_NAME_PATTERN.search(name) is not None:
             fail(f"forbidden_safety_secret_name:{name}")
+        if any(
+            ord(character) < 32 or 127 <= ord(character) <= 159 for character in value
+        ):
+            fail(f"invalid_safety_control_character:{name}")
         if name in flags:
             fail(f"duplicate_safety_flag:{name}")
+        if DELIVERY_FLAG_PATTERN.search(name) and value.casefold() in ENABLED_VALUES:
+            fail(f"enabled_delivery_alias:{name}")
         flags[name] = value
     return flags
 

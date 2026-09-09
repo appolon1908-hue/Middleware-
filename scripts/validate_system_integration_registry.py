@@ -79,7 +79,12 @@ ALLOWED_CELLS = {
     "financial-isolated",
     "planned-control-planes",
 }
-ALLOWED_LIFECYCLES = {"active", "deprecated", "legacy-migration", "planned-name-review"}
+ALLOWED_LIFECYCLES = {
+    "active",
+    "deprecated",
+    "legacy-migration",
+    "planned-name-review",
+}
 ALLOWED_INTEGRATION_MODES = {
     "middleware-authority",
     "edge-compatibility",
@@ -107,11 +112,16 @@ ALLOWED_RELATIONSHIPS = {
     "governance",
     "caller-and-target",
 }
-PROVIDER_CELLS = {"communications", "crawler", "telephony-restricted", "core-control-plane"}
+PROVIDER_CELLS = {
+    "communications",
+    "crawler",
+    "telephony-restricted",
+    "core-control-plane",
+}
 
-# Independently reviewed GitHub repository identities. The registry may use a
-# mutable repository name as an attribute, but it cannot invent or reassign the
-# immutable numeric identity for any authority-backed component.
+# Independently reviewed immutable GitHub repository identities. Repository names
+# are still mutable attributes, but an authority cannot invent or reassign the
+# numeric identity of a component.
 EXPECTED_REPOSITORY_IDENTITIES = {
     "middleware": (1347559071, "appolon1908-hue/Middleware-"),
     "caddy": (1350228103, "appolon1908-hue/Caddy"),
@@ -142,7 +152,10 @@ EXPECTED_REPOSITORY_IDENTITIES = {
     "booked4seasons": (1332044491, "appolon1908-hue/booked4seasons"),
     "codestra-public-site": (1319808791, "appolon1908-hue/codestra"),
     "restaurant-frontend": (1221155447, "appolon1908-hue/Frontend-Resturant-"),
-    "freight-platform-frontend": (1343761049, "appolon1908-hue/transportaion-Frontend"),
+    "freight-platform-frontend": (
+        1343761049,
+        "appolon1908-hue/transportaion-Frontend",
+    ),
     "social-control-plane": (1351353723, "appolon1908-hue/Codesrea-Social-"),
     "platform-documentation": (1350724356, "appolon1908-hue/documentaions"),
     "platform-infrastructure": (1350724865, "appolon1908-hue/Infustruction-repo"),
@@ -210,7 +223,10 @@ def validate(
 ) -> dict[str, int]:
     require(set(registry) == REGISTRY_KEYS, "registry top-level field inventory mismatch")
     require(registry.get("schema_version") == "4.0", "registry schema version mismatch")
-    require(registry.get("identity_key") == "github_repository_id", "registry identity key mismatch")
+    require(
+        registry.get("identity_key") == "github_repository_id",
+        "registry identity key mismatch",
+    )
     require(
         registry.get("authority_source") == "config/repository-authorities.v1.json",
         "registry authority source mismatch",
@@ -239,18 +255,18 @@ def validate(
     adapter_ids: set[str] = set()
 
     for index, raw in enumerate(systems_raw):
-        system = as_object(raw, f"registry system {index}")
-        require(set(system) == SYSTEM_KEYS, f"registry system {index} field inventory mismatch")
-        component = system.get("component")
-        repository_id = system.get("github_repository_id")
-        repository = system.get("current_repository")
-        role = system.get("authority_role")
-        lifecycle = system.get("lifecycle")
-        cell = system.get("cell")
-        mode = system.get("integration_mode")
-        relationship = system.get("middleware_relationship")
-        adapter = system.get("adapter_id")
-        name_aliases = as_list(system.get("name_aliases"), f"registry aliases for {component}")
+        item = as_object(raw, f"registry system {index}")
+        require(set(item) == SYSTEM_KEYS, f"registry system {index} field inventory mismatch")
+        component = item.get("component")
+        repository_id = item.get("github_repository_id")
+        repository = item.get("current_repository")
+        role = item.get("authority_role")
+        lifecycle = item.get("lifecycle")
+        cell = item.get("cell")
+        mode = item.get("integration_mode")
+        relationship = item.get("middleware_relationship")
+        adapter = item.get("adapter_id")
+        name_aliases = as_list(item.get("name_aliases"), f"registry aliases for {component}")
 
         if not isinstance(component, str) or not component:
             raise RegistryError(f"invalid component at index {index}")
@@ -267,27 +283,48 @@ def validate(
             canonical_repository not in canonical_repository_names,
             f"duplicate repository name: {repository}",
         )
-        require(isinstance(role, str) and bool(role), f"invalid authority role for {component}")
-        require(lifecycle in ALLOWED_LIFECYCLES, f"unsupported lifecycle for {component}: {lifecycle}")
+        require(
+            isinstance(role, str) and bool(role),
+            f"invalid authority role for {component}",
+        )
+        require(
+            lifecycle in ALLOWED_LIFECYCLES,
+            f"unsupported lifecycle for {component}: {lifecycle}",
+        )
         require(cell in ALLOWED_CELLS, f"unsupported cell for {component}: {cell}")
-        require(mode in ALLOWED_INTEGRATION_MODES, f"unsupported integration mode for {component}: {mode}")
+        require(
+            mode in ALLOWED_INTEGRATION_MODES,
+            f"unsupported integration mode for {component}: {mode}",
+        )
         require(
             relationship in ALLOWED_RELATIONSHIPS,
             f"unsupported Middleware relationship for {component}: {relationship}",
         )
-        require(adapter is None or (isinstance(adapter, str) and bool(adapter)), f"invalid adapter id for {component}")
+        require(
+            adapter is None or (isinstance(adapter, str) and bool(adapter)),
+            f"invalid adapter id for {component}",
+        )
         if isinstance(adapter, str):
             require(adapter not in adapter_ids, f"duplicate adapter id: {adapter}")
             adapter_ids.add(adapter)
-        for alias_index, alias_raw in enumerate(name_aliases):
-            alias = as_object(alias_raw, f"registry alias {component}[{alias_index}]")
-            require(set(alias) == REGISTRY_ALIAS_KEYS, f"registry alias field inventory mismatch: {component}")
-            require(valid_repository(alias.get("repository")), f"invalid registry alias repository: {component}")
-            require(alias.get("status") == "PREPARED_NOT_RENAMED", f"invalid registry alias status: {component}")
+        for alias_index, raw_alias in enumerate(name_aliases):
+            alias = as_object(raw_alias, f"registry alias {component}[{alias_index}]")
+            require(
+                set(alias) == REGISTRY_ALIAS_KEYS,
+                f"registry alias field inventory mismatch: {component}",
+            )
+            require(
+                valid_repository(alias.get("repository")),
+                f"invalid registry alias repository: {component}",
+            )
+            require(
+                alias.get("status") == "PREPARED_NOT_RENAMED",
+                f"invalid registry alias status: {component}",
+            )
 
-        systems.append(system)
-        system_by_component[component] = system
-        system_by_id[repository_id] = system
+        systems.append(item)
+        system_by_component[component] = item
+        system_by_id[repository_id] = item
         repository_names.add(repository)
         canonical_repository_names.add(canonical_repository)
 
@@ -295,16 +332,14 @@ def validate(
         set(system_by_component) == set(EXPECTED_REPOSITORY_IDENTITIES),
         "registry and authoritative repository identity coverage differ",
     )
-    for component, (expected_id, expected_repository) in (
-        EXPECTED_REPOSITORY_IDENTITIES.items()
-    ):
-        system = system_by_component[component]
+    for component, (expected_id, expected_repository) in EXPECTED_REPOSITORY_IDENTITIES.items():
+        item = system_by_component[component]
         require(
-            system.get("github_repository_id") == expected_id,
+            item.get("github_repository_id") == expected_id,
             f"authoritative repository id mismatch: {component}",
         )
         require(
-            system.get("current_repository") == expected_repository,
+            item.get("current_repository") == expected_repository,
             f"authoritative repository name mismatch: {component}",
         )
 
@@ -315,9 +350,7 @@ def validate(
         canonical_adapters.get("schema_version") == "2.0",
         "adapter registry schema version mismatch",
     )
-    adapter_rows = as_list(
-        canonical_adapters.get("adapters"), "canonical adapter registry"
-    )
+    adapter_rows = as_list(canonical_adapters.get("adapters"), "canonical adapter registry")
     canonical_adapter_by_id: dict[str, JsonObject] = {}
     for index, raw in enumerate(adapter_rows):
         adapter_row = as_object(raw, f"canonical adapter {index}")
@@ -330,9 +363,7 @@ def validate(
             f"duplicate canonical adapter id: {adapter_id}",
         )
         if not valid_repository(adapter_repository):
-            raise RegistryError(
-                f"canonical adapter repository has no system: {adapter_id}"
-            )
+            raise RegistryError(f"canonical adapter repository has no system: {adapter_id}")
         assert isinstance(adapter_repository, str)
         require(
             adapter_repository in repository_names,
@@ -350,11 +381,10 @@ def validate(
         if selected_adapter is None:
             raise RegistryError(f"unknown adapter binding: {adapter_id}")
         owning_system = next(
-            system for system in systems if system.get("adapter_id") == adapter_id
+            item for item in systems if item.get("adapter_id") == adapter_id
         )
         require(
-            selected_adapter.get("repository")
-            == owning_system.get("current_repository"),
+            selected_adapter.get("repository") == owning_system.get("current_repository"),
             f"adapter repository mismatch: {adapter_id}",
         )
 
@@ -364,16 +394,42 @@ def validate(
         "authority identity key differs from registry",
     )
     require(
-        authority_policy.get("repository_name_migration_manifest") == registry.get("name_alias_source"),
+        authority_policy.get("repository_name_migration_manifest")
+        == registry.get("name_alias_source"),
         "authority rename manifest differs from registry",
     )
 
-    authority_raw = as_list(authorities.get("authorities"), "repository authorities")
+    reference_rows = as_list(authorities.get("reference_only"), "reference-only repositories")
+    reference_only_names: set[str] = set()
+    for index, raw in enumerate(reference_rows):
+        reference = as_object(raw, f"reference-only repository {index}")
+        repository = reference.get("repository")
+        require(
+            valid_repository(repository),
+            f"invalid reference-only repository at {index}",
+        )
+        assert isinstance(repository, str)
+        canonical_reference = repository.casefold()
+        require(
+            canonical_reference not in canonical_repository_names,
+            f"reference-only repository is also a principal: {repository}",
+        )
+        require(
+            canonical_reference not in reference_only_names,
+            f"duplicate reference-only repository: {repository}",
+        )
+        reference_only_names.add(canonical_reference)
+
+    authority_rows = as_list(authorities.get("authorities"), "repository authorities")
     authority_by_component: dict[str, JsonObject] = {}
+    authority_ids: set[int] = set()
     authority_rename_ids: set[int] = set()
-    for index, raw in enumerate(authority_raw):
+    for index, raw in enumerate(authority_rows):
         authority = as_object(raw, f"authority {index}")
-        require(set(authority) <= AUTHORITY_KEYS, f"authority {index} contains unsupported fields")
+        require(
+            set(authority) <= AUTHORITY_KEYS,
+            f"authority {index} contains unsupported fields",
+        )
         require(
             {"component", "principal_repository", "role"} <= set(authority),
             f"authority {index} is incomplete",
@@ -381,77 +437,128 @@ def validate(
         component = authority.get("component")
         if not isinstance(component, str) or not component:
             raise RegistryError(f"invalid authority component at {index}")
-        require(component not in authority_by_component, f"duplicate authority component: {component}")
-        require(valid_repository(authority.get("principal_repository")), f"invalid authority repository: {component}")
-        require(isinstance(authority.get("role"), str) and bool(authority.get("role")), f"invalid authority role: {component}")
+        require(
+            component not in authority_by_component,
+            f"duplicate authority component: {component}",
+        )
+        require(
+            valid_repository(authority.get("principal_repository")),
+            f"invalid authority repository: {component}",
+        )
+        require(
+            isinstance(authority.get("role"), str) and bool(authority.get("role")),
+            f"invalid authority role: {component}",
+        )
+        if "github_repository_id" not in authority:
+            raise RegistryError(f"authority stable repository id missing: {component}")
+        repository_id = authority.get("github_repository_id")
+        if not positive_repository_id(repository_id):
+            raise RegistryError(f"invalid authority repository id: {component}")
+        assert isinstance(repository_id, int)
+        require(
+            repository_id not in authority_ids,
+            f"duplicate authority repository id: {repository_id}",
+        )
+        expected = EXPECTED_REPOSITORY_IDENTITIES.get(component)
+        if expected is None:
+            raise RegistryError(f"unknown authority component: {component}")
+        require(
+            repository_id == expected[0],
+            f"authority repository id mismatch: {component}",
+        )
+        require(
+            authority.get("principal_repository") == expected[1],
+            f"authority repository mismatch: {component}",
+        )
+        authority_ids.add(repository_id)
         authority_by_component[component] = authority
 
-        rename_fields = {
-            "github_repository_id",
-            "target_repository_after_cutover",
-            "rename_status",
-        }
+        rename_fields = {"target_repository_after_cutover", "rename_status"}
         present_rename_fields = rename_fields & set(authority)
         require(
             not present_rename_fields or present_rename_fields == rename_fields,
             f"partial authority rename binding: {component}",
         )
         if present_rename_fields:
-            repository_id = authority.get("github_repository_id")
-            if not positive_repository_id(repository_id):
-                raise RegistryError(
-                    f"invalid authority rename repository id: {component}"
-                )
-            assert isinstance(repository_id, int)
-            require(repository_id not in authority_rename_ids, f"duplicate authority rename repository id: {repository_id}")
             require(
                 valid_repository(authority.get("target_repository_after_cutover")),
                 f"invalid authority rename target: {component}",
             )
-            require(authority.get("rename_status") == "PREPARED_NOT_RENAMED", f"invalid authority rename status: {component}")
+            require(
+                authority.get("rename_status") == "PREPARED_NOT_RENAMED",
+                f"invalid authority rename status: {component}",
+            )
             authority_rename_ids.add(repository_id)
 
     require(
         set(authority_by_component) == set(system_by_component),
         "registry and repository-authority component coverage differ",
     )
-    for component, system in system_by_component.items():
+    for component, item in system_by_component.items():
         authority = authority_by_component[component]
         require(
-            authority.get("principal_repository") == system.get("current_repository"),
+            authority.get("principal_repository") == item.get("current_repository"),
             f"authority repository mismatch: {component}",
         )
-        require(authority.get("role") == system.get("authority_role"), f"authority role mismatch: {component}")
-        if "github_repository_id" in authority:
-            require(
-                authority.get("github_repository_id") == system.get("github_repository_id"),
-                f"authority repository id mismatch: {component}",
-            )
+        require(
+            authority.get("role") == item.get("authority_role"),
+            f"authority role mismatch: {component}",
+        )
+        require(
+            authority.get("github_repository_id") == item.get("github_repository_id"),
+            f"authority repository id mismatch: {component}",
+        )
         if authority.get("status") == "deprecated":
-            require(system.get("lifecycle") == "deprecated", f"deprecated authority remains active: {component}")
+            require(
+                item.get("lifecycle") == "deprecated",
+                f"deprecated authority remains active: {component}",
+            )
 
     require(aliases.get("schema_version") == "1.0", "alias schema version mismatch")
-    require(aliases.get("status") == "PREPARED_NOT_RENAMED", "alias manifest status mismatch")
-    require(aliases.get("identity_key") == registry.get("identity_key"), "alias identity key differs from registry")
-    require(aliases.get("historical_evidence_immutable") is True, "alias history immutability must be true")
-    alias_raw = as_list(aliases.get("mappings"), "repository alias mappings")
+    require(
+        aliases.get("status") == "PREPARED_NOT_RENAMED",
+        "alias manifest status mismatch",
+    )
+    require(
+        aliases.get("identity_key") == registry.get("identity_key"),
+        "alias identity key differs from registry",
+    )
+    require(
+        aliases.get("historical_evidence_immutable") is True,
+        "alias history immutability must be true",
+    )
+    alias_rows = as_list(aliases.get("mappings"), "repository alias mappings")
     alias_by_id: dict[int, JsonObject] = {}
     alias_current_names: set[str] = set()
     alias_target_names: set[str] = set()
-    for index, raw in enumerate(alias_raw):
+    for index, raw in enumerate(alias_rows):
         mapping = as_object(raw, f"alias mapping {index}")
-        require(set(mapping) == ALIAS_MAPPING_KEYS, f"alias mapping {index} field inventory mismatch")
+        require(
+            set(mapping) == ALIAS_MAPPING_KEYS,
+            f"alias mapping {index} field inventory mismatch",
+        )
         repository_id = mapping.get("github_repository_id")
         current_repository = mapping.get("current_repository")
         target_repository = mapping.get("target_repository_after_cutover")
         if not positive_repository_id(repository_id):
             raise RegistryError(f"invalid alias repository id at {index}")
         assert isinstance(repository_id, int)
-        require(repository_id not in alias_by_id, f"duplicate alias repository id: {repository_id}")
-        require(valid_repository(current_repository), f"invalid alias current repository at {index}")
-        require(valid_repository(target_repository), f"invalid alias target repository at {index}")
-        canonical_current = str(current_repository).casefold()
-        canonical_target = str(target_repository).casefold()
+        require(
+            repository_id not in alias_by_id,
+            f"duplicate alias repository id: {repository_id}",
+        )
+        require(
+            valid_repository(current_repository),
+            f"invalid alias current repository at {index}",
+        )
+        require(
+            valid_repository(target_repository),
+            f"invalid alias target repository at {index}",
+        )
+        assert isinstance(current_repository, str)
+        assert isinstance(target_repository, str)
+        canonical_current = current_repository.casefold()
+        canonical_target = target_repository.casefold()
         require(
             canonical_current not in alias_current_names,
             f"duplicate alias current repository: {current_repository}",
@@ -462,101 +569,178 @@ def validate(
             f"alias target collides with a current repository: {target_repository}",
         )
         require(
+            canonical_target not in reference_only_names,
+            f"alias target collides with a reference-only repository: {target_repository}",
+        )
+        require(
             canonical_target not in alias_target_names,
             f"duplicate alias target repository: {target_repository}",
         )
-        require(mapping.get("status") == "PREPARED_NOT_RENAMED", f"invalid alias mapping status at {index}")
+        require(
+            mapping.get("status") == "PREPARED_NOT_RENAMED",
+            f"invalid alias mapping status at {index}",
+        )
         alias_by_id[repository_id] = mapping
         alias_current_names.add(canonical_current)
         alias_target_names.add(canonical_target)
 
-    require(set(alias_by_id) == authority_rename_ids, "alias mappings and authority rename bindings differ")
-    for repository_id, system in system_by_id.items():
-        registry_aliases = as_list(system.get("name_aliases"), f"registry aliases for id {repository_id}")
-        selected_mapping = alias_by_id.get(repository_id)
-        if selected_mapping is None:
-            require(not registry_aliases, f"unregistered alias attached to repository id {repository_id}")
+    require(
+        set(alias_by_id) == authority_rename_ids,
+        "alias mappings and authority rename bindings differ",
+    )
+    for repository_id, item in system_by_id.items():
+        registry_aliases = as_list(
+            item.get("name_aliases"),
+            f"registry aliases for id {repository_id}",
+        )
+        mapping = alias_by_id.get(repository_id)
+        if mapping is None:
+            require(
+                not registry_aliases,
+                f"unregistered alias attached to repository id {repository_id}",
+            )
             continue
         require(
-            system.get("current_repository")
-            == selected_mapping.get("current_repository"),
+            item.get("current_repository") == mapping.get("current_repository"),
             f"alias current name mismatch: {repository_id}",
         )
-        require(len(registry_aliases) == 1, f"registry alias count mismatch: {repository_id}")
-        registry_alias = as_object(registry_aliases[0], f"registry alias for id {repository_id}")
+        require(
+            len(registry_aliases) == 1,
+            f"registry alias count mismatch: {repository_id}",
+        )
+        registry_alias = as_object(
+            registry_aliases[0],
+            f"registry alias for id {repository_id}",
+        )
         require(
             registry_alias.get("repository")
-            == selected_mapping.get("target_repository_after_cutover"),
+            == mapping.get("target_repository_after_cutover"),
             f"registry alias target mismatch: {repository_id}",
         )
         require(
-            registry_alias.get("status") == selected_mapping.get("status"),
+            registry_alias.get("status") == mapping.get("status"),
             f"registry alias status mismatch: {repository_id}",
         )
-        component = system.get("component")
-        authority = authority_by_component[str(component)]
+        component = str(item["component"])
+        authority = authority_by_component[component]
         require(
             authority.get("target_repository_after_cutover")
-            == selected_mapping.get("target_repository_after_cutover"),
+            == mapping.get("target_repository_after_cutover"),
             f"authority alias target mismatch: {component}",
         )
         require(
-            authority.get("rename_status") == selected_mapping.get("status"),
+            authority.get("rename_status") == mapping.get("status"),
             f"authority alias status mismatch: {component}",
         )
 
     middleware = system_by_component.get("middleware")
     if middleware is None:
         raise RegistryError("middleware registry row is missing")
-    require(middleware.get("cell") == "middleware-core", "Middleware must remain in middleware-core")
-    require(middleware.get("integration_mode") == "middleware-authority", "Middleware authority mode drift")
-    require(middleware.get("middleware_relationship") == "authority", "Middleware relationship drift")
-    require(middleware.get("adapter_id") is None, "Middleware must not masquerade as a provider adapter")
+    require(
+        middleware.get("cell") == "middleware-core",
+        "Middleware must remain in middleware-core",
+    )
+    require(
+        middleware.get("integration_mode") == "middleware-authority",
+        "Middleware authority mode drift",
+    )
+    require(
+        middleware.get("middleware_relationship") == "authority",
+        "Middleware relationship drift",
+    )
+    require(
+        middleware.get("adapter_id") is None,
+        "Middleware must not masquerade as a provider adapter",
+    )
 
     n8n = system_by_component.get("n8n")
     if n8n is None:
         raise RegistryError("n8n registry row is missing")
     require(n8n.get("cell") == "automation", "n8n must remain in the automation cell")
-    require(n8n.get("integration_mode") == "orchestration-client", "n8n must remain orchestration-only")
-    require(n8n.get("middleware_relationship") == "caller", "n8n must call Middleware rather than providers")
+    require(
+        n8n.get("integration_mode") == "orchestration-client",
+        "n8n must remain orchestration-only",
+    )
+    require(
+        n8n.get("middleware_relationship") == "caller",
+        "n8n must call Middleware rather than providers",
+    )
     require(n8n.get("adapter_id") is None, "n8n must not own a provider adapter")
 
-    for system in systems:
-        component = str(system["component"])
-        mode = system["integration_mode"]
-        lifecycle = system["lifecycle"]
-        cell = system["cell"]
-        relationship = system["middleware_relationship"]
-        adapter = system["adapter_id"]
+    for item in systems:
+        component = str(item["component"])
+        mode = item["integration_mode"]
+        lifecycle = item["lifecycle"]
+        cell = item["cell"]
+        relationship = item["middleware_relationship"]
+        adapter = item["adapter_id"]
         if mode == "provider-adapter":
             require(lifecycle == "active", f"provider adapter is not active: {component}")
-            require(cell in PROVIDER_CELLS, f"provider adapter is in an invalid cell: {component}")
-            require(relationship == "target-and-event-source", f"provider adapter bypass relationship: {component}")
-            require(isinstance(adapter, str) and bool(adapter), f"provider adapter lacks adapter id: {component}")
+            require(
+                cell in PROVIDER_CELLS,
+                f"provider adapter is in an invalid cell: {component}",
+            )
+            require(
+                relationship == "target-and-event-source",
+                f"provider adapter bypass relationship: {component}",
+            )
+            require(
+                isinstance(adapter, str) and bool(adapter),
+                f"provider adapter lacks adapter id: {component}",
+            )
         elif mode == "business-system-adapter":
-            require(cell == "communications", f"business-system adapter cell drift: {component}")
-            require(relationship == "target-and-event-source", f"business-system adapter relationship drift: {component}")
-            require(isinstance(adapter, str) and bool(adapter), f"business-system adapter lacks adapter id: {component}")
+            require(
+                cell == "communications",
+                f"business-system adapter cell drift: {component}",
+            )
+            require(
+                relationship == "target-and-event-source",
+                f"business-system adapter relationship drift: {component}",
+            )
+            require(
+                isinstance(adapter, str) and bool(adapter),
+                f"business-system adapter lacks adapter id: {component}",
+            )
         elif mode == "product-adapter-nonfinancial":
-            require(cell == "financial-isolated", f"nonfinancial product adapter cell drift: {component}")
-            require(relationship == "caller-and-target", f"nonfinancial product adapter relationship drift: {component}")
-            require(isinstance(adapter, str) and bool(adapter), f"nonfinancial product adapter lacks adapter id: {component}")
+            require(
+                cell == "financial-isolated",
+                f"nonfinancial product adapter cell drift: {component}",
+            )
+            require(
+                relationship == "caller-and-target",
+                f"nonfinancial product adapter relationship drift: {component}",
+            )
+            require(
+                isinstance(adapter, str) and bool(adapter),
+                f"nonfinancial product adapter lacks adapter id: {component}",
+            )
         elif mode == "disabled":
-            require(cell == "legacy-disabled", f"disabled system is outside legacy-disabled cell: {component}")
-            require(relationship == "none", f"disabled system retains Middleware relationship: {component}")
-            require(adapter is None, f"disabled system retains provider adapter: {component}")
+            require(
+                cell == "legacy-disabled",
+                f"disabled system is outside legacy-disabled cell: {component}",
+            )
+            require(
+                relationship == "none",
+                f"disabled system retains Middleware relationship: {component}",
+            )
+            require(
+                adapter is None,
+                f"disabled system retains provider adapter: {component}",
+            )
             require(
                 lifecycle in {"deprecated", "legacy-migration"},
                 f"disabled system has active lifecycle: {component}",
             )
         elif adapter is not None:
-            raise RegistryError(f"unexpected adapter binding for integration mode {mode}: {component}")
+            raise RegistryError(
+                f"unexpected adapter binding for integration mode {mode}: {component}"
+            )
 
     return {
         "systems": len(systems),
         "aliases": len(alias_by_id),
         "adapters": len(canonical_adapter_by_id),
-        "cells": len({str(system["cell"]) for system in systems}),
+        "cells": len({str(item["cell"]) for item in systems}),
     }
 
 

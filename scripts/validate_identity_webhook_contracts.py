@@ -289,6 +289,111 @@ SECURITY_FIELDS = {
     "signatureHeaderFormat",
     "idempotencyKeySource",
 }
+CONNECTIVITY_FIELDS = {
+    "version",
+    "canonical_contract_branch",
+    "canonical_event_schema",
+    "http_conventions",
+    "observability_conventions",
+    "policies",
+    "workstream_dependencies",
+    "connections",
+}
+CONNECTION_FIELDS = {
+    "id",
+    "source_branch",
+    "target_branch",
+    "direction",
+    "transport",
+    "authentication",
+    "reliability",
+    "owner_branch",
+    "runtime_status",
+    "contract",
+}
+CONNECTIVITY_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+WORKSTREAM = re.compile(r"^[a-z0-9-]+/[a-z0-9-]+$")
+ALLOWED_CONNECTIVITY_CONTRACTS = {
+    "contracts/beyvra-identity-provisioned.schema.json",
+    "contracts/event-envelope.schema.json",
+    "contracts/http-conventions.md",
+    "contracts/observability-conventions.md",
+}
+ALLOWED_RUNTIME_STATES = {"declared", "verification_only"}
+ALLOWED_CONNECTION_DIRECTIONS = {
+    "alert",
+    "contract",
+    "identity",
+    "internal",
+    "lease",
+    "log",
+    "probe",
+    "query",
+    "queue",
+    "request_response",
+    "scrape",
+    "state",
+    "test",
+    "workflow",
+}
+ALLOWED_CONNECTION_TRANSPORTS = {
+    "https",
+    "internal",
+    "nats_jetstream",
+    "oidc_jwks",
+    "postgresql",
+    "prometheus_scrape",
+    "redis",
+    "temporal_rpc",
+}
+ALLOWED_CONNECTION_AUTHENTICATION = {
+    "database_role",
+    "internal_service_policy",
+    "mtls_or_oidc_jwt",
+    "nats_tls_service_identity",
+    "none_private_network",
+    "oidc_jwt",
+    "redis_acl",
+    "service_identity",
+    "test_identity",
+}
+ALLOWED_CONNECTION_RELIABILITY = {
+    "at_least_once",
+    "best_effort_observation",
+    "durable_inbox",
+    "durable_workflow",
+    "lease_retry",
+    "read_only",
+    "synchronous",
+    "transactional_outbox",
+}
+EXPECTED_ENVELOPE_PROPERTIES: dict[str, object] = {
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "event_type": {
+        "type": "string",
+        "pattern": EVENT_TYPE.pattern,
+        "maxLength": 180,
+    },
+    "event_version": {"const": "1.0"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "received_at": {"type": "string", "format": "date-time"},
+    "source": {
+        "type": "string",
+        "pattern": CLIENT_ID.pattern,
+        "maxLength": 100,
+    },
+    "tenant_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "customer_id": {
+        "type": ["string", "null"],
+        "minLength": 1,
+        "maxLength": 128,
+    },
+    "correlation_id": {"type": "string", "minLength": 1, "maxLength": 180},
+    "causation_id": {"type": "string", "minLength": 1, "maxLength": 180},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 180},
+    "payload": {"type": "object"},
+    "metadata": {"type": "object", "maxProperties": 64},
+}
 
 
 class ContractError(RuntimeError):
@@ -363,6 +468,24 @@ def require_exact_fields(
         fail(message)
 
 
+def exact_json_value(value: object, expected: object) -> bool:
+    """Compare decoded JSON without Python's bool/int and int/float coercions."""
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        if not isinstance(value, dict) or set(value) != set(expected):
+            return False
+        return all(exact_json_value(value[key], item) for key, item in expected.items())
+    if isinstance(expected, list):
+        if not isinstance(value, list) or len(value) != len(expected):
+            return False
+        return all(
+            exact_json_value(actual_item, expected_item)
+            for actual_item, expected_item in zip(value, expected, strict=True)
+        )
+    return value == expected
+
+
 def validate_upstream(value: object, expected_path: str, label: str) -> None:
     upstream = require_object(value, f"{label}: upstreamContract must be an object")
     require_exact_fields(
@@ -405,7 +528,7 @@ def validate_access(
     require_exact_fields(
         access, ACCESS_FIELDS, "identity-access-map.json fields changed"
     )
-    if access.get("schemaVersion") != 1:
+    if type(access.get("schemaVersion")) is not int or access["schemaVersion"] != 1:
         fail("identity-access-map.json: schemaVersion must be 1")
     validate_upstream(
         access.get("upstreamContract"),
@@ -632,7 +755,10 @@ def validate_webhooks(
     require_exact_fields(
         webhooks, WEBHOOK_FIELDS, "api-webhook-contracts.json fields changed"
     )
-    if webhooks.get("schemaVersion") != 1:
+    if (
+        type(webhooks.get("schemaVersion")) is not int
+        or webhooks["schemaVersion"] != 1
+    ):
         fail("api-webhook-contracts.json: schemaVersion must be 1")
     validate_upstream(
         webhooks.get("upstreamContract"),
@@ -653,6 +779,27 @@ def validate_webhooks(
     if schema_path != "contracts/platform/event-envelope.v1.schema.json":
         fail("webhooks must use the canonical event-envelope schema")
     schema = load_json(root / schema_path)
+    require_exact_fields(
+        schema,
+        {
+            "$schema",
+            "$id",
+            "title",
+            "description",
+            "type",
+            "additionalProperties",
+            "required",
+            "properties",
+        },
+        "event envelope schema fields changed",
+    )
+    if schema.get("$schema") != "https://json-schema.org/draft/2020-12/schema":
+        fail("event envelope must use JSON Schema draft 2020-12")
+    if (
+        schema.get("$id")
+        != "https://contracts.codestra.co/platform/event-envelope.v1.schema.json"
+    ):
+        fail("event envelope schema identity changed")
     if (
         schema.get("type") != "object"
         or schema.get("additionalProperties") is not False
@@ -680,6 +827,8 @@ def validate_webhooks(
         or event_type_schema.get("maxLength") != 180
     ):
         fail("event envelope type pattern must require the codestra namespace")
+    if not exact_json_value(properties, EXPECTED_ENVELOPE_PROPERTIES):
+        fail("event envelope property contracts changed")
 
     security = require_object(
         webhooks.get("security"), "webhook security policy is missing"
@@ -691,7 +840,8 @@ def validate_webhooks(
         fail("webhooks must use HMAC-SHA256")
     if security.get("signatureVersion") != "v1":
         fail("webhook signature version must be v1")
-    if security.get("maximumClockSkewSeconds") != 300:
+    clock_skew = security.get("maximumClockSkewSeconds")
+    if type(clock_skew) is not int or clock_skew != 300:
         fail("webhook maximum clock skew must be 300 seconds")
     retention = security.get("replayRetentionSeconds")
     if type(retention) is not int or retention < 86400:
@@ -788,6 +938,22 @@ def validate_webhooks(
         )
 
     connectivity = load_json(root / "config/connectivity-map.json")
+    require_exact_fields(
+        connectivity, CONNECTIVITY_FIELDS, "connectivity-map.json fields changed"
+    )
+    if type(connectivity.get("version")) is not int or connectivity["version"] != 2:
+        fail("connectivity map version must be 2")
+    if connectivity.get("canonical_contract_branch") != "core/integration-contracts":
+        fail("connectivity canonical contract branch changed")
+    if connectivity.get("canonical_event_schema") != schema_path:
+        fail("connectivity canonical event schema drifted from webhook authority")
+    if connectivity.get("http_conventions") != "contracts/http-conventions.md":
+        fail("connectivity HTTP conventions path changed")
+    if (
+        connectivity.get("observability_conventions")
+        != "contracts/observability-conventions.md"
+    ):
+        fail("connectivity observability conventions path changed")
     policies = require_object(
         connectivity.get("policies"), "connectivity policies must be an object"
     )
@@ -813,13 +979,94 @@ def validate_webhooks(
     )
     dependency_index: dict[str, list[str]] = {}
     for workstream, raw_dependencies in dependencies.items():
-        if not workstream or workstream != workstream.strip():
-            fail("connectivity workstream name must be non-empty and trimmed")
-        dependency_index[workstream] = require_string_list(
+        if WORKSTREAM.fullmatch(workstream) is None:
+            fail("connectivity workstream name must be canonical")
+        values = require_string_list(
             raw_dependencies,
             f"{workstream}: dependencies must be unique strings",
             allow_empty=True,
         )
+        dependency_index[workstream] = values
+    canonical_workstream = "core/integration-contracts"
+    if dependency_index.get(canonical_workstream) != []:
+        fail("canonical contract workstream must have no dependencies")
+    for workstream, values in dependency_index.items():
+        if workstream != canonical_workstream and canonical_workstream not in values:
+            fail(f"{workstream} must depend on {canonical_workstream}")
+        unknown = sorted(set(values) - set(dependency_index))
+        if unknown:
+            fail(f"{workstream} has unknown dependencies: {unknown}")
+
+    connections = require_list(
+        connectivity.get("connections"), "connectivity connections must be an array"
+    )
+    if not connections:
+        fail("connectivity connections must be a non-empty array")
+    connection_ids: set[str] = set()
+    for index, raw in enumerate(connections):
+        connection = require_object(raw, f"connections[{index}] must be an object")
+        require_exact_fields(
+            connection,
+            CONNECTION_FIELDS,
+            f"connections[{index}] fields changed",
+        )
+        connection_id = require_string(
+            connection.get("id"), f"connections[{index}] has an invalid id"
+        )
+        if (
+            CONNECTIVITY_ID.fullmatch(connection_id) is None
+            or connection_id in connection_ids
+        ):
+            fail(f"connections[{index}] has an invalid or duplicate id")
+        connection_ids.add(connection_id)
+        source = require_string(
+            connection.get("source_branch"),
+            f"connections[{index}] has an invalid source branch",
+        )
+        target = require_string(
+            connection.get("target_branch"),
+            f"connections[{index}] has an invalid target branch",
+        )
+        owner = require_string(
+            connection.get("owner_branch"),
+            f"connections[{index}] has an invalid owner branch",
+        )
+        if source not in dependency_index or target not in dependency_index:
+            fail(f"connections[{index}] references an unknown workstream")
+        if source == target or owner not in {source, target}:
+            fail(f"connections[{index}] has an invalid source, target, or owner")
+        enum_fields = {
+            "direction": ALLOWED_CONNECTION_DIRECTIONS,
+            "transport": ALLOWED_CONNECTION_TRANSPORTS,
+            "reliability": ALLOWED_CONNECTION_RELIABILITY,
+        }
+        for field, allowed_values in enum_fields.items():
+            item = require_string(
+                connection.get(field),
+                f"connections[{index}] has an invalid {field}",
+            )
+            if item not in allowed_values:
+                fail(f"connections[{index}] has an invalid {field}")
+        authentication = require_string(
+            connection.get("authentication"),
+            f"connections[{index}] requires explicit authentication",
+        )
+        if authentication not in ALLOWED_CONNECTION_AUTHENTICATION:
+            fail(f"connections[{index}] requires explicit authentication")
+        runtime_status = require_string(
+            connection.get("runtime_status"),
+            f"connections[{index}] has an unverified runtime status",
+        )
+        if runtime_status not in ALLOWED_RUNTIME_STATES:
+            fail(f"connections[{index}] has an unverified runtime status")
+        contract = require_string(
+            connection.get("contract"),
+            f"connections[{index}] has an invalid contract",
+        )
+        if contract not in ALLOWED_CONNECTIVITY_CONTRACTS:
+            fail(f"connections[{index}] references an unapproved contract")
+        if not (root / contract).is_file():
+            fail(f"connections[{index}] references a missing contract")
     keycloak_bound_workstreams = {
         "platform/kong",
         "integration/odoo-19",

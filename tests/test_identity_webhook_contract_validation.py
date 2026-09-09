@@ -16,6 +16,10 @@ BOUND_FILES = (
     "config/identity-access-map.json",
     "config/api-webhook-contracts.json",
     "config/connectivity-map.json",
+    "contracts/beyvra-identity-provisioned.schema.json",
+    "contracts/event-envelope.schema.json",
+    "contracts/http-conventions.md",
+    "contracts/observability-conventions.md",
     "contracts/platform/event-envelope.v1.schema.json",
 )
 
@@ -91,6 +95,13 @@ class IdentityWebhookContractValidationTests(unittest.TestCase):
         )
         self.assert_rejected("machine access-token lifetime")
 
+    def test_boolean_schema_version_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/identity-access-map.json",
+            lambda access: access.update(schemaVersion=True),
+        )
+        self.assert_rejected("schemaVersion must be 1")
+
     def test_service_extra_field_fails_closed(self) -> None:
         self.mutate_json(
             "config/identity-access-map.json",
@@ -137,6 +148,15 @@ class IdentityWebhookContractValidationTests(unittest.TestCase):
         )
         self.assert_rejected("event envelope type pattern")
 
+    def test_event_payload_contract_drift_fails_closed(self) -> None:
+        self.mutate_json(
+            "contracts/platform/event-envelope.v1.schema.json",
+            lambda schema: schema["properties"]["payload"].update(
+                additionalProperties=False
+            ),
+        )
+        self.assert_rejected("event envelope property contracts changed")
+
     def test_open_event_envelope_schema_fails_closed(self) -> None:
         self.mutate_json(
             "contracts/platform/event-envelope.v1.schema.json",
@@ -166,6 +186,15 @@ class IdentityWebhookContractValidationTests(unittest.TestCase):
             lambda webhooks: webhooks["security"].update(contentType="text/plain"),
         )
         self.assert_rejected("webhook content type must be application/json")
+
+    def test_float_clock_skew_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/api-webhook-contracts.json",
+            lambda webhooks: webhooks["security"].update(
+                maximumClockSkewSeconds=300.0
+            ),
+        )
+        self.assert_rejected("webhook maximum clock skew must be 300 seconds")
 
     def test_path_traversal_fails_closed(self) -> None:
         self.mutate_json(
@@ -207,6 +236,66 @@ class IdentityWebhookContractValidationTests(unittest.TestCase):
             ),
         )
         self.assert_rejected("unbound/workstream: dependencies must be unique strings")
+
+    def test_missing_canonical_contract_dependency_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/connectivity-map.json",
+            lambda connectivity: connectivity["workstream_dependencies"][
+                "integration/odoo-19"
+            ].remove("core/integration-contracts"),
+        )
+        self.assert_rejected(
+            "integration/odoo-19 must depend on core/integration-contracts"
+        )
+
+    def test_unknown_dependency_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/connectivity-map.json",
+            lambda connectivity: connectivity["workstream_dependencies"][
+                "integration/odoo-19"
+            ].append("platform/unknown"),
+        )
+        self.assert_rejected("integration/odoo-19 has unknown dependencies")
+
+    def test_connection_without_authentication_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/connectivity-map.json",
+            lambda connectivity: connectivity["connections"][0].update(
+                authentication="none"
+            ),
+        )
+        self.assert_rejected(r"connections\[0\] requires explicit authentication")
+
+    def test_unknown_connection_transport_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/connectivity-map.json",
+            lambda connectivity: connectivity["connections"][0].update(
+                transport="httpss"
+            ),
+        )
+        self.assert_rejected(r"connections\[0\] has an invalid transport")
+
+    def test_connection_unknown_workstream_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/connectivity-map.json",
+            lambda connectivity: connectivity["connections"][0].update(
+                target_branch="platform/unknown"
+            ),
+        )
+        self.assert_rejected(r"connections\[0\] references an unknown workstream")
+
+    def test_malformed_connection_runtime_status_fails_as_contract_error(self) -> None:
+        self.mutate_json(
+            "config/connectivity-map.json",
+            lambda connectivity: connectivity["connections"][0].update(
+                runtime_status=[]
+            ),
+        )
+        self.assert_rejected(r"connections\[0\] has an unverified runtime status")
+
+    def test_missing_connection_contract_fails_closed(self) -> None:
+        (self.contract_root / "contracts/http-conventions.md").unlink()
+        self.assert_rejected(r"connections\[0\] references a missing contract")
 
 
 if __name__ == "__main__":

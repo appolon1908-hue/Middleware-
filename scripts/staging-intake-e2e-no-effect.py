@@ -128,6 +128,7 @@ def validate_dns_hostname(value: str, *, label: str) -> str:
     if (
         len(hostname) > 253
         or len(labels) < 2
+        or all(item.isdigit() for item in labels)
         or any(DNS_LABEL.fullmatch(item) is None for item in labels)
     ):
         fail(f"{label} must be a canonical DNS hostname")

@@ -97,9 +97,10 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         bound_check = checks[bound_context]
         self.assertEqual(bound_check["integration_id"], 98765)
         self.assertEqual(bound_check["provider_slug"], "github-actions")
-        self.assertIn(
-            {"context": "existing-security-gate", "integration_id": 54321},
-            checks,
+        self.assertIn("existing-security-gate", checks)
+        self.assertEqual(
+            checks["existing-security-gate"]["integration_id"],
+            54321,
         )
         self.assertIn("required_signatures", normalized["additional_rules"])
 

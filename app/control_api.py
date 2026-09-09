@@ -10,24 +10,19 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from .api_inputs import (
+    authenticated_tenant,
+    reject_duplicate_pairs as _reject_duplicate_pairs,
+    required_header,
+)
 from .capability_resolution import effective_capability_enabled
-from .control_plane_auth import caller_for_authorization
 from .runtime_safety import runtime_safety_readback
-from .security import RequestValidationError, authorize_tenant
+from .security import RequestValidationError
 from .storage import PostgresInboxStore, StorageError
 
 router = APIRouter(tags=["durable-control"])
 
 MAX_BIGINT = (1 << 63) - 1
-
-
-def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    value: dict[str, Any] = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError(f"duplicate cursor field: {key}")
-        value[key] = item
-    return value
 
 
 class ControlMutation(BaseModel):
@@ -85,32 +80,6 @@ def _next(row_id: int) -> str:
     )
 
 
-def _required_header(
-    request: Request,
-    name: str,
-    *,
-    minimum: int,
-    maximum: int,
-) -> str:
-    values = request.headers.getlist(name)
-    if len(values) != 1:
-        raise RequestValidationError(f"{name} must be provided exactly once")
-    value = values[0]
-    if not minimum <= len(value) <= maximum:
-        raise RequestValidationError(f"{name} is malformed")
-    return value
-
-
-def _authorization_header(request: Request) -> str:
-    values = request.headers.getlist("Authorization")
-    if len(values) > 1:
-        raise RequestValidationError("Authorization must be provided at most once")
-    value = values[0] if values else ""
-    if len(value) > 8192:
-        raise RequestValidationError("Authorization is malformed")
-    return value
-
-
 @overload
 async def _auth(request: Request, *, mutation: Literal[False] = False) -> str: ...
 
@@ -128,28 +97,15 @@ async def _auth(
     *,
     mutation: bool = False,
 ) -> str | tuple[str, str, str]:
-    authorization = _authorization_header(request)
-    caller = caller_for_authorization(authorization)
-    claims = await request.app.state.runtime.tokens.verify(
-        authorization,
-        expected_client_id=caller.client_id,
-        required_scope=caller.command_scope if mutation else caller.status_scope,
-    )
-    tenant = _required_header(
-        request,
-        "X-Tenant-ID",
-        minimum=1,
-        maximum=128,
-    )
-    authorize_tenant(claims, tenant)
+    _, claims, tenant = await authenticated_tenant(request, mutation=mutation)
     if mutation:
-        _required_header(
+        required_header(
             request,
             "X-Correlation-ID",
             minimum=1,
             maximum=180,
         )
-        idem = _required_header(
+        idem = required_header(
             request,
             "Idempotency-Key",
             minimum=8,

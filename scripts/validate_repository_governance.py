@@ -27,8 +27,8 @@ TRUSTED_PULL_REQUEST_TARGET_WORKFLOW = (
     "production-orchestrator-contract.yml",
     frozenset(
         {
-            "adbd04c92994d0e8b5d825028b7404d460a4686eb16fff116389a5848980dd57",
-            "e2cd1a4371e25db7e7e40b6570e8658b8a46bf640bfe20793316d25f59360712",
+            "20def40798f7b5a1b31febfdd1187e9a7ee607a685c8986ef695f3575eaedb94",
+            "319862b3075f88381ed953ac7d066505a4201baedb81388ef0561311d7c0f180",
         }
     ),
 )

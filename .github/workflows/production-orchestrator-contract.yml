@@ -2,7 +2,9 @@ name: Production orchestrator contract
 
 on:
   pull_request:
+    branches: [main]
   pull_request_target:
+    branches: [main]
   push:
     branches:
       - main
@@ -39,6 +41,16 @@ jobs:
           path: candidate
           fetch-depth: 0
           persist-credentials: false
+      - name: Import exact comparison commit from the protected checkout
+        if: ${{ github.event_name == 'pull_request_target' || github.event_name == 'pull_request' }}
+        run: |
+          set -Eeuo pipefail
+          git -C candidate fetch \
+            --no-tags \
+            --no-write-fetch-head \
+            "$GITHUB_WORKSPACE" \
+            "$COMPARISON_SHA"
+          test "$(git -C candidate rev-parse "$COMPARISON_SHA^{commit}")" = "$COMPARISON_SHA"
       - name: Install pinned workflow parser
         run: python3 -m pip install --disable-pip-version-check --no-input PyYAML==6.0.3
       - name: Validate repository-owned contract and no-runtime intent

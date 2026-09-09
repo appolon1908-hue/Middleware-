@@ -382,7 +382,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
         ),
         "scripts/apply_repository_governance.py": (
             "05a4185cbd432a339be676bd1fb01d1a828ba2c09d2b798ddc0f348fc9d1db5e",
-            frozenset({()}),
+            frozenset({(), ("--verify-live",)}),
         ),
     },
     "appolon1908-hue/beyvra-backend": {
@@ -3143,10 +3143,10 @@ def validate_intent_negative_regressions() -> None:
         "governance apply invocation escaped runtime-mutation classification",
     )
     require(
-        contains_runtime_mutation(
+        not contains_runtime_mutation(
             "python3 scripts/apply_repository_governance.py --verify-live"
         ),
-        "credentialed governance verification escaped mutation classification",
+        "read-only governance verification was treated as runtime mutation",
     )
     enabled_mutation = """name: synthetic
 jobs:

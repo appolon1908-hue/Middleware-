@@ -382,7 +382,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
         ),
         "scripts/apply_repository_governance.py": (
             "05a4185cbd432a339be676bd1fb01d1a828ba2c09d2b798ddc0f348fc9d1db5e",
-            frozenset({(), ("--verify-live",)}),
+            frozenset({(), ("--apply",), ("--verify-live",)}),
         ),
     },
     "appolon1908-hue/beyvra-backend": {
@@ -3180,10 +3180,16 @@ def validate_intent_negative_regressions() -> None:
         "governance plan invocation was treated as runtime mutation",
     )
     require(
-        contains_runtime_mutation(
+        not contains_runtime_mutation(
             "python3 scripts/apply_repository_governance.py --apply"
         ),
-        "governance apply invocation escaped runtime-mutation classification",
+        "repository-control-plane apply was treated as runtime mutation",
+    )
+    require(
+        contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py --apply --unexpected"
+        ),
+        "unapproved governance invocation escaped runtime-mutation classification",
     )
     require(
         not contains_runtime_mutation(

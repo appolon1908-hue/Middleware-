@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import base64
 import json
+from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from app.config import Settings
 from app.control_api import (
     MAX_BIGINT,
     _authorization_header,
@@ -13,7 +16,33 @@ from app.control_api import (
     _next,
     _required_header,
 )
+from app.main import create_app
+from app.replay import MemoryReplayGuard
+from app.runtime import Runtime
 from app.security import RequestValidationError
+from app.storage import MemoryInboxStore
+
+
+class _StatusTokenVerifier:
+    async def verify(
+        self,
+        authorization: str,
+        *,
+        expected_client_id: str,
+        required_scope: str,
+    ) -> dict[str, Any]:
+        assert authorization == "Bearer legacy-status-token"
+        assert expected_client_id == "kong-gateway"
+        assert required_scope == "middleware.status.read"
+        return {
+            "azp": "kong-gateway",
+            "scope": required_scope,
+            "tenant_id": "tenant-1",
+            "sub": "user-123",
+        }
+
+    async def ready(self) -> bool:
+        return True
 
 
 def _encode(value: object) -> str:
@@ -128,3 +157,27 @@ def test_authorization_header_preserves_missing_authentication_semantics() -> No
     assert _authorization_header(_request()) == ""
     with pytest.raises(RequestValidationError, match="Authorization is malformed"):
         _authorization_header(_request(("Authorization", "x" * 8193)))
+
+
+def test_authentication_precedes_tenant_validation(test_settings: Settings) -> None:
+    runtime = Runtime(
+        settings=test_settings,
+        inbox=MemoryInboxStore(),
+        replay=MemoryReplayGuard(),
+        tokens=_StatusTokenVerifier(),
+    )
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        invalid_tenant = {"X-Tenant-ID": "t" * 129}
+        assert (
+            client.get("/v1/system/capabilities", headers=invalid_tenant).status_code
+            == 401
+        )
+        authenticated = {
+            **invalid_tenant,
+            "Authorization": "Bearer legacy-status-token",
+        }
+        assert (
+            client.get("/v1/system/capabilities", headers=authenticated).status_code
+            == 400
+        )

@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from target_identity import IdentityError, NoRedirect, discover, verify_health
 
@@ -27,7 +27,7 @@ INGRESS_PATH = "/api/v1/events/vicidial"
 CLIENT = "vicidial-server-b"
 
 
-def fail(message: str) -> "NoReturn":
+def fail(message: str) -> NoReturn:
     raise SystemExit(message)
 
 
@@ -35,10 +35,25 @@ def canonical(value: dict[str, Any]) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
+def contains_test_evidence_marker(value: object) -> bool:
+    if isinstance(value, dict):
+        return any(
+            "test_evidence_id" in str(key).lower()
+            or contains_test_evidence_marker(nested)
+            for key, nested in value.items()
+        )
+    if isinstance(value, list):
+        return any(contains_test_evidence_marker(item) for item in value)
+    return False
+
+
 def load_events(path: Path, linked_id: str) -> list[tuple[dict[str, Any], bytes]]:
     if path.is_symlink() or not path.is_file():
         fail("events input must be a regular non-symlink file")
-    rows = json.loads(path.read_text())
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        fail("events input must contain valid UTF-8 JSON")
     if not isinstance(rows, list) or len(rows) != 3:
         fail("exactly three outbox rows are required")
     result = []
@@ -52,14 +67,14 @@ def load_events(path: Path, linked_id: str) -> list[tuple[dict[str, Any], bytes]
         if event.get("asterisk_linked_id") != linked_id:
             fail("event LinkedID does not match the authorized tuple")
         event_id = event.get("event_id")
-        if not isinstance(event_id, str) or event_id in seen:
+        if not isinstance(event_id, str) or not event_id or event_id in seen:
             fail("event IDs must be non-empty and unique")
         seen.add(event_id)
         payload = event.get("payload")
         expected_hash = event.get("payload_sha256")
         if not isinstance(payload, dict) or hashlib.sha256(canonical(payload)).hexdigest() != expected_hash:
             fail("payload integrity hash mismatch")
-        if any("test_evidence_id" in str(key).lower() for key in event):
+        if contains_test_evidence_marker(event):
             fail("test evidence markers are forbidden in envelopes")
         result.append((event, canonical(event)))
     return result

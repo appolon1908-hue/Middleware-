@@ -38,9 +38,14 @@ cp "$DIR/templates/extensions-6198.conf" "$TMP/tampered"; printf x >>"$TMP/tampe
 "$DIR/render-fixture.py" --secret-file "$TMP/secret" --output-dir "$TMP/r1" >/dev/null
 "$DIR/render-fixture.py" --secret-file "$TMP/secret" --output-dir "$TMP/r2" >/dev/null
 cmp "$TMP/r1/pjsip-6198.conf" "$TMP/r2/pjsip-6198.conf"; ok "deterministic render"
+[[ "$(stat -c %a "$TMP/r1/pjsip-6198.conf")" = 600 && "$(stat -c %a "$TMP/r1/extensions-6198.conf")" = 600 && "$(stat -c %a "$TMP/r1/redacted-structure.json")" = 600 ]]; ok "rendered files are owner-only"
 expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/missing" --output-dir "$TMP/r3"; ok "missing secret rejected"
 : >"$TMP/empty"; expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/empty" --output-dir "$TMP/r3"; ok "empty secret rejected"
 printf 'bad\nsecret' >"$TMP/bad"; expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/bad" --output-dir "$TMP/r3"; ok "control secret rejected"
+chmod 644 "$TMP/secret"; expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/secret" --output-dir "$TMP/r3"; chmod 600 "$TMP/secret"; ok "unsafe renderer secret mode rejected"
+printf 'x%.0s' {1..4097} >"$TMP/oversized"; chmod 600 "$TMP/oversized"; expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/oversized" --output-dir "$TMP/r3"; ok "oversized secret rejected"
+mkdir "$TMP/rwide"; chmod 755 "$TMP/rwide"; expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/secret" --output-dir "$TMP/rwide"; ok "unsafe output mode rejected"
+ln -s "$TMP/r1" "$TMP/output-link"; expect_fail "$DIR/render-fixture.py" --secret-file "$TMP/secret" --output-dir "$TMP/output-link"; ok "output symlink rejected"
 ! grep -Rqs 'safe-secret' "$TMP/out" "$TMP/err"; ok "secret absent from output"
 before="$(sha256sum "$TMP/fs/"*)"; "$DIR/activate-6198.sh" >/dev/null; [[ "$before" = "$(sha256sum "$TMP/fs/"*)" ]]; ok "activation dry run no mutation"
 "$DIR/teardown-6198.sh" >/dev/null; [[ "$before" = "$(sha256sum "$TMP/fs/"*)" ]]; ok "teardown dry run no mutation"
@@ -70,5 +75,5 @@ expect_fail env MOCK_RELOAD_FAIL=1 "$DIR/activate-6198.sh" --execute --change-id
 ! grep -REiq '(firewall-cmd|iptables|nft[[:space:]])' "$DIR" --include='*.sh'; ok "no firewall action"
 ! grep -REiq 'systemctl[[:space:]]+(restart|stop)[[:space:]]+asterisk' "$DIR" --include='*.sh'; ok "no service restart"
 forbidden_extension=$((6100+10)); ! grep -Rqs "$forbidden_extension" "$DIR"; ok "excluded extension absent"
-[[ "$pass" -eq 33 ]]
-echo "1..33"
+[[ "$pass" -eq 38 ]]
+echo "1..38"

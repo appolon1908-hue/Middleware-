@@ -1568,7 +1568,7 @@ def approved_read_only_script_invocation(
         return False
     segment: list[str] = []
     for token in arguments:
-        if token in {"|", "||", "&&", ";", "&", "{", "}"}:
+        if token.isspace() or token in {"|", "||", "&&", ";", "&", "{", "}"}:
             break
         segment.append(token)
     return (

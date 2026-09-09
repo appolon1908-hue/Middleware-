@@ -13,6 +13,7 @@ CONTRACT_PATH = ROOT / "contracts" / "platform-control-plane.v1.json"
 HMAC_VECTOR_PATH = ROOT / "contracts" / "odoo-hmac-test-vector.v1.json"
 MAIN_PATH = ROOT / "app" / "main.py"
 N8N_PATH = ROOT / "app" / "n8n_control_plane.py"
+API_INPUTS_PATH = ROOT / "app" / "api_inputs.py"
 ODOO_PATH = ROOT / "app" / "odoo_provider_adapter.py"
 WORKER_PATH = ROOT / "workers" / "run_temporal.py"
 WORKFLOW_PATH = ROOT / "app" / "temporal_workflows.py"
@@ -30,11 +31,10 @@ def main() -> int:
     capabilities = json.loads(CAPABILITIES_PATH.read_text(encoding="utf-8"))[
         "capabilities"
     ]
-    route_authority = json.loads(
-        ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8")
-    )
+    route_authority = json.loads(ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8"))
     main_source = MAIN_PATH.read_text(encoding="utf-8")
     n8n_source = N8N_PATH.read_text(encoding="utf-8")
+    api_inputs_source = API_INPUTS_PATH.read_text(encoding="utf-8")
     odoo_source = ODOO_PATH.read_text(encoding="utf-8")
     worker_source = WORKER_PATH.read_text(encoding="utf-8")
     workflow_source = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -81,7 +81,7 @@ def main() -> int:
         'router = APIRouter(tags=["n8n-control-plane"])',
         '@router.post("/v1/integrations/n8n/commands", deprecated=True)',
         (
-            '@router.get('
+            "@router.get("
             '"/v1/integrations/n8n/operations/{command_id}", deprecated=True)'
         ),
         "router.include_router(v2_router)",
@@ -89,16 +89,27 @@ def main() -> int:
         'required_scope="middleware.request.forward"',
         'required_scope="middleware.status.read"',
         "authorize_tenant(claims, command.tenant_id)",
-        'request.headers.get("Idempotency-Key") != command.idempotency_key',
+        "idempotency = required_header(",
+        '"Idempotency-Key"',
+        "if idempotency != command.idempotency_key",
         '"Deprecation": "true"',
         '"Sunset": _LEGACY_SUNSET',
         'rel="successor-version"',
     )
-    missing = [
-        marker for marker in required_n8n_markers if marker not in n8n_source
-    ]
+    missing = [marker for marker in required_n8n_markers if marker not in n8n_source]
     if missing:
         fail("legacy n8n compatibility route drifted: " + ", ".join(missing))
+    required_input_markers = (
+        "request.headers.getlist(name)",
+        "if len(values) != 1",
+        'request.headers.getlist("Authorization")',
+        "if len(values) > 1",
+    )
+    missing_inputs = [
+        marker for marker in required_input_markers if marker not in api_inputs_source
+    ]
+    if missing_inputs:
+        fail("shared API input validation drifted: " + ", ".join(missing_inputs))
     if "app.include_router(n8n_control_plane_router)" not in main_source:
         fail("legacy n8n compatibility router is not mounted")
 
@@ -124,9 +135,7 @@ def main() -> int:
         "bridge_module": "codestra_middleware_bridge",
         "canonical_command_type": "crm.lead.upsert",
         "canonical_command_version": "1.0",
-        "canonical_command_path": (
-            "/codestra/middleware/v1/commands/crm.lead.upsert"
-        ),
+        "canonical_command_path": ("/codestra/middleware/v1/commands/crm.lead.upsert"),
         "canonical_status_path": (
             "/codestra/middleware/v1/commands/{command_id}/status"
         ),
@@ -157,14 +166,8 @@ def main() -> int:
         ),
         'UPSERT_LEAD = "crm.lead.upsert"',
         "SUPPORTED = {UPSERT_LEAD}",
-        (
-            'COMMAND_PATH = '
-            '"/codestra/middleware/v1/commands/crm.lead.upsert"'
-        ),
-        (
-            'STATUS_PATH = '
-            '"/codestra/middleware/v1/commands/{command_id}/status"'
-        ),
+        ('COMMAND_PATH = "/codestra/middleware/v1/commands/crm.lead.upsert"'),
+        ('STATUS_PATH = "/codestra/middleware/v1/commands/{command_id}/status"'),
         'self.settings.external_effects.get("ODOO_WRITE") is not True',
         "len(value) > 255",
         "_odoo_lead_command_validator().iter_errors(document)",
@@ -176,9 +179,7 @@ def main() -> int:
         'data.get("operation") != self.UPSERT_LEAD',
         "ODOO_INBOUND_HMAC_SECRET",
     )
-    missing = [
-        marker for marker in required_odoo_markers if marker not in odoo_source
-    ]
+    missing = [marker for marker in required_odoo_markers if marker not in odoo_source]
     if missing:
         fail("Odoo adapter implementation drifted: " + ", ".join(missing))
     for forbidden in (
@@ -234,8 +235,7 @@ def main() -> int:
     ):
         if forbidden in serialized:
             fail(
-                "shared contract contains forbidden secret-bearing field: "
-                f"{forbidden}"
+                f"shared contract contains forbidden secret-bearing field: {forbidden}"
             )
 
     print("PLATFORM_CONTROL_PLANE=PASS")

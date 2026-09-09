@@ -60,6 +60,14 @@ class PolicyError(RuntimeError):
     """Committed policy or observed GitHub state is invalid."""
 
 
+class GitHubApiError(PolicyError):
+    """A status-bearing GitHub API failure."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class PendingInvitation(PolicyError):
     """At least one exact reviewer invitation still needs acceptance."""
 
@@ -488,6 +496,24 @@ def ruleset_meets_baseline(
         return False
 
 
+class FailClosedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never forward an administration bearer token through a redirect."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
+NO_REDIRECT_OPENER = urllib.request.build_opener(FailClosedRedirectHandler())
+
+
 class GitHubApi:
     def __init__(self, token: str) -> None:
         self.token = token
@@ -514,14 +540,15 @@ class GitHubApi:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with NO_REDIRECT_OPENER.open(request, timeout=30) as response:
                 raw = response.read()
                 value = json.loads(raw) if raw else None
                 return response.status, value
         except urllib.error.HTTPError as exc:
             raw = exc.read()
             detail = raw.decode("utf-8", errors="replace")
-            raise PolicyError(
+            raise GitHubApiError(
+                exc.code,
                 f"GitHub API {method} {path} failed with HTTP {exc.code}: {detail[:500]}"
             ) from exc
         except urllib.error.URLError as exc:
@@ -530,6 +557,74 @@ class GitHubApi:
 
 def repo_path(name: str) -> str:
     return urllib.parse.quote(name, safe="/")
+
+
+def read_reviewer_permission(
+    api: GitHubApi,
+    repository: str,
+    encoded_repository: str,
+    *,
+    allow_missing: bool,
+) -> str | None:
+    try:
+        status, value = api.request(
+            "GET",
+            f"/repos/{encoded_repository}/collaborators/"
+            f"{EXPECTED_REVIEWER['login']}/permission",
+        )
+    except GitHubApiError as exc:
+        if allow_missing and exc.status_code == 404:
+            return None
+        raise
+    require(status == 200, f"{repository}: reviewer permission readback failed")
+    permission = require_mapping(
+        value,
+        f"{repository}: reviewer permission readback invalid",
+    ).get("permission")
+    require(
+        isinstance(permission, str),
+        f"{repository}: reviewer permission readback invalid",
+    )
+    return permission
+
+
+def ensure_exact_reviewer_write(
+    api: GitHubApi,
+    repository: str,
+    encoded_repository: str,
+    mode: str,
+) -> tuple[str, bool]:
+    permission = read_reviewer_permission(
+        api,
+        repository,
+        encoded_repository,
+        allow_missing=True,
+    )
+    if permission == "write":
+        return "verified-write", False
+    if mode == "verify":
+        raise PolicyError(f"{repository}: reviewer permission is not exact write")
+
+    status, _ = api.request(
+        "PUT",
+        f"/repos/{encoded_repository}/collaborators/{EXPECTED_REVIEWER['login']}",
+        {"permission": "push"},
+    )
+    require(status in {201, 204}, f"{repository}: unexpected collaborator response")
+    if status == 201:
+        return "invitation-pending", True
+
+    permission = read_reviewer_permission(
+        api,
+        repository,
+        encoded_repository,
+        allow_missing=False,
+    )
+    require(
+        permission == "write",
+        f"{repository}: collaborator permission did not read back as exact write",
+    )
+    return "added-and-verified-write", False
 
 
 def find_ruleset(api: GitHubApi, repository: str) -> dict[str, Any] | None:
@@ -684,31 +779,13 @@ def execute(mode: str, confirmation: str) -> dict[str, Any]:
             f"{name}: token lacks repository administration",
         )
 
-        reviewer_state = "verified"
-        try:
-            _, permission = api.request(
-                "GET",
-                f"/repos/{encoded}/collaborators/{EXPECTED_REVIEWER['login']}/permission",
-            )
-            permission_name = permission.get("permission") if isinstance(permission, Mapping) else None
-            has_write = permission_name in {"admin", "maintain", "write", "push"}
-        except PolicyError:
-            has_write = False
-
-        if not has_write:
-            if mode == "verify":
-                raise PolicyError(f"{name}: exact reviewer lacks write access")
-            status, _ = api.request(
-                "PUT",
-                f"/repos/{encoded}/collaborators/{EXPECTED_REVIEWER['login']}",
-                {"permission": "push"},
-            )
-            require(status in {201, 204}, f"{name}: unexpected collaborator response")
-            if status == 201:
-                reviewer_state = "invitation-pending"
-                pending = True
-            else:
-                reviewer_state = "added"
+        reviewer_state, invitation_pending = ensure_exact_reviewer_write(
+            api,
+            name,
+            encoded,
+            mode,
+        )
+        pending = pending or invitation_pending
 
         desired = desired_ruleset(repository)
         existing = find_ruleset(api, name)

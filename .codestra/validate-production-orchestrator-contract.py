@@ -416,6 +416,14 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
 }
 APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     "appolon1908-hue/Middleware-": {
+        ".github/workflows/integration-main-release-authorities.yml": (
+            "43323ab7203be3317f700e099a01ca03f"
+            "b9828292754fc67bd681d1d410a53f3"
+        ),
+        ".github/workflows/production-reviewer-access.yml": (
+            "9a1d239d64f3d198365097ea6812ac90"
+            "b09cc11dcfb9916a68dce810b7202103"
+        ),
         ".github/workflows/python-quality-baseline.yml": (
             "cb89cb69636dc79a6a03e5df98abeb798"
             "6a823e30c2d52b1d03980dddac58cca"
@@ -424,6 +432,44 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     },
     "appolon1908-hue/beyvra-backend": {
         ".github/workflows/ci.yml": "f10b269e0faf54b23582ca1ee9700de6f2ec9f5481f6b2be20e40b9f6d428945",
+    },
+}
+APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
+    str, dict[str, dict[str, str]]
+] = {
+    "appolon1908-hue/Middleware-": {
+        ".github/workflows/integration-main-release-authorities.yml": {
+            "config/integration-main-release-authorities.v1.json": (
+                "93ee2e898759a2c6cf79cf9afc3c3d58"
+                "d9eaf84515f4207043e9da8c99e88ba1"
+            ),
+            "scripts/apply_integration_main_release_authorities.py": (
+                "95b9c27abd309b1efe579672fdb8b89fe"
+                "aed55e8e9334c50913b2e422ad771a7"
+            ),
+            "scripts/apply_integration_main_release_authorities_base.py": (
+                "71fd1f220797c12708da3d2e5f9efe25"
+                "2ad2933ae37852052e1e5b680ce3b75a"
+            ),
+            "scripts/apply_integration_main_release_authorities_v2.py": (
+                "ee67af637f8e96e531e507d71e8ff3a6"
+                "36d4d120fef134eee33a5ab3675e0edd"
+            ),
+        },
+        ".github/workflows/production-reviewer-access.yml": {
+            "config/production-reviewer-access.v1.json": (
+                "72e0b70ddbf8ff0365d2c4fc6da8e8e6"
+                "d4c7c4ef69865067317d3e9300d0e6ed"
+            ),
+            "scripts/apply_production_reviewer_access.py": (
+                "305d52658d39cc45335676c6f3d0d780"
+                "b246b8c4c9b727c68ed705b30f99da22"
+            ),
+            "scripts/apply_production_reviewer_access_base.py": (
+                "22b5d7f425f949588ce29a6c3079c09f"
+                "950dfb46e31d3bfa54b0216f73b5a43d"
+            ),
+        },
     },
 }
 APPROVED_UNRESOLVED_SCRIPT_TARGETS: dict[str, frozenset[str]] = {
@@ -445,7 +491,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_integration_main_release_authorities_v2.py": (
-            "b5f74be0edf783bd258c6321caaf63759e8beee0b0f305d34f25c932830366c2",
+            "ee67af637f8e96e531e507d71e8ff3a636d4d120fef134eee33a5ab3675e0edd",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_production_reviewer_access.py": (
@@ -1988,7 +2034,26 @@ def script_dependencies_have_runtime_mutation(
     script: str,
     script_aliases: dict[str, str] | None,
     working_directory: Path,
+    trusted_repository_scripts: frozenset[str] = frozenset(),
 ) -> bool:
+    def manifest_trust(target: str, index: int) -> bool | None:
+        """Trust pinned Python only when its import path is isolated."""
+
+        normalized = target.removeprefix("./")
+        if normalized not in trusted_repository_scripts:
+            return None
+        if Path(normalized).suffix.lower() != ".py":
+            return False
+        if executable_name(tokens[index]) not in {"python", "python3"}:
+            return False
+        for option_index in range(index + 1, len(tokens)):
+            option = tokens[option_index]
+            if option in {"|", "||", "&&", ";", "&", "{", "}"}:
+                break
+            if option.removeprefix("./") == normalized:
+                return "-I" in tokens[index + 1 : option_index]
+        return False
+
     tokens = shell_tokens(script)
     for index in command_indexes(tokens):
         raw_tail = raw_command_arguments(tokens, index)
@@ -2002,15 +2067,22 @@ def script_dependencies_have_runtime_mutation(
                 ):
                     invocation_arguments = raw_tail[target_index + 1 :]
                     break
-            if not approved_read_only_script_invocation(
-                interpreter_target,
-                invocation_arguments,
-                working_directory,
-            ) and repository_script_has_runtime_mutation(
-                interpreter_target,
-                set(),
-                script_aliases,
-                working_directory,
+            trust = manifest_trust(interpreter_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    interpreter_target,
+                    invocation_arguments,
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    interpreter_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
             ):
                 return True
 
@@ -2019,36 +2091,50 @@ def script_dependencies_have_runtime_mutation(
             index,
             working_directory,
         )
-        if module_target is not None and not approved_read_only_script_invocation(
-            module_target, interpreter_module_arguments(tokens, index), working_directory
-        ) and repository_script_has_runtime_mutation(
-            module_target,
-            set(),
-            script_aliases,
-            working_directory,
-        ):
-            return True
+        if module_target is not None:
+            trust = manifest_trust(module_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    module_target,
+                    interpreter_module_arguments(tokens, index),
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    module_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
+            ):
+                return True
 
         direct_target = direct_repository_script_target(
             tokens,
             index,
             working_directory,
         )
-        if (
-            direct_target is not None
-            and not approved_read_only_script_invocation(
-                direct_target,
-                raw_tail,
-                working_directory,
-            )
-            and repository_script_has_runtime_mutation(
-                direct_target,
-                set(),
-                script_aliases,
-                working_directory,
-            )
-        ):
-            return True
+        if direct_target is not None:
+            trust = manifest_trust(direct_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    direct_target,
+                    raw_tail,
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    direct_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
+            ):
+                return True
     return False
 
 
@@ -3014,6 +3100,31 @@ def step_has_runtime_mutation(
     )
 
 
+def verified_control_plane_dependencies(
+    repository: str,
+    workflow_path: str,
+) -> frozenset[str] | None:
+    manifest = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256.get(repository, {}).get(
+        workflow_path,
+        {},
+    )
+    trusted_scripts: set[str] = set()
+    for relative, expected_hash in manifest.items():
+        candidate = ROOT / relative
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(ROOT.resolve())
+        except (OSError, ValueError):
+            return None
+        if candidate.is_symlink() or not resolved.is_file():
+            return None
+        if hashlib.sha256(resolved.read_bytes()).hexdigest() != expected_hash:
+            return None
+        if resolved.suffix.lower() in SCRIPT_SUFFIXES:
+            trusted_scripts.add(relative)
+    return frozenset(trusted_scripts)
+
+
 def workflow_has_runtime_mutation(
     workflow: str,
     path: str,
@@ -3031,6 +3142,9 @@ def workflow_has_runtime_mutation(
     if approved_hash is not None:
         if hashlib.sha256(workflow.encode()).hexdigest() != approved_hash:
             return True
+        trusted_scripts = verified_control_plane_dependencies(repository, path)
+        if trusted_scripts is None:
+            return True
         script_aliases = workflow_script_aliases(workflow, path)
         return any(
             job_reusable_workflow_mutation(job, path, seen_workflows)
@@ -3039,6 +3153,7 @@ def workflow_has_runtime_mutation(
                     str(step.get("run", "")),
                     script_aliases,
                     step_working_directory(job, step, path),
+                    trusted_scripts,
                 )
                 or isinstance(step.get("uses"), str)
                 and str(step["uses"]).strip().startswith("./")
@@ -3821,6 +3936,70 @@ def validate_intent_negative_regressions() -> None:
         ),
         "read-only governance verification was treated as runtime mutation",
     )
+    repository = "appolon1908-hue/Middleware-"
+    control_plane_paths = (
+        ".github/workflows/integration-main-release-authorities.yml",
+        ".github/workflows/production-reviewer-access.yml",
+    )
+    for workflow_path in control_plane_paths:
+        workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
+        require(
+            not workflow_has_runtime_mutation(workflow, workflow_path),
+            f"approved repository control-plane workflow was treated as runtime: {workflow_path}",
+        )
+        require(
+            workflow_has_runtime_mutation(
+                workflow.replace(
+                    "CONTROL_PLANE_MUTATION=repository-administration",
+                    "CONTROL_PLANE_MUTATION=unreviewed",
+                    1,
+                ),
+                workflow_path,
+            ),
+            f"control-plane workflow hash drift escaped classification: {workflow_path}",
+        )
+        trusted = verified_control_plane_dependencies(repository, workflow_path)
+        require(
+            trusted is not None and bool(trusted),
+            f"control-plane dependency manifest is missing: {workflow_path}",
+        )
+        assert trusted is not None
+        entry_script = (
+            "scripts/apply_integration_main_release_authorities_v2.py"
+            if workflow_path.endswith("integration-main-release-authorities.yml")
+            else "scripts/apply_production_reviewer_access.py"
+        )
+        require(
+            not script_dependencies_have_runtime_mutation(
+                f"python3 -I {entry_script} --mode validate",
+                {},
+                ROOT,
+                trusted,
+            ),
+            f"isolated trusted control-plane script was rejected: {entry_script}",
+        )
+        require(
+            script_dependencies_have_runtime_mutation(
+                f"python3 {entry_script} --mode validate",
+                {},
+                ROOT,
+                trusted,
+            ),
+            f"non-isolated trusted control-plane script escaped: {entry_script}",
+        )
+        dependency_manifest = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256[repository][
+            workflow_path
+        ]
+        dependency_path = next(iter(dependency_manifest))
+        expected_hash = dependency_manifest[dependency_path]
+        dependency_manifest[dependency_path] = "0" * 64
+        try:
+            require(
+                verified_control_plane_dependencies(repository, workflow_path) is None,
+                f"control-plane dependency drift escaped classification: {workflow_path}",
+            )
+        finally:
+            dependency_manifest[dependency_path] = expected_hash
     require(
         not contains_runtime_mutation("bash scripts/run_ci.sh"),
         "validation script dependency chain was treated as runtime mutation",

@@ -959,9 +959,10 @@ class MemoryAutomationStore:
             )
             self.approvals[(body.tenant_id, approval_id)] = (digest, record)
             self.approval_idempotency[idem_key] = approval_id
-            raw["state"] = "WAITING_APPROVAL"
-            raw["resource_version"] += 1
-            raw["updated_at"] = now
+            if raw["state"] not in {"COMPLETED", "CANCELLED", "FAILED_TERMINAL", "DEAD_LETTER"}:
+                raw["state"] = "WAITING_APPROVAL"
+                raw["resource_version"] += 1
+                raw["updated_at"] = now
             return record
 
     async def get_approval(self, tenant_id: str, approval_id: UUID) -> ApprovalRecord:
@@ -1031,7 +1032,9 @@ class MemoryAutomationStore:
                 raise AutomationNotFound("approval was not found")
             approval = approval_entry[1]
             if (
-                approval.state != "APPROVED"
+                approval.job_id != dead.job_id
+                or approval.approval_type != "REPLAY"
+                or approval.state != "APPROVED"
                 or not approval.decided_by
                 or approval.decided_by == approval.requested_by
                 or approval.expires_at <= _utcnow()
@@ -1946,6 +1949,7 @@ class PostgresAutomationStore:
                         UPDATE middleware_automation_jobs
                         SET state='WAITING_APPROVAL',resource_version=resource_version+1,updated_at=now()
                         WHERE tenant_id=$1 AND job_id=$2
+                          AND state NOT IN ('COMPLETED','CANCELLED','FAILED_TERMINAL','DEAD_LETTER')
                         """,
                         body.tenant_id,
                         body.job_id,
@@ -2033,7 +2037,9 @@ class PostgresAutomationStore:
                 if approval is None:
                     raise AutomationNotFound("approval was not found")
                 if (
-                    approval["state"] != "APPROVED"
+                    approval["job_id"] != dead["job_id"]
+                    or approval["approval_type"] != "REPLAY"
+                    or approval["state"] != "APPROVED"
                     or not approval["decided_by"]
                     or approval["decided_by"] == approval["requested_by"]
                     or approval["expires_at"] <= _utcnow()
@@ -2188,12 +2194,14 @@ class PostgresAutomationStore:
                     safe_plan=plan,
                     created_at=now,
                 )
-                await conn.execute(
+                inserted = await conn.fetchrow(
                     """
                     INSERT INTO middleware_automation_reconciliation_runs (
                         tenant_id,reconciliation_id,mode,requested_by,idempotency_key,
                         request_sha256,result_payload,created_at
                     ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+                    ON CONFLICT (tenant_id,idempotency_key) DO NOTHING
+                    RETURNING reconciliation_id
                     """,
                     body.tenant_id,
                     reconciliation_id,
@@ -2204,6 +2212,21 @@ class PostgresAutomationStore:
                     json.dumps(run.model_dump(mode="json"), separators=(",", ":"), sort_keys=True),
                     now,
                 )
+                if inserted is None:
+                    existing = await conn.fetchrow(
+                        """
+                        SELECT request_sha256,result_payload
+                        FROM middleware_automation_reconciliation_runs
+                        WHERE tenant_id=$1 AND idempotency_key=$2
+                        """,
+                        body.tenant_id,
+                        body.idempotency_key,
+                    )
+                    if existing is None or existing["request_sha256"] != request_digest:
+                        raise AutomationConflict("reconciliation idempotency key was reused")
+                    return ReconciliationRun.model_validate(
+                        _row_json(existing["result_payload"])
+                    ).model_copy(update={"duplicate": True})
         return run
 
 

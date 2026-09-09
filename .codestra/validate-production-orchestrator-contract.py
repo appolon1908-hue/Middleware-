@@ -292,7 +292,6 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "f9ba7034692118c427555fab41b1b6e14"
             "a8698a761eb18ef6c957e1fb386c27a"
         ),
-        "scripts/apply_repository_governance.py": "14b93e6b4935a5ffec7a826de68f670e96f539caec1f34335c8accc4869897c7",
         "scripts/integration_ci.sh": "8d9327fd9ad51d6ba7243d051336f623a4f75d60c60e69fd012e65f598b12d4a",
         "scripts/nats_integration_ci.sh": "88d843c665cece68e0fb56a931c295ee10490446cad7b64d9f5356c1cbf7263d",
         "scripts/project_ci.sh": "12a529ea96f39baec5f1eeb287209dc9db355e5dca000cbbfd7494303501b2ae",
@@ -380,6 +379,10 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
         "scripts/apply_integration_main_release_authorities.py": (
             "95b9c27abd309b1efe579672fdb8b89feaed55e8e9334c50913b2e422ad771a7",
             frozenset({("--mode", "validate")}),
+        ),
+        "scripts/apply_repository_governance.py": (
+            "05a4185cbd432a339be676bd1fb01d1a828ba2c09d2b798ddc0f348fc9d1db5e",
+            frozenset({(), ("--apply",), ("--verify-live",)}),
         ),
     },
     "appolon1908-hue/beyvra-backend": {
@@ -1565,7 +1568,7 @@ def approved_read_only_script_invocation(
         return False
     segment: list[str] = []
     for token in arguments:
-        if token in {"|", "||", "&&", ";", "&", "{", "}"}:
+        if token.isspace() or token in {"|", "||", "&&", ";", "&", "{", "}"}:
             break
         segment.append(token)
     return (
@@ -1716,19 +1719,62 @@ def script_dependencies_have_runtime_mutation(
 ) -> bool:
     tokens = shell_tokens(script)
     for index in command_indexes(tokens):
-        targets = (
-            interpreter_script_target(tokens, index),
-            interpreter_module_target(tokens, index, working_directory),
-            direct_repository_script_target(tokens, index, working_directory),
-        )
-        for target in targets:
-            if target is not None and repository_script_has_runtime_mutation(
-                target,
+        raw_tail = raw_command_arguments(tokens, index)
+        interpreter_target = interpreter_script_target(tokens, index)
+        if interpreter_target is not None:
+            invocation_arguments: list[str] = []
+            for target_index, token in enumerate(raw_tail):
+                if (
+                    token.removeprefix("./")
+                    == interpreter_target.removeprefix("./")
+                ):
+                    invocation_arguments = raw_tail[target_index + 1 :]
+                    break
+            if not approved_read_only_script_invocation(
+                interpreter_target,
+                invocation_arguments,
+                working_directory,
+            ) and repository_script_has_runtime_mutation(
+                interpreter_target,
                 set(),
                 script_aliases,
                 working_directory,
             ):
                 return True
+
+        module_target = interpreter_module_target(
+            tokens,
+            index,
+            working_directory,
+        )
+        if module_target is not None and repository_script_has_runtime_mutation(
+            module_target,
+            set(),
+            script_aliases,
+            working_directory,
+        ):
+            return True
+
+        direct_target = direct_repository_script_target(
+            tokens,
+            index,
+            working_directory,
+        )
+        if (
+            direct_target is not None
+            and not approved_read_only_script_invocation(
+                direct_target,
+                raw_tail,
+                working_directory,
+            )
+            and repository_script_has_runtime_mutation(
+                direct_target,
+                set(),
+                script_aliases,
+                working_directory,
+            )
+        ):
+            return True
     return False
 
 
@@ -3126,6 +3172,34 @@ def validate_intent_negative_regressions() -> None:
     require(
         not contains_runtime_command("# docker pull example.invalid/image"),
         "comment-only runtime command was treated as executable",
+    )
+    require(
+        not contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py"
+        ),
+        "governance plan invocation was treated as runtime mutation",
+    )
+    require(
+        not contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py --apply"
+        ),
+        "repository-control-plane apply was treated as runtime mutation",
+    )
+    require(
+        contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py --apply --unexpected"
+        ),
+        "unapproved governance invocation escaped runtime-mutation classification",
+    )
+    require(
+        not contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py --verify-live"
+        ),
+        "read-only governance verification was treated as runtime mutation",
+    )
+    require(
+        not contains_runtime_mutation("bash scripts/run_ci.sh"),
+        "validation script dependency chain was treated as runtime mutation",
     )
     enabled_mutation = """name: synthetic
 jobs:

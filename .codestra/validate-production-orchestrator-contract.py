@@ -6803,6 +6803,9 @@ PY
         "https.request({method: 'POST'}, callback).end()\n",
         "const transport = await import/*comment*/('node:' + 'https'); "
         "transport.request(url, {method: 'POST'}).end(data)\n",
+        "const transport = await import // line comment\n"
+        "('node:' + 'https'); "
+        "transport.request(url, {method: 'POST'}).end(data)\n",
         "const transport = await import"
         + "/* adjacent loader comment */" * 128
         + "('node:' + 'https'); "

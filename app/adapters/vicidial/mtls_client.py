@@ -4,7 +4,7 @@ import json
 import logging
 import socket
 import ssl
-from ipaddress import ip_address
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import urlsplit
@@ -32,6 +32,18 @@ APPROVED_ROUTES = frozenset(
         ("POST", "edge.internal.codestra.agency", "/v1/calls/originate"),
     }
 )
+APPROVED_PRIVATE_IPV4_NETWORKS = (
+    IPv4Network("10.0.0.0/8"),
+    IPv4Network("172.16.0.0/12"),
+    IPv4Network("192.168.0.0/16"),
+)
+APPROVED_PRIVATE_IPV6_NETWORKS = (IPv6Network("fc00::/7"),)
+
+
+def _approved_private_address(address: IPv4Address | IPv6Address) -> bool:
+    if isinstance(address, IPv4Address):
+        return any(address in network for network in APPROVED_PRIVATE_IPV4_NETWORKS)
+    return any(address in network for network in APPROVED_PRIVATE_IPV6_NETWORKS)
 
 
 class VicidialMtlsError(RuntimeError):
@@ -290,7 +302,7 @@ class VicidialMtlsClient:
             raise VicidialMtlsError(
                 "VICidial private DNS resolution failed closed"
             ) from exc
-        if not parsed or any(not address.is_private for address in parsed):
+        if not parsed or any(not _approved_private_address(address) for address in parsed):
             raise VicidialMtlsError(
                 "VICidial hostname did not resolve exclusively to the private IP"
             )
@@ -303,7 +315,10 @@ class VicidialMtlsClient:
                 for result in socket.getaddrinfo(
                     hostname,
                     VICIDIAL_PRIVATE_PORT,
-                    family=socket.AF_INET,
+                    # The HTTP stack may select either address family. Inspect
+                    # every A and AAAA destination so a public IPv6 answer
+                    # cannot bypass a private-only IPv4 preflight.
+                    family=socket.AF_UNSPEC,
                     type=socket.SOCK_STREAM,
                 )
             }

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import types
 import unittest
+import urllib.request
 from unittest import mock
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "apply_portfolio_main_release_authorities.py"
 sys.path.insert(0, str(ROOT / "scripts"))
+from portfolio_ruleset import github_api  # noqa: E402
+
 SPEC = importlib.util.spec_from_file_location("portfolio_main_release_authorities", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -116,6 +119,22 @@ class PortfolioMainReleaseAuthoritiesTests(unittest.TestCase):
     def test_apply_requires_exact_confirmation_before_api_use(self) -> None:
         with self.assertRaises(MODULE.PolicyError):
             MODULE.execute("apply", "WRONG")
+
+    def test_repository_admin_api_redirects_are_rejected(self) -> None:
+        handler = github_api.FailClosedRedirectHandler()
+        self.assertIsNone(
+            handler.redirect_request(
+                urllib.request.Request(
+                    "https://api.github.com/user",
+                    headers={"Authorization": "Bearer protected-placeholder"},
+                ),
+                None,
+                302,
+                "Found",
+                {},
+                "https://attacker.invalid/capture",
+            )
+        )
 
     def stronger_live_ruleset(self, record: dict[str, Any]) -> dict[str, Any]:
         existing = copy.deepcopy(MODULE.desired_ruleset(self.config, record))

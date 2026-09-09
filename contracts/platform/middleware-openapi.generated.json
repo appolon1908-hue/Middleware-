@@ -118,7 +118,6 @@
             "type": "string"
           },
           "payload": {
-            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -342,7 +341,6 @@
             "type": "string"
           },
           "payload": {
-            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -504,7 +502,6 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
             "title": "Metadata",
             "type": "object"
           },
@@ -622,7 +619,6 @@
           },
           "totals": {
             "items": {
-              "additionalProperties": true,
               "type": "object"
             },
             "title": "Totals",
@@ -701,7 +697,6 @@
             "title": "From"
           },
           "metadata": {
-            "additionalProperties": true,
             "title": "Metadata",
             "type": "object"
           },
@@ -845,7 +840,6 @@
             "type": "boolean"
           },
           "safe_error": {
-            "additionalProperties": true,
             "title": "Safe Error",
             "type": "object"
           },
@@ -1073,7 +1067,6 @@
           "variables": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -1099,7 +1092,6 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
             "title": "Metadata",
             "type": "object"
           },
@@ -1390,7 +1382,6 @@
             "type": "string"
           },
           "safe_metadata": {
-            "additionalProperties": true,
             "title": "Safe Metadata",
             "type": "object"
           }
@@ -1543,7 +1534,6 @@
           "readback_evidence": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -1793,7 +1783,6 @@
             "type": "string"
           },
           "payload": {
-            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           }
@@ -1898,7 +1887,6 @@
           "readback_evidence": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -2009,7 +1997,6 @@
           },
           "providers": {
             "items": {
-              "additionalProperties": true,
               "type": "object"
             },
             "title": "Providers",
@@ -2037,7 +2024,6 @@
           },
           "domains": {
             "items": {
-              "additionalProperties": true,
               "type": "object"
             },
             "title": "Domains",
@@ -2045,7 +2031,6 @@
           },
           "providers": {
             "items": {
-              "additionalProperties": true,
               "type": "object"
             },
             "title": "Providers",
@@ -2383,7 +2368,6 @@
             "type": "string"
           },
           "safe_metadata": {
-            "additionalProperties": true,
             "title": "Safe Metadata",
             "type": "object"
           },
@@ -2457,7 +2441,6 @@
             "type": "string"
           },
           "safe_result": {
-            "additionalProperties": true,
             "title": "Safe Result",
             "type": "object"
           },
@@ -8809,7 +8792,6 @@
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
                 "title": "Document",
                 "type": "object"
               }
@@ -12084,7 +12066,6 @@
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
                 "title": "Document",
                 "type": "object"
               }

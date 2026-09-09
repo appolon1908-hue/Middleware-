@@ -5248,7 +5248,6 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
               type: object
               title: Document
         required: true
@@ -5291,7 +5290,6 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
               type: object
               title: Document
         required: true
@@ -6902,7 +6900,6 @@ components:
           format: date-time
           title: Occurred At
         payload:
-          additionalProperties: true
           type: object
           title: Payload
       additionalProperties: false
@@ -7044,7 +7041,6 @@ components:
           pattern: ^[A-Z][A-Z0-9_]{2,100}$
           title: Capability
         payload:
-          additionalProperties: true
           type: object
           title: Payload
       additionalProperties: false
@@ -7171,7 +7167,6 @@ components:
           format: date-time
           title: Updatedat
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       additionalProperties: false
@@ -7215,7 +7210,6 @@ components:
           title: To
         totals:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Totals
@@ -7287,7 +7281,6 @@ components:
           - type: 'null'
           title: Scheduledat
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       additionalProperties: false
@@ -7386,7 +7379,6 @@ components:
           title: Unknown Outcome
           default: false
         safe_error:
-          additionalProperties: true
           type: object
           title: Safe Error
       additionalProperties: false
@@ -7530,8 +7522,7 @@ components:
           title: Templateversion
         variables:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Variables
         mediaUrls:
@@ -7586,7 +7577,6 @@ components:
           - type: 'null'
           title: Providerreference
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -7754,7 +7744,6 @@ components:
           type: string
           title: Reason
         safe_metadata:
-          additionalProperties: true
           type: object
           title: Safe Metadata
         created_at:
@@ -7857,8 +7846,7 @@ components:
           title: Provider Operation Id
         readback_evidence:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Readback Evidence
         readback_evidence_sha256:
@@ -8048,7 +8036,6 @@ components:
           format: uuid
           title: Operation Id
         payload:
-          additionalProperties: true
           type: object
           title: Payload
       additionalProperties: false
@@ -8108,8 +8095,7 @@ components:
           title: Provider Operation Id
         readback_evidence:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Readback Evidence
         readback_evidence_sha256:
@@ -8196,7 +8182,6 @@ components:
           title: Checkedat
         providers:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Providers
@@ -8217,13 +8202,11 @@ components:
           title: Checkedat
         domains:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Domains
         providers:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Providers
@@ -8501,7 +8484,6 @@ components:
           format: date-time
           title: Recorded At
         safe_metadata:
-          additionalProperties: true
           type: object
           title: Safe Metadata
       additionalProperties: false
@@ -8549,7 +8531,6 @@ components:
           pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]*$
           title: Result Code
         safe_result:
-          additionalProperties: true
           type: object
           title: Safe Result
       additionalProperties: false

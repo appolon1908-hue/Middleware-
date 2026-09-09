@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
+from .api_inputs import authorization_header, required_header
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
 from .communications import (
@@ -109,18 +110,22 @@ def _error_response(
 
 
 async def _read_limited_body(request: Request, maximum: int) -> bytes:
-    raw_length = request.headers.get("Content-Length")
-    if raw_length is not None:
-        try:
-            length = int(raw_length)
-        except ValueError as exc:
+    raw_lengths = request.headers.getlist("Content-Length")
+    if len(raw_lengths) > 1:
+        from .security import RequestValidationError
+
+        raise RequestValidationError("Content-Length must be provided at most once")
+    if raw_lengths:
+        raw_length = raw_lengths[0]
+        if not raw_length.isascii() or not raw_length.isdecimal():
             from .security import RequestValidationError
 
-            raise RequestValidationError("Content-Length must be an integer") from exc
-        if length < 0:
+            raise RequestValidationError("Content-Length must contain only digits")
+        if len(raw_length) > 20:
             from .security import RequestValidationError
 
-            raise RequestValidationError("Content-Length must not be negative")
+            raise RequestValidationError("Content-Length is outside the supported range")
+        length = int(raw_length)
         if length > maximum:
             raise PayloadTooLargeError(f"request body exceeds {maximum} bytes")
     body = bytearray()
@@ -646,24 +651,26 @@ def create_app(
         from .security import RequestValidationError, authorize_tenant
 
         active = request.app.state.runtime
-        content_type = request.headers.get("Content-Type", "")
+        authorization = authorization_header(request)
+        claims = await active.tokens.verify(
+            authorization,
+            expected_client_id=INTAKE_PRODUCER_CLIENT_ID,
+            required_scope="leads.write",
+        )
+        content_type = required_header(
+            request, "Content-Type", minimum=16, maximum=128,
+        )
         if content_type.split(";", 1)[0].strip().lower() != "application/json":
             raise RequestValidationError("Content-Type must be application/json")
 
-        tenant_id = request.headers.get("X-Tenant-ID", "")
-        correlation_id = request.headers.get("X-Correlation-ID", "")
-        idempotency_key = request.headers.get("Idempotency-Key", "")
-        if not tenant_id:
-            raise RequestValidationError("X-Tenant-ID is required")
-        if not correlation_id or len(correlation_id) > 180:
-            raise RequestValidationError("X-Correlation-ID must contain 1 to 180 characters")
-        if not idempotency_key or not 8 <= len(idempotency_key) <= 180:
-            raise RequestValidationError("Idempotency-Key must contain 8 to 180 characters")
-
-        claims = await active.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id=INTAKE_PRODUCER_CLIENT_ID,
-            required_scope="leads.write",
+        tenant_id = required_header(
+            request, "X-Tenant-ID", minimum=1, maximum=128,
+        )
+        correlation_id = required_header(
+            request, "X-Correlation-ID", minimum=1, maximum=180,
+        )
+        idempotency_key = required_header(
+            request, "Idempotency-Key", minimum=8, maximum=180,
         )
         authorize_tenant(claims, tenant_id)
 
@@ -709,9 +716,7 @@ def create_app(
         request: Request,
     ) -> JSONResponse:
         active = request.app.state.runtime
-        if active.commands is None:
-            raise StorageError("command ledger is unavailable")
-        authorization = request.headers.get("Authorization", "")
+        authorization = authorization_header(request)
         caller = caller_for_authorization(authorization)
         claims = await active.tokens.verify(
             authorization,
@@ -726,17 +731,26 @@ def create_app(
         from .security import authorize_tenant
 
         authorize_tenant(claims, command.tenant_id)
-        if request.headers.get("X-Tenant-ID") != command.tenant_id:
+        tenant_id = required_header(
+            request, "X-Tenant-ID", minimum=1, maximum=128,
+        )
+        if tenant_id != command.tenant_id:
             from .security import RequestValidationError
 
             raise RequestValidationError("X-Tenant-ID does not match command tenant")
-        if request.headers.get("X-Correlation-ID") != command.correlation_id:
+        correlation_id = required_header(
+            request, "X-Correlation-ID", minimum=1, maximum=180,
+        )
+        if correlation_id != command.correlation_id:
             from .security import RequestValidationError
 
             raise RequestValidationError(
                 "X-Correlation-ID does not match command correlation_id"
             )
-        if request.headers.get("Idempotency-Key") != command.idempotency_key:
+        idempotency_key = required_header(
+            request, "Idempotency-Key", minimum=8, maximum=180,
+        )
+        if idempotency_key != command.idempotency_key:
             from .security import RequestValidationError
 
             raise RequestValidationError(
@@ -757,6 +771,8 @@ def create_app(
             raise CommandCapabilityDisabled(
                 "N8N_EXTERNAL_PROVIDER_WRITES is disabled"
             )
+        if active.commands is None:
+            raise StorageError("command ledger is unavailable")
         operation = await active.commands.submit(
             command,
             authenticated_subject=subject,

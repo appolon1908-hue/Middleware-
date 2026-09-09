@@ -430,7 +430,15 @@ def test_public_or_mixed_dns_resolution_fails_before_network(tmp_path: Path):
         calls += 1
         return httpx.Response(200)
 
-    for addresses in (["65.21.67.207"], ["10.42.0.20", "65.21.67.207"], []):
+    for addresses in (
+        ["65.21.67.207"],
+        ["10.42.0.20", "65.21.67.207"],
+        ["10.42.0.20", "2001:4860:4860::8888"],
+        ["::1"],
+        ["fe80::1"],
+        ["::ffff:10.42.0.20"],
+        [],
+    ):
         client = VicidialMtlsClient(
             _settings(tmp_path),
             transport=httpx.MockTransport(handler),
@@ -442,3 +450,21 @@ def test_public_or_mixed_dns_resolution_fails_before_network(tmp_path: Path):
         finally:
             client.close()
     assert calls == 0
+
+
+@pytest.mark.parametrize("address", ["10.42.0.20", "172.20.0.10", "fd00::20"])
+def test_rfc1918_and_ipv6_ula_destinations_are_private(
+    tmp_path: Path,
+    address: str,
+) -> None:
+    client = VicidialMtlsClient(
+        _settings(tmp_path),
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"authorized": True})
+        ),
+        resolver=lambda _: [address],
+    )
+    try:
+        assert client.authorize({}) == {"authorized": True}
+    finally:
+        client.close()

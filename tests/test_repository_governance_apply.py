@@ -89,16 +89,49 @@ def test_repository_patch_is_squash_only_and_secret_scanning_enabled(policy: dic
     }
 
 
-def test_dependabot_security_update_verifier_accepts_no_content_success() -> None:
+def test_dependabot_security_update_verifier_accepts_enabled_state() -> None:
     api = Mock(spec=GitHubApi)
-    api.request.return_value = ApiResponse(status=204, payload=None)
+    api.request.return_value = ApiResponse(status=200, payload={"enabled": True})
 
     verify_automated_security_fixes(api)
 
     api.request.assert_called_once_with(
         "GET",
         "/automated-security-fixes",
-        expected=(204,),
+        expected=(200,),
+    )
+
+
+@pytest.mark.parametrize("payload", [{"enabled": False}, {}])
+def test_dependabot_security_update_verifier_rejects_disabled_state(payload: dict) -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.return_value = ApiResponse(status=200, payload=payload)
+
+    with pytest.raises(GovernanceApplyError, match="automated security fixes are disabled"):
+        verify_automated_security_fixes(api)
+
+
+def test_dependabot_security_update_verifier_rejects_non_object_state() -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.return_value = ApiResponse(status=200, payload=[])
+
+    with pytest.raises(GovernanceApplyError, match="state is invalid"):
+        verify_automated_security_fixes(api)
+
+
+def test_dependabot_security_update_verifier_rejects_no_content_readback() -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.side_effect = GovernanceApplyError(
+        "GitHub API GET /automated-security-fixes returned 204; expected [200]"
+    )
+
+    with pytest.raises(GovernanceApplyError, match="returned 204"):
+        verify_automated_security_fixes(api)
+
+    api.request.assert_called_once_with(
+        "GET",
+        "/automated-security-fixes",
+        expected=(200,),
     )
 
 

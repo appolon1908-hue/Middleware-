@@ -335,12 +335,20 @@ def _matching_rulesets(api: GitHubApi) -> list[Mapping[str, Any]]:
 
 
 def verify_automated_security_fixes(api: GitHubApi) -> None:
-    """Require GitHub's documented no-content success for this feature."""
+    """Require a typed enabled-state readback for automated security fixes."""
 
-    api.request(
+    response = api.request(
         "GET",
         "/automated-security-fixes",
-        expected=(204,),
+        expected=(200,),
+    )
+    payload = _require_mapping(
+        response.payload,
+        "automated security fixes state is invalid",
+    )
+    require(
+        payload.get("enabled") is True,
+        "automated security fixes are disabled",
     )
 
 

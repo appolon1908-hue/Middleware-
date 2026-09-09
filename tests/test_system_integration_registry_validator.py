@@ -255,6 +255,49 @@ def test_unbound_canonical_adapter_owner_security_cannot_drift(
     )
 
 
+@pytest.mark.parametrize("component", ["ai", "marketing", "odoo", "beyvra-backend"])
+def test_canonical_adapter_owner_must_remain_active(
+    validator: ModuleType, documents, component: str
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    system(registry, component)["lifecycle"] = "deprecated"
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        f"canonical adapter owner security classification mismatch: {component}",
+    )
+
+
+def test_reference_only_repository_inventory_cannot_be_removed(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    authorities["reference_only"] = []
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "reference-only repository inventory mismatch",
+    )
+
+
+def test_reference_only_repository_policy_cannot_drift(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    authorities["reference_only"][0]["allowed_uses"] = ["central release authority"]
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "reference-only repository allowed_uses drift",
+    )
+
+
 def test_canonical_adapter_ownership_cannot_move_between_repositories(
     validator: ModuleType, documents
 ) -> None:

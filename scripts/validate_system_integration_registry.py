@@ -224,48 +224,73 @@ EXPECTED_ADAPTER_BOUND_SYSTEMS = {
     ),
 }
 EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY = {
-    "ai": ("product-clients", "product-client", "caller"),
+    "ai": ("active", "product-clients", "product-client", "caller"),
     "beyvra-backend": (
+        "active",
         "financial-isolated",
         "product-adapter-nonfinancial",
         "caller-and-target",
     ),
     "klyrow-email": (
+        "active",
         "communications",
         "provider-adapter",
         "target-and-event-source",
     ),
     "kyqra-crawler": (
+        "active",
         "crawler",
         "provider-adapter",
         "target-and-event-source",
     ),
-    "marketing": ("product-clients", "product-client", "caller"),
+    "marketing": ("active", "product-clients", "product-client", "caller"),
     "odoo": (
+        "active",
         "communications",
         "business-system-adapter",
         "target-and-event-source",
     ),
     "provisioning": (
+        "active",
         "core-control-plane",
         "provider-adapter",
         "target-and-event-source",
     ),
     "social": (
+        "active",
         "communications",
         "provider-adapter",
         "target-and-event-source",
     ),
     "telnexa-sms": (
+        "active",
         "communications",
         "provider-adapter",
         "target-and-event-source",
     ),
     "vicidial-asterisk": (
+        "active",
         "telephony-restricted",
         "provider-adapter",
         "target-and-event-source",
     ),
+}
+EXPECTED_REFERENCE_ONLY_REPOSITORIES = {
+    "appolon1908-hue/codestra-production-platform": {
+        "allowed_uses": (
+            "historical runtime inventory",
+            "deployment provenance",
+            "rollback evidence",
+            "previous Caddy/Kong/runtime configuration reference",
+            "migration comparison",
+        ),
+        "forbidden_uses": (
+            "principal source for a component that has its own repository",
+            "central release authority",
+            "place for new product or provider implementation",
+            "place for new Caddy, Kong, Keycloak, n8n, Odoo, provider, SDK or product feature development",
+        ),
+    }
 }
 
 JsonObject = dict[str, Any]
@@ -520,6 +545,10 @@ def validate(
     reference_only_names: set[str] = set()
     for index, raw in enumerate(reference_rows):
         reference = as_object(raw, f"reference-only repository {index}")
+        require(
+            set(reference) == {"repository", "allowed_uses", "forbidden_uses"},
+            f"reference-only repository schema drift at {index}",
+        )
         repository = reference.get("repository")
         require(
             valid_repository(repository),
@@ -535,7 +564,27 @@ def validate(
             canonical_reference not in reference_only_names,
             f"duplicate reference-only repository: {repository}",
         )
+        expected_reference = EXPECTED_REFERENCE_ONLY_REPOSITORIES.get(repository)
+        require(
+            expected_reference is not None,
+            f"unexpected reference-only repository: {repository}",
+        )
+        assert expected_reference is not None
+        for use_kind in ("allowed_uses", "forbidden_uses"):
+            uses = as_list(
+                reference.get(use_kind),
+                f"reference-only repository {use_kind}: {repository}",
+            )
+            require(
+                tuple(uses) == expected_reference[use_kind],
+                f"reference-only repository {use_kind} drift: {repository}",
+            )
         reference_only_names.add(canonical_reference)
+    require(
+        reference_only_names
+        == {name.casefold() for name in EXPECTED_REFERENCE_ONLY_REPOSITORIES},
+        "reference-only repository inventory mismatch",
+    )
 
     authority_rows = as_list(authorities.get("authorities"), "repository authorities")
     authority_by_component: dict[str, JsonObject] = {}
@@ -889,6 +938,7 @@ def validate(
         owner_item = system_by_component[component]
         require(
             (
+                owner_item.get("lifecycle"),
                 owner_item.get("cell"),
                 owner_item.get("integration_mode"),
                 owner_item.get("middleware_relationship"),

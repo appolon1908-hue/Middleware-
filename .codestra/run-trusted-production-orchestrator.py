@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Run only an independently approved production-contract validator pair.
 
-This launcher is executed from the protected base branch by a
-``pull_request_target`` workflow. Candidate source is treated as inert data
-until both Python validators have matched a pair approved on protected main.
-The candidate cannot update these approvals, this launcher, or its workflow in
-the same pull request that changes a validator.
+This launcher is executed from protected-base workflow source. Candidate source
+is inert data until its workflow and validator bytes match policies already
+approved on protected main. Candidate changes cannot replace this launcher or
+the trusted evidence workflow in the same pull request.
 """
 
 from __future__ import annotations
@@ -21,31 +20,48 @@ from pathlib import Path
 
 TRUST_ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER_PATH = Path(__file__).resolve()
+TRUST_GATE_WORKFLOW_PATH = Path(
+    ".github/workflows/trusted-production-orchestrator-gate.yml"
+)
 WORKFLOW_PATH = Path(".github/workflows/production-orchestrator-contract.yml")
 ORCHESTRATOR_PATH = Path(".codestra/validate-production-orchestrator-contract.py")
 RELEASE_VALIDATOR_PATH = Path(".codestra/validate-release-intent.py")
 SHA = re.compile(r"[0-9a-f]{40}")
 
-# The key is the exact orchestrator validator. The bootstrap generation binds
-# its release validator byte-for-byte. The successor binds its normalized
-# security fingerprint, permitting reviewed source-closure/hash value updates
-# without permitting release-policy logic to change in the same pull request.
-APPROVED_VALIDATOR_POLICIES = {
-    "529dcf0501b1624fb18da2ded0c0459978a0174f43e3f9412877f749911fe06b": (
-        "raw",
-        "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497",
-    ),
-    "06ab6afa78b151825c708878a8426e77e148827f9bd614e724f5bd92f7cc836b": (
-        "security-fingerprint",
-        "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec",
-    ),
+# The outer key is the exact validator already on protected main; the inner
+# key is a candidate generation it may accept. This one-way transition graph
+# prevents an older validator from being replayed after its successor merges.
+CURRENT_VALIDATOR_SHA256 = (
+    "4be8302e9c383b1da8a9afc7e25c371910ae963ed9a40d5bcf9a4091ab818d76"
+)
+SUCCESSOR_VALIDATOR_SHA256 = (
+    "ae57aceba59cdf9ae2419b7403f7ebc9d46582848c69ca18c02b4e70191621a5"
+)
+CURRENT_RELEASE_VALIDATOR_SHA256 = (
+    "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497"
+)
+SUCCESSOR_RELEASE_SECURITY_FINGERPRINT = (
+    "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec"
+)
+APPROVED_VALIDATOR_TRANSITIONS = {
+    CURRENT_VALIDATOR_SHA256: {
+        CURRENT_VALIDATOR_SHA256: ("raw", CURRENT_RELEASE_VALIDATOR_SHA256),
+        SUCCESSOR_VALIDATOR_SHA256: (
+            "security-fingerprint",
+            SUCCESSOR_RELEASE_SECURITY_FINGERPRINT,
+        ),
+    },
+    SUCCESSOR_VALIDATOR_SHA256: {
+        SUCCESSOR_VALIDATOR_SHA256: (
+            "security-fingerprint",
+            SUCCESSOR_RELEASE_SECURITY_FINGERPRINT,
+        ),
+    },
 }
 APPROVED_TRUST_WORKFLOW_SHA256 = frozenset(
     {
-        # Bootstrap generation: keeps the ordinary PR trigger long enough for
-        # this first trust-root change to satisfy the existing required check.
-        "67bdd8254210a260f65a83807f448b7a1c42fef99b12651447da09169d567148",
-        # Steady state: protected-base pull_request_target and main push only.
+        # Steady state only: the candidate-controlled pull_request generation
+        # is intentionally not replayable after this launcher reaches main.
         "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f",
     }
 )
@@ -60,16 +76,32 @@ def require(condition: bool, message: str) -> None:
         raise TrustError(message)
 
 
-def digest(path: Path) -> str:
-    require(path.is_file() and not path.is_symlink(), f"unsafe trust path: {path}")
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def safe_file(root: Path, relative: Path) -> Path:
+    require(
+        not relative.is_absolute() and ".." not in relative.parts,
+        f"unsafe trust path: {relative}",
+    )
+    resolved_root = root.resolve(strict=True)
+    candidate = resolved_root
+    for part in relative.parts:
+        candidate /= part
+        require(not candidate.is_symlink(), f"unsafe trust path: {relative}")
+    require(candidate.is_file(), f"unsafe trust path: {relative}")
+    resolved_candidate = candidate.resolve(strict=True)
+    require(
+        resolved_candidate.is_relative_to(resolved_root),
+        f"trust path escapes checkout: {relative}",
+    )
+    return candidate
+
+
+def digest(root: Path, relative: Path) -> str:
+    return hashlib.sha256(safe_file(root, relative).read_bytes()).hexdigest()
 
 
 def require_unchanged_trust_file(relative: Path, candidate_root: Path) -> None:
-    trusted = TRUST_ROOT / relative
-    candidate = candidate_root / relative
     require(
-        digest(candidate) == digest(trusted),
+        digest(candidate_root, relative) == digest(TRUST_ROOT, relative),
         f"protected-base trust file changed: {relative.as_posix()}",
     )
 
@@ -97,15 +129,26 @@ def validate_exact_checkout(root: Path) -> str:
 
 def validate_candidate(root: Path) -> Path:
     require(
-        digest(root / WORKFLOW_PATH) in APPROVED_TRUST_WORKFLOW_SHA256,
+        digest(root, WORKFLOW_PATH) in APPROVED_TRUST_WORKFLOW_SHA256,
         "candidate trust workflow is not approved by protected main",
     )
     require_unchanged_trust_file(LAUNCHER_PATH.relative_to(TRUST_ROOT), root)
-    orchestrator = root / ORCHESTRATOR_PATH
-    release_validator = root / RELEASE_VALIDATOR_PATH
-    orchestrator_digest = digest(orchestrator)
-    release_validator_digest = digest(release_validator)
-    policy = APPROVED_VALIDATOR_POLICIES.get(orchestrator_digest)
+    require_unchanged_trust_file(TRUST_GATE_WORKFLOW_PATH, root)
+
+    orchestrator = safe_file(root, ORCHESTRATOR_PATH)
+    release_validator = safe_file(root, RELEASE_VALIDATOR_PATH)
+    protected_orchestrator_digest = digest(TRUST_ROOT, ORCHESTRATOR_PATH)
+    orchestrator_digest = digest(root, ORCHESTRATOR_PATH)
+    release_validator_digest = digest(root, RELEASE_VALIDATOR_PATH)
+    allowed_transitions = APPROVED_VALIDATOR_TRANSITIONS.get(
+        protected_orchestrator_digest
+    )
+    require(
+        allowed_transitions is not None,
+        "protected-base orchestrator validator is not an approved generation",
+    )
+    assert allowed_transitions is not None
+    policy = allowed_transitions.get(orchestrator_digest)
     require(
         policy is not None,
         "candidate orchestrator validator is not approved by protected main",

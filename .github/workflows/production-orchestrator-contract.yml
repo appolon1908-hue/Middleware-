@@ -1,8 +1,6 @@
 name: Production orchestrator contract
 
 on:
-  pull_request:
-    branches: [main]
   pull_request_target:
     branches: [main]
   push:
@@ -18,9 +16,6 @@ concurrency:
 
 jobs:
   validate:
-    # The ordinary pull_request path exists only to bootstrap this trust-root
-    # change through the pre-existing required check. Steady state removes it.
-    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.number == 215 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/trusted-validator-bootstrap-20260909') }}
     name: orchestrator-contract
     runs-on: ubuntu-24.04
     timeout-minutes: 10

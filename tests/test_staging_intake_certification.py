@@ -105,6 +105,7 @@ def test_validate_base_url_rejects_committed_production_host() -> None:
         "https://[::1]",
         "https://[fd00::1]",
         "https://127.0.0.1",
+        "https://127.0.0.01",
         "https://staging-api.codestra.co:invalid",
     ],
 )

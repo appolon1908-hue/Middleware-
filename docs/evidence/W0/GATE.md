@@ -1,6 +1,6 @@
 # Gate W0 — Contract decision and repository-governance baseline
 
-- **Status:** LIVE_GOVERNANCE_APPLIED — TAG PENDING
+- **Status:** COMPLETE — LIVE GOVERNANCE AND TAG VERIFIED
 - **Original baseline commit:** `382683958feefce73458ee56a1589092bad632b3`
 - **Historical verified governance source:** `8e4e1e2e7ed38fffbd71f1b50d45b26ce325bc0e`
 - **Historical live verification workflow:** `33781342722`
@@ -54,9 +54,19 @@ capability is activated by W0 governance completion.
 - [x] Updated policy merged through protected `main`
 - [x] Updated policy applied and read back from exact protected-main SHA
 - [x] Current run/source evidence recorded in this protected change
-- [ ] Tag `w0-complete` created and its exact target read back
+- [x] Tag `w0-complete` created and its exact target read back
 
-After this evidence change is merged through protected `main`, create
-`w0-complete` exactly once on that accepted evidence-bearing commit and read
-back its target. Never force-repoint the completion tag. Creating the completion
-tag does not authorize runtime promotion or any live write.
+## Completion readback — September 9, 2026
+
+Owner-authenticated verification on protected-main commit
+`eb4cee4c36f6e9f1195b967a792e56d9bbc456a3` passed both
+`apply_repository_governance.py --verify-live` and
+`validate_repository_governance.py --live`. The exact results were
+`REPOSITORY_GOVERNANCE_APPLIER=PASS mode=VERIFY main_protected=YES live_effects=UNCHANGED`
+and `REPOSITORY_GOVERNANCE=PASS live=PASS skip_files=27`.
+
+Created `refs/tags/w0-complete` without force and read it back as a direct commit
+reference to `eb4cee4c36f6e9f1195b967a792e56d9bbc456a3`. The completion record is
+on [issue #68](https://github.com/appolon1908-hue/Middleware-/issues/68), now
+closed. Never repoint this tag. W0 completion grants no runtime promotion,
+environment approval, or live-write authority.

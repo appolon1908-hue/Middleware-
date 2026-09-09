@@ -403,6 +403,46 @@ def test_communication_cancel_authorizes_tenant_before_message_lookup(
         )
 
 
+def test_communication_cancel_hides_message_existence_from_wrong_channel(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="channel-probe-create"),
+        ).json()
+        unauthorized_headers = {
+            "Authorization": "Bearer "
+            + _token("kyqra", ["kyqra.middleware.command.write"]),
+            "X-Tenant-ID": "tenant-1",
+            "X-Correlation-ID": "channel-probe",
+            "Idempotency-Key": "channel-probe-cancel",
+        }
+        existing = client.post(
+            f"/v1/communications/messages/{created['messageId']}/cancel",
+            headers=unauthorized_headers,
+        )
+        missing = client.post(
+            f"/v1/communications/messages/{uuid4()}/cancel",
+            headers={
+                **unauthorized_headers,
+                "Idempotency-Key": "channel-probe-missing",
+            },
+        )
+
+    assert existing.status_code == missing.status_code == 404
+    assert existing.json() == missing.json()
+    assert runtime.communications is not None
+    stored = runtime.communications.get_message(
+        "tenant-1",
+        UUID(created["messageId"]),
+    )
+    assert stored.status == "queued"
+
+
 def test_klyrow_signed_event_updates_canonical_read_model(test_settings) -> None:
     runtime = _runtime(test_settings)
     app = create_app(settings=test_settings, runtime=runtime)

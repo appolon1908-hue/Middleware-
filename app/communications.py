@@ -22,7 +22,11 @@ from pydantic import (
 
 from .canonical_contracts import validate_specialized_contract
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandService
-from .control_plane_auth import authorize_command, caller_for_authorization
+from .control_plane_auth import (
+    ControlPlaneCaller,
+    authorize_command,
+    caller_for_authorization,
+)
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .sms import compliance_keyword, normalize_e164, normalize_sms_sender, sms_segments
 
@@ -692,6 +696,28 @@ class CommunicationsService:
         except KeyError as exc:
             raise CommunicationsNotFound("message was not found") from exc
 
+    def get_cancellable_message_for_caller(
+        self,
+        tenant_id: str,
+        message_id: uuid.UUID,
+        *,
+        caller: ControlPlaneCaller,
+    ) -> CommunicationMessage:
+        message = self.get_message(tenant_id, message_id)
+        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
+        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
+        try:
+            authorize_command(
+                caller,
+                command_type=cancel_command_type,
+                target=target,
+            )
+        except AuthorizationError:
+            # A caller without authority for this channel must observe the same
+            # result as it would for an unknown message identifier.
+            raise CommunicationsNotFound("message was not found") from None
+        return message
+
     def message_events(self, tenant_id: str, message_id: uuid.UUID) -> list[MessageEvent]:
         self.get_message(tenant_id, message_id)
         return sorted(self.store.events.get((tenant_id, message_id), []), key=lambda item: item.occurredAt)
@@ -774,13 +800,10 @@ class CommunicationsService:
         authorize_tenant(claims, tenant_id)
         if claims.get("sub") != actor:
             raise AuthorizationError("requested actor must equal token subject")
-        message = self.get_message(tenant_id, message_id)
-        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
-        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
-        authorize_command(
-            caller,
-            command_type=cancel_command_type,
-            target=target,
+        message = self.get_cancellable_message_for_caller(
+            tenant_id,
+            message_id,
+            caller=caller,
         )
         replay_key = (tenant_id, message_id, idempotency_key)
         if replay_key in self.store.cancellations:

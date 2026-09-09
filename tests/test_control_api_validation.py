@@ -8,13 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from app.api_inputs import authorization_header, required_header
 from app.config import Settings
 from app.control_api import (
     MAX_BIGINT,
-    _authorization_header,
     _cursor,
     _next,
-    _required_header,
 )
 from app.main import create_app
 from app.replay import MemoryReplayGuard
@@ -103,7 +102,7 @@ def test_cursor_rejects_duplicate_json_fields() -> None:
 def test_required_header_accepts_one_canonical_value() -> None:
     request = _request(("X-Tenant-ID", "tenant-1"))
     assert (
-        _required_header(
+        required_header(
             request,
             "X-Tenant-ID",
             minimum=1,
@@ -132,7 +131,7 @@ def test_required_header_rejects_invalid_contract_values(
 ) -> None:
     request = _request((name, value))
     with pytest.raises(RequestValidationError, match=f"{name} is malformed"):
-        _required_header(
+        required_header(
             request,
             name,
             minimum=minimum,
@@ -143,20 +142,20 @@ def test_required_header_rejects_invalid_contract_values(
 def test_required_header_rejects_missing_and_duplicate_values() -> None:
     missing = _request()
     with pytest.raises(RequestValidationError, match="provided exactly once"):
-        _required_header(missing, "X-Tenant-ID", minimum=1, maximum=128)
+        required_header(missing, "X-Tenant-ID", minimum=1, maximum=128)
 
     duplicate = _request(
         ("Authorization", "Bearer first"),
         ("Authorization", "Bearer second"),
     )
     with pytest.raises(RequestValidationError, match="provided at most once"):
-        _authorization_header(duplicate)
+        authorization_header(duplicate)
 
 
 def test_authorization_header_preserves_missing_authentication_semantics() -> None:
-    assert _authorization_header(_request()) == ""
+    assert authorization_header(_request()) == ""
     with pytest.raises(RequestValidationError, match="Authorization is malformed"):
-        _authorization_header(_request(("Authorization", "x" * 8193)))
+        authorization_header(_request(("Authorization", "x" * 8193)))
 
 
 def test_authentication_precedes_tenant_validation(test_settings: Settings) -> None:

@@ -198,8 +198,8 @@ def test_operation_mutation_rejects_duplicate_idempotency_header(
         ("Authorization", "Bearer legacy-command-token"),
         ("X-Tenant-ID", "tenant-1"),
         ("X-Correlation-ID", "correlation-1"),
-        ("Idempotency-Key", "idempotency-1"),
-        ("Idempotency-Key", "idempotency-2"),
+        ("Idempotency-Key", "idem-one"),
+        ("Idempotency-Key", "idem-two"),
     ]
     with TestClient(_app(test_settings)) as client:
         response = client.post(
@@ -222,7 +222,7 @@ def test_domain_submission_rejects_duplicate_idempotency_header(
         "tenant_id": "tenant-1",
         "requested_by": "user-123",
         "correlation_id": "correlation-1",
-        "idempotency_key": "idempotency-1",
+        "idempotency_key": "idem-one",
         "capability": "ODOO_WRITE",
         "payload": {"contact_id": "contact-1"},
     }
@@ -230,8 +230,8 @@ def test_domain_submission_rejects_duplicate_idempotency_header(
         ("Authorization", "Bearer legacy-command-token"),
         ("X-Tenant-ID", "tenant-1"),
         ("X-Correlation-ID", "correlation-1"),
-        ("Idempotency-Key", "idempotency-1"),
-        ("Idempotency-Key", "idempotency-2"),
+        ("Idempotency-Key", "idem-one"),
+        ("Idempotency-Key", "idem-two"),
     ]
     with TestClient(_app(test_settings)) as client:
         response = client.post("/v1/odoo/commands", headers=headers, json=payload)

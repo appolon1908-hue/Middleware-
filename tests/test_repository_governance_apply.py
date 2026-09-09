@@ -12,6 +12,7 @@ from scripts.apply_repository_governance import (
 )
 from scripts.validate_repository_governance import (
     GovernanceError,
+    validate_environment_release_policy,
     validate_live_ruleset,
 )
 
@@ -144,36 +145,113 @@ def test_live_ruleset_requires_github_actions_app_binding(policy: dict) -> None:
         validate_live_ruleset(live, policy["default_branch_ruleset"])
 
 
-def test_production_environment_uses_automated_gates_without_reviewers() -> None:
+def test_protected_environment_requires_independent_review() -> None:
+    payload = environment_payload(
+        {
+            "wait_timer": 0,
+            "prevent_self_review": True,
+            "can_admins_bypass": False,
+            "reviewers": [{"type": "User", "id": 77101516}],
+            "deployment_branch_policy": {
+                "protected_branches": True,
+                "custom_branch_policies": False,
+            },
+            "allowed_branches": [],
+        }
+    )
+
+    assert payload["prevent_self_review"] is True
+    assert payload["can_admins_bypass"] is False
+    assert payload["reviewers"] == [{"type": "User", "id": 77101516}]
+    assert payload["deployment_branch_policy"] == {
+        "protected_branches": True,
+        "custom_branch_policies": False,
+    }
+
+
+def test_custom_branch_environment_remains_supported() -> None:
     payload = environment_payload(
         {
             "wait_timer": 0,
             "prevent_self_review": False,
+            "can_admins_bypass": False,
             "reviewers": [],
             "deployment_branch_policy": {
                 "protected_branches": False,
                 "custom_branch_policies": True,
             },
+            "allowed_branches": [{"name": "main", "type": "branch"}],
         }
     )
 
-    assert payload["prevent_self_review"] is False
     assert payload["reviewers"] == []
-    assert payload["deployment_branch_policy"] == {
+    assert payload["deployment_branch_policy"]["custom_branch_policies"] is True
+
+
+def independent_environment_policy() -> dict:
+    environment = {
+        "wait_timer": 0,
+        "prevent_self_review": True,
+        "can_admins_bypass": False,
+        "reviewers": [{"type": "User", "id": 77101516}],
+        "deployment_branch_policy": {
+            "protected_branches": True,
+            "custom_branch_policies": False,
+        },
+        "allowed_branches": [],
+        "live_write_secrets_allowed": False,
+    }
+    return {
+        "environments": {
+            "staging": copy.deepcopy(environment),
+            "production": copy.deepcopy(environment),
+        },
+        "release_policy": {
+            "live_writes_default": False,
+            "odoo_write_default": False,
+            "live_apply_authorized_default": False,
+            "production_release_requires_independent_human_approval": True,
+            "production_release_environment": "production",
+        },
+    }
+
+
+def test_source_policy_requires_independent_environment_approval() -> None:
+    encoded = independent_environment_policy()
+    validate_environment_release_policy(encoded)
+
+    encoded["environments"]["production"]["prevent_self_review"] = False
+    with pytest.raises(GovernanceError, match="self-review"):
+        validate_environment_release_policy(encoded)
+
+
+def test_source_policy_rejects_admin_bypass_and_custom_production_refs() -> None:
+    encoded = independent_environment_policy()
+    encoded["environments"]["production"]["can_admins_bypass"] = True
+    with pytest.raises(GovernanceError, match="administrator bypass"):
+        validate_environment_release_policy(encoded)
+
+    encoded = independent_environment_policy()
+    encoded["environments"]["production"]["deployment_branch_policy"] = {
         "protected_branches": False,
         "custom_branch_policies": True,
     }
+    with pytest.raises(GovernanceError, match="protected branches"):
+        validate_environment_release_policy(encoded)
 
 
 def test_environment_rejects_invalid_reviewer() -> None:
     with pytest.raises(GovernanceApplyError, match="reviewer ID"):
         environment_payload(
             {
+                "wait_timer": 0,
                 "prevent_self_review": True,
+                "can_admins_bypass": False,
                 "reviewers": [{"type": "User", "id": 0}],
                 "deployment_branch_policy": {
                     "protected_branches": False,
                     "custom_branch_policies": True,
                 },
+                "allowed_branches": [{"name": "main", "type": "branch"}],
             }
         )

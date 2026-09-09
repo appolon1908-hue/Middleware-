@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from uuid import UUID
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from .api_inputs import authenticated_tenant, required_header
@@ -235,10 +235,10 @@ for _domain in ("odoo", "crm", "telephony", "social", "marketing", "ai"):
 @router.get("/v1/integrations/n8n/operations")
 async def n8n_operations(
     request: Request,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     cursor: str | None = None,
     state: OperationApiState | None = None,
-    command_type: str | None = None,
+    command_type: str | None = Query(None, min_length=1, max_length=180),
 ):
     return await core_list_operations(
         request=request,

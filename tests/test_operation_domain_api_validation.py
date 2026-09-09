@@ -210,6 +210,30 @@ def test_operation_mutation_rejects_duplicate_idempotency_header(
     assert response.status_code == 400
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "limit=0",
+        "limit=101",
+        "command_type=",
+        f"command_type={'x' * 181}",
+    ],
+)
+def test_n8n_operation_alias_preserves_canonical_query_bounds(
+    test_settings: Settings,
+    query: str,
+) -> None:
+    headers = {
+        "Authorization": "Bearer legacy-status-token",
+        "X-Tenant-ID": "tenant-1",
+    }
+    with TestClient(_app(test_settings)) as client:
+        response = client.get(
+            f"/v1/integrations/n8n/operations?{query}", headers=headers
+        )
+    assert response.status_code == 400
+
+
 def test_domain_submission_rejects_duplicate_idempotency_header(
     test_settings: Settings,
 ) -> None:

@@ -108,6 +108,20 @@ def test_authority_repository_name_drift_is_rejected(validator: ModuleType, docu
     assert_rejected(validator, registry, authorities, aliases, "authority repository mismatch: n8n")
 
 
+def test_every_authority_requires_stable_repository_id(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    authority(authorities, "middleware").pop("github_repository_id")
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "authority stable repository id missing: middleware",
+    )
+
+
 def test_controlled_rename_id_misbinding_is_rejected(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     authority(authorities, "platform-infrastructure")["github_repository_id"] = 1
@@ -140,6 +154,29 @@ def test_alias_target_cannot_collide_with_current_repository(
         authorities,
         aliases,
         "alias target collides with a current repository",
+    )
+
+
+def test_alias_target_cannot_collide_with_reference_only_repository(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    repository_id = 1350724356
+    target = "appolon1908-hue/codestra-production-platform"
+    alias = next(
+        item for item in aliases["mappings"] if item["github_repository_id"] == repository_id
+    )
+    alias["target_repository_after_cutover"] = target
+    authority(authorities, "platform-documentation")[
+        "target_repository_after_cutover"
+    ] = target
+    system(registry, "platform-documentation")["name_aliases"][0]["repository"] = target
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "alias target collides with a reference-only repository",
     )
 
 

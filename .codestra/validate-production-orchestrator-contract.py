@@ -33,20 +33,20 @@ RELEASE_VALIDATOR_NON_SELF_REFERENTIAL_BINDINGS = frozenset(
     }
 )
 STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "c80de65ea7435ccaf592c712cb482326"
-    "7097a4de22d799a21ce5e8d3c90aac47"
+    "ecf3d5b2669c14a62b9ca472d6236196"
+    "8c483ed95f76664a0aa02cb9888f13b2"
 )
 MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "8abee4eb254b40fb56125d4cc07b6ce2"
     "e45063a0379f37ae2fa0e02bee34edf8"
 )
 BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "c80de65ea7435ccaf592c712cb482326"
-    "7097a4de22d799a21ce5e8d3c90aac47"
+    "ecf3d5b2669c14a62b9ca472d6236196"
+    "8c483ed95f76664a0aa02cb9888f13b2"
 )
 MONEYBEE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "20e790bad6d768b9aed2fb2ee394e90f"
-    "6e93e3a7cef1a445eb9008f1fff7dda2"
+    "9d56380afce80d98b41e1c0d0eef11c3"
+    "50d6e5a4ac9e008e1c2733107d07098c"
 )
 EXPECTED_RELEASE_VALIDATOR_SECURITY_SHA256 = {
     "appolon1908-hue/Infustruction-repo": STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256,
@@ -405,7 +405,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "06b7f5eec4e36d51d9575decf70ce0a2"
             "12767b563bc0fbdb1b61fa46ae7fc321"
         ),
-        "scripts/validate.sh": "770f873d978b072dc86d5b8bec1c958f3a02d67b69bdda27f8cc77a3da6ee3d8",
+        "scripts/validate.sh": "0c2924af94d4f0b494cd287e3fe6a52fcc6e20f9e0e80d47671584306b859c95",
     },
     "appolon1908-hue/Middleware-": {
         "scripts/apply_portfolio_release_reviewer_access.py": (

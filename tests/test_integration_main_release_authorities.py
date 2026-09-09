@@ -43,7 +43,10 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             status = normalized["rules"]["required_status_checks"]
             self.assertTrue(status["strict_required_status_checks_policy"])
             self.assertFalse(status["do_not_enforce_on_create"])
-            self.assertEqual(status["contexts"], row["required_status_checks"])
+            self.assertEqual(
+                status["contexts"],
+                sorted(row["required_status_checks"]),
+            )
 
     def stronger_live_ruleset(self) -> tuple[dict[str, Any], dict[str, Any]]:
         row = MODULE.validate_config(self.config)[0]
@@ -82,9 +85,10 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             status["additional_parameters"]["future_enforcement_mode"],
             "strict",
         )
-        checks = status["checks"]
-        self.assertEqual(checks[0]["integration_id"], 98765)
-        self.assertEqual(checks[0]["provider_slug"], "github-actions")
+        checks = {check["context"]: check for check in status["checks"]}
+        bound_check = checks[baseline["rules"][-1]["parameters"]["required_status_checks"][0]["context"]]
+        self.assertEqual(bound_check["integration_id"], 98765)
+        self.assertEqual(bound_check["provider_slug"], "github-actions")
         self.assertIn(
             {"context": "existing-security-gate", "integration_id": 54321},
             checks,
@@ -99,6 +103,15 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             MODULE.normalize_ruleset(existing),
             MODULE.normalize_ruleset(merged),
         )
+
+    def test_status_check_order_does_not_force_a_ruleset_write(self) -> None:
+        baseline, existing = self.stronger_live_ruleset()
+        status = next(
+            rule for rule in existing["rules"] if rule["type"] == "required_status_checks"
+        )
+        status["parameters"]["required_status_checks"].reverse()
+
+        self.assertTrue(MODULE.ruleset_meets_baseline(existing, baseline))
 
     def test_effective_policy_rejects_dropped_extension_controls(self) -> None:
         baseline, existing = self.stronger_live_ruleset()

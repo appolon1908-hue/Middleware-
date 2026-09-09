@@ -123,9 +123,39 @@ class PostalDomainRegistryTests(unittest.TestCase):
         self.assert_rejected("duplicate_safety_flag:EMAIL_DELIVERY_ENABLED")
 
     def test_credential_shaped_safety_variable_fails_closed(self) -> None:
+        names = (
+            "POSTAL_ACCESS_KEY",
+            "POSTAL_API_KEY",
+            "POSTAL_CREDENTIAL",
+            "POSTAL_API_TOKEN",
+        )
+        for name in names:
+            with self.subTest(name=name):
+                shutil.copyfile(
+                    ROOT / "config/preproduction-safety.env.example",
+                    self.safety_path,
+                )
+                with self.safety_path.open("a", encoding="utf-8") as safety_file:
+                    safety_file.write(f"\n{name}=placeholder\n")
+                self.assert_rejected(f"forbidden_safety_secret_name:{name}")
+
+    def test_enabled_delivery_alias_fails_closed(self) -> None:
         with self.safety_path.open("a", encoding="utf-8") as safety_file:
-            safety_file.write("\nPOSTAL_API_TOKEN=placeholder\n")
-        self.assert_rejected("forbidden_safety_secret_name:POSTAL_API_TOKEN")
+            safety_file.write("\nCUSTOM_EMAIL_DELIVERY_GATE=true\n")
+        self.assert_rejected("enabled_delivery_alias:CUSTOM_EMAIL_DELIVERY_GATE")
+
+    def test_live_email_alias_must_be_explicitly_disabled(self) -> None:
+        safety = self.safety_path.read_text(encoding="utf-8")
+        self.safety_path.write_text(
+            safety.replace("ALLOW_LIVE_EMAIL=false", "ALLOW_LIVE_EMAIL=true"),
+            encoding="utf-8",
+        )
+        self.assert_rejected("enabled_delivery_alias:ALLOW_LIVE_EMAIL")
+
+    def test_control_character_in_safety_value_fails_closed(self) -> None:
+        with self.safety_path.open("a", encoding="utf-8") as safety_file:
+            safety_file.write("\nAPP_NOTE=value\x00junk\n")
+        self.assert_rejected("invalid_safety_control_character:APP_NOTE")
 
     def test_enabled_safety_flag_fails_closed(self) -> None:
         safety = self.safety_path.read_text(encoding="utf-8")
@@ -133,7 +163,7 @@ class PostalDomainRegistryTests(unittest.TestCase):
             safety.replace("LIVE_EMAIL_DELIVERY=false", "LIVE_EMAIL_DELIVERY=true"),
             encoding="utf-8",
         )
-        self.assert_rejected("safety_flag_must_be_false:LIVE_EMAIL_DELIVERY")
+        self.assert_rejected("enabled_delivery_alias:LIVE_EMAIL_DELIVERY")
 
 
 if __name__ == "__main__":

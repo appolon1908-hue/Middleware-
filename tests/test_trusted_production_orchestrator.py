@@ -10,10 +10,21 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / ".codestra/run-trusted-production-orchestrator.py"
+GOVERNANCE_VALIDATOR = ROOT / "scripts/validate_repository_governance.py"
 
 
 def load_launcher() -> ModuleType:
     spec = importlib.util.spec_from_file_location("trusted_orchestrator", LAUNCHER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_governance_validator() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "repository_governance", GOVERNANCE_VALIDATOR
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -68,3 +79,29 @@ def test_candidate_cannot_replace_trust_workflow(tmp_path: Path) -> None:
 
     with pytest.raises(launcher.TrustError, match="protected-base trust file changed"):
         launcher.validate_candidate(candidate)
+
+
+def test_repository_governance_accepts_only_exact_trusted_target_workflow(
+    tmp_path: Path,
+) -> None:
+    governance = load_governance_validator()
+    workflow = tmp_path / "production-orchestrator-contract.yml"
+    shutil.copyfile(ROOT / ".github/workflows" / workflow.name, workflow)
+    governance.WORKFLOW_DIR = tmp_path
+    governance.validate_source_policy()
+
+    workflow.write_bytes(workflow.read_bytes() + b"\n# candidate target bypass\n")
+    with pytest.raises(governance.GovernanceError, match="pull_request_target is forbidden"):
+        governance.validate_source_policy()
+
+
+def test_repository_governance_rejects_other_target_workflow(tmp_path: Path) -> None:
+    governance = load_governance_validator()
+    (tmp_path / "untrusted.yml").write_text(
+        "on:\n  pull_request_target:\npermissions: read-all\n",
+        encoding="utf-8",
+    )
+    governance.WORKFLOW_DIR = tmp_path
+
+    with pytest.raises(governance.GovernanceError, match="pull_request_target is forbidden"):
+        governance.validate_source_policy()

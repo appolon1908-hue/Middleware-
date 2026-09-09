@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,10 @@ RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
 REQUIRED_CHECK_APP_ID = 15368
 INDEPENDENT_REVIEWER_ID = 77101516
+TRUSTED_PULL_REQUEST_TARGET_WORKFLOW = (
+    "production-orchestrator-contract.yml",
+    "b7d5ff7a98dd640be74bb5700b8f5353c29de34359c02fe60e892179ebf924b9",
+)
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -241,10 +246,14 @@ def validate_source_policy() -> dict[str, Any]:
 
     for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml")):
         text = workflow.read_text(encoding="utf-8")
-        require(
-            "pull_request_target:" not in text,
-            f"{workflow.name}: pull_request_target is forbidden",
-        )
+        if "pull_request_target:" in text:
+            trusted_name, trusted_digest = TRUSTED_PULL_REQUEST_TARGET_WORKFLOW
+            require(
+                workflow.name == trusted_name
+                and hashlib.sha256(workflow.read_bytes()).hexdigest()
+                == trusted_digest,
+                f"{workflow.name}: pull_request_target is forbidden",
+            )
         require("write-all" not in text, f"{workflow.name}: write-all permission is forbidden")
         for action, ref in USES.findall(text):
             if action.startswith("./"):

@@ -1,4 +1,5 @@
 """Real migration tests on independently created, localhost-only disposable DBs."""
+
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +30,9 @@ def test_real_fresh_and_predecessor_migrations(predecessor, monkeypatch):
         assert parsed.scheme in {"postgres", "postgresql"}
         assert parsed.hostname in {"localhost", "127.0.0.1"}
         assert not parsed.query and not parsed.fragment
-        assert re.fullmatch(r"middleware_test_[A-Za-z0-9_]+", unquote(parsed.path.lstrip("/")))
+        assert re.fullmatch(
+            r"middleware_test_[A-Za-z0-9_]+", unquote(parsed.path.lstrip("/"))
+        )
         name = "middleware_test_migration_" + uuid4().hex
         url = urlunsplit((parsed.scheme, parsed.netloc, "/" + name, "", ""))
         admin = await asyncpg.connect(base)
@@ -47,16 +50,43 @@ def test_real_fresh_and_predecessor_migrations(predecessor, monkeypatch):
             await runner.main(verify_only=True)
             conn = await asyncpg.connect(url)
             try:
-                assert await conn.fetchval("SELECT version_num FROM public.alembic_version") == head
-                assert await conn.fetchval("SELECT count(*) FROM public.middleware_schema_migrations") == 10
-                assert await conn.fetchval("SELECT count(*) FROM public.middleware_automation_schema_migrations") == 1
-                assert await conn.fetchval("SELECT count(*) FROM public.platform_services") == 0
-                assert await conn.fetchval("SELECT count(*) FROM public.middleware_automation_jobs") == 0
+                assert (
+                    await conn.fetchval(
+                        "SELECT version_num FROM public.alembic_version"
+                    )
+                    == head
+                )
+                assert (
+                    await conn.fetchval(
+                        "SELECT count(*) FROM public.middleware_schema_migrations"
+                    )
+                    == 11
+                )
+                assert (
+                    await conn.fetchval(
+                        "SELECT count(*) FROM public.middleware_automation_schema_migrations"
+                    )
+                    == 1
+                )
+                assert (
+                    await conn.fetchval("SELECT count(*) FROM public.platform_services")
+                    == 0
+                )
+                assert (
+                    await conn.fetchval(
+                        "SELECT count(*) FROM public.middleware_automation_jobs"
+                    )
+                    == 0
+                )
                 # A second runner cannot race the migration session.
-                await conn.fetchval("SELECT pg_advisory_lock($1)", runner.MIGRATION_LOCK)
+                await conn.fetchval(
+                    "SELECT pg_advisory_lock($1)", runner.MIGRATION_LOCK
+                )
                 with pytest.raises(runner.MigrationError, match="in progress"):
                     await runner.main()
-                await conn.fetchval("SELECT pg_advisory_unlock($1)", runner.MIGRATION_LOCK)
+                await conn.fetchval(
+                    "SELECT pg_advisory_unlock($1)", runner.MIGRATION_LOCK
+                )
                 # The correct version label is insufficient when an actual table is absent.
                 await conn.execute("DROP TABLE public.platform_provisioning_audit")
                 with pytest.raises(runner.MigrationError, match="catalog table"):
@@ -88,7 +118,9 @@ SQL_CORRUPTIONS = {
 
 
 @pytest.mark.parametrize("corruption", sorted(SQL_CORRUPTIONS))
-def test_actual_sql_structure_cannot_be_certified_from_intact_receipts(corruption, monkeypatch, capsys):
+def test_actual_sql_structure_cannot_be_certified_from_intact_receipts(
+    corruption, monkeypatch, capsys
+):
     import asyncpg
     from scripts.runtime_sql_schema import SchemaDriftError
 
@@ -99,7 +131,9 @@ def test_actual_sql_structure_cannot_be_certified_from_intact_receipts(corruptio
         assert parsed.scheme in {"postgres", "postgresql"}
         assert parsed.hostname in {"localhost", "127.0.0.1"}
         assert not parsed.query and not parsed.fragment
-        assert re.fullmatch(r"middleware_test_[A-Za-z0-9_]+", unquote(parsed.path.lstrip("/")))
+        assert re.fullmatch(
+            r"middleware_test_[A-Za-z0-9_]+", unquote(parsed.path.lstrip("/"))
+        )
         name = "middleware_test_schema_" + uuid4().hex
         url = urlunsplit((parsed.scheme, parsed.netloc, "/" + name, "", ""))
         admin = await asyncpg.connect(base)
@@ -116,11 +150,28 @@ def test_actual_sql_structure_cannot_be_certified_from_intact_receipts(corruptio
                 # Sequence *values* are data, not structural drift.
                 await conn.fetchval("SELECT nextval('public.middleware_outbox_id_seq')")
                 await runner.main(verify_only=True)
-                receipts_before = await conn.fetch("SELECT * FROM public.middleware_automation_schema_migrations")
+                receipts_before = await conn.fetch(
+                    "SELECT * FROM public.middleware_automation_schema_migrations"
+                )
                 await conn.execute(SQL_CORRUPTIONS[corruption])
-                assert await conn.fetchval("SELECT version_num FROM public.alembic_version") == head
-                assert await conn.fetchval("SELECT count(*) FROM public.middleware_schema_migrations") == 10
-                assert await conn.fetch("SELECT * FROM public.middleware_automation_schema_migrations") == receipts_before
+                assert (
+                    await conn.fetchval(
+                        "SELECT version_num FROM public.alembic_version"
+                    )
+                    == head
+                )
+                assert (
+                    await conn.fetchval(
+                        "SELECT count(*) FROM public.middleware_schema_migrations"
+                    )
+                    == 11
+                )
+                assert (
+                    await conn.fetch(
+                        "SELECT * FROM public.middleware_automation_schema_migrations"
+                    )
+                    == receipts_before
+                )
                 capsys.readouterr()
                 with pytest.raises(SchemaDriftError):
                     await runner.main(verify_only=True)
@@ -131,10 +182,13 @@ def test_actual_sql_structure_cannot_be_certified_from_intact_receipts(corruptio
                     with pytest.raises(SchemaDriftError, match="structure mismatch"):
                         await runner.main()
                     assert "=PASS" not in capsys.readouterr().out
-                    assert await conn.fetchval(
-                        "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' "
-                        "AND table_name='middleware_automation_jobs' AND column_name='safe_terminal_result'"
-                    ) == 0
+                    assert (
+                        await conn.fetchval(
+                            "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' "
+                            "AND table_name='middleware_automation_jobs' AND column_name='safe_terminal_result'"
+                        )
+                        == 0
+                    )
             finally:
                 await conn.close()
         finally:

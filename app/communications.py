@@ -765,28 +765,28 @@ class CommunicationsService:
         authorization: str,
         token_verifier: Any,
     ) -> tuple[CommunicationMessage, bool]:
-        message = self.get_message(tenant_id, message_id)
-        replay_key = (tenant_id, message_id, idempotency_key)
-        if replay_key in self.store.cancellations:
-            return message.model_copy(), True
-        if message.status not in {"accepted", "queued"}:
-            raise CommunicationsConflict("message cannot be cancelled in its current state")
-        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
-        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
         caller = caller_for_authorization(authorization)
         claims = await token_verifier.verify(
             authorization,
             expected_client_id=caller.client_id,
             required_scope=caller.command_scope,
         )
+        authorize_tenant(claims, tenant_id)
+        if claims.get("sub") != actor:
+            raise AuthorizationError("requested actor must equal token subject")
+        message = self.get_message(tenant_id, message_id)
+        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
+        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
         authorize_command(
             caller,
             command_type=cancel_command_type,
             target=target,
         )
-        authorize_tenant(claims, tenant_id)
-        if claims.get("sub") != actor:
-            raise AuthorizationError("requested actor must equal token subject")
+        replay_key = (tenant_id, message_id, idempotency_key)
+        if replay_key in self.store.cancellations:
+            return message.model_copy(), True
+        if message.status not in {"accepted", "queued"}:
+            raise CommunicationsConflict("message cannot be cancelled in its current state")
         if message.operationId is None:
             raise CommunicationsConflict("message does not own a cancellable command")
         operation = await self.commands.get(tenant_id, message.operationId)

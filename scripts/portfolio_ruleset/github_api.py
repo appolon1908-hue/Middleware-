@@ -18,6 +18,24 @@ class Response:
     headers: Mapping[str, str]
 
 
+class FailClosedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never forward a repository-administration token through a redirect."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        return None
+
+
+NO_REDIRECT_OPENER = urllib.request.build_opener(FailClosedRedirectHandler())
+
+
 class GitHubApi:
     def __init__(self, token: str) -> None:
         require(bool(token), f"{TOKEN_ENV} is required")
@@ -51,7 +69,7 @@ class GitHubApi:
                 },
             )
             try:
-                with urllib.request.urlopen(request, timeout=45) as response:
+                with NO_REDIRECT_OPENER.open(request, timeout=45) as response:
                     raw = response.read()
                     value = json.loads(raw.decode()) if raw else None
                     result = Response(

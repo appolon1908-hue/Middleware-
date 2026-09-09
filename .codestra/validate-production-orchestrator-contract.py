@@ -23,6 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / ".codestra/production-orchestrator-contract.v1.json"
 INTENT_PATH = ROOT / ".github/workflows/manual-release-intent.yml"
 RELEASE_VALIDATOR_PATH = ROOT / ".codestra/validate-release-intent.py"
+MANUAL_RELEASE_INTENT_SHA256 = (
+    "b81b23af054c3e85b4c250ce69a54b1b"
+    "788733a777bbbe460ed2d9f9f8ed0cad"
+)
 SCHEMA = "codestra.production-orchestrator-contract.v1"
 PHASES = ["plan", "staging", "canary", "production"]
 SAFETY_KEYS = {
@@ -65,6 +69,18 @@ GENERIC_NETWORK_CLIENTS = {
     "socat",
     "telnet",
     "wget",
+}
+RELEASE_INTENT_ALLOWED_COMMANDS = {
+    "base64",
+    "cut",
+    "gh",
+    "jq",
+    "printf",
+    "python3",
+    "set",
+    "sha256sum",
+    "test",
+    "umask",
 }
 KUBECTL_MUTATIONS = {
     "annotate",
@@ -2341,7 +2357,18 @@ def contains_runtime_command(script: str) -> bool:
         bindings = shell_command_bindings(tokens, index)
         command_token = resolved_command_token(tokens[index], bindings)
         name = executable_name(command_token)
+        raw_arguments = raw_command_arguments(tokens, index)
         arguments = command_arguments(tokens, index)
+        if name not in RELEASE_INTENT_ALLOWED_COMMANDS:
+            # Release intent is an exact, plan-only evidence workflow. Unknown
+            # executables are runtime-capable until explicitly reviewed here.
+            return True
+        if name == "gh" and (not raw_arguments or raw_arguments[0] != "api"):
+            return True
+        if name == "python3" and interpreter_script_target(tokens, index) != (
+            ".codestra/validate-release-intent.py"
+        ):
+            return True
         if command_token_has_dynamic_executable(command_token):
             return True
         if absolute_executable_is_unproved(command_token):
@@ -3568,6 +3595,10 @@ def validate(contract: dict[str, Any]) -> None:
     require(INTENT_PATH.is_file() and not INTENT_PATH.is_symlink(), "manual release-intent workflow is missing or unsafe")
     require(RELEASE_VALIDATOR_PATH.is_file() and not RELEASE_VALIDATOR_PATH.is_symlink(), "release-intent validator is missing or unsafe")
     intent = INTENT_PATH.read_text(encoding="utf-8")
+    require(
+        hashlib.sha256(intent.encode()).hexdigest() == MANUAL_RELEASE_INTENT_SHA256,
+        "manual release-intent workflow exact-source hash drift",
+    )
     release_validator = RELEASE_VALIDATOR_PATH.read_text(encoding="utf-8")
     validate_release_validator_operations(release_validator)
     for marker in (
@@ -4188,6 +4219,28 @@ jobs:
         ),
         "approved runner-temporary redirect was treated as runtime contact",
     )
+    for unapproved_command in (
+        "openssl s_client -connect runtime.example:443 </dev/null",
+        (
+            "export GITHUB_OUTPUT=/dev/tcp/runtime.example/443; "
+            'printf x > "$GITHUB_OUTPUT"'
+        ),
+    ):
+        unapproved_shell_contact = f"""name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: {unapproved_command}
+"""
+        require(
+            workflow_has_runtime_command(
+                unapproved_shell_contact,
+                "synthetic-release-intent-unapproved-shell-contact.yml",
+            ),
+            f"unapproved executable or redirect escaped contact classification: {unapproved_command}",
+        )
     reusable_mutation = """name: synthetic
 jobs:
   deploy:

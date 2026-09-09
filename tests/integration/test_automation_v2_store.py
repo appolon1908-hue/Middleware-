@@ -221,6 +221,21 @@ async def test_replay_rejects_approval_for_another_job(automation_pool: asyncpg.
         assert await conn.fetchval('SELECT count(*) FROM middleware_automation_dispatch_outbox') == count
         assert await conn.fetchval('SELECT count(*) FROM middleware_automation_replay_requests') == 0
         assert await conn.fetchval('SELECT state FROM middleware_automation_dead_letters WHERE dead_letter_id=$1', dead_id) == 'OPEN'
-        await conn.execute('UPDATE middleware_automation_approvals SET job_id=$1 WHERE approval_id=$2', job_id, approval.approval_id)
+        await conn.execute(
+            "UPDATE middleware_automation_approvals SET job_id=$1,approval_type='EXECUTE' WHERE approval_id=$2",
+            job_id,
+            approval.approval_id,
+        )
+    with pytest.raises(AutomationAuthorizationDenied):
+        await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    async with automation_pool.acquire() as conn:
+        assert await conn.fetchrow('SELECT * FROM middleware_automation_jobs WHERE job_id=$1', job_id) == before
+        assert await conn.fetchval('SELECT count(*) FROM middleware_automation_dispatch_outbox') == count
+        assert await conn.fetchval('SELECT count(*) FROM middleware_automation_replay_requests') == 0
+        assert await conn.fetchval('SELECT state FROM middleware_automation_dead_letters WHERE dead_letter_id=$1', dead_id) == 'OPEN'
+        await conn.execute(
+            "UPDATE middleware_automation_approvals SET approval_type='REPLAY' WHERE approval_id=$1",
+            approval.approval_id,
+        )
     result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
     assert result.state == 'RETRY_SCHEDULED'

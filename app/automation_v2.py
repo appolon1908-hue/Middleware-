@@ -1032,6 +1032,7 @@ class MemoryAutomationStore:
             approval = approval_entry[1]
             if (
                 approval.job_id != dead.job_id
+                or approval.approval_type != "REPLAY"
                 or approval.state != "APPROVED"
                 or not approval.decided_by
                 or approval.decided_by == approval.requested_by
@@ -2035,6 +2036,7 @@ class PostgresAutomationStore:
                     raise AutomationNotFound("approval was not found")
                 if (
                     approval["job_id"] != dead["job_id"]
+                    or approval["approval_type"] != "REPLAY"
                     or approval["state"] != "APPROVED"
                     or not approval["decided_by"]
                     or approval["decided_by"] == approval["requested_by"]

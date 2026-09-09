@@ -544,6 +544,14 @@ async def test_replay_approval_is_bound_to_its_job() -> None:
     assert store.dispatches[(event.tenant_id, job_id)] == dispatch
     assert store.dead_letters[(event.tenant_id, dead_id)] == dead
     store.approvals[(event.tenant_id, approval_id)] = (
+        'digest', approval.model_copy(update={'job_id': job_id, 'approval_type': 'EXECUTE'}),
+    )
+    with pytest.raises(AutomationAuthorizationDenied):
+        await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert await store.get_job(event.tenant_id, job_id) == before
+    assert store.dispatches[(event.tenant_id, job_id)] == dispatch
+    assert store.dead_letters[(event.tenant_id, dead_id)] == dead
+    store.approvals[(event.tenant_id, approval_id)] = (
         'digest', approval.model_copy(update={'job_id': job_id}),
     )
     result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')

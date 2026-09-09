@@ -22,7 +22,7 @@
     },
     {
       "id": "klyrow-alert-email",
-      "cell": "observability",
+      "cell": "core-communications",
       "repository": "appolon1908-hue/klyrow.com",
       "command_prefixes": ["observability.alert."],
       "direct_n8n": false
@@ -52,7 +52,7 @@
       "id": "odoo-19",
       "cell": "core-communications",
       "repository": "appolon1908-hue/Odoo",
-      "command_prefixes": ["crm.", "odoo."],
+      "command_prefixes": ["crm."],
       "direct_n8n": false
     },
     {
@@ -80,7 +80,7 @@
       "id": "vicidial-restricted",
       "cell": "telephony-private",
       "repository": "appolon1908-hue/Vicidialer-Codestra",
-      "command_prefixes": ["telephony."],
+      "command_prefixes": ["telephony.", "telephony-internal."],
       "direct_n8n": false
     }
   ]

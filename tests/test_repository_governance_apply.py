@@ -270,6 +270,14 @@ def test_source_policy_requires_independent_environment_approval() -> None:
         validate_environment_release_policy(encoded)
 
 
+def test_source_policy_rejects_boolean_wait_timer() -> None:
+    encoded = independent_environment_policy()
+    encoded["environments"]["production"]["wait_timer"] = False
+
+    with pytest.raises(GovernanceError, match="wait timer drift"):
+        validate_environment_release_policy(encoded)
+
+
 def test_source_policy_rejects_admin_bypass_and_custom_production_refs() -> None:
     encoded = independent_environment_policy()
     encoded["environments"]["production"]["can_admins_bypass"] = True

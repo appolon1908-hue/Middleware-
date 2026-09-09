@@ -36,7 +36,9 @@ env:
 
 jobs:
   publish-sign:
-    if: github.repository == 'appolon1908-hue/Middleware-' && github.ref == 'refs/heads/main'
+    # RUNTIME_MUTATION_DISABLED=true
+    # Repository-only release preparation does not authorize registry publication or signing.
+    if: ${{ false }}
     runs-on:
       group: qwen-artifact-publishers
       labels: codestra-qwen-artifact-publisher

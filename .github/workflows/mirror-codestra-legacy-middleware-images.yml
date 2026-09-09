@@ -84,6 +84,9 @@ jobs:
 
   mirror:
     name: Mirror ${{ matrix.family }} without rebuilding
+    # RUNTIME_MUTATION_DISABLED=true
+    # Repository-only preparation does not authorize writes to either registry.
+    if: ${{ false }}
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 20

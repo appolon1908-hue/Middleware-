@@ -12,6 +12,7 @@
   "required_checks": [
     "orchestrator-contract",
     "validate",
+    "connector-runtime-build",
     "docker-test-build",
     "docker-runtime-build",
     "container-security",

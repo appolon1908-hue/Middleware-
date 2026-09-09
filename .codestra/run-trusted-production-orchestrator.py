@@ -28,19 +28,35 @@ ORCHESTRATOR_PATH = Path(".codestra/validate-production-orchestrator-contract.py
 RELEASE_VALIDATOR_PATH = Path(".codestra/validate-release-intent.py")
 SHA = re.compile(r"[0-9a-f]{40}")
 
-# The key is the exact orchestrator validator. The current generation binds
-# its release validator byte-for-byte. The successor binds its normalized
-# security fingerprint, permitting reviewed source-closure/hash value updates
-# without permitting release-policy logic to change in the same pull request.
-APPROVED_VALIDATOR_POLICIES = {
-    "4be8302e9c383b1da8a9afc7e25c371910ae963ed9a40d5bcf9a4091ab818d76": (
-        "raw",
-        "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497",
-    ),
-    "ae57aceba59cdf9ae2419b7403f7ebc9d46582848c69ca18c02b4e70191621a5": (
-        "security-fingerprint",
-        "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec",
-    ),
+# The outer key is the exact validator already on protected main; the inner
+# key is a candidate generation it may accept. This one-way transition graph
+# prevents an older validator from being replayed after its successor merges.
+CURRENT_VALIDATOR_SHA256 = (
+    "4be8302e9c383b1da8a9afc7e25c371910ae963ed9a40d5bcf9a4091ab818d76"
+)
+SUCCESSOR_VALIDATOR_SHA256 = (
+    "ae57aceba59cdf9ae2419b7403f7ebc9d46582848c69ca18c02b4e70191621a5"
+)
+CURRENT_RELEASE_VALIDATOR_SHA256 = (
+    "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497"
+)
+SUCCESSOR_RELEASE_SECURITY_FINGERPRINT = (
+    "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec"
+)
+APPROVED_VALIDATOR_TRANSITIONS = {
+    CURRENT_VALIDATOR_SHA256: {
+        CURRENT_VALIDATOR_SHA256: ("raw", CURRENT_RELEASE_VALIDATOR_SHA256),
+        SUCCESSOR_VALIDATOR_SHA256: (
+            "security-fingerprint",
+            SUCCESSOR_RELEASE_SECURITY_FINGERPRINT,
+        ),
+    },
+    SUCCESSOR_VALIDATOR_SHA256: {
+        SUCCESSOR_VALIDATOR_SHA256: (
+            "security-fingerprint",
+            SUCCESSOR_RELEASE_SECURITY_FINGERPRINT,
+        ),
+    },
 }
 APPROVED_TRUST_WORKFLOW_SHA256 = frozenset(
     {
@@ -121,9 +137,18 @@ def validate_candidate(root: Path) -> Path:
 
     orchestrator = safe_file(root, ORCHESTRATOR_PATH)
     release_validator = safe_file(root, RELEASE_VALIDATOR_PATH)
+    protected_orchestrator_digest = digest(TRUST_ROOT, ORCHESTRATOR_PATH)
     orchestrator_digest = digest(root, ORCHESTRATOR_PATH)
     release_validator_digest = digest(root, RELEASE_VALIDATOR_PATH)
-    policy = APPROVED_VALIDATOR_POLICIES.get(orchestrator_digest)
+    allowed_transitions = APPROVED_VALIDATOR_TRANSITIONS.get(
+        protected_orchestrator_digest
+    )
+    require(
+        allowed_transitions is not None,
+        "protected-base orchestrator validator is not an approved generation",
+    )
+    assert allowed_transitions is not None
+    policy = allowed_transitions.get(orchestrator_digest)
     require(
         policy is not None,
         "candidate orchestrator validator is not approved by protected main",

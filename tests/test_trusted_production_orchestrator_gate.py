@@ -76,6 +76,17 @@ def test_launcher_does_not_allow_replay_of_candidate_controlled_bootstrap() -> N
     }
 
 
+def test_validator_transition_is_one_way_after_successor_merges() -> None:
+    launcher = load_launcher()
+    current = launcher.CURRENT_VALIDATOR_SHA256
+    successor = launcher.SUCCESSOR_VALIDATOR_SHA256
+    transitions = launcher.APPROVED_VALIDATOR_TRANSITIONS
+
+    assert set(transitions[current]) == {current, successor}
+    assert set(transitions[successor]) == {successor}
+    assert current not in transitions[successor]
+
+
 def test_trust_file_comparison_rejects_candidate_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

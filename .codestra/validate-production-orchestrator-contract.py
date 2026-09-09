@@ -375,12 +375,12 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
 APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     "appolon1908-hue/Middleware-": {
         ".github/workflows/integration-main-release-authorities.yml": (
-            "012052d939d31b124b45e0ea0719b7c9"
-            "de3949146764fc7ce03ce32dfd76f872"
+            "43323ab7203be3317f700e099a01ca03f"
+            "b9828292754fc67bd681d1d410a53f3"
         ),
         ".github/workflows/production-reviewer-access.yml": (
-            "90c3554f2bd2bb9b679c42e2bd29d883"
-            "5ec7474798eec01c89a697b0263414bb"
+            "9a1d239d64f3d198365097ea6812ac90"
+            "b09cc11dcfb9916a68dce810b7202103"
         ),
         ".github/workflows/python-quality-baseline.yml": (
             "cb89cb69636dc79a6a03e5df98abeb798"
@@ -410,8 +410,8 @@ APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
                 "2ad2933ae37852052e1e5b680ce3b75a"
             ),
             "scripts/apply_integration_main_release_authorities_v2.py": (
-                "b5f74be0edf783bd258c6321caaf63759"
-                "e8beee0b0f305d34f25c932830366c2"
+                "ee67af637f8e96e531e507d71e8ff3a6"
+                "36d4d120fef134eee33a5ab3675e0edd"
             ),
         },
         ".github/workflows/production-reviewer-access.yml": {
@@ -449,7 +449,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_integration_main_release_authorities_v2.py": (
-            "b5f74be0edf783bd258c6321caaf63759e8beee0b0f305d34f25c932830366c2",
+            "ee67af637f8e96e531e507d71e8ff3a636d4d120fef134eee33a5ab3675e0edd",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_production_reviewer_access.py": (
@@ -1873,8 +1873,23 @@ def script_dependencies_have_runtime_mutation(
     working_directory: Path,
     trusted_repository_scripts: frozenset[str] = frozenset(),
 ) -> bool:
-    def is_trusted(target: str) -> bool:
-        return target.removeprefix("./") in trusted_repository_scripts
+    def manifest_trust(target: str, index: int) -> bool | None:
+        """Trust pinned Python only when its import path is isolated."""
+
+        normalized = target.removeprefix("./")
+        if normalized not in trusted_repository_scripts:
+            return None
+        if Path(normalized).suffix.lower() != ".py":
+            return False
+        if executable_name(tokens[index]) not in {"python", "python3"}:
+            return False
+        for option_index in range(index + 1, len(tokens)):
+            option = tokens[option_index]
+            if option in {"|", "||", "&&", ";", "&", "{", "}"}:
+                break
+            if option.removeprefix("./") == normalized:
+                return "-I" in tokens[index + 1 : option_index]
+        return False
 
     tokens = shell_tokens(script)
     for index in command_indexes(tokens):
@@ -1889,15 +1904,22 @@ def script_dependencies_have_runtime_mutation(
                 ):
                     invocation_arguments = raw_tail[target_index + 1 :]
                     break
-            if not is_trusted(interpreter_target) and not approved_read_only_script_invocation(
-                interpreter_target,
-                invocation_arguments,
-                working_directory,
-            ) and repository_script_has_runtime_mutation(
-                interpreter_target,
-                set(),
-                script_aliases,
-                working_directory,
+            trust = manifest_trust(interpreter_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    interpreter_target,
+                    invocation_arguments,
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    interpreter_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
             ):
                 return True
 
@@ -1906,44 +1928,50 @@ def script_dependencies_have_runtime_mutation(
             index,
             working_directory,
         )
-        if (
-            module_target is not None
-            and not is_trusted(module_target)
-            and not approved_read_only_script_invocation(
-                module_target,
-                interpreter_module_arguments(tokens, index),
-                working_directory,
-            )
-            and repository_script_has_runtime_mutation(
-                module_target,
-                set(),
-                script_aliases,
-                working_directory,
-            )
-        ):
-            return True
+        if module_target is not None:
+            trust = manifest_trust(module_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    module_target,
+                    interpreter_module_arguments(tokens, index),
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    module_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
+            ):
+                return True
 
         direct_target = direct_repository_script_target(
             tokens,
             index,
             working_directory,
         )
-        if (
-            direct_target is not None
-            and not is_trusted(direct_target)
-            and not approved_read_only_script_invocation(
-                direct_target,
-                raw_tail,
-                working_directory,
-            )
-            and repository_script_has_runtime_mutation(
-                direct_target,
-                set(),
-                script_aliases,
-                working_directory,
-            )
-        ):
-            return True
+        if direct_target is not None:
+            trust = manifest_trust(direct_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    direct_target,
+                    raw_tail,
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    direct_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
+            ):
+                return True
     return False
 
 
@@ -3579,6 +3607,30 @@ def validate_intent_negative_regressions() -> None:
         require(
             trusted is not None and bool(trusted),
             f"control-plane dependency manifest is missing: {workflow_path}",
+        )
+        assert trusted is not None
+        entry_script = (
+            "scripts/apply_integration_main_release_authorities_v2.py"
+            if workflow_path.endswith("integration-main-release-authorities.yml")
+            else "scripts/apply_production_reviewer_access.py"
+        )
+        require(
+            not script_dependencies_have_runtime_mutation(
+                f"python3 -I {entry_script} --mode validate",
+                {},
+                ROOT,
+                trusted,
+            ),
+            f"isolated trusted control-plane script was rejected: {entry_script}",
+        )
+        require(
+            script_dependencies_have_runtime_mutation(
+                f"python3 {entry_script} --mode validate",
+                {},
+                ROOT,
+                trusted,
+            ),
+            f"non-isolated trusted control-plane script escaped: {entry_script}",
         )
         dependency_manifest = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256[repository][
             workflow_path

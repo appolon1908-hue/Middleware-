@@ -139,6 +139,10 @@ class ProductionReviewerAccessTests(unittest.TestCase):
         self.assertNotIn("github.event_name == 'push'", apply_condition)
         self.assertNotIn("if: ${{ false }}", apply_condition)
         self.assertIn("issues: write", apply)
+        self.assertIn(
+            "python3 -I scripts/apply_production_reviewer_access.py",
+            text,
+        )
 
 
 if __name__ == "__main__":

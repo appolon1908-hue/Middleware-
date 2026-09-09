@@ -26,7 +26,7 @@ RUN apk add --no-cache \
       openssl-dev=3.5.8-r0 \
       readline-dev=8.3.3-r1 \
       tar=1.35-r5 \
-      xz-dev=5.8.3-r0 \
+      xz-dev=5.8.4-r0 \
       zlib-dev=1.3.2-r0
 RUN curl --fail --location --proto '=https' --tlsv1.2 \
       --output /tmp/sqlite.apk \

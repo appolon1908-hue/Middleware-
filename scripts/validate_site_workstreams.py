@@ -175,7 +175,7 @@ def main() -> int:
         errors.append("runtime status overrides reference unknown base branches")
 
     combined = base_branches | set(new_branches)
-    effective_status = dict(base_status)
+    effective_status: dict[Any, Any] = dict(base_status)
     effective_status.update(EXPECTED_OVERRIDES)
     effective_status.update(new_status)
 

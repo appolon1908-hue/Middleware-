@@ -122,6 +122,23 @@ def _domain_for_path(path: str) -> str:
     )
 
 
+def _normalize_schema_defaults(value: Any) -> None:
+    """Remove explicit JSON Schema defaults that vary across Pydantic releases."""
+    if isinstance(value, dict):
+        # `additionalProperties` defaults to true. Pydantic 2.13 emits the
+        # explicit form for open dictionaries while 2.10 omits it, even though
+        # both schemas have identical semantics. Normalizing the default keeps
+        # the committed API contract reproducible across the two checksum-
+        # locked Python environments used by this repository.
+        if value.get("additionalProperties") is True:
+            del value["additionalProperties"]
+        for child in value.values():
+            _normalize_schema_defaults(child)
+    elif isinstance(value, list):
+        for child in value:
+            _normalize_schema_defaults(child)
+
+
 def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
     """Build the enriched OpenAPI document and completion matrix in memory."""
     # These imports follow the explicit repository-root path setup above so this
@@ -137,6 +154,7 @@ def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
         }
     )
     schema: dict[str, Any] = create_app(settings=settings).openapi()
+    _normalize_schema_defaults(schema)
     schema["info"]["description"] = DESCRIPTION
     components = schema.setdefault("components", {})
     security_schemes = components.setdefault("securitySchemes", {})

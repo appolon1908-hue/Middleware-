@@ -14,6 +14,7 @@ from scripts.generate_api_contracts import (
     MUTATION_METHODS,
     REQUIRED_HEADERS,
     _ensure_header,
+    _normalize_schema_defaults,
     build_documents,
     render_documents,
 )
@@ -101,6 +102,20 @@ def test_generator_rejects_weaker_existing_header_contract() -> None:
     weak_tenant["required"] = False
     with pytest.raises(ValueError, match="non-canonical X-Tenant-ID"):
         _ensure_header([weak_tenant], "X-Tenant-ID")
+
+
+def test_generator_normalizes_only_redundant_open_object_defaults() -> None:
+    schema = {
+        "open": {"type": "object", "additionalProperties": True},
+        "closed": {"type": "object", "additionalProperties": False},
+        "nested": [{"additionalProperties": {"type": "string"}}],
+    }
+    _normalize_schema_defaults(schema)
+    assert schema == {
+        "open": {"type": "object"},
+        "closed": {"type": "object", "additionalProperties": False},
+        "nested": [{"additionalProperties": {"type": "string"}}],
+    }
 
 
 def test_generated_contract_documents_mutation_headers() -> None:

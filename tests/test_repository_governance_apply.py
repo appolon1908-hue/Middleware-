@@ -74,7 +74,9 @@ def policy() -> dict:
     }
 
 
-def test_repository_patch_is_squash_only_and_secret_scanning_enabled(policy: dict) -> None:
+def test_repository_patch_is_squash_only_and_secret_scanning_enabled(
+    policy: dict,
+) -> None:
     patch = repository_patch(policy)
 
     assert patch["allow_squash_merge"] is True
@@ -98,8 +100,26 @@ def test_dependabot_security_update_verifier_accepts_no_content_success() -> Non
     api.request.assert_called_once_with(
         "GET",
         "/automated-security-fixes",
-        expected=(204,),
+        expected=(200, 204),
     )
+
+
+def test_dependabot_security_update_verifier_accepts_typed_enabled_readback() -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.return_value = ApiResponse(status=200, payload={"enabled": True})
+
+    verify_automated_security_fixes(api)
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"enabled": False}, {"enabled": "true"}])
+def test_dependabot_security_update_verifier_rejects_invalid_readback(
+    payload: object,
+) -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.return_value = ApiResponse(status=200, payload=payload)
+
+    with pytest.raises(GovernanceApplyError):
+        verify_automated_security_fixes(api)
 
 
 def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
@@ -121,18 +141,16 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     pull_request = rules["pull_request"]["parameters"]
     assert pull_request["allowed_merge_methods"] == ["squash"]
     assert pull_request["required_approving_review_count"] == 1
-    assert (
-        pull_request["require_extra_approval_for_unattributed_changes"] is False
-    )
+    assert pull_request["require_extra_approval_for_unattributed_changes"] is False
     assert pull_request["required_review_thread_resolution"] is True
     status = rules["required_status_checks"]["parameters"]
     assert status["strict_required_status_checks_policy"] is True
     assert [item["context"] for item in status["required_status_checks"]] == policy[
         "default_branch_ruleset"
     ]["required_status_checks"]
-    assert {
-        item["integration_id"] for item in status["required_status_checks"]
-    } == {15368}
+    assert {item["integration_id"] for item in status["required_status_checks"]} == {
+        15368
+    }
 
 
 def test_ruleset_rejects_duplicate_status_checks(policy: dict) -> None:

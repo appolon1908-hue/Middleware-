@@ -357,3 +357,147 @@ async def test_hangup_binding_mismatch_fails_before_network(change, tmp_path):
         await adapter.execute(request)
     assert called is False
     await client.aclose()
+
+
+def lifecycle_evidence(grant):
+    request = command(grant)
+    return {
+        "operation_id": request.command_id, "correlation_id": request.correlation_id,
+        "dispatch_state": "accepted", "asterisk_uniqueid": "codestra-unique-1",
+        "linkedid": "codestra-linked-1", "call_id": "gateway-call-1",
+        "call_state": "completed", "terminal": True,
+        "created_at": "2026-09-05T19:00:00Z", "answered_at": "2026-09-05T19:00:01Z",
+        "ended_at": "2026-09-05T19:00:03Z", "duration_seconds": 3,
+        "talk_duration_seconds": 2, "evidence": {"call_state": "completed"},
+        "tenant_id": request.tenant_id, "subject": principal().subject,
+        "employee_id": principal().employee_id, "username": "appolon",
+        "extension": "6901", "campaign": "TEST_SYN",
+        "authorization_reference": grant.authorization_reference,
+        "internal_only": True, "external_dialing": False, "recording": False,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["redirect", "invalid_length", "oversized", "missing_uniqueid"])
+async def test_unverifiable_originate_response_is_unknown_without_retry(tmp_path, failure):
+    grant, env = environment(tmp_path)
+    attempts = []
+
+    async def endpoint(request):
+        attempts.append(request)
+        response = {"operation_id": command(grant).command_id, "status": "accepted",
+                    "asterisk_uniqueid": "codestra-unique-1"}
+        headers = {}
+        if failure == "invalid_length":
+            headers["content-length"] = "not-a-number"
+        elif failure == "oversized":
+            headers["content-length"] = "65537"
+        elif failure == "missing_uniqueid":
+            response.pop("asterisk_uniqueid")
+        return httpx.Response(302 if failure == "redirect" else 200,
+                              json=response, headers=headers, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
+        with pytest.raises(VicidialInternalCallUnknown):
+            await adapter.execute(command(grant))
+    assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,value", [
+    ("operation_id", "other-operation"), ("correlation_id", "other-correlation"),
+    ("asterisk_uniqueid", "other-call"), ("tenant_id", "other-tenant"),
+    ("subject", "other-subject"), ("employee_id", "other-employee"),
+    ("authorization_reference", "CHG-OTHER-AUTHORIZATION"),
+    ("extension", "6101"), ("campaign", "OTHER"),
+    ("internal_only", False), ("external_dialing", True), ("hangup", "success"),
+])
+async def test_hangup_response_must_bind_original_call(tmp_path, field, value):
+    grant, env = environment(tmp_path)
+    attempts = []
+
+    async def endpoint(request):
+        attempts.append(request)
+        result = lifecycle_evidence(grant) | {"hangup": "requested", field: value}
+        return httpx.Response(200, json=result, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
+        with pytest.raises(VicidialInternalCallUnknown, match="acknowledgement"):
+            await adapter.execute(hangup_command(grant))
+    assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hangup,status", [
+    ("requested", "accepted"), ("already_terminal", "accepted"),
+    ("dispatch_unknown", "dispatch_unknown"),
+])
+async def test_bound_hangup_preserves_unknown_outcome(tmp_path, hangup, status):
+    grant, env = environment(tmp_path)
+
+    async def endpoint(request):
+        return httpx.Response(200, json=lifecycle_evidence(grant) | {"hangup": hangup}, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        result = await VicidialInternalCallAdapter(
+            SimpleNamespace(source_sha=SOURCE_SHA), env, client,
+        ).execute(hangup_command(grant))
+    assert result.status == status
+    assert result.provider_operation_id == "codestra-unique-1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,value", [
+    ("authorization_reference", "CHG-OTHER-AUTHORIZATION"),
+    ("asterisk_uniqueid", "other-call"),
+])
+async def test_readback_requires_original_authorization_and_call(tmp_path, field, value):
+    grant, env = environment(tmp_path)
+
+    async def endpoint(request):
+        return httpx.Response(200, json=lifecycle_evidence(grant) | {field: value}, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
+        with pytest.raises(VicidialInternalCallError, match="binding mismatch"):
+            await adapter.readback(hangup_command(grant))
+
+
+@pytest.mark.asyncio
+async def test_matching_terminal_readback_succeeds(tmp_path):
+    grant, env = environment(tmp_path)
+
+    async def endpoint(request):
+        return httpx.Response(200, json=lifecycle_evidence(grant), request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        result = await VicidialInternalCallAdapter(
+            SimpleNamespace(source_sha=SOURCE_SHA), env, client,
+        ).readback(hangup_command(grant))
+    assert result.status == "matched"
+    assert result.readback_evidence["authorization_reference"] == grant.authorization_reference
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['originate', 'hangup', 'denial'])
+@pytest.mark.parametrize('malformed', [[], {}])
+async def test_unhashable_response_fields_remain_classified(tmp_path, kind, malformed):
+    grant, env = environment(tmp_path)
+    attempts = []
+
+    async def endpoint(request):
+        attempts.append(request)
+        if kind == 'denial':
+            return httpx.Response(403, json={'detail': malformed}, request=request)
+        result = lifecycle_evidence(grant) | {'status': 'accepted', 'hangup': 'requested'}
+        result['hangup' if kind == 'hangup' else 'status'] = malformed
+        return httpx.Response(200, json=result, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(endpoint)) as client:
+        adapter = VicidialInternalCallAdapter(SimpleNamespace(source_sha=SOURCE_SHA), env, client)
+        expected = VicidialInternalCallError if kind == 'denial' else VicidialInternalCallUnknown
+        with pytest.raises(expected):
+            await adapter.execute(hangup_command(grant) if kind == 'hangup' else command(grant))
+    assert len(attempts) == 1

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "config" / "postal-domain-registry.json"
@@ -29,7 +30,7 @@ UNVERIFIED = {"booked4seasons.com"}
 EXPECTED = VERIFIED | UNVERIFIED
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"POSTAL_DOMAIN_REGISTRY_ERROR={message}")
 
 
@@ -72,7 +73,14 @@ def main() -> None:
     if not isinstance(domains, list):
         fail("domains must be a list")
 
-    names = [item.get("domain") for item in domains if isinstance(item, dict)]
+    names: list[str] = []
+    for index, item in enumerate(domains):
+        if not isinstance(item, dict):
+            fail(f"domains[{index}] must be an object")
+        name = item.get("domain")
+        if not isinstance(name, str) or not name:
+            fail(f"domains[{index}] must contain a non-empty domain")
+        names.append(name)
     if len(names) != len(set(names)):
         fail("duplicate domain")
     if set(names) != EXPECTED:

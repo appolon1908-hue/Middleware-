@@ -149,8 +149,104 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
     except SyntaxError as error:
         raise ContractError("application factory is not valid Python") from error
 
+    factories = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "create_app"
+    ]
+    require(len(factories) == 1, "application factory definition is not unique")
+
+    def attribute_path(node: ast.expr) -> list[str] | None:
+        parts: list[str] = []
+        current = node
+        while isinstance(current, ast.Attribute):
+            parts.append(current.attr)
+            current = current.value
+        if not isinstance(current, ast.Name):
+            return None
+        parts.append(current.id)
+        return list(reversed(parts))
+
+    def authentication_binding(node: ast.AsyncFunctionDef) -> tuple[str, str]:
+        request_arguments = [
+            argument.arg
+            for argument in (*node.args.posonlyargs, *node.args.args)
+            if argument.arg == "request"
+        ]
+        require(
+            request_arguments == ["request"],
+            "governed GET route request binding is missing or ambiguous",
+        )
+        statements = list(node.body)
+        if (
+            statements
+            and isinstance(statements[0], ast.Expr)
+            and isinstance(statements[0].value, ast.Constant)
+            and isinstance(statements[0].value.value, str)
+        ):
+            statements = statements[1:]
+        if not statements:
+            raise ContractError("governed GET route body is empty")
+        first = statements[0]
+        if not isinstance(first, ast.Expr) or not isinstance(first.value, ast.Await):
+            raise ContractError(
+                "governed GET route must authenticate before executing its body"
+            )
+        call = first.value.value
+        if not isinstance(call, ast.Call) or attribute_path(call.func) != [
+            "request",
+            "app",
+            "state",
+            "runtime",
+            "tokens",
+            "verify",
+        ]:
+            raise ContractError(
+                "governed GET route does not await the runtime token verifier"
+            )
+        if len(call.args) != 1 or not isinstance(call.args[0], ast.Call):
+            raise ContractError(
+                "governed GET route does not verify its Authorization header"
+            )
+        header_call = call.args[0]
+        if (
+            attribute_path(header_call.func) != ["request", "headers", "get"]
+            or len(header_call.args) != 2
+            or not all(isinstance(item, ast.Constant) for item in header_call.args)
+            or [
+                item.value
+                for item in header_call.args
+                if isinstance(item, ast.Constant)
+            ]
+            != ["Authorization", ""]
+        ):
+            raise ContractError(
+                "governed GET route does not verify its Authorization header"
+            )
+        require(
+            all(keyword.arg is not None for keyword in call.keywords),
+            "governed GET route authentication uses expanded keywords",
+        )
+        keywords = {item.arg: item.value for item in call.keywords if item.arg}
+        require(
+            set(keywords) == {"expected_client_id", "required_scope"},
+            "governed GET route authentication keywords are not exact",
+        )
+        client = keywords["expected_client_id"]
+        scope = keywords["required_scope"]
+        if (
+            not isinstance(client, ast.Constant)
+            or not isinstance(client.value, str)
+            or not isinstance(scope, ast.Constant)
+            or not isinstance(scope.value, str)
+        ):
+            raise ContractError(
+                "governed GET route authentication binding is not static"
+            )
+        return client.value, scope.value
+
     routes: dict[str, tuple[str, str]] = {}
-    for node in ast.walk(tree):
+    for node in factories[0].body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         paths: list[str] = []
@@ -169,32 +265,13 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
         paths = [path for path in paths if path in GOVERNED_READ_PATHS]
         if not paths:
             continue
-
-        bindings: list[tuple[str, str]] = []
-        for call in ast.walk(node):
-            if (
-                not isinstance(call, ast.Call)
-                or not isinstance(call.func, ast.Attribute)
-                or call.func.attr != "verify"
-            ):
-                continue
-            keywords = {item.arg: item.value for item in call.keywords if item.arg}
-            client = keywords.get("expected_client_id")
-            scope = keywords.get("required_scope")
-            if (
-                isinstance(client, ast.Constant)
-                and isinstance(client.value, str)
-                and isinstance(scope, ast.Constant)
-                and isinstance(scope.value, str)
-            ):
-                bindings.append((client.value, scope.value))
         for path in paths:
             require(path not in routes, f"duplicate GET route in app factory: {path}")
-            require(
-                len(bindings) == 1,
-                f"GET route lacks one static authentication binding: {path}",
-            )
-            routes[path] = bindings[0]
+            if not isinstance(node, ast.AsyncFunctionDef):
+                raise ContractError(
+                    f"governed GET route must be asynchronous: {path}"
+                )
+            routes[path] = authentication_binding(node)
     return routes
 
 

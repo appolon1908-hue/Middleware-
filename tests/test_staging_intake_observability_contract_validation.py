@@ -27,6 +27,9 @@ BOUND_FILES = (
         "public_metrics",
         "wrong_source",
         "commented_metrics_route",
+        "dead_metrics_authentication",
+        "unrelated_metrics_verifier",
+        "unawaited_metrics_verifier",
     ],
 )
 def test_staging_contract_fails_closed(
@@ -63,6 +66,35 @@ def test_staging_contract_fails_closed(
         )
         factory += '\n# @app.get("/metrics") required_scope="metrics.read"\n'
         factory_path.write_text(factory, encoding="utf-8")
+    elif mutation in {
+        "dead_metrics_authentication",
+        "unrelated_metrics_verifier",
+        "unawaited_metrics_verifier",
+    }:
+        factory_path = tmp_path / "app/appolon_factory.py"
+        factory = factory_path.read_text(encoding="utf-8")
+        authentication = '''        await request.app.state.runtime.tokens.verify(
+            request.headers.get("Authorization", ""),
+            expected_client_id="monitoring-readonly",
+            required_scope="metrics.read",
+        )'''
+        if mutation == "dead_metrics_authentication":
+            replacement = '''        if False:
+            await request.app.state.runtime.tokens.verify(
+                request.headers.get("Authorization", ""),
+                expected_client_id="monitoring-readonly",
+                required_scope="metrics.read",
+            )'''
+        elif mutation == "unrelated_metrics_verifier":
+            replacement = authentication.replace(
+                "request.app.state.runtime.tokens.verify",
+                "unrelated.verify",
+            )
+        else:
+            replacement = authentication.replace("        await ", "        ", 1)
+        require_replacement = factory.replace(authentication, replacement, 1)
+        assert require_replacement != factory
+        factory_path.write_text(require_replacement, encoding="utf-8")
 
     program = (
         "import importlib.util,pathlib;"

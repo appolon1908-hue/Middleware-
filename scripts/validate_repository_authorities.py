@@ -10,6 +10,12 @@ from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = "appolon1908-hue/codestra-production-platform"
+MIDDLEWARE = "appolon1908-hue/Middleware-"
+REFERENCE_CANONICAL = REFERENCE.casefold()
+FORBIDDEN_ADAPTER_REPOSITORIES = {
+    REFERENCE_CANONICAL,
+    MIDDLEWARE.casefold(),
+}
 IDENTIFIER_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 REPOSITORY_PATTERN = re.compile(r"appolon1908-hue/[A-Za-z0-9_.-]+\Z")
 EXPECTED = {
@@ -136,7 +142,7 @@ def validate(root: Path = ROOT) -> tuple[int, int]:
         canonical_repository = repository.casefold()
         if canonical_repository in canonical_principal_repositories:
             fail(f"duplicate_principal_repository:{repository}")
-        if repository == REFERENCE:
+        if canonical_repository == REFERENCE_CANONICAL:
             fail(f"reference_repo_cannot_be_principal:{component}")
         if not repository.startswith("appolon1908-hue/"):
             fail(f"non_codestra_principal:{component}")
@@ -180,7 +186,7 @@ def validate(root: Path = ROOT) -> tuple[int, int]:
             fail(f"direct_n8n_forbidden:{connector_id}")
         if repository not in principal_repositories:
             fail(f"adapter_repository_has_no_principal:{connector_id}:{repository}")
-        if repository in {REFERENCE, "appolon1908-hue/Middleware-"}:
+        if repository.casefold() in FORBIDDEN_ADAPTER_REPOSITORIES:
             fail(f"adapter_points_to_nonprincipal:{connector_id}")
         adapter_repositories[connector_id] = repository
     if not adapter_repositories:

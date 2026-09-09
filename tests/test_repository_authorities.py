@@ -102,6 +102,21 @@ class RepositoryAuthorityContractTests(unittest.TestCase):
         )
         self.assert_rejected("invalid_authority_identity")
 
+    def test_case_variant_reference_repository_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/repository-authorities.v1.json",
+            lambda data: data["authorities"].append(
+                {
+                    "component": "reference-alias",
+                    "principal_repository": (
+                        "appolon1908-hue/CODESTRA-PRODUCTION-PLATFORM"
+                    ),
+                    "role": "forbidden-reference-alias",
+                }
+            ),
+        )
+        self.assert_rejected("reference_repo_cannot_be_principal:reference-alias")
+
     def test_scalar_reference_uses_fail_closed(self) -> None:
         self.mutate_json(
             "config/repository-authorities.v1.json",

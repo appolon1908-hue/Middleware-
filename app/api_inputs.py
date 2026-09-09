@@ -33,6 +33,24 @@ def required_header(
     return value
 
 
+def optional_header(
+    request: Request,
+    name: str,
+    *,
+    minimum: int,
+    maximum: int,
+) -> str | None:
+    values = request.headers.getlist(name)
+    if len(values) > 1:
+        raise RequestValidationError(f"{name} must be provided at most once")
+    if not values:
+        return None
+    value = values[0]
+    if not minimum <= len(value) <= maximum:
+        raise RequestValidationError(f"{name} is malformed")
+    return value
+
+
 def authorization_header(request: Request) -> str:
     values = request.headers.getlist("Authorization")
     if len(values) > 1:

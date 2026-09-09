@@ -500,3 +500,84 @@ def test_n4_rejects_versioned_command_type_and_blind_unknown_outcome_retry() -> 
                 "safe_metadata": {"access_token": "forbidden"},
             }
         )
+
+
+@pytest.mark.asyncio
+async def test_replay_approval_is_bound_to_its_job() -> None:
+    from datetime import timedelta
+    from app.automation_v2 import (
+        ApprovalRecord,
+        AutomationAuthorizationDenied,
+        DeadLetterRecord,
+        DeadLetterReplayRequest,
+    )
+
+    store = MemoryAutomationStore()
+    job_id, _, event, route = await _seed(store)
+    now = datetime.now(UTC)
+    dead_id, approval_id = uuid4(), uuid4()
+    dead = DeadLetterRecord(
+        dead_letter_id=dead_id, tenant_id=event.tenant_id, job_id=job_id,
+        workflow_key=route.workflow_key, workflow_family=route.workflow_family,
+        original_effect_fingerprint='a' * 64, safe_payload={}, state='OPEN',
+        resource_version=1, created_at=now, updated_at=now,
+    )
+    approval = ApprovalRecord(
+        approval_id=approval_id, tenant_id=event.tenant_id, job_id=uuid4(),
+        approval_type='REPLAY', summary='Replay a different job', state='APPROVED',
+        requested_by='operator', decided_by='reviewer',
+        expires_at=now + timedelta(hours=1), created_at=now, updated_at=now,
+    )
+    store.dead_letters[(event.tenant_id, dead_id)] = dead
+    store.approvals[(event.tenant_id, approval_id)] = ('digest', approval)
+    body = DeadLetterReplayRequest(
+        tenant_id=event.tenant_id, correlation_id=event.correlation_id,
+        idempotency_key='replay-job-binding', approval_id=approval_id,
+        expected_version=1, original_effect_fingerprint='a' * 64,
+        safe_replay_classification='NO_EFFECT', replay_reason='Isolated test',
+    )
+    before = await store.get_job(event.tenant_id, job_id)
+    dispatch = dict(store.dispatches[(event.tenant_id, job_id)])
+    with pytest.raises(AutomationAuthorizationDenied):
+        await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert await store.get_job(event.tenant_id, job_id) == before
+    assert store.dispatches[(event.tenant_id, job_id)] == dispatch
+    assert store.dead_letters[(event.tenant_id, dead_id)] == dead
+    store.approvals[(event.tenant_id, approval_id)] = (
+        'digest', approval.model_copy(update={'job_id': job_id, 'approval_type': 'EXECUTE'}),
+    )
+    with pytest.raises(AutomationAuthorizationDenied):
+        await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert await store.get_job(event.tenant_id, job_id) == before
+    assert store.dispatches[(event.tenant_id, job_id)] == dispatch
+    assert store.dead_letters[(event.tenant_id, dead_id)] == dead
+    store.approvals[(event.tenant_id, approval_id)] = (
+        'digest', approval.model_copy(update={'job_id': job_id}),
+    )
+    result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert result.state == 'RETRY_SCHEDULED'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['COMPLETED', 'CANCELLED', 'FAILED_TERMINAL', 'DEAD_LETTER'])
+async def test_approval_preserves_terminal_job_state(state: str) -> None:
+    from datetime import timedelta
+    from app.automation_v2 import ApprovalRequest
+
+    store = MemoryAutomationStore()
+    job_id, _, event, route = await _seed(store)
+    store.jobs[(event.tenant_id, job_id)]['state'] = state
+    before = await store.get_job(event.tenant_id, job_id)
+    body = ApprovalRequest(
+        tenant_id=event.tenant_id, correlation_id=event.correlation_id,
+        idempotency_key='terminal-approval-test', job_id=job_id,
+        approval_type='REPLAY', summary='Review terminal outcome',
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    approval = await store.request_approval(body, client_id=route.client_id, requested_by='operator')
+    assert approval.state == 'PENDING'
+    assert await store.get_job(event.tenant_id, job_id) == before
+    duplicate = await store.request_approval(body, client_id=route.client_id, requested_by='operator')
+    assert duplicate.duplicate is True
+    assert duplicate.approval_id == approval.approval_id
+    assert await store.get_job(event.tenant_id, job_id) == before

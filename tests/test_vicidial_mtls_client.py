@@ -1,6 +1,7 @@
 import logging
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 import httpx
 import pytest
@@ -168,13 +169,16 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
     values.update(overrides)
     # Temporary certificate paths are intentionally limited to tests. Production
     # Settings validation requires /run/secrets/vicidial-mtls.
-    return Settings.model_construct(**values)
+    return Settings.model_construct(**values)  # type: ignore[arg-type]
 
 
-def _client(settings: Settings, transport: httpx.BaseTransport) -> VicidialMtlsClient:
+def _client(
+    settings: Settings,
+    handler: Callable[[httpx.Request], httpx.Response],
+) -> VicidialMtlsClient:
     return VicidialMtlsClient(
         settings,
-        transport=transport,
+        transport_factory=lambda: httpx.MockTransport(handler),
         resolver=lambda _: ["10.42.0.20"],
     )
 
@@ -210,16 +214,64 @@ def test_valid_mtls_request_has_ids_and_exact_route(tmp_path: Path):
         captured.append(request)
         return httpx.Response(200, json={"allowed": True})
 
-    client = _client(_settings(tmp_path), httpx.MockTransport(handler))
+    client = _client(_settings(tmp_path), handler)
     try:
         assert client.authorize({"lead_id": 42}) == {"allowed": True}
     finally:
         client.close()
     request = captured[0]
     assert request.method == "POST"
+    assert request.url.host == "10.42.0.20"
     assert request.url.path == "/api/v1/transfers/authorize"
+    assert request.headers["Host"] == ("authorization.internal.codestra.agency:8443")
+    assert request.extensions["sni_hostname"] == (
+        "authorization.internal.codestra.agency"
+    )
     assert request.headers["X-Correlation-ID"]
     assert request.headers["X-Request-ID"]
+
+
+def test_governed_hostnames_use_distinct_transport_pools(tmp_path: Path) -> None:
+    next_pool = 0
+    captured: list[tuple[int, httpx.Request]] = []
+
+    def transport_factory() -> httpx.BaseTransport:
+        nonlocal next_pool
+        pool_id = next_pool
+        next_pool += 1
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append((pool_id, request))
+            return httpx.Response(200, json={"ok": True})
+
+        return httpx.MockTransport(handler)
+
+    settings = _settings(
+        tmp_path,
+        vicidial_write_enabled=True,
+        live_writes_enabled=True,
+    )
+    client = VicidialMtlsClient(
+        settings,
+        transport_factory=transport_factory,
+        # Reproduce the dangerous case: both governed names share one IP.
+        resolver=lambda _: ["10.42.0.20"],
+    )
+    try:
+        assert client.authorize({}) == {"ok": True}
+        assert client.execute({}) == {"ok": True}
+    finally:
+        client.close()
+
+    pools_by_host = {
+        request.headers["Host"]: pool_id for pool_id, request in captured
+    }
+    assert pools_by_host.keys() == {
+        "authorization.internal.codestra.agency:8443",
+        "edge.internal.codestra.agency:8443",
+    }
+    assert len(set(pools_by_host.values())) == 2
+    assert {request.url.host for _, request in captured} == {"10.42.0.20"}
 
 
 def test_missing_client_certificate_fails_closed(tmp_path: Path):
@@ -227,7 +279,7 @@ def test_missing_client_certificate_fails_closed(tmp_path: Path):
         tmp_path, vicidial_client_cert_file=str(tmp_path / "missing.crt")
     )
     with pytest.raises(VicidialMtlsError, match="client certificate is missing"):
-        _client(settings, httpx.MockTransport(lambda _: httpx.Response(200)))
+        _client(settings, lambda _: httpx.Response(200))
 
 
 def test_untrusted_ca_fails_closed(tmp_path: Path):
@@ -235,7 +287,7 @@ def test_untrusted_ca_fails_closed(tmp_path: Path):
     invalid_ca.write_text("not a certificate")
     settings = _settings(tmp_path, vicidial_ca_file=str(invalid_ca))
     with pytest.raises(VicidialMtlsError, match="invalid or unreadable"):
-        _client(settings, httpx.MockTransport(lambda _: httpx.Response(200)))
+        _client(settings, lambda _: httpx.Response(200))
 
 
 def test_wrong_hostname_certificate_is_rejected(tmp_path: Path):
@@ -277,13 +329,11 @@ def test_crl_validation_is_fail_closed_when_crl_is_invalid(tmp_path: Path):
     crl.write_text("invalid CRL")
     settings = _settings(tmp_path, vicidial_crl_file=str(crl))
     with pytest.raises(VicidialMtlsError, match="invalid or unreadable"):
-        _client(settings, httpx.MockTransport(lambda _: httpx.Response(200)))
+        _client(settings, lambda _: httpx.Response(200))
 
 
 def test_unapproved_route_and_method_are_rejected(tmp_path: Path):
-    client = _client(
-        _settings(tmp_path), httpx.MockTransport(lambda _: httpx.Response(200))
-    )
+    client = _client(_settings(tmp_path), lambda _: httpx.Response(200))
     try:
         with pytest.raises(VicidialMtlsError, match="method or route"):
             client.request("GET", f"{AUTH_URL}/api/v1/transfers/authorize", {})
@@ -301,7 +351,7 @@ def test_timeout_and_connection_refusal_do_not_retry(tmp_path: Path):
         calls += 1
         raise httpx.ConnectTimeout("test timeout", request=request)
 
-    client = _client(_settings(tmp_path), httpx.MockTransport(timeout))
+    client = _client(_settings(tmp_path), timeout)
     try:
         with pytest.raises(VicidialMtlsError, match="failed closed"):
             client.authorize({"lead_id": 42})
@@ -312,7 +362,7 @@ def test_timeout_and_connection_refusal_do_not_retry(tmp_path: Path):
     def refused(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
-    client = _client(_settings(tmp_path), httpx.MockTransport(refused))
+    client = _client(_settings(tmp_path), refused)
     try:
         with pytest.raises(VicidialMtlsError, match="failed closed"):
             client.authorize({"lead_id": 42})
@@ -321,9 +371,7 @@ def test_timeout_and_connection_refusal_do_not_retry(tmp_path: Path):
 
 
 def test_payload_limit_is_enforced_before_transport(tmp_path: Path):
-    client = _client(
-        _settings(tmp_path), httpx.MockTransport(lambda _: httpx.Response(200))
-    )
+    client = _client(_settings(tmp_path), lambda _: httpx.Response(200))
     try:
         with pytest.raises(VicidialMtlsError, match="payload exceeds"):
             client.authorize({"secret": "x" * MAX_PAYLOAD_BYTES})
@@ -337,7 +385,7 @@ def test_logs_do_not_contain_payload_or_credentials(
     marker = "DO-NOT-LOG-THIS-SECRET"
     client = _client(
         _settings(tmp_path),
-        httpx.MockTransport(lambda _: httpx.Response(200, json={"ok": True})),
+        lambda _: httpx.Response(200, json={"ok": True}),
     )
     try:
         with caplog.at_level(logging.INFO, logger="codestra.vicidial_mtls"):
@@ -364,7 +412,7 @@ def test_disabled_flags_fail_closed_before_network(tmp_path: Path):
         live_writes_enabled=False,
         external_dial_enabled=False,
     )
-    client = _client(settings, httpx.MockTransport(handler))
+    client = _client(settings, handler)
     try:
         with pytest.raises(VicidialMtlsError, match="authorization is disabled"):
             client.authorize({})
@@ -387,7 +435,7 @@ def test_originate_disabled_even_with_write_and_live_flags_alone(tmp_path: Path)
         live_writes_enabled=True,
         external_dial_enabled=False,
     )
-    client = _client(settings, httpx.MockTransport(lambda _: httpx.Response(200)))
+    client = _client(settings, lambda _: httpx.Response(200))
     try:
         with pytest.raises(VicidialMtlsError, match="origination is disabled"):
             client.originate({"destination": "+15551234567"})
@@ -408,7 +456,7 @@ def test_originate_valid_request_hits_approved_route(tmp_path: Path):
         live_writes_enabled=True,
         external_dial_enabled=True,
     )
-    client = _client(settings, httpx.MockTransport(handler))
+    client = _client(settings, handler)
     try:
         assert client.originate({"destination": "+15551234567"}) == {
             "accepted": True
@@ -430,11 +478,22 @@ def test_public_or_mixed_dns_resolution_fails_before_network(tmp_path: Path):
         calls += 1
         return httpx.Response(200)
 
-    for addresses in (["65.21.67.207"], ["10.42.0.20", "65.21.67.207"], []):
+    for addresses in (
+        ["65.21.67.207"],
+        ["10.42.0.20", "65.21.67.207"],
+        ["10.42.0.20", "2001:4860:4860::8888"],
+        ["::1"],
+        ["fe80::1"],
+        ["::ffff:10.42.0.20"],
+        [],
+    ):
+        def resolve(_: str, result: list[str] = addresses) -> list[str]:
+            return result
+
         client = VicidialMtlsClient(
             _settings(tmp_path),
-            transport=httpx.MockTransport(handler),
-            resolver=lambda _, result=addresses: result,
+            transport_factory=lambda: httpx.MockTransport(handler),
+            resolver=resolve,
         )
         try:
             with pytest.raises(VicidialMtlsError, match="private IP"):
@@ -442,3 +501,32 @@ def test_public_or_mixed_dns_resolution_fails_before_network(tmp_path: Path):
         finally:
             client.close()
     assert calls == 0
+
+
+@pytest.mark.parametrize("address", ["10.42.0.20", "172.20.0.10", "fd00::20"])
+def test_rfc1918_and_ipv6_ula_destinations_are_private(
+    tmp_path: Path,
+    address: str,
+) -> None:
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={"authorized": True})
+
+    client = VicidialMtlsClient(
+        _settings(tmp_path),
+        transport_factory=lambda: httpx.MockTransport(handler),
+        resolver=lambda _: [address],
+    )
+    try:
+        assert client.authorize({}) == {"authorized": True}
+    finally:
+        client.close()
+    assert captured[0].url.host == address
+    assert captured[0].headers["Host"] == (
+        "authorization.internal.codestra.agency:8443"
+    )
+    assert captured[0].extensions["sni_hostname"] == (
+        "authorization.internal.codestra.agency"
+    )

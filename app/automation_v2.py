@@ -959,9 +959,10 @@ class MemoryAutomationStore:
             )
             self.approvals[(body.tenant_id, approval_id)] = (digest, record)
             self.approval_idempotency[idem_key] = approval_id
-            raw["state"] = "WAITING_APPROVAL"
-            raw["resource_version"] += 1
-            raw["updated_at"] = now
+            if raw["state"] not in {"COMPLETED", "CANCELLED", "FAILED_TERMINAL", "DEAD_LETTER"}:
+                raw["state"] = "WAITING_APPROVAL"
+                raw["resource_version"] += 1
+                raw["updated_at"] = now
             return record
 
     async def get_approval(self, tenant_id: str, approval_id: UUID) -> ApprovalRecord:
@@ -1948,6 +1949,7 @@ class PostgresAutomationStore:
                         UPDATE middleware_automation_jobs
                         SET state='WAITING_APPROVAL',resource_version=resource_version+1,updated_at=now()
                         WHERE tenant_id=$1 AND job_id=$2
+                          AND state NOT IN ('COMPLETED','CANCELLED','FAILED_TERMINAL','DEAD_LETTER')
                         """,
                         body.tenant_id,
                         body.job_id,

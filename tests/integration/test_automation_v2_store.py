@@ -239,3 +239,41 @@ async def test_replay_rejects_approval_for_another_job(automation_pool: asyncpg.
         )
     result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
     assert result.state == 'RETRY_SCHEDULED'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['COMPLETED', 'CANCELLED', 'FAILED_TERMINAL', 'DEAD_LETTER', 'RUNNING'])
+async def test_approval_preserves_terminal_job_state(automation_pool: asyncpg.Pool, state: str) -> None:
+    from datetime import timedelta
+    from app.automation_v2 import ApprovalRequest
+
+    store = PostgresAutomationStore(automation_pool, owns_pool=False)
+    item = envelope()
+    route = WorkflowRouter.load().by_event[item.event_type][0]
+    await store.enqueue_event(item, route, source_client_id=item.source)
+    async with automation_pool.acquire() as conn:
+        before = await conn.fetchrow(
+            'UPDATE middleware_automation_jobs SET state=$1 RETURNING *', state,
+        )
+    assert before is not None
+    body = ApprovalRequest(
+        tenant_id=item.tenant_id, correlation_id=item.correlation_id,
+        idempotency_key='terminal-approval-test', job_id=before['job_id'],
+        approval_type='REPLAY', summary='Review terminal outcome',
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    approval = await store.request_approval(body, client_id=route.client_id, requested_by='operator')
+    assert approval.state == 'PENDING'
+    async with automation_pool.acquire() as conn:
+        after = await conn.fetchrow('SELECT * FROM middleware_automation_jobs WHERE job_id=$1', before['job_id'])
+    assert after is not None
+    if state == 'RUNNING':
+        assert after['state'] == 'WAITING_APPROVAL'
+        assert after['resource_version'] == before['resource_version'] + 1
+    else:
+        assert after == before
+    duplicate = await store.request_approval(body, client_id=route.client_id, requested_by='operator')
+    assert duplicate.duplicate is True
+    assert duplicate.approval_id == approval.approval_id
+    async with automation_pool.acquire() as conn:
+        assert await conn.fetchrow('SELECT * FROM middleware_automation_jobs WHERE job_id=$1', before['job_id']) == after

@@ -556,3 +556,28 @@ async def test_replay_approval_is_bound_to_its_job() -> None:
     )
     result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
     assert result.state == 'RETRY_SCHEDULED'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['COMPLETED', 'CANCELLED', 'FAILED_TERMINAL', 'DEAD_LETTER'])
+async def test_approval_preserves_terminal_job_state(state: str) -> None:
+    from datetime import timedelta
+    from app.automation_v2 import ApprovalRequest
+
+    store = MemoryAutomationStore()
+    job_id, _, event, route = await _seed(store)
+    store.jobs[(event.tenant_id, job_id)]['state'] = state
+    before = await store.get_job(event.tenant_id, job_id)
+    body = ApprovalRequest(
+        tenant_id=event.tenant_id, correlation_id=event.correlation_id,
+        idempotency_key='terminal-approval-test', job_id=job_id,
+        approval_type='REPLAY', summary='Review terminal outcome',
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    approval = await store.request_approval(body, client_id=route.client_id, requested_by='operator')
+    assert approval.state == 'PENDING'
+    assert await store.get_job(event.tenant_id, job_id) == before
+    duplicate = await store.request_approval(body, client_id=route.client_id, requested_by='operator')
+    assert duplicate.duplicate is True
+    assert duplicate.approval_id == approval.approval_id
+    assert await store.get_job(event.tenant_id, job_id) == before

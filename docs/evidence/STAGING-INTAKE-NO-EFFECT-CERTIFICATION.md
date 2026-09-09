@@ -3,8 +3,11 @@
 ## Authority
 
 The manual workflow `.github/workflows/staging-intake-e2e-no-effect.yml` is the
-only repository workflow for issue #65. It runs only from protected `main` and
-uses the protected `intake-staging-certification` environment.
+only repository workflow for issue #65. It runs only from protected `main`,
+requires the repository owner to explicitly set `confirm_no_effect=true`, and
+uses the protected `intake-staging-certification` environment. A source merge
+does not execute the certification. The environment approval and protected
+staging credentials remain separate runtime gates.
 
 ## Required protected secrets
 
@@ -24,9 +27,25 @@ artifacts.
   production gateway. The workflow refuses to send either bearer token when
   the requested base URL does not match this protected authority exactly.
 
+## Dispatch admission
+
+Before any staging request can run, the workflow requires all of the following:
+
+1. repository `appolon1908-hue/Middleware-`;
+2. owner actor `appolon1908-hue`;
+3. exact ref `refs/heads/main`;
+4. explicit boolean input `confirm_no_effect=true`;
+5. admission to the protected `intake-staging-certification` environment;
+6. non-empty protected tokens and the approved-host variable.
+
+Failure of any admission condition prevents the certification job from
+contacting staging. No production runtime or provider authority is granted by
+this dispatch path.
+
 ## Fail-closed sequence
 
-1. Check out and prove the exact protected-main workflow SHA.
+1. Prove the protected manual authorization boundary and exact protected-main
+   workflow SHA.
 2. Require the exact protected staging hostname and standard HTTPS port; reject
    arbitrary hosts, credentials, IPv4/IPv6 literals, the committed production
    gateway, and malformed base URLs before loading a bearer token into a

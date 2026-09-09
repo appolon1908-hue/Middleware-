@@ -26,6 +26,7 @@ SCHEMA = "codestra.production-orchestrator-contract.v1"
 WORKFLOW = ".github/workflows/manual-release-intent.yml"
 CONTROLLER_REPOSITORY = "appolon1908-hue/codestra-production-platform"
 CONTROLLER_BRANCH = "release/production-activation"
+INDEPENDENT_REVIEWER_ID = 77101516
 CANDIDATE_SCHEMA = "codestra.manual-production-candidate.v1"
 ZERO64 = "0" * 64
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -305,15 +306,26 @@ def validate_environment_document(value: object, environment: str) -> None:
     reviewers = reviewer_rule.get("reviewers")
     if not isinstance(reviewers, list) or not reviewers:
         raise PolicyError("protected environment has no required reviewers")
+    reviewer_identities: set[tuple[str, int]] = set()
+    for item in reviewers:
+        reviewer_type = item.get("type") if isinstance(item, dict) else None
+        reviewer = item.get("reviewer") if isinstance(item, dict) else None
+        reviewer_id = reviewer.get("id") if isinstance(reviewer, dict) else None
+        require(
+            reviewer_type in {"User", "Team"}
+            and isinstance(reviewer_id, int)
+            and not isinstance(reviewer_id, bool)
+            and reviewer_id > 0,
+            "protected environment reviewer identity is invalid",
+        )
+        reviewer_identities.add((str(reviewer_type), reviewer_id))
     require(
-        all(
-            isinstance(item, dict)
-            and item.get("type") in {"User", "Team"}
-            and isinstance(item.get("reviewer"), dict)
-            and isinstance(item["reviewer"].get("id"), int)
-            for item in reviewers
-        ),
-        "protected environment reviewer identity is invalid",
+        len(reviewer_identities) == len(reviewers),
+        "protected environment contains duplicate reviewers",
+    )
+    require(
+        reviewer_identities == {("User", INDEPENDENT_REVIEWER_ID)},
+        "protected environment approved reviewer identity drift",
     )
     require(reviewer_rule.get("prevent_self_review") is True, "protected environment permits self-review")
     require(value.get("can_admins_bypass") is False, "protected environment permits administrator bypass")
@@ -1089,7 +1101,13 @@ def self_test() -> int:
                 "type": "required_reviewers",
                 "prevent_self_review": True,
                 "reviewers": [
-                    {"type": "User", "reviewer": {"id": 42, "login": "reviewer"}}
+                    {
+                        "type": "User",
+                        "reviewer": {
+                            "id": INDEPENDENT_REVIEWER_ID,
+                            "login": "kazan555",
+                        },
+                    }
                 ],
             }
         ],
@@ -1105,6 +1123,26 @@ def self_test() -> int:
             {
                 **protected_environment,
                 "protection_rules": [],
+            },
+        ),
+        (
+            "substituted environment reviewer",
+            {
+                **protected_environment,
+                "protection_rules": [
+                    {
+                        **protected_environment["protection_rules"][0],
+                        "reviewers": [
+                            {
+                                "type": "User",
+                                "reviewer": {
+                                    "id": INDEPENDENT_REVIEWER_ID + 1,
+                                    "login": "substituted-reviewer",
+                                },
+                            }
+                        ],
+                    }
+                ],
             },
         ),
         (

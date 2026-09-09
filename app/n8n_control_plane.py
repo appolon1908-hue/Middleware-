@@ -86,7 +86,7 @@ async def submit_n8n_command(
     tenant = required_header(request, "X-Tenant-ID", minimum=1, maximum=128)
     if tenant != command.tenant_id:
         raise RequestValidationError("X-Tenant-ID does not match command tenant")
-    authorize_tenant(claims, tenant)
+    authorize_tenant(claims, command.tenant_id)
     _require_forwarding_headers(request, command)
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:

@@ -7,7 +7,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Self
 from urllib.parse import urlsplit, urlunsplit
 
 from .vicidial_odoo_projection_errors import ProjectionConfigurationError
@@ -205,7 +205,7 @@ class ProjectionSettings:
     def from_env(
         cls,
         env: Mapping[str, str] | None = None,
-    ) -> "ProjectionSettings":
+    ) -> Self:
         source = os.environ if env is None else env
         enabled = parse_bool(
             source.get("VICIDIAL_ODOO_PROJECTION_ENABLED"),

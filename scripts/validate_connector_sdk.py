@@ -28,8 +28,6 @@ def load_json(path: Path) -> object:
 def main() -> int:
     errors: list[str] = []
     manifest_dir = ROOT / "connectors" / "manifests"
-    files = sorted(manifest_dir.glob("*.connector.json"))
-
     registry = ConnectorRegistry()
     try:
         records = registry.load_directory(
@@ -297,8 +295,8 @@ def main() -> int:
             "CONNECTOR_SDK_VALIDATION=FAIL",
             file=sys.stderr,
         )
-        for error in errors:
-            print(f"ERROR={error}", file=sys.stderr)
+        for validation_error in errors:
+            print(f"ERROR={validation_error}", file=sys.stderr)
         return 1
 
     print(

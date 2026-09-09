@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,7 +20,6 @@ from app.automation_v2 import (
     JobClaimRequest,
     MemoryAutomationStore,
     StepRecord,
-    TerminalResult,
     WorkflowRoute,
     WorkflowRouter,
 )
@@ -447,6 +446,7 @@ async def test_odoo_command_is_authenticated_but_blocked_with_zero_effect(test_s
             )
     assert command.status_code == 403, command.text
     assert command.json()["error"]["code"] == "capability_disabled"
+    assert isinstance(commands.store, MemoryCommandStore)
     assert commands.store._commands == {}
 
 
@@ -454,7 +454,7 @@ def test_n4_rejects_versioned_command_type_and_blind_unknown_outcome_retry() -> 
     base = {
         "tenant_id": "tenant-1",
         "correlation_id": "correlation-1",
-        "idempotency_key": "idempotency-1",
+        "idempotency_key": "idempotency-1",  #gitleaks:allow
         "job_id": str(uuid4()),
         "lease_token": "l" * 32,
         "execution_id": str(uuid4()),
@@ -476,7 +476,7 @@ def test_n4_rejects_versioned_command_type_and_blind_unknown_outcome_retry() -> 
             {
                 "tenant_id": "tenant-1",
                 "correlation_id": "correlation-1",
-                "idempotency_key": "idempotency-2",
+                "idempotency_key": "idempotency-2",  #gitleaks:allow
                 "lease_token": "l" * 32,
                 "execution_id": str(uuid4()),
                 "error_code": "PROVIDER_TIMEOUT",
@@ -491,7 +491,7 @@ def test_n4_rejects_versioned_command_type_and_blind_unknown_outcome_retry() -> 
             {
                 "tenant_id": "tenant-1",
                 "correlation_id": "correlation-1",
-                "idempotency_key": "idempotency-3",
+                "idempotency_key": "idempotency-3",  #gitleaks:allow
                 "lease_token": "l" * 32,
                 "execution_id": str(uuid4()),
                 "step_key": "safe-evidence",

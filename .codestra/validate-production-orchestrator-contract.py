@@ -4435,6 +4435,123 @@ def attestation_covers_publication(
     )
 
 
+def normalized_image_subject(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    subject = value.strip()
+    if (
+        len(subject) >= 2
+        and subject[0] == subject[-1]
+        and subject[0] in {"'", '"'}
+    ):
+        subject = subject[1:-1].strip()
+    subject = re.sub(
+        r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}",
+        r"$\1",
+        subject,
+    )
+    if not subject or any(character in subject for character in "\r\n\0"):
+        return None
+    return subject
+
+
+def publication_subjects(step: dict[str, Any]) -> set[str]:
+    subjects: set[str] = set()
+    uses = step.get("uses")
+    inputs = step.get("with")
+    if isinstance(uses, str) and isinstance(inputs, dict):
+        normalized = uses.split(" #", 1)[0].strip().lower()
+        if normalized.startswith("docker/build-push-action@"):
+            tags = inputs.get("tags")
+            if isinstance(tags, str):
+                for raw_subject in re.split(r"[\r\n,]+", tags):
+                    subject = normalized_image_subject(raw_subject)
+                    if subject is not None:
+                        subjects.add(subject)
+        elif normalized.startswith("actions/attest-build-provenance@"):
+            subject = normalized_image_subject(inputs.get("subject-name"))
+            if subject is not None:
+                subjects.add(subject)
+
+    raw_tokens = shell_tokens(str(step.get("run", "")))
+    for index in command_indexes(raw_tokens):
+        if executable_name(raw_tokens[index]).lower() not in {"docker", "podman"}:
+            continue
+        arguments = raw_command_arguments(raw_tokens, index)
+        lowered = [argument.lower() for argument in arguments]
+        if "push" in lowered[:4]:
+            push_index = lowered.index("push")
+            candidates = [
+                argument
+                for argument in arguments[push_index + 1 :]
+                if not argument.startswith("-")
+            ]
+            if candidates:
+                subject = normalized_image_subject(candidates[-1])
+                if subject is not None:
+                    subjects.add(subject)
+        for argument_index, argument in enumerate(arguments):
+            if argument in {"--tag", "-t"} and argument_index + 1 < len(arguments):
+                subject = normalized_image_subject(arguments[argument_index + 1])
+            elif argument.startswith("--tag="):
+                subject = normalized_image_subject(argument.split("=", 1)[1])
+            elif argument.startswith("-t") and len(argument) > 2:
+                subject = normalized_image_subject(argument[2:])
+            else:
+                continue
+            if subject is not None:
+                subjects.add(subject)
+    return subjects
+
+
+def attestation_subjects(step: dict[str, Any]) -> set[str]:
+    uses = step.get("uses")
+    inputs = step.get("with")
+    if isinstance(uses, str) and uses.startswith(
+        ("actions/attest@", "actions/attest-build-provenance@")
+    ):
+        if not isinstance(inputs, dict):
+            return set()
+        subject = normalized_image_subject(inputs.get("subject-name"))
+        return set() if subject is None else {subject}
+
+    raw_tokens = shell_tokens(str(step.get("run", "")))
+    for index in command_indexes(raw_tokens):
+        if executable_name(raw_tokens[index]).lower() != "cosign":
+            continue
+        arguments = raw_command_arguments(raw_tokens, index)
+        if not arguments or arguments[0].lower() != "attest":
+            continue
+        candidates = [argument for argument in arguments[1:] if not argument.startswith("-")]
+        if not candidates:
+            return set()
+        subject = normalized_image_subject(candidates[-1])
+        return set() if subject is None else {subject}
+    return set()
+
+
+def attestation_targets_publication(
+    attestation: dict[str, Any],
+    publication: dict[str, Any],
+) -> bool:
+    published = publication_subjects(publication)
+    attested = attestation_subjects(attestation)
+    if not published or not attested or published.isdisjoint(attested):
+        return False
+
+    uses = attestation.get("uses")
+    if isinstance(uses, str) and uses.startswith(
+        ("actions/attest@", "actions/attest-build-provenance@")
+    ):
+        inputs = attestation.get("with")
+        publication_id = publication.get("id")
+        if not isinstance(inputs, dict) or not isinstance(publication_id, str):
+            return False
+        expected_digest = f"${{{{ steps.{publication_id}.outputs.digest }}}}"
+        return inputs.get("subject-digest") == expected_digest
+    return True
+
+
 def require_reachable_signer_workflow(workflow: str, path: str) -> None:
     jobs = workflow_jobs(workflow, path)
     publication_jobs = [
@@ -4456,18 +4573,33 @@ def require_reachable_signer_workflow(workflow: str, path: str) -> None:
     )
     for publication_job in publication_jobs:
         steps = workflow_steps(publication_job, path)
-        for publication in steps:
-            if condition_is_statically_false(
-                publication.get("if")
-            ) or not contains_image_publication(publication):
-                continue
+        publications = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if not condition_is_statically_false(step.get("if"))
+            and contains_image_publication(step)
+        ]
+        for publication_index, publication in publications:
             require(
                 any(
                     step_has_reachable_attestation(step)
                     and attestation_covers_publication(step, publication)
-                    for step in steps
+                    and attestation_targets_publication(step, publication)
+                    for step in steps[publication_index + 1 :]
                 ),
                 f"signer publication path has no guaranteed attestation step: {path}",
+            )
+        for attestation_index, attestation in enumerate(steps):
+            if not step_has_reachable_attestation(attestation):
+                continue
+            require(
+                any(
+                    publication_index < attestation_index
+                    and attestation_covers_publication(attestation, publication)
+                    and attestation_targets_publication(attestation, publication)
+                    for publication_index, publication in publications
+                ),
+                f"signer attestation is not bound to a preceding publication: {path}",
             )
 
 
@@ -5552,10 +5684,12 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: docker/build-push-action@0123456789012345678901234567890123456789
+      - id: build
+        uses: docker/build-push-action@0123456789012345678901234567890123456789
         with:
           push: true
-      - uses: actions/attest@0123456789012345678901234567890123456789
+          tags: ghcr.io/example/repository:sha-0123456
+      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456
 """
     require_reachable_signer_workflow(
         reachable_signer,
@@ -5590,8 +5724,8 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
                 "negative regression unexpectedly passed: unreachable signer workflow"
             )
     disabled_publication_step = reachable_signer.replace(
-        "      - uses: docker/build-push-action@",
-        "      - if: false\n        uses: docker/build-push-action@",
+        "      - id: build\n        uses: docker/build-push-action@",
+        "      - id: build\n        if: false\n        uses: docker/build-push-action@",
         1,
     )
     try:
@@ -5606,7 +5740,7 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
             "negative regression unexpectedly passed: disabled publication step"
         )
     comment_only_attestation = reachable_signer.replace(
-        "      - uses: actions/attest@0123456789012345678901234567890123456789",
+        "      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456",
         "      - run: echo done # cosign attest",
         1,
     )
@@ -5650,11 +5784,11 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
         "unconditional attestation was rejected",
     )
     complementary_signer = reachable_signer.replace(
-        "      - uses: docker/build-push-action@",
-        "      - if: inputs.publish\n        uses: docker/build-push-action@",
+        "      - id: build\n        uses: docker/build-push-action@",
+        "      - id: build\n        if: inputs.publish\n        uses: docker/build-push-action@",
     ).replace(
-        "      - uses: actions/attest@",
-        "      - if: ${{ !inputs.publish }}\n        uses: actions/attest@",
+        "      - run: cosign attest",
+        "      - if: ${{ !inputs.publish }}\n        run: cosign attest",
     )
     try:
         require_reachable_signer_workflow(
@@ -5667,18 +5801,9 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
         raise ContractError(
             "negative regression unexpectedly passed: unattested publication path"
         )
-    cosign_signer = reachable_signer.replace(
-        "      - uses: actions/attest@0123456789012345678901234567890123456789",
-        "      - run: cosign attest --yes image@example",
-        1,
-    )
-    require_reachable_signer_workflow(
-        cosign_signer,
-        "synthetic-cosign-signer.yml",
-    )
-    unreachable_cosign = cosign_signer.replace(
-        "      - run: cosign attest --yes image@example",
-        "      - run: if false; then cosign attest --yes image@example; fi",
+    unreachable_cosign = reachable_signer.replace(
+        "      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456",
+        "      - run: if false; then cosign attest --yes ghcr.io/example/repository:sha-0123456; fi",
         1,
     )
     try:
@@ -5692,6 +5817,73 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
         raise ContractError(
             "negative regression unexpectedly passed: unreachable cosign attestation"
         )
+    mismatched_attestation = reachable_signer.replace(
+        "cosign attest --yes ghcr.io/example/repository:sha-0123456",
+        "cosign attest --yes ghcr.io/example/other:sha-0123456",
+        1,
+    )
+    try:
+        require_reachable_signer_workflow(
+            mismatched_attestation,
+            "synthetic-mismatched-attestation.yml",
+        )
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: attestation subject mismatch"
+        )
+    mixed_attestation = reachable_signer.replace(
+        "      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456",
+        "      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456\n"
+        "      - run: cosign attest --yes ghcr.io/example/other:sha-0123456",
+        1,
+    )
+    try:
+        require_reachable_signer_workflow(
+            mixed_attestation,
+            "synthetic-mixed-attestation.yml",
+        )
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: extra unbound attestation"
+        )
+    premature_attestation = """jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456
+      - id: build
+        uses: docker/build-push-action@0123456789012345678901234567890123456789
+        with:
+          push: true
+          tags: ghcr.io/example/repository:sha-0123456
+"""
+    try:
+        require_reachable_signer_workflow(
+            premature_attestation,
+            "synthetic-premature-attestation.yml",
+        )
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: attestation preceded publication"
+        )
+    action_attestation = reachable_signer.replace(
+        "      - run: cosign attest --yes ghcr.io/example/repository:sha-0123456",
+        "      - uses: actions/attest@0123456789012345678901234567890123456789\n"
+        "        with:\n"
+        "          subject-name: ghcr.io/example/repository:sha-0123456\n"
+        "          subject-digest: ${{ steps.build.outputs.digest }}",
+        1,
+    )
+    require_reachable_signer_workflow(
+        action_attestation,
+        "synthetic-action-attestation.yml",
+    )
     split_attestation = """jobs:
   publish:
     runs-on: ubuntu-latest

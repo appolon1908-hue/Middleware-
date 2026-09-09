@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 import importlib.util
-import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_SCRIPT = ROOT / "scripts" / "apply_integration_main_release_authorities_base.py"
+BASE_SCRIPT = (
+    ROOT
+    / "scripts"
+    / "apply_integration_main_release_authorities_base.py"
+)
 
 spec = importlib.util.spec_from_file_location(
     "integration_authority_v1_base",
@@ -73,17 +75,6 @@ EXPECTED_REPOSITORIES = {
         ),
     ),
 }
-
-
-def _reject_duplicate_pairs(
-    pairs: list[tuple[str, Any]],
-) -> dict[str, Any]:
-    value: dict[str, Any] = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError(f"duplicate JSON field: {key}")
-        value[key] = item
-    return value
 
 
 def configure_base() -> None:
@@ -170,33 +161,12 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
     )
 
 
-def validate_runner_issue_comment_event() -> None:
-    """Validate the runner-owned event file without an inline Python loader."""
-
-    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-    BASE.require(bool(event_path), "issue command event path missing")
-    try:
-        value = json.loads(
-            Path(event_path).read_text(encoding="utf-8"),
-            object_pairs_hook=_reject_duplicate_pairs,
-        )
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        raise BASE.PolicyError("cannot load issue command event") from exc
-    validate_issue_comment_event(
-        require_mapping(value, "issue command event must be an object")
-    )
-
-
 configure_base()
 
 
 def main(argv: list[str] | None = None) -> int:
     configure_base()
-    arguments = list(sys.argv[1:] if argv is None else argv)
-    if arguments == ["--validate-issue-comment-event"]:
-        validate_runner_issue_comment_event()
-        return 0
-    return BASE.main(arguments)
+    return BASE.main(list(sys.argv[1:] if argv is None else argv))
 
 
 if __name__ == "__main__":

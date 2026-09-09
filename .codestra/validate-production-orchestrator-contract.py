@@ -181,12 +181,7 @@ EXPECTED_IDENTITIES: dict[str, tuple[int, str, bool, bool]] = {
     "appolon1908-hue/Breero.com": (1331354808, "application", True, False),
     "appolon1908-hue/Moneybee-Backend": (1343760409, "application", True, False),
     "appolon1908-hue/Telnexa-web": (1346958528, "application", True, False),
-    "appolon1908-hue/codestra-production-platform": (
-        1314230781,
-        "controller",
-        False,
-        False,
-    ),
+    "appolon1908-hue/codestra-production-platform": (1314230781, "controller", False, False),
 }
 EXPECTED_ARTIFACT_POLICIES: dict[
     str, tuple[tuple[str, ...], bool, bool, bool, str | None, str | None]
@@ -280,23 +275,27 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
         "scripts/runner-systemd-preflight.sh": "d49eec2b037067dbede30aac8b49328025189e6a8883b0b4314ce613a7bd37be",
         "scripts/test-backup-contract.sh": "48ac288ce0e2eb29f220b5e701ef6a11a5a6cfe3eb058c89ac74b505d3c62d62",
         "scripts/test-ephemeral-docker-auth.sh": (
-            "44ed657edf1d82b7aa1d2508d75955ae30b71399c30055db198e2ea8a62ca277"
+            "44ed657edf1d82b7aa1d2508d75955ae"
+            "30b71399c30055db198e2ea8a62ca277"
         ),
         "scripts/test-plan-gate.sh": "a1998a4a92a2535aea09f35c5de369f0675ab4276e86ab92a42f908590c0ca6d",
         "scripts/test-runtime-preflight.sh": "e4fae06b294f0385d6006d35107463eaa65ec1099fae45ef032dffa1d3f65471",
         "scripts/validate-governance.sh": "5e3b7accddaf255104dd41a02da1c94dc3660a9fac4d0fdd2d1e1f04b6e330e7",
         "scripts/validate-workflows.py": (
-            "d96a8f3373cdd9c26f1a0b92fe120494717bfd70cbbde4a8e795c3c31450f1c6"
+            "d96a8f3373cdd9c26f1a0b92fe120494"
+            "717bfd70cbbde4a8e795c3c31450f1c6"
         ),
         "scripts/validate.sh": "e86900aa5ea91795abe0c93fa14b9733f9f8277e78b7667111d211216849645b",
     },
     "appolon1908-hue/Middleware-": {
         "scripts/apply_portfolio_release_reviewer_access.py": (
-            "f9ba7034692118c427555fab41b1b6e14a8698a761eb18ef6c957e1fb386c27a"
+            "f9ba7034692118c427555fab41b1b6e14"
+            "a8698a761eb18ef6c957e1fb386c27a"
         ),
         "scripts/integration_ci.sh": "8d9327fd9ad51d6ba7243d051336f623a4f75d60c60e69fd012e65f598b12d4a",
         "scripts/validate_middleware_authority_convergence.py": (
-            "23679aee112625c778d7607187ea505ca2f9f0983411143728d785d011298ae4"
+            "23679aee112625c778d7607187ea505c"
+            "a2f9f0983411143728d785d011298ae4"
         ),
         "scripts/nats_integration_ci.sh": "88d843c665cece68e0fb56a931c295ee10490446cad7b64d9f5356c1cbf7263d",
         "scripts/project_ci.sh": "12a529ea96f39baec5f1eeb287209dc9db355e5dca000cbbfd7494303501b2ae",
@@ -316,19 +315,22 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
     },
     "appolon1908-hue/beyvra-frontend": {
         "client-portal/scripts/audit-gate.mjs": (
-            "8f50a0920735449fe65aa988cf2f4f290aa744362bbc848830992da7752e2fd6"
+            "8f50a0920735449fe65aa988cf2f4f290"
+            "aa744362bbc848830992da7752e2fd6"
         ),
     },
     "appolon1908-hue/beyvra-backend": {
         "FX/release-init-prod.sh": "cef5fadd788f5ae5c9ba28a857bfe516e47b671e36aafcf3817b4c20b9e5115b",
         "operations/verify_release_identity.py": "8aadfc14fa376ba46483216c6323d589d4603c71d42f5a77c29286edb5b5cf0a",
         "scripts/certify_staging_api.py": (
-            "a154c1bcd011c42442263d06b530e243901ec8487c6b34f032e53810f12a5a30"
+            "a154c1bcd011c42442263d06b530e243"
+            "901ec8487c6b34f032e53810f12a5a30"
         ),
     },
     "appolon1908-hue/scrapper": {
         "apps/operations-dashboard/test/api-client.test.mjs": (
-            "430b330930d546cdc5270b6d3ffe109550e9e725d646e737a54c2654d92b7646"
+            "430b330930d546cdc5270b6d3ffe10955"
+            "0e9e725d646e737a54c2654d92b7646"
         ),
         "scripts/validate-gateway.sh": "d0c9888cc7bde27682a32d00fcb00d55d0ff6fc3ad711650cb6647f9dfccdc2a",
         "scripts/validate-deployment-scaffolding.sh": "03db69454e0ea0f62923ab43307ce95ab08c3586d3eb455f53552b65e052cfb9",
@@ -342,11 +344,13 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
     },
     "appolon1908-hue/Moneybee-Backend": {
         "ops/stage-bank-credential-references.py": (
-            "ea78c91ccc0d779260b13ccead92ca3116b5b0ac5f3ede028e86a8aa197e3cca"
+            "ea78c91ccc0d779260b13ccead92ca31"
+            "16b5b0ac5f3ede028e86a8aa197e3cca"
         ),
         "ops/verify-compose-contract.py": "5b9c78f82de3784af3d68945be43abadbbe3eab7e73f3edf0f27ef7042e7e674",
         "scripts/smoke_api.py": (
-            "62b60fa9fb0331d5227b51b9b2c542d4ec96da9f683a5f678a60d5f27996c692"
+            "62b60fa9fb0331d5227b51b9b2c542d"
+            "4ec96da9f683a5f678a60d5f27996c692"
         ),
     },
     "appolon1908-hue/Telnexa-web": {
@@ -371,13 +375,16 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
 APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     "appolon1908-hue/Middleware-": {
         ".github/workflows/integration-main-release-authorities.yml": (
-            "43323ab7203be3317f700e099a01ca03fb9828292754fc67bd681d1d410a53f3"
+            "012052d939d31b124b45e0ea0719b7c9"
+            "de3949146764fc7ce03ce32dfd76f872"
         ),
         ".github/workflows/production-reviewer-access.yml": (
-            "9a1d239d64f3d198365097ea6812ac90b09cc11dcfb9916a68dce810b7202103"
+            "90c3554f2bd2bb9b679c42e2bd29d883"
+            "5ec7474798eec01c89a697b0263414bb"
         ),
         ".github/workflows/python-quality-baseline.yml": (
-            "cb89cb69636dc79a6a03e5df98abeb7986a823e30c2d52b1d03980dddac58cca"
+            "cb89cb69636dc79a6a03e5df98abeb798"
+            "6a823e30c2d52b1d03980dddac58cca"
         ),
         ".github/workflows/required-ci.yml": "5b135f1eec36d3baa8d605ecddf3d37aa1fbfa7bd9d58e61ba58a5324a087d5e",
     },
@@ -385,31 +392,40 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
         ".github/workflows/ci.yml": "f10b269e0faf54b23582ca1ee9700de6f2ec9f5481f6b2be20e40b9f6d428945",
     },
 }
-APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[str, dict[str, dict[str, str]]] = {
+APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
+    str, dict[str, dict[str, str]]
+] = {
     "appolon1908-hue/Middleware-": {
         ".github/workflows/integration-main-release-authorities.yml": {
             "config/integration-main-release-authorities.v1.json": (
-                "93ee2e898759a2c6cf79cf9afc3c3d58d9eaf84515f4207043e9da8c99e88ba1"
+                "93ee2e898759a2c6cf79cf9afc3c3d58"
+                "d9eaf84515f4207043e9da8c99e88ba1"
             ),
             "scripts/apply_integration_main_release_authorities.py": (
-                "95b9c27abd309b1efe579672fdb8b89feaed55e8e9334c50913b2e422ad771a7"
+                "95b9c27abd309b1efe579672fdb8b89fe"
+                "aed55e8e9334c50913b2e422ad771a7"
             ),
             "scripts/apply_integration_main_release_authorities_base.py": (
-                "71fd1f220797c12708da3d2e5f9efe252ad2933ae37852052e1e5b680ce3b75a"
+                "71fd1f220797c12708da3d2e5f9efe25"
+                "2ad2933ae37852052e1e5b680ce3b75a"
             ),
             "scripts/apply_integration_main_release_authorities_v2.py": (
-                "292d0a592c06a34bb3c486d366ec7df2f549d70226cd15a05060145c3e21bd22"
+                "b5f74be0edf783bd258c6321caaf63759"
+                "e8beee0b0f305d34f25c932830366c2"
             ),
         },
         ".github/workflows/production-reviewer-access.yml": {
             "config/production-reviewer-access.v1.json": (
-                "72e0b70ddbf8ff0365d2c4fc6da8e8e6d4c7c4ef69865067317d3e9300d0e6ed"
+                "72e0b70ddbf8ff0365d2c4fc6da8e8e6"
+                "d4c7c4ef69865067317d3e9300d0e6ed"
             ),
             "scripts/apply_production_reviewer_access.py": (
-                "305d52658d39cc45335676c6f3d0d780b246b8c4c9b727c68ed705b30f99da22"
+                "305d52658d39cc45335676c6f3d0d780"
+                "b246b8c4c9b727c68ed705b30f99da22"
             ),
             "scripts/apply_production_reviewer_access_base.py": (
-                "22b5d7f425f949588ce29a6c3079c09f950dfb46e31d3bfa54b0216f73b5a43d"
+                "22b5d7f425f949588ce29a6c3079c09f"
+                "950dfb46e31d3bfa54b0216f73b5a43d"
             ),
         },
     },
@@ -433,7 +449,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_integration_main_release_authorities_v2.py": (
-            "292d0a592c06a34bb3c486d366ec7df2f549d70226cd15a05060145c3e21bd22",
+            "b5f74be0edf783bd258c6321caaf63759e8beee0b0f305d34f25c932830366c2",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_production_reviewer_access.py": (
@@ -509,9 +525,7 @@ def require_mapping(value: object, message: str) -> dict[str, Any]:
     return value
 
 
-def require_string_list(
-    value: object, message: str, *, nonempty: bool = False
-) -> list[str]:
+def require_string_list(value: object, message: str, *, nonempty: bool = False) -> list[str]:
     if not isinstance(value, list):
         raise ContractError(message)
     if nonempty and not value:
@@ -522,10 +536,7 @@ def require_string_list(
 
 
 def load_contract() -> dict[str, Any]:
-    require(
-        CONTRACT_PATH.is_file() and not CONTRACT_PATH.is_symlink(),
-        "contract is missing or unsafe",
-    )
+    require(CONTRACT_PATH.is_file() and not CONTRACT_PATH.is_symlink(), "contract is missing or unsafe")
     value = json.loads(
         CONTRACT_PATH.read_text(encoding="utf-8"),
         object_pairs_hook=reject_duplicate_keys,
@@ -613,20 +624,12 @@ def workflow_jobs(workflow: str, path: str) -> dict[str, WorkflowJob]:
     workflow_working_directory = default_working_directory(document, path)
     workflow_shell = default_shell(document, path)
     jobs_value = document.get("jobs")
-    require(
-        isinstance(jobs_value, dict) and bool(jobs_value),
-        f"workflow has no jobs: {path}",
-    )
-    require(
-        isinstance(root, yaml.nodes.MappingNode), f"workflow root is invalid: {path}"
-    )
+    require(isinstance(jobs_value, dict) and bool(jobs_value), f"workflow has no jobs: {path}")
+    require(isinstance(root, yaml.nodes.MappingNode), f"workflow root is invalid: {path}")
     jobs_node: yaml.nodes.MappingNode | None = None
     for key_node, value_node in root.value:
         if isinstance(key_node, yaml.nodes.ScalarNode) and key_node.value == "jobs":
-            require(
-                isinstance(value_node, yaml.nodes.MappingNode),
-                f"workflow jobs are invalid: {path}",
-            )
+            require(isinstance(value_node, yaml.nodes.MappingNode), f"workflow jobs are invalid: {path}")
             jobs_node = value_node
             break
     if jobs_node is None:
@@ -634,16 +637,11 @@ def workflow_jobs(workflow: str, path: str) -> dict[str, WorkflowJob]:
     lines = workflow.splitlines()
     result: dict[str, WorkflowJob] = {}
     for key_node, value_node in jobs_node.value:
-        require(
-            isinstance(key_node, yaml.nodes.ScalarNode),
-            f"workflow job name is invalid: {path}",
-        )
+        require(isinstance(key_node, yaml.nodes.ScalarNode), f"workflow job name is invalid: {path}")
         name = key_node.value
         data = jobs_value.get(name)
         require(isinstance(data, dict), f"workflow job is not a mapping: {path}:{name}")
-        raw = (
-            "\n".join(lines[key_node.start_mark.line : value_node.end_mark.line]) + "\n"
-        )
+        raw = "\n".join(lines[key_node.start_mark.line : value_node.end_mark.line]) + "\n"
         job_working_directory = default_working_directory(data, path)
         job_shell = default_shell(data, path)
         result[name] = WorkflowJob(
@@ -770,9 +768,7 @@ def shell_command_bindings(
 
 
 def resolved_command_token(token: str, bindings: dict[str, str]) -> str:
-    match = re.fullmatch(
-        r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))", token
-    )
+    match = re.fullmatch(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))", token)
     if match is None:
         return token
     return bindings.get(match.group(1) or match.group(2), token)
@@ -820,11 +816,7 @@ def shell_command_substitutions(script: str) -> tuple[list[str], str] | None:
                 comment = True
             elif character == "`":
                 return None
-            elif (
-                character == "$"
-                and index + 1 < len(script)
-                and script[index + 1] == "("
-            ):
+            elif character == "$" and index + 1 < len(script) and script[index + 1] == "(":
                 if index + 2 >= len(script) or script[index + 2] != "(":
                     depth += 1
                     index += 1
@@ -1004,11 +996,7 @@ def wrapped_executable_index(tokens: list[str], start: int) -> int | None:
         if wrapper not in no_value_options:
             return index
         index += 1
-        if (
-            wrapper == "command"
-            and index < len(tokens)
-            and tokens[index] in {"-v", "-V"}
-        ):
+        if wrapper == "command" and index < len(tokens) and tokens[index] in {"-v", "-V"}:
             return None
         while index < len(tokens):
             token = tokens[index]
@@ -1065,22 +1053,8 @@ def runtime_cli_operation_is_dynamic(name: str, arguments: list[str]) -> bool:
     """Fail closed only when a runtime CLI's operation token is unresolved."""
 
     value_options = {
-        "helm": {
-            "--kube-apiserver",
-            "--kube-context",
-            "--kube-token",
-            "--namespace",
-            "-n",
-        },
-        "kubectl": {
-            "--context",
-            "--kubeconfig",
-            "--namespace",
-            "--server",
-            "--token",
-            "-n",
-            "-s",
-        },
+        "helm": {"--kube-apiserver", "--kube-context", "--kube-token", "--namespace", "-n"},
+        "kubectl": {"--context", "--kubeconfig", "--namespace", "--server", "--token", "-n", "-s"},
         "terraform": {"-chdir"},
         "tofu": {"-chdir"},
     }.get(name, set())
@@ -1170,7 +1144,8 @@ def xargs_payload(arguments: list[str]) -> str | None:
         if payload_name in SHELL_INTERPRETERS | SCRIPT_INTERPRETERS:
             inline = interpreter_payload(payload_tokens, 0)
             if inline == "" or (
-                inline is None and interpreter_script_target(payload_tokens, 0) is None
+                inline is None
+                and interpreter_script_target(payload_tokens, 0) is None
             ):
                 # xargs appends stdin items after the fixed arguments. For
                 # inline interpreters or an interpreter without a fixed script,
@@ -1227,12 +1202,9 @@ def interpreter_script_target(tokens: list[str], index: int) -> str | None:
             or token == "-"
             or token.startswith("<<")
             or token == "-c"
-            or token == "-e"
-            and name in {"node", "perl", "ruby"}
-            or token == "--eval"
-            and name == "node"
-            or token == "-r"
-            and name == "php"
+            or token == "-e" and name in {"node", "perl", "ruby"}
+            or token == "--eval" and name == "node"
+            or token == "-r" and name == "php"
         ):
             return None
         if token == "-n" and name in SHELL_INTERPRETERS:
@@ -1431,9 +1403,7 @@ def python_source_has_runtime_mutation(source: str) -> bool:
                 if not argument.elts:
                     return True
                 first = argument.elts[0]
-                if not isinstance(first, ast.Constant) or not isinstance(
-                    first.value, str
-                ):
+                if not isinstance(first, ast.Constant) or not isinstance(first.value, str):
                     return True
                 values = [
                     item.value
@@ -1443,9 +1413,7 @@ def python_source_has_runtime_mutation(source: str) -> bool:
                 executable = executable_name(first.value)
                 if executable in {"ansible-playbook", "scp", "ssh"}:
                     return True
-                if executable in {"helm", "kubectl", "terraform", "tofu"} and len(
-                    values
-                ) != len(argument.elts):
+                if executable in {"helm", "kubectl", "terraform", "tofu"} and len(values) != len(argument.elts):
                     return True
                 command = " ".join(values)
             else:
@@ -1510,13 +1478,10 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
             return True
         lowered_arguments = arguments.lower()
         for method in re.finditer(r"\bmethod\s*:", lowered_arguments):
-            if (
-                re.match(
-                    r"\s*['\"](?:get|head)['\"]",
-                    lowered_arguments[method.end() :],
-                )
-                is None
-            ):
+            if re.match(
+                r"\s*['\"](?:get|head)['\"]",
+                lowered_arguments[method.end() :],
+            ) is None:
                 return True
     client_aliases = set(
         re.findall(
@@ -1594,7 +1559,9 @@ def heredoc_programs(script: str) -> list[tuple[str, str]]:
             end += 1
         require(end < len(lines), "heredoc terminator is missing")
         if interpreter in SHELL_INTERPRETERS | SCRIPT_INTERPRETERS:
-            programs.append((interpreter, "\n".join(lines[index + 1 : end]) + "\n"))
+            programs.append(
+                (interpreter, "\n".join(lines[index + 1 : end]) + "\n")
+            )
         index = end + 1
     return programs
 
@@ -1730,7 +1697,9 @@ def approved_read_only_script_invocation(
             "",
         )
     normalized = target.removeprefix("./")
-    policy = APPROVED_READ_ONLY_SCRIPT_INVOCATIONS.get(repository, {}).get(normalized)
+    policy = APPROVED_READ_ONLY_SCRIPT_INVOCATIONS.get(repository, {}).get(
+        normalized
+    )
     if policy is None:
         return False
     expected_hash, allowed_arguments = policy
@@ -1904,29 +1873,8 @@ def script_dependencies_have_runtime_mutation(
     working_directory: Path,
     trusted_repository_scripts: frozenset[str] = frozenset(),
 ) -> bool:
-    def manifest_trust(target: str, index: int) -> bool | None:
-        """Trust pinned Python only when its import path is isolated.
-
-        A repository script directory precedes the standard library on
-        ``sys.path`` during a normal Python file invocation.  Requiring
-        isolated mode prevents an unmanifested sibling such as ``json.py``
-        from executing with a repository-administration token.
-        """
-
-        normalized = target.removeprefix("./")
-        if normalized not in trusted_repository_scripts:
-            return None
-        if Path(normalized).suffix.lower() != ".py":
-            return False
-        if executable_name(tokens[index]) not in {"python", "python3"}:
-            return False
-        for option_index in range(index + 1, len(tokens)):
-            option = tokens[option_index]
-            if option in {"|", "||", "&&", ";", "&", "{", "}"}:
-                break
-            if option.removeprefix("./") == normalized:
-                return "-I" in tokens[index + 1 : option_index]
-        return False
+    def is_trusted(target: str) -> bool:
+        return target.removeprefix("./") in trusted_repository_scripts
 
     tokens = shell_tokens(script)
     for index in command_indexes(tokens):
@@ -1935,25 +1883,21 @@ def script_dependencies_have_runtime_mutation(
         if interpreter_target is not None:
             invocation_arguments: list[str] = []
             for target_index, token in enumerate(raw_tail):
-                if token.removeprefix("./") == interpreter_target.removeprefix("./"):
+                if (
+                    token.removeprefix("./")
+                    == interpreter_target.removeprefix("./")
+                ):
                     invocation_arguments = raw_tail[target_index + 1 :]
                     break
-            trust = manifest_trust(interpreter_target, index)
-            if trust is False:
-                return True
-            if (
-                trust is None
-                and not approved_read_only_script_invocation(
-                    interpreter_target,
-                    invocation_arguments,
-                    working_directory,
-                )
-                and repository_script_has_runtime_mutation(
-                    interpreter_target,
-                    set(),
-                    script_aliases,
-                    working_directory,
-                )
+            if not is_trusted(interpreter_target) and not approved_read_only_script_invocation(
+                interpreter_target,
+                invocation_arguments,
+                working_directory,
+            ) and repository_script_has_runtime_mutation(
+                interpreter_target,
+                set(),
+                script_aliases,
+                working_directory,
             ):
                 return True
 
@@ -1962,50 +1906,44 @@ def script_dependencies_have_runtime_mutation(
             index,
             working_directory,
         )
-        if module_target is not None:
-            trust = manifest_trust(module_target, index)
-            if trust is False:
-                return True
-            if (
-                trust is None
-                and not approved_read_only_script_invocation(
-                    module_target,
-                    interpreter_module_arguments(tokens, index),
-                    working_directory,
-                )
-                and repository_script_has_runtime_mutation(
-                    module_target,
-                    set(),
-                    script_aliases,
-                    working_directory,
-                )
-            ):
-                return True
+        if (
+            module_target is not None
+            and not is_trusted(module_target)
+            and not approved_read_only_script_invocation(
+                module_target,
+                interpreter_module_arguments(tokens, index),
+                working_directory,
+            )
+            and repository_script_has_runtime_mutation(
+                module_target,
+                set(),
+                script_aliases,
+                working_directory,
+            )
+        ):
+            return True
 
         direct_target = direct_repository_script_target(
             tokens,
             index,
             working_directory,
         )
-        if direct_target is not None:
-            trust = manifest_trust(direct_target, index)
-            if trust is False:
-                return True
-            if (
-                trust is None
-                and not approved_read_only_script_invocation(
-                    direct_target,
-                    raw_tail,
-                    working_directory,
-                )
-                and repository_script_has_runtime_mutation(
-                    direct_target,
-                    set(),
-                    script_aliases,
-                    working_directory,
-                )
-            ):
-                return True
+        if (
+            direct_target is not None
+            and not is_trusted(direct_target)
+            and not approved_read_only_script_invocation(
+                direct_target,
+                raw_tail,
+                working_directory,
+            )
+            and repository_script_has_runtime_mutation(
+                direct_target,
+                set(),
+                script_aliases,
+                working_directory,
+            )
+        ):
+            return True
     return False
 
 
@@ -2056,7 +1994,6 @@ def package_manager_payloads(
         "-v",
         "-y",
     }
-
     def safe_directory(base: Path, value: str) -> Path | None:
         if not value or "$" in value or "${{" in value or Path(value).is_absolute():
             return None
@@ -2184,7 +2121,9 @@ def package_manager_payloads(
         for field in ("dependencies", "devDependencies", "optionalDependencies"):
             values = document.get(field, {})
             if isinstance(values, dict):
-                dependencies.update(key for key in values if isinstance(key, str))
+                dependencies.update(
+                    key for key in values if isinstance(key, str)
+                )
         safe_executables = {"eslint", "playwright", "tsc", "vite", "vitest"}
         declared_names = {
             "playwright": {"@playwright/test", "playwright"},
@@ -2384,25 +2323,18 @@ def contains_runtime_mutation(
             index,
             working_directory,
         )
-        if (
-            direct_target is not None
-            and repository_script_has_runtime_mutation(
-                direct_target,
-                seen_scripts,
-                script_aliases,
-                working_directory,
-            )
-            and not approved_read_only_script_invocation(
-                direct_target,
-                raw_tail,
-                working_directory,
-            )
+        if direct_target is not None and repository_script_has_runtime_mutation(
+            direct_target,
+            seen_scripts,
+            script_aliases,
+            working_directory,
+        ) and not approved_read_only_script_invocation(
+            direct_target,
+            raw_tail,
+            working_directory,
         ):
             return True
-        if (
-            command_token_has_dynamic_executable(command_token)
-            and direct_target is None
-        ):
+        if command_token_has_dynamic_executable(command_token) and direct_target is None:
             return True
         if absolute_executable_is_unproved(command_token):
             return True
@@ -2451,15 +2383,11 @@ def contains_runtime_mutation(
             return True
         if name == "xargs":
             payload = xargs_payload(raw_tail)
-            if (
-                payload is None
-                or payload
-                and contains_runtime_mutation(
-                    payload,
-                    seen_scripts,
-                    script_aliases,
-                    working_directory,
-                )
+            if payload is None or payload and contains_runtime_mutation(
+                payload,
+                seen_scripts,
+                script_aliases,
+                working_directory,
             ):
                 return True
         if name in {"ansible-playbook", "scp", "ssh"}:
@@ -2474,14 +2402,11 @@ def contains_runtime_mutation(
             return True
         if name in {"terraform", "tofu"} and (
             any(item in TERRAFORM_MUTATIONS for item in tail)
-            or "state" in tail
-            and any(item in {"mv", "push", "rm"} for item in tail)
+            or "state" in tail and any(item in {"mv", "push", "rm"} for item in tail)
         ):
             return True
-        if (
-            name in {"docker", "podman"}
-            and "compose" in tail
-            and any(item in CONTAINER_MUTATIONS for item in tail)
+        if name in {"docker", "podman"} and "compose" in tail and any(
+            item in CONTAINER_MUTATIONS for item in tail
         ):
             return True
         if name in {"docker", "podman"} and (
@@ -2489,7 +2414,8 @@ def contains_runtime_mutation(
             and any(item in {"deploy", "rm"} for item in tail)
             or "service" in tail
             and any(
-                item in {"create", "rm", "rollback", "scale", "update"} for item in tail
+                item in {"create", "rm", "rollback", "scale", "update"}
+                for item in tail
             )
             or "swarm" in tail
             and any(item in {"init", "join", "leave", "update"} for item in tail)
@@ -2502,10 +2428,7 @@ def contains_runtime_mutation(
             or name.endswith("apply-plan.sh")
             or lower_name.startswith("deploy_")
             and lower_name.endswith((".py", ".sh"))
-            and any(
-                item in {"apply", "apply-and-issue", "deploy", "rollback"}
-                for item in tail
-            )
+            and any(item in {"apply", "apply-and-issue", "deploy", "rollback"} for item in tail)
             or "reconcile" in lower_name
             and any(item in {"apply", "apply-and-issue", "deploy"} for item in tail)
         ):
@@ -2535,8 +2458,7 @@ def api_client_has_mutating_operation(name: str, tail: list[str]) -> bool:
         if lower_name == "curl" and any(
             token == "-K"
             or lower == "--config"
-            or token.startswith("-K")
-            and len(token) > 2
+            or token.startswith("-K") and len(token) > 2
             or lower.startswith("--config=")
             for token, lower in zip(tail, lower_tail, strict=True)
         ):
@@ -2551,8 +2473,7 @@ def api_client_has_mutating_operation(name: str, tail: list[str]) -> bool:
                 for flag in HTTP_MUTATION_FLAGS
                 if flag.startswith("--")
             )
-            or lower.startswith("-d")
-            and len(token) > 2
+            or lower.startswith("-d") and len(token) > 2
             or token.startswith(("-F", "-T"))
             or lower.startswith("--post-")
             for token, lower in zip(tail, lower_tail, strict=True)
@@ -2565,15 +2486,11 @@ def api_client_has_mutating_operation(name: str, tail: list[str]) -> bool:
             if option in inherited_value_options:
                 index += 2
                 continue
-            if (
-                any(
-                    option.startswith(f"{name}=")
-                    for name in inherited_value_options
-                    if name.startswith("--")
-                )
-                or option.startswith("-r")
-                and len(option) > 2
-            ):
+            if any(
+                option.startswith(f"{name}=")
+                for name in inherited_value_options
+                if name.startswith("--")
+            ) or option.startswith("-r") and len(option) > 2:
                 index += 1
                 continue
             return True
@@ -2582,10 +2499,15 @@ def api_client_has_mutating_operation(name: str, tail: list[str]) -> bool:
             return False
         if arguments[0] == "api":
             method = option_value(arguments[1:], {"--method", "-x"})
-            return method not in {None, "get"} or any(
-                token in {"--field", "--input", "--raw-field", "-f"}
-                or token.startswith(("--field=", "--input=", "--raw-field=", "-f="))
-                for token in arguments[1:]
+            return (
+                method not in {None, "get"}
+                or any(
+                    token in {"--field", "--input", "--raw-field", "-f"}
+                    or token.startswith(
+                        ("--field=", "--input=", "--raw-field=", "-f=")
+                    )
+                    for token in arguments[1:]
+                )
             )
         return arguments[:2] in (["workflow", "run"], ["run", "rerun"])
     if lower_name in {"aws", "az", "doctl", "gcloud"}:
@@ -2641,7 +2563,8 @@ def contains_runtime_action(step: dict[str, Any]) -> bool:
             # Reject callable aliases such as ``const write = github.request``.
             return True
         return any(
-            re.match(r"\s*['\"`]\s*(?:get|head)\s+", script[match.end() :]) is None
+            re.match(r"\s*['\"`]\s*(?:get|head)\s+", script[match.end() :])
+            is None
             for match in request_calls
         )
     return (
@@ -2742,9 +2665,7 @@ def workflow_script_aliases(workflow: str, path: str) -> dict[str, str]:
                     f"checkout path is dynamic or invalid: {path}",
                 )
                 alias = f"{checkout_path}/"
-                require(
-                    alias not in aliases, f"duplicate checkout path binding: {path}"
-                )
+                require(alias not in aliases, f"duplicate checkout path binding: {path}")
                 aliases[alias] = ""
             script = str(step.get("run", "")).replace("\\\n", " ")
             for line in script.splitlines():
@@ -2753,10 +2674,7 @@ def workflow_script_aliases(workflow: str, path: str) -> dict[str, str]:
                     continue
                 source, destination = match.groups()
                 destination = destination.replace("$RUNNER_TEMP/", "${RUNNER_TEMP}/")
-                require(
-                    destination not in aliases,
-                    f"duplicate generated script binding: {path}",
-                )
+                require(destination not in aliases, f"duplicate generated script binding: {path}")
                 candidate = step_working_directory(job, step, path) / source
                 require(
                     candidate.is_file() and not candidate.is_symlink(),
@@ -2839,7 +2757,9 @@ def workflow_has_runtime_mutation(
             "repository",
             "",
         )
-    approved_hash = APPROVED_CONTROL_PLANE_WORKFLOW_SHA256.get(repository, {}).get(path)
+    approved_hash = APPROVED_CONTROL_PLANE_WORKFLOW_SHA256.get(repository, {}).get(
+        path
+    )
     if approved_hash is not None:
         if hashlib.sha256(workflow.encode()).hexdigest() != approved_hash:
             return True
@@ -2903,18 +2823,14 @@ def workflow_actions(workflow: str, path: str) -> list[str]:
 def validate_intent_source_binding(intent: str) -> None:
     jobs = workflow_jobs(intent, ".github/workflows/manual-release-intent.yml")
     require("verify" in jobs, "release-intent verify job is missing")
-    steps = workflow_steps(
-        jobs["verify"], ".github/workflows/manual-release-intent.yml"
-    )
+    steps = workflow_steps(jobs["verify"], ".github/workflows/manual-release-intent.yml")
     checkout_indexes = [
         index
         for index, step in enumerate(steps)
         if isinstance(step.get("uses"), str)
         and step["uses"].startswith("actions/checkout@")
     ]
-    require(
-        len(checkout_indexes) == 1, "release-intent must have one exact checkout step"
-    )
+    require(len(checkout_indexes) == 1, "release-intent must have one exact checkout step")
     checkout_index = checkout_indexes[0]
     checkout = steps[checkout_index]
     require(
@@ -2935,13 +2851,8 @@ def validate_intent_source_binding(intent: str) -> None:
         if step.get("name")
         == "Verify dispatched source is current protected head before checkout"
     ]
-    require(
-        len(precheck_indexes) == 1, "release-intent protected-head precheck is missing"
-    )
-    require(
-        precheck_indexes[0] < checkout_index,
-        "release-intent checks out before validating the protected head",
-    )
+    require(len(precheck_indexes) == 1, "release-intent protected-head precheck is missing")
+    require(precheck_indexes[0] < checkout_index, "release-intent checks out before validating the protected head")
     precheck = steps[precheck_indexes[0]]
     require(
         precheck["env"].get("GH_TOKEN") == "${{ github.token }}"
@@ -2994,10 +2905,7 @@ def validate_protected_job_recheck(intent: str) -> None:
     ]
     require(len(checkout_indexes) == 1, "protected job exact checkout is missing")
     require(len(recheck_indexes) == 1, "protected job policy recheck is missing")
-    require(
-        checkout_indexes[0] < recheck_indexes[0],
-        "protected job rechecks before exact checkout",
-    )
+    require(checkout_indexes[0] < recheck_indexes[0], "protected job rechecks before exact checkout")
     recheck = steps[recheck_indexes[0]]
     expected_env = {
         "GH_TOKEN": "${{ github.token }}",
@@ -3009,10 +2917,7 @@ def validate_protected_job_recheck(intent: str) -> None:
         "IMAGES_JSON": "${{ inputs.images_json }}",
         "PREVIOUS_IMAGES_JSON": "${{ inputs.previous_images_json }}",
     }
-    require(
-        recheck.get("env") == expected_env,
-        "protected job policy recheck inputs are incomplete",
-    )
+    require(recheck.get("env") == expected_env, "protected job policy recheck inputs are incomplete")
 
 
 def validate_release_validator_operations(source: str) -> None:
@@ -3101,7 +3006,9 @@ def validate_release_validator_operations(source: str) -> None:
                     prefix.append(item.value)
                 if prefix:
                     prefix[0] = executable_name(prefix[0])
-                    command_bindings.setdefault(target_name, set()).add(tuple(prefix))
+                    command_bindings.setdefault(target_name, set()).add(
+                        tuple(prefix)
+                    )
             elif (
                 isinstance(value, ast.Call)
                 and qualified_name(value.func) == "urllib.request.build_opener"
@@ -3254,8 +3161,7 @@ def validate_release_validator_operations(source: str) -> None:
             if approved_url_call:
                 require(
                     bool(function_stack)
-                    and function_stack[-1]
-                    in {"api_request", "download_artifact_archive"},
+                    and function_stack[-1] in {"api_request", "download_artifact_archive"},
                     "release-intent validator opens a URL outside the evidence clients",
                 )
             self.generic_visit(node)
@@ -3267,21 +3173,11 @@ def validate(contract: dict[str, Any]) -> None:
     repository = os.environ.get("GITHUB_REPOSITORY", contract.get("repository", ""))
     repository_id_text = os.environ.get("GITHUB_REPOSITORY_ID")
     require(contract.get("schema_version") == SCHEMA, "contract schema mismatch")
-    require(
-        repository in EXPECTED_IDENTITIES,
-        "repository is outside the protected catalog identity map",
-    )
+    require(repository in EXPECTED_IDENTITIES, "repository is outside the protected catalog identity map")
     require(contract.get("repository") == repository, "repository identity mismatch")
-    expected_id, expected_role, expected_deployment, expected_runtime = (
-        EXPECTED_IDENTITIES[repository]
-    )
-    require(
-        contract.get("repository_id") == expected_id, "stable repository ID mismatch"
-    )
-    require(
-        contract.get("role") == expected_role,
-        "repository role contradicts the protected catalog",
-    )
+    expected_id, expected_role, expected_deployment, expected_runtime = EXPECTED_IDENTITIES[repository]
+    require(contract.get("repository_id") == expected_id, "stable repository ID mismatch")
+    require(contract.get("role") == expected_role, "repository role contradicts the protected catalog")
     require(
         contract.get("deployment_authority") is expected_deployment,
         "deployment authority contradicts the protected catalog",
@@ -3292,24 +3188,11 @@ def validate(contract: dict[str, Any]) -> None:
     )
     if repository_id_text:
         require(repository_id_text.isdigit(), "GITHUB_REPOSITORY_ID is invalid")
-        require(
-            contract.get("repository_id") == int(repository_id_text),
-            "stable repository ID mismatch",
-        )
+        require(contract.get("repository_id") == int(repository_id_text), "stable repository ID mismatch")
     require(contract.get("default_branch") == "main", "default branch must be main")
-    require(
-        contract.get("release_intent_workflow")
-        == ".github/workflows/manual-release-intent.yml",
-        "intent workflow mismatch",
-    )
-    require(
-        contract.get("require_verified_commit") is True,
-        "verified commits must be required",
-    )
-    require(
-        contract.get("required_check_app_id") == 15368,
-        "required checks must be bound to GitHub Actions",
-    )
+    require(contract.get("release_intent_workflow") == ".github/workflows/manual-release-intent.yml", "intent workflow mismatch")
+    require(contract.get("require_verified_commit") is True, "verified commits must be required")
+    require(contract.get("required_check_app_id") == 15368, "required checks must be bound to GitHub Actions")
 
     checks = require_string_list(
         contract.get("required_checks"),
@@ -3328,16 +3211,11 @@ def validate(contract: dict[str, Any]) -> None:
     )
     supported = contract.get("supported_phases")
     if deployment_authority:
-        require(
-            supported == PHASES,
-            "deployment authority must support the normalized phase sequence",
-        )
+        require(supported == PHASES, "deployment authority must support the normalized phase sequence")
     else:
         require(supported == ["plan"], "non-deployment authority must be plan-only")
 
-    artifacts = require_mapping(
-        contract.get("artifact_policy"), "artifact policy is missing"
-    )
+    artifacts = require_mapping(contract.get("artifact_policy"), "artifact policy is missing")
     minimum = artifacts.get("minimum_images")
     maximum = artifacts.get("maximum_images")
     if not isinstance(minimum, int) or not isinstance(maximum, int):
@@ -3348,14 +3226,8 @@ def validate(contract: dict[str, Any]) -> None:
         artifacts.get("image_repositories"),
         "image repositories must match the exact image count",
     )
-    require(
-        len(repositories) == maximum,
-        "image repositories must match the exact image count",
-    )
-    require(
-        len(repositories) == len(set(repositories)),
-        "image repositories contain duplicates",
-    )
+    require(len(repositories) == maximum, "image repositories must match the exact image count")
+    require(len(repositories) == len(set(repositories)), "image repositories contain duplicates")
     require(
         all(
             isinstance(item, str)
@@ -3386,14 +3258,8 @@ def validate(contract: dict[str, Any]) -> None:
         "artifact supply-chain policy contradicts the protected repository identity",
     )
     require(artifacts.get("require_digest") is True, "digest-only images are mandatory")
-    require(
-        artifacts.get("allow_rebuild_after_staging") is False,
-        "rebuild after staging is forbidden",
-    )
-    require(
-        artifacts.get("allow_retag_after_staging") is False,
-        "retag after staging is forbidden",
-    )
+    require(artifacts.get("allow_rebuild_after_staging") is False, "rebuild after staging is forbidden")
+    require(artifacts.get("allow_retag_after_staging") is False, "retag after staging is forbidden")
     for field in ("require_sbom", "require_provenance", "require_signature"):
         require(type(artifacts.get(field)) is bool, f"{field} must be boolean")
     supply_chain_required = any(
@@ -3401,17 +3267,10 @@ def validate(contract: dict[str, Any]) -> None:
         for field in ("require_sbom", "require_provenance", "require_signature")
     )
     if supply_chain_required:
+        require(artifacts.get("attestation_verifier") in {"github", "cosign"}, "attestation verifier is missing")
+        require(artifacts.get("attestation_storage") in {"github", "oci"}, "attestation storage is missing")
         require(
-            artifacts.get("attestation_verifier") in {"github", "cosign"},
-            "attestation verifier is missing",
-        )
-        require(
-            artifacts.get("attestation_storage") in {"github", "oci"},
-            "attestation storage is missing",
-        )
-        require(
-            artifacts.get("attestation_verifier") != "cosign"
-            or artifacts.get("attestation_storage") == "oci",
+            artifacts.get("attestation_verifier") != "cosign" or artifacts.get("attestation_storage") == "oci",
             "Cosign attestations must use OCI storage",
         )
         signer_workflow = artifacts.get("signer_workflow")
@@ -3431,31 +3290,22 @@ def validate(contract: dict[str, Any]) -> None:
             "canonical middleware supply-chain requirements cannot be downgraded",
         )
 
-    environments = require_mapping(
-        contract.get("environments"), "environment policy is missing"
-    )
+    environments = require_mapping(contract.get("environments"), "environment policy is missing")
     expected_environments = {
         "staging": "staging-readonly",
         "canary": "production-readonly-canary",
         "production": "production",
     }
     require(
-        environments == expected_environments
-        if deployment_authority
-        else environments == {},
+        environments == expected_environments if deployment_authority else environments == {},
         "protected environment policy mismatch",
     )
 
     safety = require_mapping(contract.get("safety"), "safety controls are missing")
     require(set(safety) == SAFETY_KEYS, "safety controls are incomplete or unexpected")
-    require(
-        all(value is False for value in safety.values()),
-        "every external/live effect must remain disabled",
-    )
+    require(all(value is False for value in safety.values()), "every external/live effect must remain disabled")
 
-    native = require_mapping(
-        contract.get("native_workflows"), "native workflow policy must be an object"
-    )
+    native = require_mapping(contract.get("native_workflows"), "native workflow policy must be an object")
     required_native = REQUIRED_NATIVE_WORKFLOWS.get(repository, {})
     require(
         all(native.get(name) == path for name, path in required_native.items()),
@@ -3468,21 +3318,11 @@ def validate(contract: dict[str, Any]) -> None:
             "signer workflow is outside the enforced native workflow scope",
         )
     for value in native.values():
-        require(
-            isinstance(value, str)
-            and value.startswith(".github/workflows/")
-            and value.endswith((".yml", ".yaml")),
-            "native workflow path is invalid",
-        )
+        require(isinstance(value, str) and value.startswith(".github/workflows/") and value.endswith((".yml", ".yaml")), "native workflow path is invalid")
         path = ROOT / value
-        require(
-            path.is_file() and not path.is_symlink(),
-            f"native workflow is missing or unsafe: {value}",
-        )
+        require(path.is_file() and not path.is_symlink(), f"native workflow is missing or unsafe: {value}")
         workflow = path.read_text(encoding="utf-8")
-        if runtime_mutation_authority is False and workflow_has_runtime_mutation(
-            workflow, value
-        ):
+        if runtime_mutation_authority is False and workflow_has_runtime_mutation(workflow, value):
             require_mutating_jobs_disabled(workflow, value)
     if runtime_mutation_authority is False:
         workflow_paths = sorted(
@@ -3505,52 +3345,36 @@ def validate(contract: dict[str, Any]) -> None:
 
     require_string_list(contract.get("blockers"), "blockers must be non-empty strings")
 
-    require(
-        INTENT_PATH.is_file() and not INTENT_PATH.is_symlink(),
-        "manual release-intent workflow is missing or unsafe",
-    )
-    require(
-        RELEASE_VALIDATOR_PATH.is_file() and not RELEASE_VALIDATOR_PATH.is_symlink(),
-        "release-intent validator is missing or unsafe",
-    )
+    require(INTENT_PATH.is_file() and not INTENT_PATH.is_symlink(), "manual release-intent workflow is missing or unsafe")
+    require(RELEASE_VALIDATOR_PATH.is_file() and not RELEASE_VALIDATOR_PATH.is_symlink(), "release-intent validator is missing or unsafe")
     intent = INTENT_PATH.read_text(encoding="utf-8")
     release_validator = RELEASE_VALIDATOR_PATH.read_text(encoding="utf-8")
     validate_release_validator_operations(release_validator)
     for marker in (
-        'runtime_contacted": False',
-        'production_changed": False',
-        'external_effects_enabled": False',
-        '["git", "rev-parse", "HEAD"]',
+        "runtime_contacted\": False",
+        "production_changed\": False",
+        "external_effects_enabled\": False",
+        "[\"git\", \"rev-parse\", \"HEAD\"]",
         "required checks are not app-bound",
         "prior evidence hash mismatch",
         "--source-digest",
     ):
-        require(
-            marker in release_validator,
-            f"release-intent safety marker is missing: {marker}",
-        )
+        require(marker in release_validator, f"release-intent safety marker is missing: {marker}")
     for marker in (
         "persist-credentials: false",
         "prior_evidence_run_id:",
         "protected_environment_approved == false",
         "protected_environment_job_completed = true",
     ):
-        require(
-            marker in intent, f"release-intent workflow marker is missing: {marker}"
-        )
+        require(marker in intent, f"release-intent workflow marker is missing: {marker}")
     validate_intent_source_binding(intent)
     validate_protected_job_recheck(intent)
     require(
-        not workflow_has_runtime_command(
-            intent, ".github/workflows/manual-release-intent.yml"
-        ),
+        not workflow_has_runtime_command(intent, ".github/workflows/manual-release-intent.yml"),
         "release-intent workflow contains a runtime/deployment command",
     )
     actions = workflow_actions(intent, ".github/workflows/manual-release-intent.yml")
-    require(
-        bool(actions) and set(actions) <= ALLOWED_ACTIONS,
-        "release-intent workflow uses a non-allowlisted action",
-    )
+    require(bool(actions) and set(actions) <= ALLOWED_ACTIONS, "release-intent workflow uses a non-allowlisted action")
 
 
 def validate_negative_regressions(contract: dict[str, Any]) -> None:
@@ -3594,9 +3418,7 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
         }
     )
     if contract["artifact_policy"]["maximum_images"] != 0:
-        mutations.append(
-            ("repository artifact-policy downgrade", identity_artifact_downgrade)
-        )
+        mutations.append(("repository artifact-policy downgrade", identity_artifact_downgrade))
 
     live_effect = deepcopy(contract)
     live_effect["safety"]["payment_execution"] = True
@@ -3608,9 +3430,7 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
     mutations.append(("non-authority phase escalation", phase_escalation))
 
     runtime_escalation = deepcopy(contract)
-    runtime_escalation["runtime_mutation_authority"] = not runtime_escalation[
-        "runtime_mutation_authority"
-    ]
+    runtime_escalation["runtime_mutation_authority"] = not runtime_escalation["runtime_mutation_authority"]
     mutations.append(("runtime mutation authority contradiction", runtime_escalation))
 
     role_escalation = deepcopy(contract)
@@ -3673,9 +3493,7 @@ def validate_intent_negative_regressions() -> None:
             validate_intent_source_binding(unsafe)
         except ContractError:
             continue
-        raise ContractError(
-            "negative regression unexpectedly passed: unsafe source binding"
-        )
+        raise ContractError("negative regression unexpectedly passed: unsafe source binding")
     unsafe_protected_job = intent.replace(
         "    environment:\n      name: ${{ needs.verify.outputs.environment }}",
         "    environment: unreviewed-production",
@@ -3712,7 +3530,9 @@ def validate_intent_negative_regressions() -> None:
         "comment-only runtime command was treated as executable",
     )
     require(
-        not contains_runtime_mutation("python3 scripts/apply_repository_governance.py"),
+        not contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py"
+        ),
         "governance plan invocation was treated as runtime mutation",
     )
     require(
@@ -3760,30 +3580,6 @@ def validate_intent_negative_regressions() -> None:
             trusted is not None and bool(trusted),
             f"control-plane dependency manifest is missing: {workflow_path}",
         )
-        assert trusted is not None
-        entry_script = (
-            "scripts/apply_integration_main_release_authorities_v2.py"
-            if workflow_path.endswith("integration-main-release-authorities.yml")
-            else "scripts/apply_production_reviewer_access.py"
-        )
-        require(
-            not script_dependencies_have_runtime_mutation(
-                f"python3 -I {entry_script} --mode validate",
-                {},
-                ROOT,
-                trusted,
-            ),
-            f"isolated trusted control-plane script was rejected: {entry_script}",
-        )
-        require(
-            script_dependencies_have_runtime_mutation(
-                f"python3 {entry_script} --mode validate",
-                {},
-                ROOT,
-                trusted,
-            ),
-            f"non-isolated trusted control-plane script escaped: {entry_script}",
-        )
         dependency_manifest = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256[repository][
             workflow_path
         ]
@@ -3814,9 +3610,7 @@ jobs:
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: enabled mutating job"
-        )
+        raise ContractError("negative regression unexpectedly passed: enabled mutating job")
     enabled_action_mutation = """name: synthetic
 jobs:
   deploy:
@@ -3829,9 +3623,7 @@ jobs:
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: action mutating job"
-        )
+        raise ContractError("negative regression unexpectedly passed: action mutating job")
     quoted_mutation = """name: synthetic
 jobs:
   deploy:
@@ -3844,9 +3636,7 @@ jobs:
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: quoted mutating command"
-        )
+        raise ContractError("negative regression unexpectedly passed: quoted mutating command")
     github_script_mutation = """name: synthetic
 jobs:
   deploy:
@@ -3857,15 +3647,11 @@ jobs:
           script: await exec.exec('kubectl', ['apply', '-f', 'runtime.yml'])
 """
     try:
-        require_mutating_jobs_disabled(
-            github_script_mutation, "synthetic-github-script.yml"
-        )
+        require_mutating_jobs_disabled(github_script_mutation, "synthetic-github-script.yml")
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: github-script mutation"
-        )
+        raise ContractError("negative regression unexpectedly passed: github-script mutation")
     octokit_mutation = """name: synthetic
 jobs:
   deploy:
@@ -3936,7 +3722,9 @@ jobs:
         except ContractError:
             pass
         else:
-            raise ContractError(f"negative regression unexpectedly passed: {name}")
+            raise ContractError(
+                f"negative regression unexpectedly passed: {name}"
+            )
     dynamic_publication = """name: synthetic
 jobs:
   publish:
@@ -3975,9 +3763,7 @@ jobs:
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: declared Python shell"
-        )
+        raise ContractError("negative regression unexpectedly passed: declared Python shell")
     workflow_python_shell_mutation = """name: synthetic
 defaults:
   run:
@@ -4016,9 +3802,7 @@ jobs:
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: reusable workflow mutation"
-        )
+        raise ContractError("negative regression unexpectedly passed: reusable workflow mutation")
     local_reusable = ROOT / ".github/workflows/.codestra-local-runtime-negative.yml"
     try:
         local_reusable.write_text(
@@ -4047,9 +3831,7 @@ jobs:
             )
     finally:
         local_reusable.unlink(missing_ok=True)
-    with tempfile.TemporaryDirectory(
-        prefix=".codestra-contract-", dir=ROOT
-    ) as directory:
+    with tempfile.TemporaryDirectory(prefix=".codestra-contract-", dir=ROOT) as directory:
         local_script = Path(directory) / "runtime.sh"
         local_script.write_text("kubectl apply -f runtime.yml\n", encoding="utf-8")
         relative = local_script.relative_to(ROOT).as_posix()
@@ -4122,7 +3904,7 @@ jobs:
                         "deploy": "kubectl apply -f runtime.yml",
                         "prepack": "kubectl apply -f runtime.yml",
                         "validate": "python3 -m compileall -q .",
-                    },
+                    }
                 }
             ),
             encoding="utf-8",
@@ -4339,9 +4121,7 @@ subprocess.run([\"kubectl\", \"apply\", \"-f\", \"runtime.yml\"], check=True)
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: runtime validator operation"
-        )
+        raise ContractError("negative regression unexpectedly passed: runtime validator operation")
     unsafe_aliased_validator = """import subprocess as sp
 sp.run(["kubectl", "apply", "-f", "runtime.yml"], check=True)
 """
@@ -4350,9 +4130,7 @@ sp.run(["kubectl", "apply", "-f", "runtime.yml"], check=True)
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: aliased runtime operation"
-        )
+        raise ContractError("negative regression unexpectedly passed: aliased runtime operation")
     unsafe_callable_validator = """import subprocess
 runner = subprocess.run
 runner(["kubectl", "apply", "-f", "runtime.yml"], check=True)
@@ -4395,7 +4173,7 @@ runner(["kubectl", "apply", "-f", "runtime.yml"], check=True)
         "import urllib.request\ngetattr(urllib.request, 'urlopen')"
         "('https://runtime.example/mutate')\n",
         "import builtins\nbuiltins.exec("
-        "\"import os; os.system(\\'kubectl apply -f runtime.yml\\')\")\n",
+        '"import os; os.system(\\\'kubectl apply -f runtime.yml\\\')")\n',
         "import builtins, subprocess\n"
         "launch = builtins.getattr(subprocess, 'run')\n"
         "launch(['kubectl', 'apply'])\n",
@@ -4431,7 +4209,9 @@ command.extend(["kubectl", "apply"])
 subprocess.run(command, check=True)
 """
     try:
-        validate_release_validator_operations(unsafe_method_mutated_command_validator)
+        validate_release_validator_operations(
+            unsafe_method_mutated_command_validator
+        )
     except ContractError:
         pass
     else:
@@ -4459,9 +4239,7 @@ urllib.request.urlopen("https://runtime.example/mutate")
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: unapproved URL opener"
-        )
+        raise ContractError("negative regression unexpectedly passed: unapproved URL opener")
     unsafe_aliased_urlopen = """import urllib.request
 open_url = urllib.request.urlopen
 open_url("https://runtime.example/mutate")
@@ -4482,9 +4260,7 @@ subprocess.run([\"gh\", \"api\", \"--method\", \"POST\"], check=True)
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: validator status writer"
-        )
+        raise ContractError("negative regression unexpectedly passed: validator status writer")
     unsafe_buildx_writer = """import subprocess
 subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
 """
@@ -4493,12 +4269,10 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
     except ContractError:
         pass
     else:
-        raise ContractError(
-            "negative regression unexpectedly passed: validator image writer"
-        )
+        raise ContractError("negative regression unexpectedly passed: validator image writer")
     for command in (
         "curl -X POST https://runtime.example/mutate",
-        'METHOD=POST; curl -X "$METHOD" https://runtime.example/mutate',
+        "METHOD=POST; curl -X \"$METHOD\" https://runtime.example/mutate",
         "curl --data-urlencode action=deploy https://runtime.example/mutate",
         "gh api --method POST repos/example/runtime/dispatches",
         "gh -R example/runtime workflow run deploy.yml",
@@ -4527,16 +4301,17 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
         "find . -exec kubectl apply -f runtime.yml {} \\;",
         'ACTION=-exec; find . "$ACTION" kubectl apply -f runtime.yml {} \\;',
         'find . "${ACTION}" kubectl apply -f runtime.yml {} \\;',
-        'action=-execdir; find . "$action" sh -c "kubectl apply -f runtime.yml" \\;',
+        'action=-execdir; find . "$action" sh -c '
+        '"kubectl apply -f runtime.yml" \\;',
         "shopt -s expand_aliases; alias deploy='kubectl apply -f runtime.yml'; deploy",
         "make up",
         "curl -K request.conf",
         "curl -fsSL https://example.invalid/deploy.sh | bash",
-        'python3 -c "import subprocess; '
+        "python3 -c \"import subprocess; "
         "subprocess.run(['kubectl', 'apply', '-f', 'runtime.yml'])\"",
-        'python3 -B -E -I -c "import subprocess; '
+        "python3 -B -E -I -c \"import subprocess; "
         "subprocess.run(['kubectl', 'apply'])\"",
-        'node --eval=\'require("node:child_process").execSync('
+        "node --eval='require(\"node:child_process\").execSync("
         '"kubectl apply -f runtime.yml")\'',
         "python3 -c'import os; os.system(\"kubectl apply -f runtime.yml\")'",
         "/tmp/python",
@@ -4548,7 +4323,9 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
             f"negative API mutation regression passed: {command}",
         )
     require(
-        not contains_runtime_mutation("find . -type f -print0 | xargs -0 sha256sum"),
+        not contains_runtime_mutation(
+            "find . -type f -print0 | xargs -0 sha256sum"
+        ),
         "read-only xargs checksum regression failed",
     )
     require(
@@ -4581,7 +4358,10 @@ def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
 def require_image_publishing_jobs_disabled(workflow: str, path: str) -> None:
     publishing_jobs = 0
     for job in workflow_jobs(workflow, path).values():
-        if any(contains_image_publication(step) for step in workflow_steps(job, path)):
+        if any(
+            contains_image_publication(step)
+            for step in workflow_steps(job, path)
+        ):
             publishing_jobs += 1
             require(
                 "RUNTIME_MUTATION_DISABLED=true" in job.raw,
@@ -4606,17 +4386,9 @@ def main() -> int:
     )
     expected_sha = os.environ.get("EXPECTED_SHA")
     if expected_sha:
-        require(
-            re.fullmatch(r"[0-9a-f]{40}", expected_sha) is not None,
-            "expected source SHA is invalid",
-        )
-        actual_sha = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip()
-        require(
-            actual_sha == expected_sha,
-            "contract validation checkout is not the exact event source",
-        )
+        require(re.fullmatch(r"[0-9a-f]{40}", expected_sha) is not None, "expected source SHA is invalid")
+        actual_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        require(actual_sha == expected_sha, "contract validation checkout is not the exact event source")
     print("PRODUCTION_ORCHESTRATOR_CONTRACT=PASS")
     return 0
 

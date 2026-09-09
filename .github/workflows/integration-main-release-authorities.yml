@@ -77,8 +77,21 @@ jobs:
         if: github.event_name == 'issue_comment'
         run: |
           set -Eeuo pipefail
-          python3 -I scripts/apply_integration_main_release_authorities_v2.py \
-            --validate-issue-comment-event
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+
+          script = Path("scripts/apply_integration_main_release_authorities_v2.py")
+          spec = importlib.util.spec_from_file_location("integration_authority", script)
+          assert spec and spec.loader
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
+              event = json.load(handle)
+          module.validate_issue_comment_event(event)
+          PY
       - name: Validate fixed repository, reviewer, and ruleset authority
         run: |
           set -Eeuo pipefail
@@ -93,8 +106,8 @@ jobs:
             tests.test_integration_main_release_authorities \
             tests.test_integration_main_release_authorities_v2 \
             tests.test_integration_main_release_authorities_compat
-          python3 -I scripts/apply_integration_main_release_authorities.py --mode validate
-          python3 -I scripts/apply_integration_main_release_authorities_v2.py --mode validate
+          python3 scripts/apply_integration_main_release_authorities.py --mode validate
+          python3 scripts/apply_integration_main_release_authorities_v2.py --mode validate
           python3 -m json.tool config/integration-main-release-authorities.v1.json >/dev/null
           git diff --check
       - name: Upload secret-free policy evidence
@@ -156,7 +169,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -n "$CODESTRA_REPOSITORY_ADMIN_TOKEN"
-          python3 -I scripts/apply_integration_main_release_authorities_v2.py \
+          python3 scripts/apply_integration_main_release_authorities_v2.py \
             --mode apply \
             --confirm APPLY_INTEGRATION_MAIN_RELEASE_AUTHORITY_V1
       - name: Upload bounded rollout evidence

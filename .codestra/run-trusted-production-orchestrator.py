@@ -60,16 +60,32 @@ def require(condition: bool, message: str) -> None:
         raise TrustError(message)
 
 
-def digest(path: Path) -> str:
-    require(path.is_file() and not path.is_symlink(), f"unsafe trust path: {path}")
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def safe_file(root: Path, relative: Path) -> Path:
+    require(
+        not relative.is_absolute() and ".." not in relative.parts,
+        f"unsafe trust path: {relative}",
+    )
+    resolved_root = root.resolve(strict=True)
+    candidate = resolved_root
+    for part in relative.parts:
+        candidate /= part
+        require(not candidate.is_symlink(), f"unsafe trust path: {relative}")
+    require(candidate.is_file(), f"unsafe trust path: {relative}")
+    resolved_candidate = candidate.resolve(strict=True)
+    require(
+        resolved_candidate.is_relative_to(resolved_root),
+        f"trust path escapes checkout: {relative}",
+    )
+    return candidate
+
+
+def digest(root: Path, relative: Path) -> str:
+    return hashlib.sha256(safe_file(root, relative).read_bytes()).hexdigest()
 
 
 def require_unchanged_trust_file(relative: Path, candidate_root: Path) -> None:
-    trusted = TRUST_ROOT / relative
-    candidate = candidate_root / relative
     require(
-        digest(candidate) == digest(trusted),
+        digest(candidate_root, relative) == digest(TRUST_ROOT, relative),
         f"protected-base trust file changed: {relative.as_posix()}",
     )
 
@@ -97,16 +113,16 @@ def validate_exact_checkout(root: Path) -> str:
 
 def validate_candidate(root: Path) -> Path:
     require(
-        digest(root / WORKFLOW_PATH) in APPROVED_TRUST_WORKFLOW_SHA256,
+        digest(root, WORKFLOW_PATH) in APPROVED_TRUST_WORKFLOW_SHA256,
         "candidate trust workflow is not approved by protected main",
     )
     require_unchanged_trust_file(LAUNCHER_PATH.relative_to(TRUST_ROOT), root)
     require_unchanged_trust_file(TRUST_GATE_WORKFLOW_PATH, root)
 
-    orchestrator = root / ORCHESTRATOR_PATH
-    release_validator = root / RELEASE_VALIDATOR_PATH
-    orchestrator_digest = digest(orchestrator)
-    release_validator_digest = digest(release_validator)
+    orchestrator = safe_file(root, ORCHESTRATOR_PATH)
+    release_validator = safe_file(root, RELEASE_VALIDATOR_PATH)
+    orchestrator_digest = digest(root, ORCHESTRATOR_PATH)
+    release_validator_digest = digest(root, RELEASE_VALIDATOR_PATH)
     policy = APPROVED_VALIDATOR_POLICIES.get(orchestrator_digest)
     require(
         policy is not None,

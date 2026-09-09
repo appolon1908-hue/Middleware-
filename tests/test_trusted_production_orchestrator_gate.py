@@ -96,6 +96,25 @@ def test_trust_file_comparison_rejects_candidate_drift(
         launcher.require_unchanged_trust_file(relative, candidate_root)
 
 
+def test_safe_file_rejects_a_symlinked_parent_that_escapes_candidate(
+    tmp_path: Path,
+) -> None:
+    launcher = load_launcher()
+    candidate_root = tmp_path / "candidate"
+    protected_root = tmp_path / "protected"
+    candidate_root.mkdir()
+    (protected_root / ".codestra").mkdir(parents=True)
+    (protected_root / ".codestra" / "validator.py").write_text(
+        "protected\n", encoding="utf-8"
+    )
+    (candidate_root / ".codestra").symlink_to(
+        protected_root / ".codestra", target_is_directory=True
+    )
+
+    with pytest.raises(launcher.TrustError, match="unsafe trust path"):
+        launcher.safe_file(candidate_root, Path(".codestra/validator.py"))
+
+
 def test_governance_accepts_only_the_exact_gate_workflow() -> None:
     governance = load_governance_validator()
     text = GATE.read_text(encoding="utf-8")

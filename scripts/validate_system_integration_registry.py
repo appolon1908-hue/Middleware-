@@ -223,6 +223,50 @@ EXPECTED_ADAPTER_BOUND_SYSTEMS = {
         "target-and-event-source",
     ),
 }
+EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY = {
+    "ai": ("product-clients", "product-client", "caller"),
+    "beyvra-backend": (
+        "financial-isolated",
+        "product-adapter-nonfinancial",
+        "caller-and-target",
+    ),
+    "klyrow-email": (
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "kyqra-crawler": (
+        "crawler",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "marketing": ("product-clients", "product-client", "caller"),
+    "odoo": (
+        "communications",
+        "business-system-adapter",
+        "target-and-event-source",
+    ),
+    "provisioning": (
+        "core-control-plane",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "social": (
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "telnexa-sms": (
+        "communications",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+    "vicidial-asterisk": (
+        "telephony-restricted",
+        "provider-adapter",
+        "target-and-event-source",
+    ),
+}
 
 JsonObject = dict[str, Any]
 
@@ -824,6 +868,32 @@ def validate(
                 owner_item.get("middleware_relationship"),
             )
             == (cell, mode, relationship),
+            f"canonical adapter owner security classification mismatch: {component}",
+        )
+
+    canonical_owner_repositories = {
+        repository.casefold()
+        for repository in EXPECTED_CANONICAL_ADAPTER_OWNERS.values()
+    }
+    canonical_owner_components = {
+        str(item["component"])
+        for item in systems
+        if str(item["current_repository"]).casefold() in canonical_owner_repositories
+    }
+    require(
+        canonical_owner_components
+        == set(EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY),
+        "canonical adapter owner security inventory mismatch",
+    )
+    for component, expected_security in EXPECTED_CANONICAL_ADAPTER_OWNER_SECURITY.items():
+        owner_item = system_by_component[component]
+        require(
+            (
+                owner_item.get("cell"),
+                owner_item.get("integration_mode"),
+                owner_item.get("middleware_relationship"),
+            )
+            == expected_security,
             f"canonical adapter owner security classification mismatch: {component}",
         )
 

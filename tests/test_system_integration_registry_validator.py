@@ -237,6 +237,24 @@ def test_canonical_adapter_owner_cannot_be_relabelled_as_client(
     )
 
 
+@pytest.mark.parametrize("component", ["ai", "marketing"])
+def test_unbound_canonical_adapter_owner_security_cannot_drift(
+    validator: ModuleType, documents, component: str
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    owner = system(registry, component)
+    owner["cell"] = "governance"
+    owner["integration_mode"] = "documentation-reference"
+    owner["middleware_relationship"] = "none"
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        f"canonical adapter owner security classification mismatch: {component}",
+    )
+
+
 def test_canonical_adapter_ownership_cannot_move_between_repositories(
     validator: ModuleType, documents
 ) -> None:

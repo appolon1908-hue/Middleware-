@@ -280,32 +280,33 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                 "completed",
             ]
 
-            activities.command_transitions.clear()
-            activities.execute_status = "dispatch_unknown"
-            readbacks_before = activities.readback_attempts
-            dispatch_unknown = await environment.client.execute_workflow(
-                CommandExecutionWorkflow.run,
-                CommandExecutionRequest(
-                    command_id="00000000-0000-4000-8000-000000000099",
-                    command_type="telephony-internal.calls.originate",
-                    command_version="1.0",
-                    target="vicidial-restricted",
-                    tenant_id="tenant-test",
-                    requested_by="subject-appolon",
-                    correlation_id="calling-correlation-unknown",
-                    idempotency_key="calling-idempotency-unknown",
-                    capability="INTERNAL_TELEPHONY_CALLS",
-                    payload={},
-                    authenticated_client_id="odoo-integration",
-                ),
-                id="test-calling-dispatch-unknown",
-                task_queue=TASK_QUEUE,
-            )
-            assert dispatch_unknown.status == "reconciliation_required"
-            assert activities.command_transitions == [
-                "queued", "dispatching", "reconciliation_required",
-            ]
-            assert activities.readback_attempts == readbacks_before
+            for action in ("originate", "hangup"):
+                activities.command_transitions.clear()
+                activities.execute_status = "dispatch_unknown"
+                readbacks_before = activities.readback_attempts
+                dispatch_unknown = await environment.client.execute_workflow(
+                    CommandExecutionWorkflow.run,
+                    CommandExecutionRequest(
+                        command_id="00000000-0000-4000-8000-000000000099",
+                        command_type=f"telephony-internal.calls.{action}",
+                        command_version="1.0",
+                        target="vicidial-restricted",
+                        tenant_id="tenant-test",
+                        requested_by="subject-appolon",
+                        correlation_id="calling-correlation-unknown",
+                        idempotency_key="calling-idempotency-unknown",
+                        capability="INTERNAL_TELEPHONY_CALLS",
+                        payload={},
+                        authenticated_client_id="odoo-integration",
+                    ),
+                    id=f"test-calling-{action}-dispatch-unknown",
+                    task_queue=TASK_QUEUE,
+                )
+                assert dispatch_unknown.status == "reconciliation_required"
+                assert activities.command_transitions == [
+                    "queued", "dispatching", "reconciliation_required",
+                ]
+                assert activities.readback_attempts == readbacks_before
             activities.execute_status = "accepted"
 
             activities.command_transitions.clear()
@@ -434,7 +435,7 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                     tenant_id="tenant-test",
                     requested_by="user-1",
                     correlation_id="sms-correlation-1",
-                    idempotency_key="sms-idempotency-1",
+                    idempotency_key="test-sms-2",
                     capability="SMS_DELIVERY",
                     payload={"message_id": "message-2"},
                     authenticated_client_id="test-client",

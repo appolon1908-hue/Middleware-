@@ -435,7 +435,7 @@ async def test_critical_workflows_retry_wait_compensate_and_require_approval() -
                     tenant_id="tenant-test",
                     requested_by="user-1",
                     correlation_id="sms-correlation-1",
-                    idempotency_key="sms-idempotency-1",
+                    idempotency_key="test-sms-2",
                     capability="SMS_DELIVERY",
                     payload={"message_id": "message-2"},
                     authenticated_client_id="test-client",

@@ -85,7 +85,8 @@ def test_runtime_safety_openapi_publishes_typed_v11_schema(test_settings):
     assert component["additionalProperties"] is False
 
 def test_generic_provider_webhook_preserves_signature_and_replay_controls(test_settings,runtime):
-    path="/v1/webhooks/odoo/events/webhook-1"; route=ROUTE_BY_PATH["/api/v1/odoo/events"]
+    path="/v1/webhooks/odoo/events/webhook-1"
+    route=ROUTE_BY_PATH["/api/v1/odoo/events"]
     event=make_event(producer=route.producer_client_id,event_type=sorted(route.event_types)[0])
     body,headers=signed_headers(path=path,producer=route.producer_client_id,scope=route.required_scope,event=event)
     with TestClient(create_app(settings=test_settings,runtime=runtime)) as client:
@@ -93,11 +94,13 @@ def test_generic_provider_webhook_preserves_signature_and_replay_controls(test_s
         assert first.status_code==202
         replay=client.post(path,content=body,headers=headers)
         assert replay.status_code==200 and replay.json()["duplicate"] is True
-        unsigned=dict(headers); unsigned["X-Codestra-Signature"]="sha256="+"0"*64
+        unsigned=dict(headers)
+        unsigned["X-Codestra-Signature"]="sha256="+"0"*64
         assert client.post(path,content=body,headers=unsigned).status_code==401
 
 def test_odoo_domain_command_reuses_durable_operation_and_scope_controls(test_settings):
-    body=command_payload(); headers={"Authorization":"Bearer legacy-command-token","X-Tenant-ID":"tenant-1","X-Correlation-ID":body["correlation_id"],"Idempotency-Key":body["idempotency_key"]}
+    body=command_payload()
+    headers={"Authorization":"Bearer legacy-command-token","X-Tenant-ID":"tenant-1","X-Correlation-ID":body["correlation_id"],"Idempotency-Key":body["idempotency_key"]}
     with TestClient(_app(test_settings)) as client:
         submitted=client.post("/v1/odoo/commands",json=body,headers=headers)
         assert submitted.status_code==202

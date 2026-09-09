@@ -82,6 +82,20 @@ RELEASE_INTENT_ALLOWED_COMMANDS = {
     "test",
     "umask",
 }
+RELEASE_INTENT_ALLOWED_GH_API = {
+    (
+        "api",
+        "repos/${GITHUB_REPOSITORY}",
+        "--jq",
+        ".default_branch",
+    ),
+    (
+        "api",
+        "repos/${GITHUB_REPOSITORY}/branches/${branch}",
+        "--jq",
+        ".commit.sha",
+    ),
+}
 KUBECTL_MUTATIONS = {
     "annotate",
     "apply",
@@ -2363,7 +2377,10 @@ def contains_runtime_command(script: str) -> bool:
             # Release intent is an exact, plan-only evidence workflow. Unknown
             # executables are runtime-capable until explicitly reviewed here.
             return True
-        if name == "gh" and (not raw_arguments or raw_arguments[0] != "api"):
+        if name == "gh" and (
+            bindings
+            or tuple(raw_arguments) not in RELEASE_INTENT_ALLOWED_GH_API
+        ):
             return True
         if name == "python3" and interpreter_script_target(tokens, index) != (
             ".codestra/validate-release-intent.py"
@@ -4719,6 +4736,21 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
         pass
     else:
         raise ContractError("negative regression unexpectedly passed: validator image writer")
+    require(
+        not contains_runtime_command(
+            'gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch'
+        ),
+        "fixed GitHub control-plane read was treated as runtime contact",
+    )
+    for command in (
+        'gh api --hostname runtime.example "repos/${GITHUB_REPOSITORY}" --jq .default_branch',
+        "gh api https://runtime.example/status --jq .status",
+        'GH_HOST=runtime.example gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch',
+    ):
+        require(
+            contains_runtime_command(command),
+            f"unapproved GitHub API authority escaped: {command}",
+        )
     for command in (
         "curl -X POST https://runtime.example/mutate",
         "METHOD=POST; curl -X \"$METHOD\" https://runtime.example/mutate",

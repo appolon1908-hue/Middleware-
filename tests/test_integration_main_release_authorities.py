@@ -52,6 +52,9 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         row = MODULE.validate_config(self.config)[0]
         baseline = MODULE.desired_ruleset(row)
         existing = copy.deepcopy(baseline)
+        existing["conditions"]["ref_name"]["include"].append(
+            "refs/heads/release/*"
+        )
         pull = next(rule for rule in existing["rules"] if rule["type"] == "pull_request")
         pull["parameters"]["require_code_owner_review"] = True
         pull["parameters"]["require_extra_approval_for_unattributed_changes"] = True
@@ -73,6 +76,10 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         baseline, existing = self.stronger_live_ruleset()
         merged = MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
         normalized = MODULE.normalize_ruleset(merged)
+        self.assertEqual(
+            normalized["conditions"]["ref_name"]["include"],
+            ["refs/heads/release/*", "~DEFAULT_BRANCH"],
+        )
         pull = normalized["rules"]["pull_request"]
         self.assertTrue(pull["require_code_owner_review"])
         self.assertTrue(pull["require_extra_approval_for_unattributed_changes"])
@@ -112,6 +119,22 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             MODULE.normalize_ruleset(existing),
             MODULE.normalize_ruleset(merged),
         )
+
+    def test_protected_ref_order_does_not_force_a_ruleset_write(self) -> None:
+        baseline, existing = self.stronger_live_ruleset()
+        existing["conditions"]["ref_name"]["include"].reverse()
+
+        self.assertTrue(MODULE.ruleset_meets_baseline(existing, baseline))
+
+    def test_effective_policy_rejects_dropped_protected_ref(self) -> None:
+        baseline, existing = self.stronger_live_ruleset()
+        effective = MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+        weakened = copy.deepcopy(effective)
+        weakened["conditions"]["ref_name"]["include"].remove(
+            "refs/heads/release/*"
+        )
+
+        self.assertFalse(MODULE.ruleset_meets_baseline(weakened, effective))
 
     def test_status_check_order_does_not_force_a_ruleset_write(self) -> None:
         baseline, existing = self.stronger_live_ruleset()

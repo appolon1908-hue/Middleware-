@@ -1286,6 +1286,43 @@ def python_source_has_runtime_mutation(
         network_receiver = bool(receiver_hints & NETWORK_CLIENT_HINTS)
         database_receiver = bool(receiver_hints & DATABASE_CLIENT_HINTS)
         if include_read_only_runtime_contact and (
+            method
+            in {
+                "create_connection",
+                "create_datagram_endpoint",
+                "create_server",
+                "open_connection",
+                "open_unix_connection",
+                "start_server",
+                "start_unix_server",
+            }
+            or
+            qualified
+            in {
+                "asyncio.open_connection",
+                "asyncio.start_server",
+                "asyncio.start_unix_server",
+                "asyncio.open_unix_connection",
+            }
+            or qualified.startswith(
+                (
+                    "aiohttp.",
+                    "asyncio.BaseEventLoop.create_connection",
+                    "asyncio.BaseEventLoop.create_server",
+                    "asyncio.loop.create_connection",
+                    "asyncio.loop.create_server",
+                    "ftplib.",
+                    "grpc.",
+                    "http.client.",
+                    "smtplib.",
+                    "socket.",
+                    "ssl.",
+                    "websockets.",
+                )
+            )
+        ):
+            return True
+        if include_read_only_runtime_contact and (
             network_receiver
             or database_receiver
             or qualified
@@ -1527,6 +1564,14 @@ def javascript_source_has_runtime_contact(source: str) -> bool:
             "node:net",
             "node:tls",
             "node:dgram",
+            "from 'http'",
+            'from "http"',
+            "from 'https'",
+            'from "https"',
+            "from 'net'",
+            'from "net"',
+            "from 'tls'",
+            'from "tls"',
             "require('http')",
             'require("http")',
             "require('https')",
@@ -1538,9 +1583,13 @@ def javascript_source_has_runtime_contact(source: str) -> bool:
         )
     ):
         return True
+    if re.search(r"\bimport\s*\(", lower):
+        # Dynamic imports can return a destructured or renamed network
+        # primitive whose eventual call has no statically attributable receiver.
+        return True
     return bool(
-        re.search(r"\bfetch\s*\(", lower)
-        or re.search(r"\bwebsocket\s*\(", lower)
+        re.search(r"\bfetch\b", lower)
+        or re.search(r"\bwebsocket\b", lower)
         or re.search(
             r"\b(?:api|api_client|axios|client|connection|http|httpx|requests|session|socket)"
             r"\s*\.\s*(?:get|head|request|send)\s*\(",
@@ -2769,6 +2818,21 @@ def step_has_runtime_contact(
     tokens = shell_tokens(shell_without_heredoc_bodies(run))
     for index in command_indexes(tokens):
         interpreter = executable_name(tokens[index]).lower()
+        if interpreter in {
+            "curl",
+            "ftp",
+            "lftp",
+            "nc",
+            "ncat",
+            "netcat",
+            "sftp",
+            "socat",
+            "telnet",
+            "wget",
+        }:
+            # Generic network clients cannot prove that a read-only-looking
+            # request is not contacting the governed runtime.
+            return True
         payload = interpreter_payload(tokens, index)
         if payload is not None:
             if interpreter in {"python", "python3"}:
@@ -3913,6 +3977,56 @@ jobs:
             "synthetic-release-intent-invoked-runtime-read.yml",
         ),
         "invoked read-only runtime script escaped classification",
+    )
+    for client_command in (
+        'curl -fsS "$RUNTIME_HEALTH_URL"',
+        'wget -qO- "$RUNTIME_HEALTH_URL"',
+    ):
+        generic_network_contact = f"""name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: {client_command}
+"""
+        require(
+            workflow_has_runtime_command(
+                generic_network_contact,
+                "synthetic-release-intent-generic-network-read.yml",
+            ),
+            f"generic network client escaped contact classification: {client_command}",
+        )
+    asyncio_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import asyncio
+          asyncio.run(asyncio.open_connection(host, 443))
+"""
+    require(
+        workflow_has_runtime_command(
+            asyncio_runtime_contact,
+            "synthetic-release-intent-asyncio-runtime-read.yml",
+        ),
+        "asyncio network connection escaped contact classification",
+    )
+    dynamic_node_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: import("https").then(({get}) => get(process.env.RUNTIME_URL))
+"""
+    require(
+        workflow_has_runtime_command(
+            dynamic_node_runtime_contact,
+            "synthetic-release-intent-dynamic-node-runtime-read.yml",
+        ),
+        "dynamic Node network import escaped contact classification",
     )
     reusable_mutation = """name: synthetic
 jobs:

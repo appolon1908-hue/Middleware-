@@ -40,7 +40,7 @@ class _ControlTokenVerifier:
         required_scope: str,
     ) -> dict[str, Any]:
         if (
-            expected_client_id != "kong-gateway"
+            expected_client_id not in {"kong-gateway", "n8n-automation"}
             or authorization != f"Bearer {self._TOKENS[required_scope]}"
         ):
             raise AuthenticationError("invalid control token")
@@ -148,6 +148,7 @@ def test_event_and_attempt_cursors_reject_non_bigint_positions(value: object) ->
     [
         "/v1/operations",
         "/v1/odoo/provider-health",
+        f"/v1/integrations/n8n/operations/{UUID(int=1)}",
     ],
 )
 def test_control_surfaces_authenticate_before_tenant_validation(
@@ -169,6 +170,7 @@ def test_control_surfaces_authenticate_before_tenant_validation(
     [
         "/v1/operations",
         "/v1/odoo/provider-health",
+        f"/v1/integrations/n8n/operations/{UUID(int=1)}",
     ],
 )
 def test_control_surfaces_reject_duplicate_authority_headers(
@@ -234,8 +236,16 @@ def test_n8n_operation_alias_preserves_canonical_query_bounds(
     assert response.status_code == 400
 
 
-def test_domain_submission_rejects_duplicate_idempotency_header(
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/odoo/commands",
+        "/v1/integrations/n8n/commands",
+    ],
+)
+def test_command_surfaces_reject_duplicate_idempotency_header(
     test_settings: Settings,
+    path: str,
 ) -> None:
     command_id = str(uuid4())
     payload = {
@@ -258,5 +268,5 @@ def test_domain_submission_rejects_duplicate_idempotency_header(
         ("Idempotency-Key", "idem-two"),
     ]
     with TestClient(_app(test_settings)) as client:
-        response = client.post("/v1/odoo/commands", headers=headers, json=payload)
+        response = client.post(path, headers=headers, json=payload)
     assert response.status_code == 400

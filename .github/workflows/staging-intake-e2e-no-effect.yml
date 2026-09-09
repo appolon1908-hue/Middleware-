@@ -32,6 +32,7 @@ jobs:
   certify-no-effect:
     # Contacts only the protected isolated staging authority after explicit owner intent.
     if: >-
+      github.event_name == 'workflow_dispatch' &&
       github.repository == 'appolon1908-hue/Middleware-' &&
       github.actor == 'appolon1908-hue' &&
       github.ref == 'refs/heads/main' &&
@@ -42,12 +43,14 @@ jobs:
     steps:
       - name: Prove protected manual authorization boundary
         env:
+          REQUEST_EVENT: ${{ github.event_name }}
           REQUEST_REPOSITORY: ${{ github.repository }}
           REQUEST_ACTOR: ${{ github.actor }}
           REQUEST_REF: ${{ github.ref }}
           CONFIRM_NO_EFFECT: ${{ inputs.confirm_no_effect }}
         run: |
           set -Eeuo pipefail
+          test "$REQUEST_EVENT" = 'workflow_dispatch'
           test "$REQUEST_REPOSITORY" = 'appolon1908-hue/Middleware-'
           test "$REQUEST_ACTOR" = 'appolon1908-hue'
           test "$REQUEST_REF" = 'refs/heads/main'

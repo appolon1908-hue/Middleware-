@@ -124,7 +124,7 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
             "config/control-plane-callers.v1.json",
             lambda registry: registry["callers"].update({"alertmanager-service": []}),
         )
-        self.assert_rejected("missing_caller:alertmanager-service")
+        self.assert_rejected("invalid_caller:alertmanager-service")
 
     def test_command_registry_entry_shape_fails_closed(self) -> None:
         self.mutate_json(
@@ -144,7 +144,32 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
                 )
             ),
         )
-        self.assert_rejected("alert_command_policy_missing_or_duplicate:count=2")
+        self.assert_rejected("duplicate_command_prefix:observability.alert")
+
+    def test_duplicate_non_alert_command_prefix_fails_closed(self) -> None:
+        self.mutate_json(
+            "connectors/generated/command-registry.v1.json",
+            lambda registry: registry["commands"].append(
+                next(
+                    command.copy()
+                    for command in registry["commands"]
+                    if command["prefix"] == "ai."
+                )
+                | {"connector_id": "marketing-provider"}
+            ),
+        )
+        self.assert_rejected("duplicate_command_prefix:ai")
+
+    def test_command_adapter_mapping_drift_fails_closed(self) -> None:
+        self.mutate_json(
+            "connectors/generated/command-registry.v1.json",
+            lambda registry: next(
+                command
+                for command in registry["commands"]
+                if command["prefix"] == "ai."
+            ).update(connector_id="marketing-provider"),
+        )
+        self.assert_rejected("command_adapter_inventory_drifted")
 
     def test_duplicate_alert_adapter_fails_closed(self) -> None:
         self.mutate_json(
@@ -157,13 +182,38 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
                 )
             ),
         )
-        self.assert_rejected("alert_adapter_missing_or_duplicate:count=2")
+        self.assert_rejected("duplicate_adapter_id:klyrow-alert-email")
 
     def test_duplicate_openapi_route_fails_closed(self) -> None:
         path = self.contract_root / "contracts/observability/alert-api.v1.openapi.yaml"
-        with path.open("a", encoding="utf-8") as contract:
-            contract.write("\n  /health:\n    get: {}\n")
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace(
+                "\ncomponents:\n", "\n  /health:\n    get: {}\ncomponents:\n", 1
+            ),
+            encoding="utf-8",
+        )
         self.assert_rejected("duplicate_openapi_route")
+
+    def test_quoted_duplicate_openapi_route_fails_closed(self) -> None:
+        path = self.contract_root / "contracts/observability/alert-api.v1.openapi.yaml"
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace(
+                "\ncomponents:\n", '\n  "/health":\n    get: {}\ncomponents:\n', 1
+            ),
+            encoding="utf-8",
+        )
+        self.assert_rejected("openapi_route_inventory_drifted")
+
+    def test_caller_prefix_and_target_must_match_registry(self) -> None:
+        self.mutate_json(
+            "config/control-plane-callers.v1.json",
+            lambda registry: registry["callers"]["klyrow"].update(
+                allowed_command_prefixes=["crm."]
+            ),
+        )
+        self.assert_rejected("caller_prefix_target_mismatch:klyrow:crm")
 
     def test_privileged_container_fails_closed(self) -> None:
         path = (
@@ -191,6 +241,49 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
         )
         self.assert_rejected("container_boundary_forbidden:host_port")
 
+    def test_duplicate_compose_service_fails_closed(self) -> None:
+        path = (
+            self.contract_root
+            / "deploy/observability-alerts/compose.core-production.yaml"
+        )
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace(
+                "\nnetworks:\n",
+                "\n  observability-alert-api:\n"
+                "    image: attacker.invalid/latest\n\nnetworks:\n",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assert_rejected("observability_alert_compose_service:count=2")
+
+    def test_duplicate_hardening_key_fails_closed(self) -> None:
+        path = (
+            self.contract_root
+            / "deploy/observability-alerts/compose.core-production.yaml"
+        )
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace(
+                "    read_only: true", "    read_only: true\n    read_only: false"
+            ),
+            encoding="utf-8",
+        )
+        self.assert_rejected("duplicate_observability_alert_service_field")
+
+    def test_host_volume_fails_closed_as_unapproved_service_field(self) -> None:
+        path = (
+            self.contract_root
+            / "deploy/observability-alerts/compose.core-production.yaml"
+        )
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace("    expose:", "    volumes: [/://host]\n    expose:"),
+            encoding="utf-8",
+        )
+        self.assert_rejected("observability_alert_service_fields_drifted")
+
     def test_hardening_cannot_be_borrowed_from_another_service(self) -> None:
         path = (
             self.contract_root
@@ -211,8 +304,35 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
         with path.open("a", encoding="utf-8") as environment:
             environment.write("\nsmtp_password = placeholder\n")
         self.assert_rejected(
-            "secret_bearing_alert_configuration:direct_smtp_credential"
+            "secret_bearing_alert_configuration:direct_smtp_configuration"
         )
+
+    def test_direct_smtp_host_fails_closed(self) -> None:
+        path = self.contract_root / "deploy/observability-alerts/production.env.example"
+        with path.open("a", encoding="utf-8") as environment:
+            environment.write("\nSMTP_HOST=mail.example.invalid\n")
+        self.assert_rejected(
+            "secret_bearing_alert_configuration:direct_smtp_configuration"
+        )
+
+    def test_direct_smtp_library_fails_closed(self) -> None:
+        path = self.contract_root / "app/observability_alerts.py"
+        source = path.read_text(encoding="utf-8")
+        path.write_text("import smtplib\n" + source, encoding="utf-8")
+        self.assert_rejected("direct_smtp_implementation_forbidden")
+
+    def test_required_python_constant_cannot_be_supplied_by_comment(self) -> None:
+        path = self.contract_root / "app/observability_alert_contract.py"
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace(
+                'COMMAND_TARGET = "klyrow-alert-email"',
+                'COMMAND_TARGET = "untrusted-target"\n'
+                '# COMMAND_TARGET = "klyrow-alert-email"',
+            ),
+            encoding="utf-8",
+        )
+        self.assert_rejected("python_constant_drifted:.*:COMMAND_TARGET")
 
 
 if __name__ == "__main__":

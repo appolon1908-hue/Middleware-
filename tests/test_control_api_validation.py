@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app.api_inputs import authorization_header, required_header
+from app.api_inputs import authorization_header, optional_header, required_header
 from app.config import Settings
 from app.control_api import (
     MAX_BIGINT,
@@ -156,6 +156,49 @@ def test_authorization_header_preserves_missing_authentication_semantics() -> No
     assert authorization_header(_request()) == ""
     with pytest.raises(RequestValidationError, match="Authorization is malformed"):
         authorization_header(_request(("Authorization", "x" * 8193)))
+
+
+def test_optional_header_accepts_absence_or_one_bounded_value() -> None:
+    assert (
+        optional_header(
+            _request(),
+            "X-Tenant-ID",
+            minimum=1,
+            maximum=128,
+        )
+        is None
+    )
+    assert (
+        optional_header(
+            _request(("X-Tenant-ID", "tenant-1")),
+            "X-Tenant-ID",
+            minimum=1,
+            maximum=128,
+        )
+        == "tenant-1"
+    )
+
+
+def test_optional_header_rejects_duplicates_and_malformed_values() -> None:
+    duplicate = _request(
+        ("X-Tenant-ID", "tenant-1"),
+        ("X-Tenant-ID", "tenant-2"),
+    )
+    with pytest.raises(RequestValidationError, match="provided at most once"):
+        optional_header(
+            duplicate,
+            "X-Tenant-ID",
+            minimum=1,
+            maximum=128,
+        )
+
+    with pytest.raises(RequestValidationError, match="X-Tenant-ID is malformed"):
+        optional_header(
+            _request(("X-Tenant-ID", "")),
+            "X-Tenant-ID",
+            minimum=1,
+            maximum=128,
+        )
 
 
 def test_authentication_precedes_tenant_validation(test_settings: Settings) -> None:

@@ -62,7 +62,7 @@ def test_completed_hangup_response_uses_bound_originate_evidence_identity():
     assert response["reason"] == "terminal call outcome reconciled; see call_state"
 
 
-async def asgi_request(app, method, path, body=None, headers=None):
+async def asgi_request(app, method, path, body=None, headers=None, extra_headers=None):
     raw = json.dumps(body).encode() if body is not None else b""
     incoming = {"Authorization": "Bearer synthetic-test-token", "Content-Type": "application/json",
                 "X-Correlation-ID": "test-correlation-0001"}
@@ -73,7 +73,8 @@ async def asgi_request(app, method, path, body=None, headers=None):
              "method": method, "scheme": "https", "path": path, "raw_path": path.encode(),
              "root_path": "", "query_string": b"", "server": ("testserver", 443),
              "client": ("127.0.0.1", 1),
-             "headers": [(k.lower().encode(), v.encode()) for k, v in incoming.items()]}
+             "headers": [(k.lower().encode(), v.encode()) for k, v in incoming.items()] +
+                        [(k.lower().encode(), v.encode()) for k, v in (extra_headers or [])]}
     messages = []
     delivered = False
 
@@ -231,6 +232,26 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(status, expected)
         self.assertFalse(self.store._commands)
 
+    async def test_duplicate_security_headers_are_rejected(self):
+        for name, values in [
+            ("Authorization", ["Bearer duplicate-token"]),
+            ("Idempotency-Key", ["test-originate-duplicate"]),
+            ("X-Correlation-ID", ["test-correlation-duplicate"]),
+            ("X-Tenant-ID", ["tenant-test", "tenant-other"]),
+        ]:
+            status, _, _ = await self.call(
+                extra_headers=[(name, value) for value in values]
+            )
+            self.assertEqual(status, 400, name)
+        self.assertFalse(self.store._commands)
+
+    async def test_authentication_precedes_optional_tenant_validation(self):
+        status, _, _ = await self.call(
+            headers={"Authorization": "Bearer invalid", "X-Tenant-ID": "x" * 129}
+        )
+        self.assertEqual(status, 401)
+        self.assertFalse(self.store._commands)
+
     async def test_request_validation_does_not_persist(self):
         body = originate().model_dump() | {"trunk": "untrusted"}
         status, _, _ = await self.call(body)
@@ -289,7 +310,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observed["operation_id"], hangup_id)
         status, reconciled, _ = await asgi_request(
             self.app, "POST", f"/v1/telephony/calls/requests/{hangup_id}/reconcile",
-            dict(idempotency_key="test-hangup-reconcile-0001", expected_version=1,
+            dict(idempotency_key="test-hangup-reconcile-0001", expected_version=1,  # gitleaks:allow test fixture
                  reason="Reconcile uncertain hangup"),
         )
         self.assertEqual(status, 202)
@@ -304,7 +325,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_hangup_relationship_tampering_and_hangup_of_hangup_are_denied(self):
         identity = await self.accept_call()
         mutation = dict(
-            idempotency_key="test-hangup-relation-0001", expected_version=1,
+            idempotency_key="test-hangup-relation-0001", expected_version=1,  # gitleaks:allow test fixture
             reason="Agent hangup",
         )
         status, created, _ = await asgi_request(

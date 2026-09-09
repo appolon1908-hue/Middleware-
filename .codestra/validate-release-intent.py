@@ -311,13 +311,13 @@ def validate_environment_document(value: object, environment: str) -> None:
         reviewer_type = item.get("type") if isinstance(item, dict) else None
         reviewer = item.get("reviewer") if isinstance(item, dict) else None
         reviewer_id = reviewer.get("id") if isinstance(reviewer, dict) else None
-        require(
-            reviewer_type in {"User", "Team"}
-            and isinstance(reviewer_id, int)
-            and not isinstance(reviewer_id, bool)
-            and reviewer_id > 0,
-            "protected environment reviewer identity is invalid",
-        )
+        if (
+            reviewer_type not in {"User", "Team"}
+            or not isinstance(reviewer_id, int)
+            or isinstance(reviewer_id, bool)
+            or reviewer_id <= 0
+        ):
+            raise PolicyError("protected environment reviewer identity is invalid")
         reviewer_identities.add((str(reviewer_type), reviewer_id))
     require(
         len(reviewer_identities) == len(reviewers),

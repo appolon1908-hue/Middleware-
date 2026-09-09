@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from app.commands import (
@@ -294,6 +295,152 @@ def test_email_scope_tenant_and_cancellation_guards(test_settings) -> None:
             headers=_headers(key="cancel-key-3"),
         )
         assert again.status_code == 409
+
+
+def test_communication_create_rejects_duplicate_security_headers(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    duplicate_cases = (
+        ("Authorization", "Bearer duplicate-token"),
+        ("X-Tenant-ID", "tenant-2"),
+        ("X-Correlation-ID", "duplicate-correlation"),
+        ("Idempotency-Key", "duplicate-idempotency-key"),
+    )
+    with TestClient(app) as client:
+        for name, value in duplicate_cases:
+            request_headers = list(_headers().items()) + [(name, value)]
+            response = client.post(
+                "/v1/communications/messages",
+                content=json.dumps(_message()),
+                headers=request_headers,
+            )
+            assert response.status_code == 400, name
+            assert response.json()["error"]["code"] == "invalid_request"
+
+        duplicate_actor = list(_headers().items()) + [
+            ("X-Codestra-Actor", "user-123"),
+            ("X-Codestra-Actor", "user-123"),
+        ]
+        response = client.post(
+            "/v1/communications/messages",
+            content=json.dumps(_message()),
+            headers=duplicate_actor,
+        )
+        assert response.status_code == 400
+
+        mismatched_actor = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers={**_headers(), "X-Codestra-Actor": "different-subject"},
+        )
+        assert mismatched_actor.status_code == 403
+
+    assert runtime.communications is not None
+    assert runtime.communications.store.messages == {}
+
+
+def test_communication_authentication_precedes_storage_disclosure(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    runtime.commands = None
+    runtime.communications = None
+    request_headers = {
+        **_headers(),
+        "Authorization": "Bearer invalid-token",
+        "X-Codestra-Actor": "user-123",
+    }
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=request_headers,
+        )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "authentication_failed"
+
+
+def test_communication_reads_authenticate_before_tenant_metadata(
+    test_settings,
+) -> None:
+    app = create_app(settings=test_settings, runtime=_runtime(test_settings))
+    request_headers = {
+        **_headers(scope="klyrow.middleware.status.read"),
+        "Authorization": "Bearer invalid-token",
+        "X-Tenant-ID": "t" * 129,
+    }
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/communications/messages",
+            headers=request_headers,
+        )
+    assert response.status_code == 401
+
+
+def test_communication_cancel_authorizes_tenant_before_message_lookup(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    assert runtime.communications is not None
+    authorization = "Bearer " + _token(
+        "klyrow",
+        ["klyrow.middleware.command.write"],
+        tenant_id="tenant-2",
+    )
+    with pytest.raises(AuthorizationError, match="tenant"):
+        asyncio.run(
+            runtime.communications.cancel(
+                "tenant-1",
+                uuid4(),
+                idempotency_key="cancel-unknown-message",
+                actor="user-123",
+                authorization=authorization,
+                token_verifier=runtime.tokens,
+            )
+        )
+
+
+def test_communication_cancel_hides_message_existence_from_wrong_channel(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="channel-probe-create"),
+        ).json()
+        unauthorized_headers = {
+            "Authorization": "Bearer "
+            + _token("kyqra", ["kyqra.middleware.command.write"]),
+            "X-Tenant-ID": "tenant-1",
+            "X-Correlation-ID": "channel-probe",
+            "Idempotency-Key": "channel-probe-cancel",
+        }
+        existing = client.post(
+            f"/v1/communications/messages/{created['messageId']}/cancel",
+            headers=unauthorized_headers,
+        )
+        missing = client.post(
+            f"/v1/communications/messages/{uuid4()}/cancel",
+            headers={
+                **unauthorized_headers,
+                "Idempotency-Key": "channel-probe-missing",
+            },
+        )
+
+    assert existing.status_code == missing.status_code == 404
+    assert existing.json() == missing.json()
+    assert runtime.communications is not None
+    stored = runtime.communications.get_message(
+        "tenant-1",
+        UUID(created["messageId"]),
+    )
+    assert stored.status == "queued"
 
 
 def test_klyrow_signed_event_updates_canonical_read_model(test_settings) -> None:

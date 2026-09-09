@@ -1,0 +1,120 @@
+name: Finalize W0 completion tag
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: w0-completion-tag
+  cancel-in-progress: false
+
+jobs:
+  finalize-w0-tag:
+    if: >-
+      github.event.issue.number == 68 &&
+      github.event.comment.user.login == 'appolon1908-hue' &&
+      github.event.comment.user.id == 275410064 &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/finalize-w0 w0-complete'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      TARGET_SHA: 791afad45e6855d6d6f92f290bfdbc001dd514b6
+      EVIDENCE_PR: '205'
+      TAG_NAME: w0-complete
+    steps:
+      - name: Verify accepted evidence and create immutable completion tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(
+            -H "Authorization: Bearer ${GH_TOKEN}"
+            -H "Accept: application/vnd.github+json"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          pr_json="$(curl --fail-with-body --silent --show-error "${auth[@]}" "${api}/pulls/${EVIDENCE_PR}")"
+          PR_JSON="$pr_json" python3 - <<'PY'
+          import json, os
+          pr = json.loads(os.environ["PR_JSON"])
+          target = os.environ["TARGET_SHA"]
+          if pr.get("merged_at") is None:
+              raise SystemExit("W0 evidence PR is not merged")
+          if pr.get("merge_commit_sha") != target:
+              raise SystemExit("W0 evidence PR merge commit does not match TARGET_SHA")
+          PY
+
+          main_json="$(curl --fail-with-body --silent --show-error "${auth[@]}" "${api}/git/ref/heads/main")"
+          main_sha="$(MAIN_JSON="$main_json" python3 - <<'PY'
+          import json, os
+          print(json.loads(os.environ["MAIN_JSON"])["object"]["sha"])
+          PY
+          )"
+
+          compare_json="$(curl --fail-with-body --silent --show-error "${auth[@]}" "${api}/compare/${TARGET_SHA}...${main_sha}")"
+          COMPARE_JSON="$compare_json" python3 - <<'PY'
+          import json, os
+          status = json.loads(os.environ["COMPARE_JSON"]).get("status")
+          if status not in {"ahead", "identical"}:
+              raise SystemExit(f"TARGET_SHA is not an ancestor of protected main: {status!r}")
+          PY
+
+          tag_url="${api}/git/ref/tags/${TAG_NAME}"
+          http_code="$(curl --silent --show-error -o /tmp/w0-tag.json -w '%{http_code}' "${auth[@]}" "$tag_url")"
+          case "$http_code" in
+            200)
+              existing_sha="$(python3 - <<'PY'
+          import json
+          print(json.load(open('/tmp/w0-tag.json', encoding='utf-8'))['object']['sha'])
+          PY
+              )"
+              if [ "$existing_sha" != "$TARGET_SHA" ]; then
+                echo "Existing ${TAG_NAME} points to ${existing_sha}; refusing to move it." >&2
+                exit 1
+              fi
+              ;;
+            404)
+              payload="$(python3 - <<'PY'
+          import json, os
+          print(json.dumps({"ref": f"refs/tags/{os.environ['TAG_NAME']}", "sha": os.environ["TARGET_SHA"]}))
+          PY
+              )"
+              create_code="$(curl --silent --show-error -o /tmp/w0-tag-created.json -w '%{http_code}' \
+                -X POST "${auth[@]}" -H 'Content-Type: application/json' \
+                --data "$payload" "${api}/git/refs")"
+              if [ "$create_code" != "201" ]; then
+                echo "Tag creation failed with HTTP ${create_code}." >&2
+                cat /tmp/w0-tag-created.json >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Tag preflight failed with HTTP ${http_code}." >&2
+              cat /tmp/w0-tag.json >&2
+              exit 1
+              ;;
+          esac
+
+          final_json="$(curl --fail-with-body --silent --show-error "${auth[@]}" "$tag_url")"
+          final_sha="$(FINAL_JSON="$final_json" python3 - <<'PY'
+          import json, os
+          print(json.loads(os.environ["FINAL_JSON"])["object"]["sha"])
+          PY
+          )"
+          if [ "$final_sha" != "$TARGET_SHA" ]; then
+            echo "Tag read-back mismatch: ${final_sha}" >&2
+            exit 1
+          fi
+
+          echo "W0_COMPLETION_TAG=PASS"
+          echo "W0_COMPLETION_TAG_NAME=${TAG_NAME}"
+          echo "W0_COMPLETION_TAG_TARGET=${final_sha}"
+          echo "W0_COMPLETION_MAIN_SHA=${main_sha}"
+          echo "LIVE_EFFECTS=UNCHANGED"

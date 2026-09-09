@@ -11,6 +11,9 @@ from typing import Any, Never, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_ISSUER = "https://auth.codestra.co/realms/codestra"
+IDENTITY_UPSTREAM_REVIEW_SHA = "85738deb86c409208b0ec17e1f017d78586eed25"
+WEBHOOK_UPSTREAM_REVIEW_SHA = "187d058423dc7703deee9132f4a750222b3d974b"
+WEBHOOK_LIFECYCLE_MERGE_SHA = "922d039b5143f3ac738e88998036355562a8dd5d"
 EXPECTED_CLIENTS = [
     "kong-gateway",
     "middleware-api",
@@ -223,7 +226,6 @@ ALLOWED_SOURCE_STATES = {
 RESOURCE_BASE_URL = re.compile(r"^[A-Z][A-Z0-9_]*_BASE_URL$")
 SCOPE = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$")
 EVENT_TYPE = re.compile(r"^codestra\.[a-z0-9_]+(?:\.[a-z0-9_]+)+$")
-SHA40 = re.compile(r"^[0-9a-f]{40}$")
 CLIENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 WEBHOOK_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 WEBHOOK_PATH = re.compile(r"^/api/v1/[a-z0-9-]+(?:/[a-z0-9-]+)*$")
@@ -486,7 +488,9 @@ def exact_json_value(value: object, expected: object) -> bool:
     return value == expected
 
 
-def validate_upstream(value: object, expected_path: str, label: str) -> None:
+def validate_upstream(
+    value: object, expected_path: str, expected_sha: str, label: str
+) -> None:
     upstream = require_object(value, f"{label}: upstreamContract must be an object")
     require_exact_fields(
         upstream,
@@ -499,9 +503,8 @@ def validate_upstream(value: object, expected_path: str, label: str) -> None:
         fail(f"{label}: unexpected upstream path")
     if upstream.get("reviewBranch") != "feat/service-api-webhook-identity-contracts":
         fail(f"{label}: unexpected upstream review branch")
-    sha = upstream.get("reviewSha")
-    if not isinstance(sha, str) or not SHA40.fullmatch(sha):
-        fail(f"{label}: upstream review SHA must be exact 40-character lowercase hex")
+    if upstream.get("reviewSha") != expected_sha:
+        fail(f"{label}: upstream review SHA must match approved source authority")
 
 
 def validate_lifecycle_contract(value: object) -> None:
@@ -517,9 +520,8 @@ def validate_lifecycle_contract(value: object) -> None:
         fail("webhook lifecycle path changed")
     if lifecycle.get("protectedBranch") != "main":
         fail("webhook lifecycle source must be protected main")
-    sha = lifecycle.get("mergeSha")
-    if not isinstance(sha, str) or SHA40.fullmatch(sha) is None:
-        fail("webhook lifecycle merge SHA must be exact lowercase hex")
+    if lifecycle.get("mergeSha") != WEBHOOK_LIFECYCLE_MERGE_SHA:
+        fail("webhook lifecycle merge SHA must match approved protected-main authority")
 
 
 def validate_access(
@@ -533,6 +535,7 @@ def validate_access(
     validate_upstream(
         access.get("upstreamContract"),
         "config/contracts/service-access-matrix.json",
+        IDENTITY_UPSTREAM_REVIEW_SHA,
         "identity-access-map.json",
     )
     if access.get("issuer") != CANONICAL_ISSUER:
@@ -763,6 +766,7 @@ def validate_webhooks(
     validate_upstream(
         webhooks.get("upstreamContract"),
         "config/contracts/webhook-contracts.json",
+        WEBHOOK_UPSTREAM_REVIEW_SHA,
         "api-webhook-contracts.json",
     )
     if webhooks.get("issuer") != CANONICAL_ISSUER:

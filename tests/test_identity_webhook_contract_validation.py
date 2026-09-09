@@ -132,6 +132,26 @@ class IdentityWebhookContractValidationTests(unittest.TestCase):
         )
         self.assert_rejected("webhook lifecycle source must be protected main")
 
+    def test_fabricated_lifecycle_merge_sha_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/api-webhook-contracts.json",
+            lambda webhooks: webhooks["lifecycleContract"].update(
+                mergeSha="0" * 40
+            ),
+        )
+        self.assert_rejected(
+            "webhook lifecycle merge SHA must match approved protected-main authority"
+        )
+
+    def test_fabricated_upstream_review_sha_fails_closed(self) -> None:
+        self.mutate_json(
+            "config/identity-access-map.json",
+            lambda access: access["upstreamContract"].update(reviewSha="0" * 40),
+        )
+        self.assert_rejected(
+            "upstream review SHA must match approved source authority"
+        )
+
     def test_malformed_event_schema_required_fields_fail_closed(self) -> None:
         self.mutate_json(
             "contracts/platform/event-envelope.v1.schema.json",

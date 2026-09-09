@@ -53,6 +53,39 @@ WEBHOOK_SECRET_NAMES = {
     "WEBHOOK_SECRET_POSTLY_ADAPTER",
 }
 GOVERNED_READ_PATHS = {"/metrics", "/v1/runtime/safety"}
+EXPECTED_INCLUDED_ROUTERS = {
+    "n8n_control_plane_router": "n8n_control_plane",
+    "operations_dashboard_router": "operations_dashboard",
+    "operations_router": "operations",
+    "control_api_router": "control_api",
+    "compatibility_api_router": "compatibility_api",
+    "domain_api_router": "domain_api",
+    "webhook_api_router": "webhook_api",
+}
+EXPECTED_NESTED_ROUTER_INCLUDES = {
+    "n8n_control_plane": {"v2_router"},
+    "operations_dashboard": set(),
+    "operations": set(),
+    "control_api": set(),
+    "compatibility_api": set(),
+    "domain_api": {"calling_router"},
+    "webhook_api": set(),
+    "telephony_api": set(),
+}
+ROUTE_REGISTRATION_METHODS = {
+    "add_api_route",
+    "add_route",
+    "api_route",
+    "get",
+    "head",
+    "options",
+    "patch",
+    "post",
+    "put",
+    "route",
+    "trace",
+    "websocket",
+}
 
 
 class ContractError(ValueError):
@@ -167,6 +200,181 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
         parts.append(current.id)
         return list(reversed(parts))
 
+    def static_string(node: ast.expr) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            left = static_string(node.left)
+            right = static_string(node.right)
+            if left is not None and right is not None:
+                return left + right
+        if isinstance(node, ast.JoinedStr):
+            values: list[str] = []
+            for item in node.values:
+                if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+                    return None
+                values.append(item.value)
+            return "".join(values)
+        return None
+
+    def route_pattern(node: ast.expr) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return re.escape(node.value)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            left = route_pattern(node.left)
+            right = route_pattern(node.right)
+            if left is not None and right is not None:
+                return left + right
+        if isinstance(node, ast.JoinedStr):
+            parts: list[str] = []
+            for item in node.values:
+                if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                    parts.append(re.escape(item.value))
+                elif isinstance(item, ast.FormattedValue):
+                    parts.append(".*")
+                else:
+                    return None
+            return "".join(parts)
+        if isinstance(node, (ast.Name, ast.Attribute, ast.Subscript)):
+            return ".*"
+        return None
+
+    def router_prefix(module_tree: ast.Module) -> str:
+        prefixes: list[str] = []
+        for statement in module_tree.body:
+            if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            if not any(isinstance(target, ast.Name) and target.id == "router" for target in targets):
+                continue
+            value = statement.value
+            if not (
+                isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id == "APIRouter"
+            ):
+                continue
+            prefix_values = [
+                static_string(keyword.value)
+                for keyword in value.keywords
+                if keyword.arg == "prefix"
+            ]
+            if len(prefix_values) > 1 or any(item is None for item in prefix_values):
+                raise ContractError("included router prefix is dynamic or ambiguous")
+            prefix_value = prefix_values[0] if prefix_values else ""
+            if prefix_value is None:
+                raise ContractError("included router prefix is dynamic or ambiguous")
+            prefixes.append(prefix_value)
+        require(len(prefixes) == 1, "included router definition is not unique")
+        return prefixes[0]
+
+    def registered_paths(
+        module_tree: ast.Module,
+        *,
+        prefix: str = "",
+        allow_webhook_dynamic: bool = False,
+    ) -> list[str]:
+        paths: list[str] = []
+        webhook_registrations = 0
+        for candidate in ast.walk(module_tree):
+            if (
+                not isinstance(candidate, ast.Call)
+                or not isinstance(candidate.func, ast.Attribute)
+                or candidate.func.attr not in ROUTE_REGISTRATION_METHODS
+                or not candidate.args
+            ):
+                continue
+            receiver = attribute_path(candidate.func.value)
+            if receiver is None or not (
+                receiver[0] == "app"
+                or receiver[-1] == "router"
+                or receiver[-1].endswith("_router")
+            ):
+                continue
+            path = static_string(candidate.args[0])
+            if path is not None and path.startswith("/"):
+                paths.append(prefix.rstrip("/") + path)
+                continue
+            methods = [
+                keyword.value
+                for keyword in candidate.keywords
+                if keyword.arg == "methods"
+            ]
+            if (
+                allow_webhook_dynamic
+                and receiver == ["app"]
+                and candidate.func.attr == "add_api_route"
+                and attribute_path(candidate.args[0]) == ["route", "path"]
+                and len(methods) == 1
+                and isinstance(methods[0], (ast.List, ast.Tuple))
+                and len(methods[0].elts) == 1
+                and isinstance(methods[0].elts[0], ast.Constant)
+                and methods[0].elts[0].value == "POST"
+            ):
+                webhook_registrations += 1
+                continue
+            pattern = route_pattern(candidate.args[0])
+            if pattern is None:
+                raise ContractError("route registration path cannot be proven safe")
+            prefixed_pattern = re.escape(prefix.rstrip("/")) + pattern
+            require(
+                not any(
+                    re.fullmatch(prefixed_pattern, governed) is not None
+                    for governed in GOVERNED_READ_PATHS
+                ),
+                "dynamic route registration may shadow a governed GET route",
+            )
+        require(
+            webhook_registrations == (1 if allow_webhook_dynamic else 0),
+            "dynamic webhook route registration is missing or ambiguous",
+        )
+        return paths
+
+    imported_routers: dict[str, str] = {}
+    for statement in tree.body:
+        if not isinstance(statement, ast.ImportFrom) or statement.level != 1:
+            continue
+        for imported in statement.names:
+            alias = imported.asname
+            if alias in EXPECTED_INCLUDED_ROUTERS and imported.name == "router":
+                if statement.module != EXPECTED_INCLUDED_ROUTERS[alias]:
+                    raise ContractError(f"included router import drift: {alias}")
+                require(alias not in imported_routers, f"duplicate router import: {alias}")
+                imported_routers[alias] = statement.module
+    require(
+        imported_routers == EXPECTED_INCLUDED_ROUTERS,
+        "application factory included-router imports are incomplete",
+    )
+    rebound_router_names = {
+        candidate.id
+        for candidate in ast.walk(tree)
+        if isinstance(candidate, ast.Name)
+        and isinstance(candidate.ctx, (ast.Store, ast.Del))
+        and candidate.id in EXPECTED_INCLUDED_ROUTERS
+    }
+    require(not rebound_router_names, "included router binding is reassigned")
+
+    include_calls = [
+        candidate
+        for candidate in ast.walk(factories[0])
+        if isinstance(candidate, ast.Call)
+        and attribute_path(candidate.func) == ["app", "include_router"]
+    ]
+    included_names: list[str] = []
+    for call in include_calls:
+        if (
+            len(call.args) != 1
+            or not isinstance(call.args[0], ast.Name)
+            or call.args[0].id not in EXPECTED_INCLUDED_ROUTERS
+        ):
+            raise ContractError("application factory includes an unapproved router")
+        included_names.append(call.args[0].id)
+    require(
+        len(included_names) == len(EXPECTED_INCLUDED_ROUTERS)
+        and set(included_names) == set(EXPECTED_INCLUDED_ROUTERS),
+        "application factory included-router calls are incomplete or duplicated",
+    )
+
     def authentication_binding(node: ast.AsyncFunctionDef) -> tuple[str, str]:
         request_arguments = [
             argument.arg
@@ -265,6 +473,10 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
         paths = [path for path in paths if path in GOVERNED_READ_PATHS]
         if not paths:
             continue
+        require(
+            len(node.decorator_list) == 1,
+            "governed GET route has a handler-replacing decorator",
+        )
         for path in paths:
             require(path not in routes, f"duplicate GET route in app factory: {path}")
             if not isinstance(node, ast.AsyncFunctionDef):
@@ -272,6 +484,44 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
                     f"governed GET route must be asynchronous: {path}"
                 )
             routes[path] = authentication_binding(node)
+
+    all_registered_paths = registered_paths(tree, allow_webhook_dynamic=True)
+    router_modules = [*EXPECTED_INCLUDED_ROUTERS.values(), "telephony_api"]
+    for module_name in router_modules:
+        module_path = ROOT / "app" / f"{module_name}.py"
+        try:
+            module_tree = ast.parse(
+                module_path.read_text(encoding="utf-8"),
+                filename=module_path.relative_to(ROOT).as_posix(),
+            )
+        except (OSError, SyntaxError) as error:
+            raise ContractError(
+                f"included router source is unavailable or invalid: {module_name}"
+            ) from error
+        all_registered_paths.extend(
+            registered_paths(module_tree, prefix=router_prefix(module_tree))
+        )
+        nested_calls = [
+            candidate
+            for candidate in ast.walk(module_tree)
+            if isinstance(candidate, ast.Call)
+            and attribute_path(candidate.func) == ["router", "include_router"]
+        ]
+        nested_names = [
+            call.args[0].id
+            for call in nested_calls
+            if len(call.args) == 1 and isinstance(call.args[0], ast.Name)
+        ]
+        require(
+            len(nested_names) == len(nested_calls)
+            and set(nested_names) == EXPECTED_NESTED_ROUTER_INCLUDES[module_name],
+            f"included router graph drift: {module_name}",
+        )
+    for path in GOVERNED_READ_PATHS:
+        require(
+            all_registered_paths.count(path) == 1,
+            f"governed GET route registration is missing or ambiguous: {path}",
+        )
     return routes
 
 
@@ -453,6 +703,21 @@ def main() -> None:
 
     factory_source = (ROOT / "app/appolon_factory.py").read_text()
     security_source = (ROOT / "app/security.py").read_text()
+    webhook_contract = json.loads(
+        (ROOT / "config/api-webhook-contracts.json").read_text(encoding="utf-8")
+    )
+    webhook_paths = [
+        item.get("path")
+        for item in webhook_contract.get("webhooks", [])
+        if isinstance(item, dict)
+    ]
+    require(
+        webhook_paths
+        and len(webhook_paths) == len(set(webhook_paths))
+        and all(isinstance(path, str) and path.startswith("/") for path in webhook_paths)
+        and GOVERNED_READ_PATHS.isdisjoint(webhook_paths),
+        "dynamic webhook paths are invalid or shadow a governed GET route",
+    )
     route_bindings = authenticated_get_routes(factory_source)
     require(
         route_bindings.get("/metrics")

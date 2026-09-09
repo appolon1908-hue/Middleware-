@@ -12,8 +12,17 @@ SCRIPT = ROOT / "scripts/validate_staging_intake_observability_contract.py"
 BOUND_FILES = (
     "contracts/staging-intake-observability-runtime.v1.json",
     "config/runtime-profiles.v1.json",
+    "config/api-webhook-contracts.json",
     "config/environments/staging.intake-observability.runtime.env.example",
     "app/appolon_factory.py",
+    "app/n8n_control_plane.py",
+    "app/operations_dashboard.py",
+    "app/operations.py",
+    "app/control_api.py",
+    "app/compatibility_api.py",
+    "app/domain_api.py",
+    "app/webhook_api.py",
+    "app/telephony_api.py",
     "app/security.py",
 )
 
@@ -30,6 +39,11 @@ BOUND_FILES = (
         "dead_metrics_authentication",
         "unrelated_metrics_verifier",
         "unawaited_metrics_verifier",
+        "decorated_metrics_handler",
+        "shadow_metrics_registration",
+        "unapproved_included_router",
+        "included_router_shadow",
+        "webhook_shadow",
     ],
 )
 def test_staging_contract_fails_closed(
@@ -95,6 +109,39 @@ def test_staging_contract_fails_closed(
         require_replacement = factory.replace(authentication, replacement, 1)
         assert require_replacement != factory
         factory_path.write_text(require_replacement, encoding="utf-8")
+    elif mutation in {
+        "decorated_metrics_handler",
+        "shadow_metrics_registration",
+        "unapproved_included_router",
+    }:
+        factory_path = tmp_path / "app/appolon_factory.py"
+        factory = factory_path.read_text(encoding="utf-8")
+        marker = '    @app.get("/metrics")\n'
+        if mutation == "decorated_metrics_handler":
+            replacement = marker + "    @replace_handler\n"
+        elif mutation == "shadow_metrics_registration":
+            replacement = (
+                "    app.add_api_route(\"/\" + \"metrics\", public_metrics, "
+                "methods=[\"GET\"])\n\n" + marker
+            )
+        else:
+            replacement = "    app.include_router(public_metrics_router)\n\n" + marker
+        changed = factory.replace(marker, replacement, 1)
+        assert changed != factory
+        factory_path.write_text(changed, encoding="utf-8")
+    elif mutation == "included_router_shadow":
+        router_path = tmp_path / "app/control_api.py"
+        source = router_path.read_text(encoding="utf-8")
+        source += (
+            '\nshadow_path = "/metrics"\n'
+            'router.add_api_route(shadow_path, public_metrics, methods=["GET"])\n'
+        )
+        router_path.write_text(source, encoding="utf-8")
+    elif mutation == "webhook_shadow":
+        webhook_path = tmp_path / "config/api-webhook-contracts.json"
+        webhook_contract = json.loads(webhook_path.read_text(encoding="utf-8"))
+        webhook_contract["webhooks"][0]["path"] = "/metrics"
+        webhook_path.write_text(json.dumps(webhook_contract), encoding="utf-8")
 
     program = (
         "import importlib.util,pathlib;"

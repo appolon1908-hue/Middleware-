@@ -23,6 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / ".codestra/production-orchestrator-contract.v1.json"
 INTENT_PATH = ROOT / ".github/workflows/manual-release-intent.yml"
 RELEASE_VALIDATOR_PATH = ROOT / ".codestra/validate-release-intent.py"
+MANUAL_RELEASE_INTENT_SHA256 = (
+    "b81b23af054c3e85b4c250ce69a54b1b"
+    "788733a777bbbe460ed2d9f9f8ed0cad"
+)
 SCHEMA = "codestra.production-orchestrator-contract.v1"
 PHASES = ["plan", "staging", "canary", "production"]
 SAFETY_KEYS = {
@@ -54,6 +58,44 @@ RUNTIME_TOOLS = {
 SHELL_INTERPRETERS = {"bash", "dash", "eval", "ksh", "sh", "zsh"}
 SCRIPT_INTERPRETERS = {"node", "perl", "php", "python", "python3", "ruby"}
 SHELL_WRAPPERS = {"!", "command", "env", "exec", "nohup", "sudo", "time"}
+GENERIC_NETWORK_CLIENTS = {
+    "curl",
+    "ftp",
+    "lftp",
+    "nc",
+    "ncat",
+    "netcat",
+    "sftp",
+    "socat",
+    "telnet",
+    "wget",
+}
+RELEASE_INTENT_ALLOWED_COMMANDS = {
+    "base64",
+    "cut",
+    "gh",
+    "jq",
+    "printf",
+    "python3",
+    "set",
+    "sha256sum",
+    "test",
+    "umask",
+}
+RELEASE_INTENT_ALLOWED_GH_API = {
+    (
+        "api",
+        "repos/${GITHUB_REPOSITORY}",
+        "--jq",
+        ".default_branch",
+    ),
+    (
+        "api",
+        "repos/${GITHUB_REPOSITORY}/branches/${branch}",
+        "--jq",
+        ".commit.sha",
+    ),
+}
 KUBECTL_MUTATIONS = {
     "annotate",
     "apply",
@@ -374,6 +416,14 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
 }
 APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     "appolon1908-hue/Middleware-": {
+        ".github/workflows/integration-main-release-authorities.yml": (
+            "43323ab7203be3317f700e099a01ca03f"
+            "b9828292754fc67bd681d1d410a53f3"
+        ),
+        ".github/workflows/production-reviewer-access.yml": (
+            "9a1d239d64f3d198365097ea6812ac90"
+            "b09cc11dcfb9916a68dce810b7202103"
+        ),
         ".github/workflows/python-quality-baseline.yml": (
             "cb89cb69636dc79a6a03e5df98abeb798"
             "6a823e30c2d52b1d03980dddac58cca"
@@ -382,6 +432,44 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     },
     "appolon1908-hue/beyvra-backend": {
         ".github/workflows/ci.yml": "f10b269e0faf54b23582ca1ee9700de6f2ec9f5481f6b2be20e40b9f6d428945",
+    },
+}
+APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
+    str, dict[str, dict[str, str]]
+] = {
+    "appolon1908-hue/Middleware-": {
+        ".github/workflows/integration-main-release-authorities.yml": {
+            "config/integration-main-release-authorities.v1.json": (
+                "93ee2e898759a2c6cf79cf9afc3c3d58"
+                "d9eaf84515f4207043e9da8c99e88ba1"
+            ),
+            "scripts/apply_integration_main_release_authorities.py": (
+                "95b9c27abd309b1efe579672fdb8b89fe"
+                "aed55e8e9334c50913b2e422ad771a7"
+            ),
+            "scripts/apply_integration_main_release_authorities_base.py": (
+                "71fd1f220797c12708da3d2e5f9efe25"
+                "2ad2933ae37852052e1e5b680ce3b75a"
+            ),
+            "scripts/apply_integration_main_release_authorities_v2.py": (
+                "ee67af637f8e96e531e507d71e8ff3a6"
+                "36d4d120fef134eee33a5ab3675e0edd"
+            ),
+        },
+        ".github/workflows/production-reviewer-access.yml": {
+            "config/production-reviewer-access.v1.json": (
+                "72e0b70ddbf8ff0365d2c4fc6da8e8e6"
+                "d4c7c4ef69865067317d3e9300d0e6ed"
+            ),
+            "scripts/apply_production_reviewer_access.py": (
+                "305d52658d39cc45335676c6f3d0d780"
+                "b246b8c4c9b727c68ed705b30f99da22"
+            ),
+            "scripts/apply_production_reviewer_access_base.py": (
+                "22b5d7f425f949588ce29a6c3079c09f"
+                "950dfb46e31d3bfa54b0216f73b5a43d"
+            ),
+        },
     },
 }
 APPROVED_UNRESOLVED_SCRIPT_TARGETS: dict[str, frozenset[str]] = {
@@ -403,7 +491,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_integration_main_release_authorities_v2.py": (
-            "b5f74be0edf783bd258c6321caaf63759e8beee0b0f305d34f25c932830366c2",
+            "ee67af637f8e96e531e507d71e8ff3a636d4d120fef134eee33a5ab3675e0edd",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_production_reviewer_access.py": (
@@ -1180,7 +1268,11 @@ def interpreter_script_target(tokens: list[str], index: int) -> str | None:
     return None
 
 
-def python_source_has_runtime_mutation(source: str) -> bool:
+def python_source_has_runtime_mutation(
+    source: str,
+    *,
+    include_read_only_runtime_contact: bool = False,
+) -> bool:
     try:
         tree = ast.parse(source)
     except SyntaxError:
@@ -1281,6 +1373,58 @@ def python_source_has_runtime_mutation(source: str) -> bool:
         receiver_hints = set(re.split(r"[^a-z0-9_]+", receiver))
         network_receiver = bool(receiver_hints & NETWORK_CLIENT_HINTS)
         database_receiver = bool(receiver_hints & DATABASE_CLIENT_HINTS)
+        if include_read_only_runtime_contact and (
+            method
+            in {
+                "create_connection",
+                "create_datagram_endpoint",
+                "create_server",
+                "create_subprocess_exec",
+                "create_subprocess_shell",
+                "open_connection",
+                "open_unix_connection",
+                "start_server",
+                "start_unix_server",
+            }
+            or
+            qualified
+            in {
+                "asyncio.open_connection",
+                "asyncio.start_server",
+                "asyncio.start_unix_server",
+                "asyncio.open_unix_connection",
+            }
+            or qualified.startswith(
+                (
+                    "aiohttp.",
+                    "asyncio.BaseEventLoop.create_connection",
+                    "asyncio.BaseEventLoop.create_server",
+                    "asyncio.loop.create_connection",
+                    "asyncio.loop.create_server",
+                    "ftplib.",
+                    "grpc.",
+                    "http.client.",
+                    "smtplib.",
+                    "socket.",
+                    "ssl.",
+                    "websockets.",
+                )
+            )
+        ):
+            return True
+        if include_read_only_runtime_contact and (
+            network_receiver
+            or database_receiver
+            or qualified
+            in {
+                "urllib.request.Request",
+                "urllib.request.urlopen",
+            }
+        ):
+            # A plan-only release intent cannot prove that a direct network or
+            # database read is not runtime contact. Fail closed even when the
+            # operation is read-only.
+            return True
         if method in NETWORK_MUTATION_METHODS and network_receiver:
             return True
         if method in DATABASE_MUTATION_METHODS and database_receiver:
@@ -1372,9 +1516,20 @@ def python_source_has_runtime_mutation(source: str) -> bool:
                 command = " ".join(values)
             else:
                 return True
-            if contains_runtime_mutation(command):
+            if (
+                contains_runtime_command(command)
+                if include_read_only_runtime_contact
+                else contains_runtime_mutation(command)
+            ):
                 return True
     return False
+
+
+def python_source_has_runtime_contact(source: str) -> bool:
+    return python_source_has_runtime_mutation(
+        source,
+        include_read_only_runtime_contact=True,
+    )
 
 
 def javascript_source_has_runtime_mutation(source: str) -> bool:
@@ -1483,6 +1638,60 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
     ):
         return True
     return False
+
+
+def javascript_source_has_runtime_contact(source: str) -> bool:
+    if javascript_source_has_runtime_mutation(source):
+        return True
+    lower = source.lower()
+    if any(
+        marker in lower
+        for marker in (
+            "@kubernetes/client-node",
+            "dockerode",
+            "node:http",
+            "node:https",
+            "node:net",
+            "node:tls",
+            "node:dgram",
+            "from 'http'",
+            'from "http"',
+            "from 'https'",
+            'from "https"',
+            "from 'net'",
+            'from "net"',
+            "from 'tls'",
+            'from "tls"',
+            "require('http')",
+            'require("http")',
+            "require('https')",
+            'require("https")',
+            "require('net')",
+            'require("net")',
+            "require('tls')",
+            'require("tls")',
+        )
+    ):
+        return True
+    if re.search(r"\bimport\s*\(", lower):
+        # Dynamic imports can return a destructured or renamed network
+        # primitive whose eventual call has no statically attributable receiver.
+        return True
+    if re.search(r"\brequire\b", lower):
+        # CommonJS imports can compute a module name, execute module-level
+        # effects, freely rename the result, and place comments between the
+        # callee and opening parenthesis. Without a JavaScript AST and dependency
+        # closure, any unresolved use of the identifier is not contact-free.
+        return True
+    return bool(
+        re.search(r"\bfetch\b", lower)
+        or re.search(r"\bwebsocket\b", lower)
+        or re.search(
+            r"\b(?:api|api_client|axios|client|connection|http|httpx|requests|session|socket)"
+            r"\s*\.\s*(?:get|head|request|send)\s*\(",
+            lower,
+        )
+    )
 
 
 def heredoc_programs(script: str) -> list[tuple[str, str]]:
@@ -1825,7 +2034,26 @@ def script_dependencies_have_runtime_mutation(
     script: str,
     script_aliases: dict[str, str] | None,
     working_directory: Path,
+    trusted_repository_scripts: frozenset[str] = frozenset(),
 ) -> bool:
+    def manifest_trust(target: str, index: int) -> bool | None:
+        """Trust pinned Python only when its import path is isolated."""
+
+        normalized = target.removeprefix("./")
+        if normalized not in trusted_repository_scripts:
+            return None
+        if Path(normalized).suffix.lower() != ".py":
+            return False
+        if executable_name(tokens[index]) not in {"python", "python3"}:
+            return False
+        for option_index in range(index + 1, len(tokens)):
+            option = tokens[option_index]
+            if option in {"|", "||", "&&", ";", "&", "{", "}"}:
+                break
+            if option.removeprefix("./") == normalized:
+                return "-I" in tokens[index + 1 : option_index]
+        return False
+
     tokens = shell_tokens(script)
     for index in command_indexes(tokens):
         raw_tail = raw_command_arguments(tokens, index)
@@ -1839,15 +2067,22 @@ def script_dependencies_have_runtime_mutation(
                 ):
                     invocation_arguments = raw_tail[target_index + 1 :]
                     break
-            if not approved_read_only_script_invocation(
-                interpreter_target,
-                invocation_arguments,
-                working_directory,
-            ) and repository_script_has_runtime_mutation(
-                interpreter_target,
-                set(),
-                script_aliases,
-                working_directory,
+            trust = manifest_trust(interpreter_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    interpreter_target,
+                    invocation_arguments,
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    interpreter_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
             ):
                 return True
 
@@ -1856,36 +2091,50 @@ def script_dependencies_have_runtime_mutation(
             index,
             working_directory,
         )
-        if module_target is not None and not approved_read_only_script_invocation(
-            module_target, interpreter_module_arguments(tokens, index), working_directory
-        ) and repository_script_has_runtime_mutation(
-            module_target,
-            set(),
-            script_aliases,
-            working_directory,
-        ):
-            return True
+        if module_target is not None:
+            trust = manifest_trust(module_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    module_target,
+                    interpreter_module_arguments(tokens, index),
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    module_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
+            ):
+                return True
 
         direct_target = direct_repository_script_target(
             tokens,
             index,
             working_directory,
         )
-        if (
-            direct_target is not None
-            and not approved_read_only_script_invocation(
-                direct_target,
-                raw_tail,
-                working_directory,
-            )
-            and repository_script_has_runtime_mutation(
-                direct_target,
-                set(),
-                script_aliases,
-                working_directory,
-            )
-        ):
-            return True
+        if direct_target is not None:
+            trust = manifest_trust(direct_target, index)
+            if trust is False:
+                return True
+            if (
+                trust is None
+                and not approved_read_only_script_invocation(
+                    direct_target,
+                    raw_tail,
+                    working_directory,
+                )
+                and repository_script_has_runtime_mutation(
+                    direct_target,
+                    set(),
+                    script_aliases,
+                    working_directory,
+                )
+            ):
+                return True
     return False
 
 
@@ -1909,6 +2158,56 @@ def inline_interpreter_payload_has_runtime_mutation(
             script_aliases,
             working_directory,
         )
+    # Perl, PHP, and Ruby inline programs are not statically admitted.
+    return True
+
+
+def shell_tokens_have_network_device_redirect(tokens: list[str]) -> bool:
+    """Recognize Bash's socket-opening /dev/tcp and /dev/udp redirections."""
+
+    redirect = re.compile(
+        r"^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?"
+        r"(?:<>|>>?|<|&>>?|>\|)(?P<path>.*)$"
+    )
+    variable = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+    def resolve_path(path: str, bindings: dict[str, str]) -> str:
+        def replacement(match: re.Match[str]) -> str:
+            return bindings.get(match.group(1) or match.group(2), match.group(0))
+
+        return variable.sub(replacement, path)
+
+    for index, token in enumerate(tokens):
+        match = redirect.match(token)
+        if match is None:
+            continue
+        path = match.group("path")
+        if not path and index + 1 < len(tokens):
+            path = tokens[index + 1]
+        resolved = resolve_path(path, shell_command_bindings(tokens, index))
+        if resolved.startswith(("/dev/tcp/", "/dev/udp/")):
+            return True
+        approved_dynamic = resolved in {"$GITHUB_OUTPUT", "${GITHUB_OUTPUT}"} or (
+            resolved.startswith(("$RUNNER_TEMP/", "${RUNNER_TEMP}/"))
+        )
+        if "$" in resolved and not approved_dynamic:
+            # An unresolved redirect target can synthesize /dev/tcp or /dev/udp.
+            # The release workflow only needs runner-owned output paths.
+            return True
+    return False
+
+
+def inline_interpreter_payload_has_runtime_contact(
+    interpreter: str,
+    payload: str,
+) -> bool:
+    """Fail closed on any unproved contact from an inline program."""
+
+    if interpreter in SCRIPT_INTERPRETERS:
+        # Plan-only intent admits one separately operation-verified repository
+        # validator, not arbitrary inline programs in Turing-complete languages.
+        return True
+    if interpreter in SHELL_INTERPRETERS:
+        return contains_runtime_command(payload) or contains_runtime_mutation(payload)
     # Perl, PHP, and Ruby inline programs are not statically admitted.
     return True
 
@@ -2141,6 +2440,9 @@ def package_manager_payloads(
 def contains_runtime_command(script: str) -> bool:
     if heredoc_has_runtime_mutation(script, set(), None, ROOT):
         return True
+    for interpreter, body in heredoc_programs(script):
+        if inline_interpreter_payload_has_runtime_contact(interpreter, body):
+            return True
     shell_script = shell_without_heredoc_bodies(script)
     parsed_substitutions = shell_command_substitutions(shell_script)
     if parsed_substitutions is None:
@@ -2149,17 +2451,34 @@ def contains_runtime_command(script: str) -> bool:
     if any(contains_runtime_command(payload) for payload in substitutions):
         return True
     tokens = shell_tokens(shell_script)
+    if shell_tokens_have_network_device_redirect(tokens):
+        return True
     for index in command_indexes(tokens):
         bindings = shell_command_bindings(tokens, index)
         command_token = resolved_command_token(tokens[index], bindings)
         name = executable_name(command_token)
+        raw_arguments = raw_command_arguments(tokens, index)
         arguments = command_arguments(tokens, index)
+        if name not in RELEASE_INTENT_ALLOWED_COMMANDS:
+            # Release intent is an exact, plan-only evidence workflow. Unknown
+            # executables are runtime-capable until explicitly reviewed here.
+            return True
+        if name == "gh" and (
+            bindings
+            or tuple(raw_arguments) not in RELEASE_INTENT_ALLOWED_GH_API
+        ):
+            return True
+        if name == "python3" and interpreter_script_target(tokens, index) != (
+            ".codestra/validate-release-intent.py"
+        ):
+            return True
         if command_token_has_dynamic_executable(command_token):
             return True
         if absolute_executable_is_unproved(command_token):
             return True
         if (
             name in RUNTIME_TOOLS
+            or name.lower() in GENERIC_NETWORK_CLIENTS
             or name in SHELL_WRAPPERS
             or name.endswith("deploy_immutable")
             or name.endswith("apply-plan.sh")
@@ -2167,9 +2486,8 @@ def contains_runtime_command(script: str) -> bool:
         ):
             return True
         payload = interpreter_payload(tokens, index)
-        if payload is not None and inline_interpreter_payload_has_runtime_mutation(
-            name,
-            payload,
+        if payload is not None and inline_interpreter_payload_has_runtime_contact(
+            name, payload
         ):
             return True
     return False
@@ -2626,11 +2944,130 @@ def workflow_script_aliases(workflow: str, path: str) -> dict[str, str]:
     return aliases
 
 
+def repository_script_has_runtime_contact(
+    target: str,
+    script_aliases: dict[str, str],
+    working_directory: Path,
+) -> bool:
+    normalized_target = target.replace("$RUNNER_TEMP/", "${RUNNER_TEMP}/")
+    if normalized_target in script_aliases:
+        target = script_aliases[normalized_target]
+    else:
+        for prefix, replacement in script_aliases.items():
+            if prefix.endswith("/") and normalized_target.startswith(prefix):
+                target = replacement + normalized_target.removeprefix(prefix)
+                break
+    if "${{" in target or "$" in target:
+        return True
+    relative_target = target.removeprefix("./")
+    if Path(relative_target).is_absolute() or any(
+        marker in relative_target for marker in "*?["
+    ):
+        return True
+    candidate = working_directory / relative_target
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(ROOT.resolve())
+    except (OSError, ValueError):
+        return True
+    if candidate.is_symlink() or not resolved.is_file():
+        return True
+    if resolved == RELEASE_VALIDATOR_PATH.resolve():
+        validate_release_validator_operations(resolved.read_text(encoding="utf-8"))
+        return False
+    # A repository script can import an arbitrary local helper, so source-only
+    # inspection of its entrypoint is insufficient to prove no runtime contact.
+    # The release validator above is the sole dependency with a dedicated
+    # operation contract.
+    return True
+
+
+def step_has_runtime_contact(
+    job: WorkflowJob,
+    step: dict[str, Any],
+    path: str,
+    script_aliases: dict[str, str],
+) -> bool:
+    run = str(step.get("run", ""))
+    shell = step.get("shell", job.shell)
+    shell_name = ""
+    if shell is not None:
+        if not isinstance(shell, str) or "${{" in shell or "$" in shell:
+            return True
+        shell_name = executable_name(shell.split()[0]).lower() if shell.split() else ""
+        if shell_name in SCRIPT_INTERPRETERS:
+            # The exact repository validator remains available as a normal
+            # shell command and is checked through its dedicated operation
+            # contract. Arbitrary declared script-language shells are unproved.
+            return True
+        if shell_name not in {"bash", "dash", "sh", "zsh"}:
+            return True
+    if contains_runtime_command(run) or step_has_runtime_mutation(
+        job,
+        step,
+        path,
+        script_aliases,
+    ):
+        return True
+    for interpreter, body in heredoc_programs(run):
+        if interpreter in {"python", "python3"}:
+            if python_source_has_runtime_contact(body):
+                return True
+        elif interpreter == "node":
+            if javascript_source_has_runtime_contact(body):
+                return True
+        elif interpreter in SHELL_INTERPRETERS:
+            if contains_runtime_command(body) or contains_runtime_mutation(body):
+                return True
+        else:
+            return True
+    tokens = shell_tokens(shell_without_heredoc_bodies(run))
+    for index in command_indexes(tokens):
+        interpreter = executable_name(tokens[index]).lower()
+        if interpreter in GENERIC_NETWORK_CLIENTS:
+            # Generic network clients cannot prove that a read-only-looking
+            # request is not contacting the governed runtime.
+            return True
+        payload = interpreter_payload(tokens, index)
+        if payload is not None:
+            if inline_interpreter_payload_has_runtime_contact(interpreter, payload):
+                return True
+        target = interpreter_script_target(tokens, index)
+        if target is not None and repository_script_has_runtime_contact(
+            target,
+            script_aliases,
+            step_working_directory(job, step, path),
+        ):
+            return True
+        module_target = interpreter_module_target(
+            tokens,
+            index,
+            step_working_directory(job, step, path),
+        )
+        if module_target is not None:
+            return True
+        direct_target = direct_repository_script_target(
+            tokens,
+            index,
+            step_working_directory(job, step, path),
+        )
+        if direct_target is not None and repository_script_has_runtime_contact(
+            direct_target,
+            script_aliases,
+            step_working_directory(job, step, path),
+        ):
+            return True
+    return False
+
+
 def workflow_has_runtime_command(workflow: str, path: str) -> bool:
     jobs = workflow_jobs(workflow, path)
     script_aliases = workflow_script_aliases(workflow, path)
     return any(
-        step_has_runtime_mutation(job, step, path, script_aliases)
+        # Release-intent evidence promises that no runtime was contacted, so
+        # declared Python/Node shells, inline programs, and invoked repository
+        # scripts require the stronger contact-aware classifier.
+        step_has_runtime_contact(job, step, path, script_aliases)
         for job in jobs.values()
         for step in workflow_steps(job, path)
     )
@@ -2663,6 +3100,31 @@ def step_has_runtime_mutation(
     )
 
 
+def verified_control_plane_dependencies(
+    repository: str,
+    workflow_path: str,
+) -> frozenset[str] | None:
+    manifest = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256.get(repository, {}).get(
+        workflow_path,
+        {},
+    )
+    trusted_scripts: set[str] = set()
+    for relative, expected_hash in manifest.items():
+        candidate = ROOT / relative
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(ROOT.resolve())
+        except (OSError, ValueError):
+            return None
+        if candidate.is_symlink() or not resolved.is_file():
+            return None
+        if hashlib.sha256(resolved.read_bytes()).hexdigest() != expected_hash:
+            return None
+        if resolved.suffix.lower() in SCRIPT_SUFFIXES:
+            trusted_scripts.add(relative)
+    return frozenset(trusted_scripts)
+
+
 def workflow_has_runtime_mutation(
     workflow: str,
     path: str,
@@ -2680,6 +3142,9 @@ def workflow_has_runtime_mutation(
     if approved_hash is not None:
         if hashlib.sha256(workflow.encode()).hexdigest() != approved_hash:
             return True
+        trusted_scripts = verified_control_plane_dependencies(repository, path)
+        if trusted_scripts is None:
+            return True
         script_aliases = workflow_script_aliases(workflow, path)
         return any(
             job_reusable_workflow_mutation(job, path, seen_workflows)
@@ -2688,6 +3153,7 @@ def workflow_has_runtime_mutation(
                     str(step.get("run", "")),
                     script_aliases,
                     step_working_directory(job, step, path),
+                    trusted_scripts,
                 )
                 or isinstance(step.get("uses"), str)
                 and str(step["uses"]).strip().startswith("./")
@@ -3261,6 +3727,10 @@ def validate(contract: dict[str, Any]) -> None:
     require(INTENT_PATH.is_file() and not INTENT_PATH.is_symlink(), "manual release-intent workflow is missing or unsafe")
     require(RELEASE_VALIDATOR_PATH.is_file() and not RELEASE_VALIDATOR_PATH.is_symlink(), "release-intent validator is missing or unsafe")
     intent = INTENT_PATH.read_text(encoding="utf-8")
+    require(
+        hashlib.sha256(intent.encode()).hexdigest() == MANUAL_RELEASE_INTENT_SHA256,
+        "manual release-intent workflow exact-source hash drift",
+    )
     release_validator = RELEASE_VALIDATOR_PATH.read_text(encoding="utf-8")
     validate_release_validator_operations(release_validator)
     for marker in (
@@ -3466,6 +3936,70 @@ def validate_intent_negative_regressions() -> None:
         ),
         "read-only governance verification was treated as runtime mutation",
     )
+    repository = "appolon1908-hue/Middleware-"
+    control_plane_paths = (
+        ".github/workflows/integration-main-release-authorities.yml",
+        ".github/workflows/production-reviewer-access.yml",
+    )
+    for workflow_path in control_plane_paths:
+        workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
+        require(
+            not workflow_has_runtime_mutation(workflow, workflow_path),
+            f"approved repository control-plane workflow was treated as runtime: {workflow_path}",
+        )
+        require(
+            workflow_has_runtime_mutation(
+                workflow.replace(
+                    "CONTROL_PLANE_MUTATION=repository-administration",
+                    "CONTROL_PLANE_MUTATION=unreviewed",
+                    1,
+                ),
+                workflow_path,
+            ),
+            f"control-plane workflow hash drift escaped classification: {workflow_path}",
+        )
+        trusted = verified_control_plane_dependencies(repository, workflow_path)
+        require(
+            trusted is not None and bool(trusted),
+            f"control-plane dependency manifest is missing: {workflow_path}",
+        )
+        assert trusted is not None
+        entry_script = (
+            "scripts/apply_integration_main_release_authorities_v2.py"
+            if workflow_path.endswith("integration-main-release-authorities.yml")
+            else "scripts/apply_production_reviewer_access.py"
+        )
+        require(
+            not script_dependencies_have_runtime_mutation(
+                f"python3 -I {entry_script} --mode validate",
+                {},
+                ROOT,
+                trusted,
+            ),
+            f"isolated trusted control-plane script was rejected: {entry_script}",
+        )
+        require(
+            script_dependencies_have_runtime_mutation(
+                f"python3 {entry_script} --mode validate",
+                {},
+                ROOT,
+                trusted,
+            ),
+            f"non-isolated trusted control-plane script escaped: {entry_script}",
+        )
+        dependency_manifest = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256[repository][
+            workflow_path
+        ]
+        dependency_path = next(iter(dependency_manifest))
+        expected_hash = dependency_manifest[dependency_path]
+        dependency_manifest[dependency_path] = "0" * 64
+        try:
+            require(
+                verified_control_plane_dependencies(repository, workflow_path) is None,
+                f"control-plane dependency drift escaped classification: {workflow_path}",
+            )
+        finally:
+            dependency_manifest[dependency_path] = expected_hash
     require(
         not contains_runtime_mutation("bash scripts/run_ci.sh"),
         "validation script dependency chain was treated as runtime mutation",
@@ -3665,6 +4199,244 @@ jobs:
         ),
         "negative release-intent Python shell regression passed",
     )
+    read_only_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          kubectl get pods
+          docker inspect middleware-api
+"""
+    require(
+        workflow_has_runtime_command(
+            read_only_runtime_contact,
+            "synthetic-release-intent-runtime-read.yml",
+        ),
+        "negative release-intent read-only runtime regression passed",
+    )
+    python_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import subprocess
+          subprocess.run(["kubectl", "get", "pods"], check=True)
+"""
+    require(
+        workflow_has_runtime_command(
+            python_runtime_contact,
+            "synthetic-release-intent-python-runtime-read.yml",
+        ),
+        "declared Python read-only runtime contact escaped classification",
+    )
+    node_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: await fetch("https://runtime.example/health")
+"""
+    require(
+        workflow_has_runtime_command(
+            node_runtime_contact,
+            "synthetic-release-intent-node-runtime-read.yml",
+        ),
+        "declared Node read-only runtime contact escaped classification",
+    )
+    invoked_runtime_reader = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 scripts/audit_release_endpoints.py
+"""
+    require(
+        workflow_has_runtime_command(
+            invoked_runtime_reader,
+            "synthetic-release-intent-invoked-runtime-read.yml",
+        ),
+        "invoked read-only runtime script escaped classification",
+    )
+    for client_command in (
+        'curl -fsS "$RUNTIME_HEALTH_URL"',
+        'wget -qO- "$RUNTIME_HEALTH_URL"',
+    ):
+        generic_network_contact = f"""name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: {client_command}
+"""
+        require(
+            workflow_has_runtime_command(
+                generic_network_contact,
+                "synthetic-release-intent-generic-network-read.yml",
+            ),
+            f"generic network client escaped contact classification: {client_command}",
+        )
+    asyncio_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import asyncio
+          asyncio.run(asyncio.open_connection(host, 443))
+"""
+    require(
+        workflow_has_runtime_command(
+            asyncio_runtime_contact,
+            "synthetic-release-intent-asyncio-runtime-read.yml",
+        ),
+        "asyncio network connection escaped contact classification",
+    )
+    dynamic_node_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: import("https").then(({get}) => get(process.env.RUNTIME_URL))
+"""
+    require(
+        workflow_has_runtime_command(
+            dynamic_node_runtime_contact,
+            "synthetic-release-intent-dynamic-node-runtime-read.yml",
+        ),
+        "dynamic Node network import escaped contact classification",
+    )
+    python_generic_client_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import subprocess
+          subprocess.run(["curl", "-fsS", "https://runtime.example/health"])
+"""
+    require(
+        workflow_has_runtime_command(
+            python_generic_client_contact,
+            "synthetic-release-intent-python-generic-network-read.yml",
+        ),
+        "Python-launched generic network client escaped contact classification",
+    )
+    asyncio_subprocess_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import asyncio
+          asyncio.run(asyncio.create_subprocess_exec("curl", "https://runtime.example"))
+"""
+    require(
+        workflow_has_runtime_command(
+            asyncio_subprocess_contact,
+            "synthetic-release-intent-asyncio-subprocess-read.yml",
+        ),
+        "asyncio subprocess runtime contact escaped classification",
+    )
+    computed_commonjs_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: |
+          const transport = require("node:" + "https");
+          transport.get(process.env.RUNTIME_URL);
+"""
+    require(
+        workflow_has_runtime_command(
+            computed_commonjs_contact,
+            "synthetic-release-intent-computed-commonjs-runtime-read.yml",
+        ),
+        "computed CommonJS network import escaped contact classification",
+    )
+    commented_commonjs_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: |
+          const transport = require /*comment*/ ("https");
+          transport.get(process.env.RUNTIME_URL);
+"""
+    require(
+        workflow_has_runtime_command(
+            commented_commonjs_contact,
+            "synthetic-release-intent-commented-commonjs-runtime-read.yml",
+        ),
+        "comment-separated CommonJS import escaped contact classification",
+    )
+    bash_network_device_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: exec 3<>/dev/tcp/runtime.example/443
+"""
+    require(
+        workflow_has_runtime_command(
+            bash_network_device_contact,
+            "synthetic-release-intent-bash-network-device-read.yml",
+        ),
+        "Bash network-device redirection escaped contact classification",
+    )
+    expanded_bash_network_device_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: proto=tcp; exec 3<>/dev/$proto/runtime.example/443
+"""
+    require(
+        workflow_has_runtime_command(
+            expanded_bash_network_device_contact,
+            "synthetic-release-intent-expanded-bash-network-device-read.yml",
+        ),
+        "expanded Bash network-device redirection escaped contact classification",
+    )
+    require(
+        not contains_runtime_command(
+            'printf %s "$EVIDENCE" > "$RUNNER_TEMP/release-intent.json"'
+        ),
+        "approved runner-temporary redirect was treated as runtime contact",
+    )
+    for unapproved_command in (
+        "openssl s_client -connect runtime.example:443 </dev/null",
+        (
+            "export GITHUB_OUTPUT=/dev/tcp/runtime.example/443; "
+            'printf x > "$GITHUB_OUTPUT"'
+        ),
+    ):
+        unapproved_shell_contact = f"""name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: {unapproved_command}
+"""
+        require(
+            workflow_has_runtime_command(
+                unapproved_shell_contact,
+                "synthetic-release-intent-unapproved-shell-contact.yml",
+            ),
+            f"unapproved executable or redirect escaped contact classification: {unapproved_command}",
+        )
     reusable_mutation = """name: synthetic
 jobs:
   deploy:
@@ -4143,6 +4915,21 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
         pass
     else:
         raise ContractError("negative regression unexpectedly passed: validator image writer")
+    require(
+        not contains_runtime_command(
+            'gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch'
+        ),
+        "fixed GitHub control-plane read was treated as runtime contact",
+    )
+    for command in (
+        'gh api --hostname runtime.example "repos/${GITHUB_REPOSITORY}" --jq .default_branch',
+        "gh api https://runtime.example/status --jq .status",
+        'GH_HOST=runtime.example gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch',
+    ):
+        require(
+            contains_runtime_command(command),
+            f"unapproved GitHub API authority escaped: {command}",
+        )
     for command in (
         "curl -X POST https://runtime.example/mutate",
         "METHOD=POST; curl -X \"$METHOD\" https://runtime.example/mutate",

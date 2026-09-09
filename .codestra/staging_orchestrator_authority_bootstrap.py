@@ -30,10 +30,9 @@ OLD = '''def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
 '''
 
 
-def replacement(script_sha: str) -> str:
-    return f'''STAGING_NO_EFFECT_WORKFLOW_PATH = ".github/workflows/staging-intake-e2e-no-effect.yml"
+TEMPLATE = '''STAGING_NO_EFFECT_WORKFLOW_PATH = ".github/workflows/staging-intake-e2e-no-effect.yml"
 STAGING_NO_EFFECT_JOB_NAME = "certify-no-effect"
-STAGING_NO_EFFECT_SCRIPT_SHA256 = "{script_sha}"
+STAGING_NO_EFFECT_SCRIPT_SHA256 = "__SCRIPT_SHA__"
 STAGING_NO_EFFECT_FALSE_FLAGS = (
     "LIVE_WRITES",
     "ODOO_WRITE",
@@ -54,7 +53,7 @@ def require_staging_no_effect_mutation_authority(
     require(
         path == STAGING_NO_EFFECT_WORKFLOW_PATH
         and job_name == STAGING_NO_EFFECT_JOB_NAME,
-        f"unapproved live mutation exception: {{path}}:{{job_name}}",
+        f"unapproved live mutation exception: {path}:{job_name}",
     )
     condition = job_condition(job)
     require(isinstance(condition, str), "staging no-effect job condition is missing")
@@ -65,7 +64,7 @@ def require_staging_no_effect_mutation_authority(
         "github.ref == 'refs/heads/main'",
         "inputs.confirm_no_effect == true",
     ):
-        require(fragment in condition, f"staging no-effect authority drift: {{fragment}}")
+        require(fragment in condition, f"staging no-effect authority drift: {fragment}")
     require(
         job.data.get("environment") == "intake-staging-certification",
         "staging no-effect protected environment drift",
@@ -81,7 +80,7 @@ def require_staging_no_effect_mutation_authority(
     for flag in STAGING_NO_EFFECT_FALSE_FLAGS:
         require(
             root_env.get(flag) == "false",
-            f"staging effect flag enabled or missing: {{flag}}",
+            f"staging effect flag enabled or missing: {flag}",
         )
 
     script_path = ROOT / "scripts/staging-intake-e2e-no-effect.py"
@@ -103,7 +102,7 @@ def require_staging_no_effect_mutation_authority(
     ]
     require(
         len(mutating_steps) == 1,
-        f"staging no-effect job must have exactly one mutating step: {{path}}:{{job_name}}",
+        f"staging no-effect job must have exactly one mutating step: {path}:{job_name}",
     )
     step = mutating_steps[0]
     run = step.get("run")
@@ -111,14 +110,18 @@ def require_staging_no_effect_mutation_authority(
         isinstance(run, str),
         "staging no-effect mutation must be an explicit run step",
     )
-    run_lines = [line.strip() for line in run.splitlines() if line.strip()]
+    run_lines = [
+        line.strip().rstrip(chr(92)).strip()
+        for line in run.splitlines()
+        if line.strip()
+    ]
     require(
         run_lines
         == [
             "set -Eeuo pipefail",
-            "python3 scripts/staging-intake-e2e-no-effect.py \\",
-            '--base-url "$BASE_URL" \\',
-            '--tenant "$TENANT_ID" \\',
+            "python3 scripts/staging-intake-e2e-no-effect.py",
+            '--base-url "$BASE_URL"',
+            '--tenant "$TENANT_ID"',
             '--expected-source-sha "$EXPECTED_SOURCE_SHA"',
         ],
         "staging no-effect mutating command drift",
@@ -145,7 +148,7 @@ def require_staging_no_effect_mutation_authority(
     ):
         require(
             boundary in workflow,
-            f"staging non-authorization boundary drift: {{boundary}}",
+            f"staging non-authorization boundary drift: {boundary}",
         )
 
 
@@ -173,13 +176,13 @@ def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
                 continue
             require(
                 "RUNTIME_MUTATION_DISABLED=true" in job.raw,
-                f"mutating job lacks disable marker: {{path}}:{{job_name}}",
+                f"mutating job lacks disable marker: {path}:{job_name}",
             )
             require(
                 job_condition(job) == "${{ false }}",
-                f"mutating job is not unconditionally disabled: {{path}}:{{job_name}}",
+                f"mutating job is not unconditionally disabled: {path}:{job_name}",
             )
-    require(mutating_jobs > 0, f"native mutation classification drift: {{path}}")
+    require(mutating_jobs > 0, f"native mutation classification drift: {path}")
 '''
 
 
@@ -189,7 +192,7 @@ def main() -> None:
         raise SystemExit("expected exactly one mutating-job authority function")
     script_sha = hashlib.sha256(SCRIPT_PATH.read_bytes()).hexdigest()
     VALIDATOR_PATH.write_text(
-        validator.replace(OLD, replacement(script_sha), 1),
+        validator.replace(OLD, TEMPLATE.replace("__SCRIPT_SHA__", script_sha), 1),
         encoding="utf-8",
     )
     print(f"STAGING_NO_EFFECT_SCRIPT_SHA256={script_sha}")

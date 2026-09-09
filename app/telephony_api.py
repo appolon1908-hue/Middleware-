@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
+from .api_inputs import authorization_header, optional_header, required_header
 from .calling_contract import (
     CLIENT_ID, CallPrincipal, CallingContractError, CallingGrant,
     MutationRequest, OriginateRequest, load_grant,
@@ -40,23 +41,30 @@ class CallingResponse(BaseModel):
 
 async def _principal(request: Request, action: str) -> CallPrincipal:
     claims = await request.app.state.runtime.tokens.verify(
-        request.headers.get("Authorization", ""), expected_client_id=CLIENT_ID,
+        authorization_header(request), expected_client_id=CLIENT_ID,
         required_scope=f"telephony.calls.{action}",
     )
     try:
         principal = CallPrincipal.from_claims(claims)
     except ValidationError as exc:
         raise AuthorizationError("verified calling identity claims are incomplete") from exc
-    supplied_tenant = request.headers.get("X-Tenant-ID")
+    supplied_tenant = optional_header(
+        request, "X-Tenant-ID", minimum=1, maximum=128,
+    )
     if supplied_tenant is not None and supplied_tenant != principal.tenant_id:
         raise AuthorizationError("calling tenant header conflicts with verified identity")
     return principal
 
 
 def _headers(request: Request, key: str) -> str:
-    if request.headers.get("Idempotency-Key") != key:
+    supplied_key = required_header(
+        request, "Idempotency-Key", minimum=8, maximum=180,
+    )
+    if supplied_key != key:
         raise RequestValidationError("Idempotency-Key must equal the request body key")
-    correlation = request.headers.get("X-Correlation-ID", "")
+    correlation = required_header(
+        request, "X-Correlation-ID", minimum=8, maximum=180,
+    )
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{7,179}", correlation) is None:
         raise RequestValidationError("a bounded X-Correlation-ID is required")
     return correlation

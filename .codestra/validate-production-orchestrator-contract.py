@@ -1580,10 +1580,12 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
                 return True
             if re.search(r"\bbody\s*:", lowered_options):
                 return True
-            method = re.search(r"\bmethod\s*:", lowered_options)
-            if method is not None and re.match(
-                r"\s*['\"](?:get|head)['\"]",
-                lowered_options[method.end() :],
+            methods = list(re.finditer(r"(?:\bmethod|['\"]method['\"])\s*:", lowered_options))
+            if len(methods) > 1:
+                return True
+            if methods and re.match(
+                r"\s*['\"](?:get|head)['\"]\s*(?:,|})",
+                lowered_options[methods[0].end() :],
             ) is None:
                 return True
     # Module imports can rename or construct clients in arbitrary ways. Until
@@ -3261,7 +3263,11 @@ def validate_release_validator_operations(source: str) -> None:
         def visit_Return(self, node: ast.Return) -> None:
             if node.value is not None:
                 require(
-                    not restricted_callable_name(qualified_name(node.value)),
+                    not any(
+                        isinstance(value, ast.expr)
+                        and restricted_callable_name(qualified_name(value))
+                        for value in ast.walk(node.value)
+                    ),
                     "release-intent validator returns a restricted callable",
                 )
             self.generic_visit(node)
@@ -3380,8 +3386,11 @@ def validate_release_validator_operations(source: str) -> None:
                 not (
                     function_stack
                     and function_stack[-1] in {"api_request", "download_artifact_archive"}
-                    and isinstance(node.ctx, (ast.Store, ast.Del))
-                    and node.attr in {"method", "data", "get_method"}
+                    and (
+                        node.attr == "__dict__"
+                        or isinstance(node.ctx, (ast.Store, ast.Del))
+                        and node.attr in {"method", "data", "get_method"}
+                    )
                 ),
                 "evidence client mutates request method or body after construction",
             )
@@ -4389,6 +4398,23 @@ runner(["kubectl", "apply", "-f", "runtime.yml"], check=True)
         raise ContractError(
             "negative regression unexpectedly passed: assigned subprocess callable"
         )
+    for returned in ("(subprocess.run,)[0]", "{'runner': subprocess.run}['runner']"):
+        unsafe = f"import subprocess\ndef helper():\n    return {returned}\nrunner = helper()\nrunner(['kubectl', 'apply'])\n"
+        try:
+            validate_release_validator_operations(unsafe)
+        except ContractError:
+            pass
+        else:
+            raise ContractError("container-returned restricted callable admitted")
+    for options in (
+        "{headers: {method: 'GET'}, method: 'POST'}",
+        "{method: 'GET', method: 'POST'}",
+        "{'method': 'POST'}",
+    ):
+        require(
+            javascript_source_has_runtime_mutation(f"fetch(url, {options})"),
+            "effective fetch mutation method admitted",
+        )
     unsafe_annotated_callable_validator = """import subprocess
 runner: object = subprocess.run
 runner(["kubectl", "apply", "-f", "runtime.yml"], check=True)
@@ -4558,6 +4584,8 @@ open_url("https://runtime.example/mutate")
             "NO_REDIRECT_OPENER.open(request, **options)",
             "request.method = 'POST'", "request.data = b'payload'",
             "request.method: str = 'POST'",
+            "request.__dict__['method'] = 'POST'",
+            "request.__dict__['data'] = b'payload'",
         ):
             unsafe = (
                 "import urllib.request\n"

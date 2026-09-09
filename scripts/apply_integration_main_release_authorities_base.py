@@ -87,6 +87,13 @@ def require_string(value: object, message: str) -> str:
     return value
 
 
+def require_string_list(value: object, message: str) -> list[str]:
+    values = require_list(value, message)
+    result = [require_string(item, message) for item in values]
+    require(len(result) == len(set(result)), message)
+    return result
+
+
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -194,6 +201,14 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
         conditions.get("ref_name"),
         "ruleset ref conditions missing",
     )
+    included_refs = require_string_list(
+        ref_name.get("include"),
+        "ruleset included refs missing or invalid",
+    )
+    excluded_refs = require_string_list(
+        ref_name.get("exclude"),
+        "ruleset excluded refs missing or invalid",
+    )
     rules = require_list(value.get("rules"), "ruleset rules missing")
 
     by_type: dict[str, Mapping[str, Any]] = {}
@@ -269,8 +284,8 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
         "bypass_actors": value.get("bypass_actors"),
         "conditions": {
             "ref_name": {
-                "include": list(ref_name.get("include", [])),
-                "exclude": list(ref_name.get("exclude", [])),
+                "include": sorted(included_refs),
+                "exclude": sorted(excluded_refs),
             }
         },
         "rules": {
@@ -337,6 +352,33 @@ def merge_ruleset_preserving_stronger_controls(
     merged = copy.deepcopy(dict(baseline))
     existing_rules = rules_by_type(existing)
     merged_rules = rules_by_type(merged)
+
+    existing_conditions = require_mapping(
+        existing.get("conditions"),
+        "existing ruleset conditions missing",
+    )
+    existing_ref_name = require_mapping(
+        existing_conditions.get("ref_name"),
+        "existing ruleset ref conditions missing",
+    )
+    existing_included_refs = require_string_list(
+        existing_ref_name.get("include"),
+        "existing included refs missing or invalid",
+    )
+    merged_conditions = require_mapping(
+        merged.get("conditions"),
+        "merged ruleset conditions missing",
+    )
+    merged_ref_name_value = merged_conditions.get("ref_name")
+    if not isinstance(merged_ref_name_value, dict):
+        raise PolicyError("merged ruleset ref conditions missing")
+    merged_included_refs = require_string_list(
+        merged_ref_name_value.get("include"),
+        "merged included refs missing or invalid",
+    )
+    merged_ref_name_value["include"] = list(
+        dict.fromkeys(merged_included_refs + existing_included_refs)
+    )
 
     for kind, rule in existing_rules.items():
         if kind not in merged_rules:

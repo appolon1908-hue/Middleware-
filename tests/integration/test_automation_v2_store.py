@@ -59,18 +59,6 @@ async def automation_pool() -> asyncpg.Pool:
         await conn.execute("DROP TABLE IF EXISTS middleware_automation_audit CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_automation_jobs CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_automation_schema_migrations CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_outbox_attempt_events CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_control_mutations CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_control_audit CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_operation_mutations CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_event_ledger CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_reconciliation_audit CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_outbox CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_inbox CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_schema_migrations CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_command_audit CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_command_attempts CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_commands CASCADE")
         for migration in root + automation:
             await conn.execute(migration)
     try:
@@ -81,17 +69,18 @@ async def automation_pool() -> asyncpg.Pool:
 
 def envelope() -> EventEnvelope:
     now = datetime.now(UTC)
+    identity = uuid4().hex
     return EventEnvelope(
-        event_id="event-email-delivered-atomic-0001",
+        event_id=f"event-email-delivered-atomic-{identity}",
         event_type="codestra.email.message.delivered",
         event_version="1.0",
         occurred_at=now,
         received_at=now,
         source="klyrow-gateway",
-        tenant_id="tenant-integration",
-        correlation_id="correlation-integration-0001",
-        causation_id="causation-integration-0001",
-        idempotency_key="event-email-delivered-atomic-0001",
+        tenant_id=f"tenant-integration-{identity}",
+        correlation_id=f"correlation-integration-{identity}",
+        causation_id=f"causation-integration-{identity}",
+        idempotency_key=f"event-email-delivered-atomic-{identity}",
         payload={"message_id": "message-integration-1", "status": "delivered"},
         metadata={},
     )
@@ -131,11 +120,26 @@ async def test_event_job_and_dispatch_are_atomic_and_idempotent(automation_pool:
 
     async with automation_pool.acquire() as conn:
         counts = {
-            "inbox": await conn.fetchval("SELECT count(*) FROM middleware_inbox"),
-            "ledger": await conn.fetchval("SELECT count(*) FROM middleware_event_ledger"),
-            "event_outbox": await conn.fetchval("SELECT count(*) FROM middleware_outbox"),
-            "jobs": await conn.fetchval("SELECT count(*) FROM middleware_automation_jobs"),
-            "dispatch": await conn.fetchval("SELECT count(*) FROM middleware_automation_dispatch_outbox"),
+            "inbox": await conn.fetchval(
+                "SELECT count(*) FROM middleware_inbox WHERE tenant_id=$1",
+                item.tenant_id,
+            ),
+            "ledger": await conn.fetchval(
+                "SELECT count(*) FROM middleware_event_ledger WHERE tenant_id=$1",
+                item.tenant_id,
+            ),
+            "event_outbox": await conn.fetchval(
+                "SELECT count(*) FROM middleware_outbox WHERE tenant_id=$1",
+                item.tenant_id,
+            ),
+            "jobs": await conn.fetchval(
+                "SELECT count(*) FROM middleware_automation_jobs WHERE tenant_id=$1",
+                item.tenant_id,
+            ),
+            "dispatch": await conn.fetchval(
+                "SELECT count(*) FROM middleware_automation_dispatch_outbox WHERE tenant_id=$1",
+                item.tenant_id,
+            ),
         }
         wake = await conn.fetchrow(
             "SELECT payload FROM middleware_automation_dispatch_outbox WHERE tenant_id=$1",
@@ -291,13 +295,16 @@ async def test_concurrent_reconciliation_is_idempotent(
         await conn.execute("""
             CREATE OR REPLACE FUNCTION test_delay_reconciliation() RETURNS trigger
             LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.1); RETURN NEW; END $$;
+            DROP TRIGGER IF EXISTS test_delay_reconciliation
+            ON middleware_automation_reconciliation_runs;
             CREATE TRIGGER test_delay_reconciliation BEFORE INSERT
             ON middleware_automation_reconciliation_runs FOR EACH ROW
             EXECUTE FUNCTION test_delay_reconciliation();
         """)
     store = PostgresAutomationStore(automation_pool, owns_pool=False)
+    tenant_id = f"tenant-race-{uuid4().hex}"
     first = ReconciliationRequest(
-        tenant_id='tenant-race', correlation_id='correlation-race',
+        tenant_id=tenant_id, correlation_id='correlation-race',
         idempotency_key='reconcile-race-key', mode='READ',
     )
     second = first.model_copy(update={'mode': 'PLAN'}) if different_content else first
@@ -317,4 +324,7 @@ async def test_concurrent_reconciliation_is_idempotent(
         assert sorted(result.duplicate for result in successes) == [False, True]
         assert successes[0].model_dump(exclude={'duplicate'}) == successes[1].model_dump(exclude={'duplicate'})
     async with automation_pool.acquire() as conn:
-        assert await conn.fetchval('SELECT count(*) FROM middleware_automation_reconciliation_runs') == 1
+        assert await conn.fetchval(
+            'SELECT count(*) FROM middleware_automation_reconciliation_runs WHERE tenant_id=$1',
+            tenant_id,
+        ) == 1

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "config" / "repository-authorities.v1.json"
@@ -39,7 +40,7 @@ CONNECTOR_OWNERS = {
 }
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"REPOSITORY_AUTHORITY_ERROR={message}")
 
 
@@ -95,14 +96,16 @@ def main() -> None:
         manifest = json.loads(path.read_text(encoding="utf-8"))
         connector_id = manifest.get("connector_id")
         repository = manifest.get("repository")
-        if connector_id not in CONNECTOR_OWNERS:
+        if not isinstance(connector_id, str) or connector_id not in CONNECTOR_OWNERS:
             fail(f"unregistered_connector_owner:{connector_id}")
         component = CONNECTOR_OWNERS[connector_id]
-        expected_repo = by_component.get(component)
-        if repository != expected_repo:
+        manifest_expected_repo = by_component.get(component)
+        if manifest_expected_repo is None:
+            fail(f"missing_connector_principal:{connector_id}:{component}")
+        if repository != manifest_expected_repo:
             fail(
                 f"connector_repository_drift:{connector_id}:"
-                f"{repository}:expected:{expected_repo}"
+                f"{repository}:expected:{manifest_expected_repo}"
             )
         if repository in {REFERENCE, "appolon1908-hue/Middleware-"}:
             fail(f"connector_points_to_nonprincipal:{connector_id}")

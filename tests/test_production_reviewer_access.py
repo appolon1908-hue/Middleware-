@@ -24,9 +24,7 @@ spec.loader.exec_module(MODULE)
 
 class ProductionReviewerAccessTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.config: dict[str, Any] = json.loads(
-            CONFIG.read_text(encoding="utf-8")
-        )
+        self.config: dict[str, Any] = json.loads(CONFIG.read_text(encoding="utf-8"))
 
     def test_exact_fixed_repository_set_and_ids_validate(self) -> None:
         repositories = MODULE.validate_config(self.config)
@@ -47,9 +45,7 @@ class ProductionReviewerAccessTests(unittest.TestCase):
 
     def test_foreign_or_unknown_repository_fails(self) -> None:
         broken = copy.deepcopy(self.config)
-        broken["repositories"][0]["repository"] = (
-            "another-owner/not-authorized"
-        )
+        broken["repositories"][0]["repository"] = "another-owner/not-authorized"
         with self.assertRaises(MODULE.AccessError):
             MODULE.validate_config(broken)
 
@@ -68,9 +64,9 @@ class ProductionReviewerAccessTests(unittest.TestCase):
             MODULE.validate_config(duplicate_name)
 
         duplicate_id = copy.deepcopy(self.config)
-        duplicate_id["repositories"][-1]["repository_id"] = (
-            duplicate_id["repositories"][0]["repository_id"]
-        )
+        duplicate_id["repositories"][-1]["repository_id"] = duplicate_id[
+            "repositories"
+        ][0]["repository_id"]
         with self.assertRaises(MODULE.AccessError):
             MODULE.validate_config(duplicate_id)
 
@@ -89,21 +85,11 @@ class ProductionReviewerAccessTests(unittest.TestCase):
         self.assertFalse(document["external_effects_enabled"])
 
     def test_permission_helper_accepts_only_exact_write(self) -> None:
-        self.assertTrue(
-            MODULE.permission_is_write({"permission": "write"})
-        )
-        self.assertFalse(
-            MODULE.permission_is_write({"permission": "push"})
-        )
-        self.assertFalse(
-            MODULE.permission_is_write({"permission": "maintain"})
-        )
-        self.assertFalse(
-            MODULE.permission_is_write({"permission": "admin"})
-        )
-        self.assertFalse(
-            MODULE.permission_is_write({"permission": "read"})
-        )
+        self.assertTrue(MODULE.permission_is_write({"permission": "write"}))
+        self.assertFalse(MODULE.permission_is_write({"permission": "push"}))
+        self.assertFalse(MODULE.permission_is_write({"permission": "maintain"}))
+        self.assertFalse(MODULE.permission_is_write({"permission": "admin"}))
+        self.assertFalse(MODULE.permission_is_write({"permission": "read"}))
         self.assertFalse(MODULE.permission_is_write(None))
 
     def test_admin_api_redirects_are_rejected(self) -> None:
@@ -130,7 +116,9 @@ class ProductionReviewerAccessTests(unittest.TestCase):
         self.assertNotIn("issues: write", header)
         _, apply = jobs.split("\n  apply:\n", 1)
         apply_condition = apply.split("\n    permissions:\n", 1)[0]
-        self.assertIn("CONTROL_PLANE_MUTATION=repository-administration", apply_condition)
+        self.assertIn(
+            "CONTROL_PLANE_MUTATION=repository-administration", apply_condition
+        )
         self.assertIn("github.event_name == 'issue_comment'", apply_condition)
         self.assertIn("github.event.repository.id == 1347559071", apply_condition)
         self.assertIn("github.event.sender.id == 275410064", apply_condition)
@@ -139,6 +127,10 @@ class ProductionReviewerAccessTests(unittest.TestCase):
         self.assertNotIn("github.event_name == 'push'", apply_condition)
         self.assertNotIn("if: ${{ false }}", apply_condition)
         self.assertIn("issues: write", apply)
+        self.assertIn(
+            "python3 -I scripts/apply_production_reviewer_access.py",
+            text,
+        )
 
 
 if __name__ == "__main__":

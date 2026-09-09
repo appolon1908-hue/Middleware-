@@ -3,9 +3,12 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "apply_integration_main_release_authorities_v2.py"
@@ -30,20 +33,28 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
                 "id": MODULE.EXPECTED_REPOSITORY_ID,
                 "full_name": MODULE.EXPECTED_REPOSITORY,
                 "default_branch": "main",
-                "owner": {"login": MODULE.EXPECTED_OWNER, "id": MODULE.EXPECTED_OWNER_ID},
+                "owner": {
+                    "login": MODULE.EXPECTED_OWNER,
+                    "id": MODULE.EXPECTED_OWNER_ID,
+                },
             },
             "issue": {"number": MODULE.EXPECTED_ISSUE_NUMBER},
             "sender": {"login": MODULE.EXPECTED_OWNER, "id": MODULE.EXPECTED_OWNER_ID},
             "comment": {
                 "body": MODULE.EXPECTED_ISSUE_COMMAND,
-                "user": {"login": MODULE.EXPECTED_OWNER, "id": MODULE.EXPECTED_OWNER_ID},
+                "user": {
+                    "login": MODULE.EXPECTED_OWNER,
+                    "id": MODULE.EXPECTED_OWNER_ID,
+                },
             },
         }
 
     def test_exact_seven_repository_set_validates(self) -> None:
         rows = MODULE.BASE.validate_config(self.config)
         self.assertEqual(len(rows), 7)
-        self.assertEqual({row["repository"] for row in rows}, set(MODULE.EXPECTED_REPOSITORIES))
+        self.assertEqual(
+            {row["repository"] for row in rows}, set(MODULE.EXPECTED_REPOSITORIES)
+        )
 
     def test_new_governance_gap_repositories_are_exact(self) -> None:
         expected = {
@@ -51,11 +62,28 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
             "appolon1908-hue/klyrow.com",
             "appolon1908-hue/Codestra-Prometheus",
         }
-        observed = {row["repository"] for row in MODULE.BASE.validate_config(self.config)}
+        observed = {
+            row["repository"] for row in MODULE.BASE.validate_config(self.config)
+        }
         self.assertTrue(expected.issubset(observed))
 
     def test_exact_issue_command_event_validates(self) -> None:
         MODULE.validate_issue_comment_event(self.exact_event())
+
+    def test_fixed_cli_validates_runner_event_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "event.json"
+            path.write_text(json.dumps(self.exact_event()), encoding="utf-8")
+            with mock.patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(path)}):
+                self.assertEqual(MODULE.main(["--validate-issue-comment-event"]), 0)
+
+    def test_fixed_cli_rejects_duplicate_event_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "event.json"
+            path.write_text('{"action":"created","action":"edited"}', encoding="utf-8")
+            with mock.patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(path)}):
+                with self.assertRaises(MODULE.BASE.PolicyError):
+                    MODULE.main(["--validate-issue-comment-event"])
 
     def test_issue_command_drift_fails(self) -> None:
         event = self.exact_event()
@@ -97,11 +125,19 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
         self.assertIn("github.event.repository.id == 1347559071", condition)
         self.assertIn("github.event.sender.id == 275410064", condition)
         self.assertIn("github.event.comment.user.id == 275410064", condition)
-        self.assertIn("github.event.comment.body == '/apply-integration-main-release-authority v1'", condition)
+        self.assertIn(
+            "github.event.comment.body == '/apply-integration-main-release-authority v1'",
+            condition,
+        )
         self.assertNotIn("github.event_name == 'workflow_dispatch'", condition)
         self.assertNotIn("if: ${{ false }}", condition)
         self.assertNotIn("options: [validate, apply, verify]", text)
         self.assertNotIn("REQUESTED_MODE", text)
+        self.assertIn(
+            "python3 -I scripts/apply_integration_main_release_authorities_v2.py",
+            text,
+        )
+        self.assertIn("--validate-issue-comment-event", text)
         self.assertIn("--mode apply", apply)
         self.assertIn("--confirm APPLY_INTEGRATION_MAIN_RELEASE_AUTHORITY_V1", apply)
         self.assertNotIn('"${args[@]}"', apply)

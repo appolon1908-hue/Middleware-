@@ -57,11 +57,10 @@ def assert_rejected(
 def test_current_registry_passes_and_derives_counts(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = documents
     summary = validator.validate(registry, authorities, aliases)
+    adapter_registry = validator.load_object(validator.ADAPTER_PATH)
     assert summary["systems"] == len(registry["systems"])
     assert summary["aliases"] == len(aliases["mappings"])
-    assert summary["adapters"] == len(
-        {item["adapter_id"] for item in registry["systems"] if item["adapter_id"] is not None}
-    )
+    assert summary["adapters"] == len(adapter_registry["adapters"]) == 11
     assert summary["cells"] == len({item["cell"] for item in registry["systems"]})
 
 
@@ -69,6 +68,20 @@ def test_duplicate_repository_id_is_rejected(validator: ModuleType, documents) -
     registry, authorities, aliases = copy.deepcopy(documents)
     registry["systems"][1]["github_repository_id"] = registry["systems"][0]["github_repository_id"]
     assert_rejected(validator, registry, authorities, aliases, "duplicate repository id")
+
+
+def test_repository_id_must_match_independent_authority(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    system(registry, "middleware")["github_repository_id"] = 999_999_999
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "authoritative repository id mismatch: middleware",
+    )
 
 
 def test_duplicate_current_repository_name_is_rejected(validator: ModuleType, documents) -> None:
@@ -107,6 +120,29 @@ def test_alias_target_drift_is_rejected(validator: ModuleType, documents) -> Non
     assert_rejected(validator, registry, authorities, aliases, "registry alias target mismatch")
 
 
+def test_alias_target_cannot_collide_with_current_repository(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    repository_id = 1350724356
+    target = "appolon1908-hue/Middleware-"
+    alias = next(
+        item for item in aliases["mappings"] if item["github_repository_id"] == repository_id
+    )
+    alias["target_repository_after_cutover"] = target
+    authority(authorities, "platform-documentation")[
+        "target_repository_after_cutover"
+    ] = target
+    system(registry, "platform-documentation")["name_aliases"][0]["repository"] = target
+    assert_rejected(
+        validator,
+        registry,
+        authorities,
+        aliases,
+        "alias target collides with a current repository",
+    )
+
+
 def test_alias_status_must_remain_prepared_not_renamed(validator: ModuleType, documents) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     aliases["mappings"][0]["status"] = "RENAMED"
@@ -119,7 +155,7 @@ def test_n8n_cannot_become_provider_adapter(validator: ModuleType, documents) ->
     n8n["cell"] = "communications"
     n8n["integration_mode"] = "provider-adapter"
     n8n["middleware_relationship"] = "target-and-event-source"
-    n8n["adapter_id"] = "n8n-direct-provider"
+    n8n["adapter_id"] = None
     assert_rejected(validator, registry, authorities, aliases, "n8n must remain in the automation cell")
 
 
@@ -139,6 +175,25 @@ def test_duplicate_adapter_binding_is_rejected(validator: ModuleType, documents)
     registry, authorities, aliases = copy.deepcopy(documents)
     system(registry, "social")["adapter_id"] = system(registry, "telnexa-sms")["adapter_id"]
     assert_rejected(validator, registry, authorities, aliases, "duplicate adapter id")
+
+
+def test_invented_adapter_binding_is_rejected(validator: ModuleType, documents) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    system(registry, "telnexa-sms")["adapter_id"] = "invented-sms-adapter"
+    assert_rejected(validator, registry, authorities, aliases, "unknown adapter binding")
+
+
+def test_canonical_adapter_cannot_bypass_middleware(
+    validator: ModuleType, documents
+) -> None:
+    registry, authorities, aliases = copy.deepcopy(documents)
+    adapters = validator.load_object(validator.ADAPTER_PATH)
+    next(item for item in adapters["adapters"] if item["id"] == "ai-provider")[
+        "direct_n8n"
+    ] = True
+
+    with pytest.raises(validator.RegistryError, match="canonical adapter permits direct n8n"):
+        validator.validate(registry, authorities, aliases, adapters)
 
 
 def test_disabled_legacy_system_cannot_retain_write_relationship(validator: ModuleType, documents) -> None:
@@ -163,3 +218,14 @@ def test_hard_coded_inventory_count_is_rejected_as_schema_drift(validator: Modul
     registry, authorities, aliases = copy.deepcopy(documents)
     registry["repository_count"] = len(registry["systems"])
     assert_rejected(validator, registry, authorities, aliases, "registry top-level field inventory mismatch")
+
+
+def test_duplicate_json_keys_are_rejected(validator: ModuleType, tmp_path: Path) -> None:
+    ambiguous = tmp_path / "ambiguous.json"
+    ambiguous.write_text(
+        '{"github_repository_id": 1, "github_repository_id": 2}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(validator.RegistryError, match="duplicate JSON key"):
+        validator.load_object(ambiguous)

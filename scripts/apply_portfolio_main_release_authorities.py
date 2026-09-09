@@ -101,6 +101,18 @@ def require_string(value: object, message: str) -> str:
     return value
 
 
+def require_boolean(value: object, message: str) -> bool:
+    if type(value) is not bool:
+        raise PolicyError(message)
+    return value
+
+
+def require_nonnegative_integer(value: object, message: str) -> int:
+    if type(value) is not int or value < 0:
+        raise PolicyError(message)
+    return value
+
+
 def require_string_list(value: object, message: str) -> list[str]:
     values = require_list(value, message)
     result = [require_string(item, message) for item in values]
@@ -302,6 +314,9 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 and integration_id > 0,
                 f"{context}: invalid status-check integration ID",
             )
+        provider_slug = row.get("provider_slug")
+        if provider_slug is not None:
+            require_string(provider_slug, f"{context}: invalid status-check provider slug")
         checks.append(check)
     checks.sort(key=lambda row: str(row["context"]))
 
@@ -322,6 +337,33 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
     allowed_merge_methods = require_string_list(
         pull.get("allowed_merge_methods"), "allowed merge methods missing or invalid"
     )
+    pull_flags = {
+        key: require_boolean(pull.get(key), f"{key} must be boolean")
+        for key in (
+            "dismiss_stale_reviews_on_push",
+            "require_code_owner_review",
+            "require_last_push_approval",
+            "required_review_thread_resolution",
+        )
+    }
+    extra_approval = pull.get("require_extra_approval_for_unattributed_changes")
+    if extra_approval is not None:
+        extra_approval = require_boolean(
+            extra_approval,
+            "require_extra_approval_for_unattributed_changes must be boolean",
+        )
+    approving_review_count = require_nonnegative_integer(
+        pull.get("required_approving_review_count"),
+        "required_approving_review_count must be a non-negative integer",
+    )
+    do_not_enforce_on_create = require_boolean(
+        status.get("do_not_enforce_on_create"),
+        "do_not_enforce_on_create must be boolean",
+    )
+    strict_status_checks = require_boolean(
+        status.get("strict_required_status_checks_policy"),
+        "strict_required_status_checks_policy must be boolean",
+    )
     return {
         "name": value.get("name"),
         "target": value.get("target"),
@@ -339,26 +381,19 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
             "required_linear_history": True,
             "pull_request": {
                 "allowed_merge_methods": allowed_merge_methods,
-                "dismiss_stale_reviews_on_push": pull.get("dismiss_stale_reviews_on_push"),
-                "require_code_owner_review": pull.get("require_code_owner_review"),
-                "require_extra_approval_for_unattributed_changes": pull.get(
-                    "require_extra_approval_for_unattributed_changes"
-                ),
-                "require_last_push_approval": pull.get("require_last_push_approval"),
-                "required_approving_review_count": pull.get("required_approving_review_count"),
-                "required_review_thread_resolution": pull.get("required_review_thread_resolution"),
+                **pull_flags,
+                "require_extra_approval_for_unattributed_changes": extra_approval,
+                "required_approving_review_count": approving_review_count,
                 "additional_parameters": {
                     key: copy.deepcopy(pull[key])
                     for key in sorted(set(pull) - known_pull_parameters)
                 },
             },
             "required_status_checks": {
-                "do_not_enforce_on_create": status.get("do_not_enforce_on_create"),
+                "do_not_enforce_on_create": do_not_enforce_on_create,
                 "contexts": [row["context"] for row in checks],
                 "checks": checks,
-                "strict_required_status_checks_policy": status.get(
-                    "strict_required_status_checks_policy"
-                ),
+                "strict_required_status_checks_policy": strict_status_checks,
                 "additional_parameters": {
                     key: copy.deepcopy(status[key])
                     for key in sorted(set(status) - known_status_parameters)
@@ -432,14 +467,20 @@ def merge_ruleset_preserving_stronger_controls(
         for key, item in existing_pull.items():
             if key not in merged_pull_value:
                 merged_pull_value[key] = copy.deepcopy(item)
-        for key in (
+        boolean_keys = (
             "dismiss_stale_reviews_on_push",
             "require_code_owner_review",
             "require_extra_approval_for_unattributed_changes",
             "require_last_push_approval",
             "required_review_thread_resolution",
-        ):
-            if existing_pull.get(key) is True:
+        )
+        for key in boolean_keys:
+            if key not in existing_pull:
+                continue
+            existing_flag = require_boolean(
+                existing_pull.get(key), f"existing {key} must be boolean"
+            )
+            if existing_flag:
                 merged_pull_value[key] = True
         existing_count = existing_pull.get("required_approving_review_count", 0)
         require(
@@ -472,6 +513,14 @@ def merge_ruleset_preserving_stronger_controls(
         for key, item in existing_status.items():
             if key not in merged_status_value:
                 merged_status_value[key] = copy.deepcopy(item)
+        for key in (
+            "do_not_enforce_on_create",
+            "strict_required_status_checks_policy",
+        ):
+            if key in existing_status:
+                require_boolean(
+                    existing_status.get(key), f"existing {key} must be boolean"
+                )
         existing_checks = require_list(
             existing_status.get("required_status_checks"),
             "existing status checks missing",
@@ -493,6 +542,9 @@ def merge_ruleset_preserving_stronger_controls(
                 and integration_id > 0,
                 f"{context}: invalid status-check integration ID",
             )
+        provider_slug = row.get("provider_slug")
+        if provider_slug is not None:
+            require_string(provider_slug, f"{context}: invalid status-check provider slug")
         existing_by_context[context] = row
 
     combined_checks: list[dict[str, Any]] = []
@@ -516,6 +568,7 @@ def merge_ruleset_preserving_stronger_controls(
         if context not in baseline_contexts:
             combined_checks.append(copy.deepcopy(dict(row)))
     merged_status_value["required_status_checks"] = combined_checks
+    normalize_ruleset(merged)
     return merged
 
 

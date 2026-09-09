@@ -205,6 +205,43 @@ class PortfolioMainReleaseAuthoritiesTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.PolicyError, "integration ID"):
             MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
 
+    def test_integer_boolean_rule_flag_fails_closed(self) -> None:
+        record = MODULE.validate_config(self.config)[0]
+        baseline = MODULE.desired_ruleset(self.config, record)
+        existing = self.stronger_live_ruleset(record)
+        pull = next(
+            rule for rule in existing["rules"] if rule["type"] == "pull_request"
+        )
+        pull["parameters"]["require_code_owner_review"] = 1
+        with self.assertRaisesRegex(MODULE.PolicyError, "must be boolean"):
+            MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+
+    def test_integer_boolean_status_flag_fails_closed(self) -> None:
+        record = MODULE.validate_config(self.config)[0]
+        baseline = MODULE.desired_ruleset(self.config, record)
+        existing = self.stronger_live_ruleset(record)
+        status = next(
+            rule
+            for rule in existing["rules"]
+            if rule["type"] == "required_status_checks"
+        )
+        status["parameters"]["do_not_enforce_on_create"] = 0
+        with self.assertRaisesRegex(MODULE.PolicyError, "must be boolean"):
+            MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+
+    def test_malformed_provider_slug_fails_closed(self) -> None:
+        record = MODULE.validate_config(self.config)[0]
+        baseline = MODULE.desired_ruleset(self.config, record)
+        existing = self.stronger_live_ruleset(record)
+        status = next(
+            rule
+            for rule in existing["rules"]
+            if rule["type"] == "required_status_checks"
+        )
+        status["parameters"]["required_status_checks"][0]["provider_slug"] = {}
+        with self.assertRaisesRegex(MODULE.PolicyError, "provider slug"):
+            MODULE.merge_ruleset_preserving_stronger_controls(existing, baseline)
+
     def test_missing_baseline_rule_is_repaired_without_losing_extra_rules(self) -> None:
         record = MODULE.validate_config(self.config)[0]
         baseline = MODULE.desired_ruleset(self.config, record)

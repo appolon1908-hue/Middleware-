@@ -52,12 +52,8 @@ def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
         "default_branch_ruleset is missing",
     )
     require(isinstance(policy.get("actions_policy"), dict), "actions_policy is missing")
-    require(
-        isinstance(policy.get("security_policy"), dict), "security_policy is missing"
-    )
-    require(
-        isinstance(policy.get("environments"), dict), "environments policy is missing"
-    )
+    require(isinstance(policy.get("security_policy"), dict), "security_policy is missing")
+    require(isinstance(policy.get("environments"), dict), "environments policy is missing")
     return policy
 
 
@@ -89,13 +85,8 @@ def ruleset_payload(policy: Mapping[str, Any]) -> dict[str, Any]:
     checks = encoded["required_status_checks"]
     if not isinstance(checks, list) or not checks:
         raise GovernanceApplyError("required status checks are invalid")
-    require(
-        all(isinstance(item, str) for item in checks),
-        "required status checks are invalid",
-    )
-    require(
-        len(checks) == len(set(checks)), "required status checks contain duplicates"
-    )
+    require(all(isinstance(item, str) for item in checks), "required status checks are invalid")
+    require(len(checks) == len(set(checks)), "required status checks contain duplicates")
     return {
         "name": RULESET_NAME,
         "target": "branch",
@@ -115,13 +106,17 @@ def ruleset_payload(policy: Mapping[str, Any]) -> dict[str, Any]:
                 "type": "pull_request",
                 "parameters": {
                     "allowed_merge_methods": ["squash"],
-                    "dismiss_stale_reviews_on_push": encoded["dismiss_stale_reviews"],
+                    "dismiss_stale_reviews_on_push": encoded[
+                        "dismiss_stale_reviews"
+                    ],
                     "require_code_owner_review": False,
                     "require_extra_approval_for_unattributed_changes": encoded.get(
                         "require_extra_approval_for_unattributed_changes", False
                     ),
                     "require_last_push_approval": False,
-                    "required_approving_review_count": encoded["required_approvals"],
+                    "required_approving_review_count": encoded[
+                        "required_approvals"
+                    ],
                     "required_review_thread_resolution": encoded[
                         "require_review_thread_resolution"
                     ],
@@ -340,22 +335,13 @@ def _matching_rulesets(api: GitHubApi) -> list[Mapping[str, Any]]:
 
 
 def verify_automated_security_fixes(api: GitHubApi) -> None:
-    """Accept both GitHub readback representations and require enabled state."""
+    """Require GitHub's documented no-content success for this feature."""
 
-    response = api.request(
+    api.request(
         "GET",
         "/automated-security-fixes",
-        expected=(200, 204),
+        expected=(204,),
     )
-    if response.status == 200:
-        payload = _require_mapping(
-            response.payload,
-            "automated security fixes state is invalid",
-        )
-        require(
-            payload.get("enabled") is True,
-            "automated security fixes are disabled",
-        )
 
 
 def apply_ruleset(api: GitHubApi, policy: Mapping[str, Any]) -> int:
@@ -378,9 +364,7 @@ def apply_ruleset(api: GitHubApi, policy: Mapping[str, Any]) -> int:
             payload=payload,
             expected=(201,),
         )
-    ruleset_id = (
-        response.payload.get("id") if isinstance(response.payload, dict) else None
-    )
+    ruleset_id = response.payload.get("id") if isinstance(response.payload, dict) else None
     if not isinstance(ruleset_id, int):
         raise GovernanceApplyError("applied ruleset ID is unavailable")
     return ruleset_id
@@ -404,7 +388,9 @@ def apply_environment(
     if not desired_keys:
         return
 
-    policies_path = f"/environments/{encoded_name}/deployment-branch-policies"
+    policies_path = (
+        f"/environments/{encoded_name}/deployment-branch-policies"
+    )
     observed = api.request(
         "GET",
         f"{policies_path}?per_page=100",
@@ -512,12 +498,8 @@ def verify_ruleset(
     require(ruleset.get("target") == "branch", "ruleset target drift")
     require(ruleset.get("enforcement") == "active", "ruleset enforcement drift")
     require(ruleset.get("bypass_actors") == [], "ruleset permits bypass actors")
-    conditions = _require_mapping(
-        ruleset.get("conditions"), "ruleset conditions missing"
-    )
-    ref_name = _require_mapping(
-        conditions.get("ref_name"), "ruleset ref condition missing"
-    )
+    conditions = _require_mapping(ruleset.get("conditions"), "ruleset conditions missing")
+    ref_name = _require_mapping(conditions.get("ref_name"), "ruleset ref condition missing")
     require(
         set(ref_name.get("include", [])) == {"~DEFAULT_BRANCH"},
         "ruleset does not target only the default branch",
@@ -633,7 +615,9 @@ def verify_environment(
         for item in protection_rules
         if isinstance(item, dict) and item.get("type") == "required_reviewers"
     ]
-    expected_reviewers = {(item["type"], item["id"]) for item in expected["reviewers"]}
+    expected_reviewers = {
+        (item["type"], item["id"]) for item in expected["reviewers"]
+    }
     if expected_reviewers:
         require(len(reviewer_rules) == 1, f"{name}: required reviewer rule missing")
         observed_reviewers = reviewer_rules[0].get("reviewers")
@@ -692,9 +676,7 @@ def verify_environment(
 def verify_live(api: GitHubApi, policy: Mapping[str, Any]) -> None:
     repository = api.request("GET", "", expected=(200,)).payload
     repository = _require_mapping(repository, "repository metadata is invalid")
-    require(
-        repository.get("full_name") == policy["repository"], "repository identity drift"
-    )
+    require(repository.get("full_name") == policy["repository"], "repository identity drift")
     require(repository.get("default_branch") == "main", "default branch drift")
 
     patch = repository_patch(policy)
@@ -716,7 +698,8 @@ def verify_live(api: GitHubApi, policy: Mapping[str, Any]) -> None:
     topics = api.request("GET", "/topics", expected=(200,)).payload
     topics = _require_mapping(topics, "repository topics response is invalid")
     require(
-        set(topics.get("names", [])) == set(policy["repository_profile"]["topics"]),
+        set(topics.get("names", []))
+        == set(policy["repository_profile"]["topics"]),
         "repository topics drift",
     )
 
@@ -781,12 +764,8 @@ def print_plan(policy: Mapping[str, Any]) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--apply", action="store_true", help="apply and verify live settings"
-    )
-    mode.add_argument(
-        "--verify-live", action="store_true", help="verify without mutation"
-    )
+    mode.add_argument("--apply", action="store_true", help="apply and verify live settings")
+    mode.add_argument("--verify-live", action="store_true", help="verify without mutation")
     args = parser.parse_args(argv)
 
     try:

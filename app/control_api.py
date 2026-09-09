@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 import json
+from datetime import UTC, datetime
 from typing import Any, Literal, overload
 
 from fastapi import APIRouter, Query, Request
@@ -78,6 +79,67 @@ def _next(row_id: int) -> str:
         .decode()
         .rstrip("=")
     )
+
+
+def _audit_next(created_at: datetime, authority: str, row_id: int) -> str:
+    if created_at.tzinfo is None or created_at.utcoffset() is None:
+        raise ValueError("audit cursor timestamp must be timezone-aware")
+    if authority not in {"control", "command"}:
+        raise ValueError("audit cursor authority is invalid")
+    if type(row_id) is not int or not 1 <= row_id <= MAX_BIGINT:
+        raise ValueError("audit cursor ID is outside the PostgreSQL bigint range")
+    timestamp = created_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    return (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                {"v": 1, "ts": timestamp, "authority": authority, "id": row_id},
+                separators=(",", ":"),
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
+
+
+def _audit_cursor(value: str | None) -> tuple[datetime, str, int] | None:
+    if value is None:
+        return None
+    try:
+        if not 1 <= len(value) <= 256 or any(
+            character
+            not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            for character in value
+        ):
+            raise ValueError("cursor is not canonical base64url")
+        decoded = base64.b64decode(
+            value + "=" * (-len(value) % 4), altchars=b"-_", validate=True
+        )
+        raw = json.loads(decoded, object_pairs_hook=_reject_duplicate_pairs)
+        if not isinstance(raw, dict) or set(raw) != {"v", "ts", "authority", "id"}:
+            raise ValueError("audit cursor field set is invalid")
+        if type(raw["v"]) is not int or raw["v"] != 1:
+            raise ValueError("audit cursor version is invalid")
+        timestamp_value = raw["ts"]
+        authority = raw["authority"]
+        row_id = raw["id"]
+        if not isinstance(timestamp_value, str) or not timestamp_value.endswith("Z"):
+            raise ValueError("audit cursor timestamp is invalid")
+        created_at = datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
+        if created_at.tzinfo is None or created_at.utcoffset() is None:
+            raise ValueError("audit cursor timestamp is invalid")
+        if not isinstance(authority, str):
+            raise ValueError("audit cursor authority is invalid")
+        canonical = _audit_next(created_at, authority, row_id)
+        if canonical != value:
+            raise ValueError("audit cursor encoding is not canonical")
+        return created_at, authority, row_id
+    except (
+        binascii.Error,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ValueError,
+    ) as exc:
+        raise RequestValidationError("audit cursor is malformed") from exc
 
 
 @overload
@@ -557,15 +619,43 @@ async def reconciliation_list(request: Request, limit: int = Query(50, ge=1, le=
 
 
 @router.get("/v1/audit/events")
-async def audit_events(request: Request, limit: int = Query(50, ge=1, le=100)):
+async def audit_events(
+    request: Request,
+    limit: int = Query(50, ge=1, le=100),
+    cursor: str | None = None,
+):
     tenant = await _auth(request)
+    position = _audit_cursor(cursor)
+    cursor_time = position[0] if position else None
+    cursor_rank = {"control": 1, "command": 0}[position[1]] if position else None
+    cursor_id = position[2] if position else None
     pool = _pool(request)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT id,'control' AS authority,resource_kind,resource_id,action,actor_id,reason,created_at FROM middleware_control_audit WHERE tenant_id=$1
-          UNION ALL SELECT id,'command','command',command_id,new_state,actor_id,reason,created_at FROM middleware_command_audit WHERE tenant_id=$1
-          ORDER BY created_at DESC,id DESC LIMIT $2""",
+            """WITH audit_events AS (
+              SELECT id,1 AS authority_rank,'control' AS authority,resource_kind,
+                     resource_id,action,actor_id,reason,created_at
+                FROM middleware_control_audit WHERE tenant_id=$1
+              UNION ALL
+              SELECT id,0 AS authority_rank,'command' AS authority,'command',
+                     command_id,new_state,actor_id,reason,created_at
+                FROM middleware_command_audit WHERE tenant_id=$1
+            )
+            SELECT id,authority,resource_kind,resource_id,action,actor_id,reason,created_at
+              FROM audit_events
+             WHERE $2::timestamptz IS NULL
+                OR (created_at,authority_rank,id) < ($2::timestamptz,$3::integer,$4::bigint)
+             ORDER BY created_at DESC,authority_rank DESC,id DESC
+             LIMIT $5""",
             tenant,
-            limit,
+            cursor_time,
+            cursor_rank,
+            cursor_id,
+            limit + 1,
         )
-    return {"items": [dict(r) for r in rows], "next_cursor": None}
+    items = [dict(row) for row in rows[:limit]]
+    next_cursor = None
+    if len(rows) > limit:
+        last = items[-1]
+        next_cursor = _audit_next(last["created_at"], last["authority"], last["id"])
+    return {"items": items, "next_cursor": next_cursor}

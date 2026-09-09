@@ -78,12 +78,38 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
     require(config.get("owner") == EXPECTED_OWNER, "reviewer owner drift")
     require(config.get("reviewer") == EXPECTED_REVIEWER, "reviewer identity drift")
     rows = config.get("repositories")
-    require(isinstance(rows, list), "repositories must be a list")
-    require(all(isinstance(row, str) and row for row in rows), "invalid repository name")
-    require(len(rows) == len(set(rows)), "duplicate repository")
-    require(set(rows) == EXPECTED_REPOSITORIES, "fixed repository coverage drift")
-    require(all(row.startswith(f"{EXPECTED_OWNER}/") for row in rows), "foreign owner forbidden")
-    return sorted(rows, key=str.casefold)
+    if not isinstance(rows, list):
+        raise AccessError("repositories must be a list")
+    repositories: list[str] = []
+    for row in rows:
+        if not isinstance(row, str) or not row:
+            raise AccessError("invalid repository name")
+        repositories.append(row)
+    require(len(repositories) == len(set(repositories)), "duplicate repository")
+    require(set(repositories) == EXPECTED_REPOSITORIES, "fixed repository coverage drift")
+    require(
+        all(row.startswith(f"{EXPECTED_OWNER}/") for row in repositories),
+        "foreign owner forbidden",
+    )
+    return sorted(repositories, key=str.casefold)
+
+
+class FailClosedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never forward an administration bearer token through a redirect."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
+NO_REDIRECT_OPENER = urllib.request.build_opener(FailClosedRedirectHandler())
 
 
 class GitHubApi:
@@ -110,7 +136,7 @@ class GitHubApi:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with NO_REDIRECT_OPENER.open(request, timeout=30) as response:
                 raw = response.read()
                 return response.status, json.loads(raw) if raw else None
         except urllib.error.HTTPError as exc:

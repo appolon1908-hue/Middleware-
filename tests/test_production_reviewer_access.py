@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 import unittest
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +105,22 @@ class ProductionReviewerAccessTests(unittest.TestCase):
             MODULE.permission_is_write({"permission": "read"})
         )
         self.assertFalse(MODULE.permission_is_write(None))
+
+    def test_admin_api_redirects_are_rejected(self) -> None:
+        handler = MODULE.FailClosedRedirectHandler()
+        self.assertIsNone(
+            handler.redirect_request(
+                urllib.request.Request(
+                    "https://api.github.com/user",
+                    headers={"Authorization": "Bearer protected"},
+                ),
+                None,
+                302,
+                "Found",
+                {},
+                "https://attacker.example/capture",
+            )
+        )
 
     def test_workflow_apply_is_issue_command_only_and_policy_is_read_only(
         self,

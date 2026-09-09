@@ -406,8 +406,8 @@ APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
                 "aed55e8e9334c50913b2e422ad771a7"
             ),
             "scripts/apply_integration_main_release_authorities_base.py": (
-                "1174905e9086a08d0cec75ca7f26aec6"
-                "b2a9c45f5df52ddc747c7be92c34b6e6"
+                "71fd1f220797c12708da3d2e5f9efe25"
+                "2ad2933ae37852052e1e5b680ce3b75a"
             ),
             "scripts/apply_integration_main_release_authorities_v2.py": (
                 "b5f74be0edf783bd258c6321caaf63759"
@@ -424,8 +424,8 @@ APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
                 "b246b8c4c9b727c68ed705b30f99da22"
             ),
             "scripts/apply_production_reviewer_access_base.py": (
-                "53b629ffeb49b0bd0408c37295ea235b6"
-                "278d8910d86f0b6801808e7b42cb2ca"
+                "22b5d7f425f949588ce29a6c3079c09f"
+                "950dfb46e31d3bfa54b0216f73b5a43d"
             ),
         },
     },

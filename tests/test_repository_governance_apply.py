@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import copy
+from unittest.mock import Mock
 
 import pytest
 
 from scripts.apply_repository_governance import (
+    ApiResponse,
     GovernanceApplyError,
+    GitHubApi,
     environment_payload,
     repository_patch,
     ruleset_payload,
+    verify_automated_security_fixes,
 )
 from scripts.validate_repository_governance import (
     GovernanceError,
@@ -83,6 +87,19 @@ def test_repository_patch_is_squash_only_and_secret_scanning_enabled(policy: dic
         "secret_scanning": {"status": "enabled"},
         "secret_scanning_push_protection": {"status": "enabled"},
     }
+
+
+def test_dependabot_security_update_verifier_accepts_no_content_success() -> None:
+    api = Mock(spec=GitHubApi)
+    api.request.return_value = ApiResponse(status=204, payload=None)
+
+    verify_automated_security_fixes(api)
+
+    api.request.assert_called_once_with(
+        "GET",
+        "/automated-security-fixes",
+        expected=(204,),
+    )
 
 
 def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:

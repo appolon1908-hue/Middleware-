@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "repository-governance.v1.json"
@@ -182,7 +182,7 @@ def deployment_branch_policy_keys(
         ),
         "allowed branch policies are invalid",
     )
-    return desired_keys
+    return cast(set[tuple[str, str]], desired_keys)
 
 
 def environment_payload(environment: Mapping[str, Any]) -> dict[str, Any]:
@@ -224,7 +224,7 @@ def environment_payload(environment: Mapping[str, Any]) -> dict[str, Any]:
         reviewer_keys.add(key)
         normalized_reviewers.append({"type": reviewer_type, "id": reviewer_id})
     require(
-        not normalized_reviewers or prevent_self_review,
+        not normalized_reviewers or prevent_self_review is True,
         "reviewed environments must prevent self-review",
     )
 
@@ -332,6 +332,16 @@ def _matching_rulesets(api: GitHubApi) -> list[Mapping[str, Any]]:
         and item.get("name") == RULESET_NAME
         and item.get("source_type", "Repository") == "Repository"
     ]
+
+
+def verify_automated_security_fixes(api: GitHubApi) -> None:
+    """Require GitHub's documented no-content success for this feature."""
+
+    api.request(
+        "GET",
+        "/automated-security-fixes",
+        expected=(204,),
+    )
 
 
 def apply_ruleset(api: GitHubApi, policy: Mapping[str, Any]) -> int:
@@ -717,13 +727,7 @@ def verify_live(api: GitHubApi, policy: Mapping[str, Any]) -> None:
     verify_ruleset(api, policy)
 
     api.request("GET", "/vulnerability-alerts", expected=(204,))
-    automated = api.request(
-        "GET",
-        "/automated-security-fixes",
-        expected=(200,),
-    ).payload
-    automated = _require_mapping(automated, "Dependabot security-update state invalid")
-    require(automated.get("enabled") is True, "Dependabot security updates are disabled")
+    verify_automated_security_fixes(api)
     private_reporting = api.request(
         "GET",
         "/private-vulnerability-reporting",

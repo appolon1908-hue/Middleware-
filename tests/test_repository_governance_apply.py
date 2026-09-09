@@ -188,6 +188,51 @@ def test_custom_branch_environment_remains_supported() -> None:
     assert payload["deployment_branch_policy"]["custom_branch_policies"] is True
 
 
+@pytest.mark.parametrize(
+    ("protected_branches", "custom_branch_policies"),
+    [(True, True), (False, False)],
+)
+def test_environment_rejects_ambiguous_branch_policy_modes(
+    protected_branches: bool,
+    custom_branch_policies: bool,
+) -> None:
+    with pytest.raises(
+        GovernanceApplyError,
+        match="exactly one deployment branch-policy mode",
+    ):
+        environment_payload(
+            {
+                "wait_timer": 0,
+                "prevent_self_review": False,
+                "can_admins_bypass": False,
+                "reviewers": [],
+                "deployment_branch_policy": {
+                    "protected_branches": protected_branches,
+                    "custom_branch_policies": custom_branch_policies,
+                },
+                "allowed_branches": [],
+            }
+        )
+
+
+def test_environment_rejects_duplicate_reviewers() -> None:
+    reviewer = {"type": "User", "id": 77101516}
+    with pytest.raises(GovernanceApplyError, match="duplicate environment reviewer"):
+        environment_payload(
+            {
+                "wait_timer": 0,
+                "prevent_self_review": True,
+                "can_admins_bypass": False,
+                "reviewers": [reviewer, reviewer],
+                "deployment_branch_policy": {
+                    "protected_branches": True,
+                    "custom_branch_policies": False,
+                },
+                "allowed_branches": [],
+            }
+        )
+
+
 def independent_environment_policy() -> dict:
     environment = {
         "wait_timer": 0,

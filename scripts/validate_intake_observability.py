@@ -6,7 +6,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTROL = ROOT / "config" / "intake-observability.v1.json"
@@ -84,7 +84,7 @@ FORBIDDEN_LABEL_FIELDS = {
 }
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"INTAKE_OBSERVABILITY_VALIDATION=FAIL: {message}")
 
 
@@ -197,7 +197,10 @@ def validate_prometheus_definitions() -> None:
             continue
         if not node.args or not isinstance(node.args[0], ast.Constant):
             fail("every Prometheus metric must use a static name")
-        metric_names.add(str(node.args[0].value))
+        metric_name = node.args[0].value
+        if not isinstance(metric_name, str):
+            fail("every Prometheus metric name must be a string literal")
+        metric_names.add(metric_name)
         if len(node.args) >= 3:
             observed_label_literals |= {
                 value.lower() for value in string_literals(node.args[2])

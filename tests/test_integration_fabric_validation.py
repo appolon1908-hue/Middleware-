@@ -4,16 +4,24 @@ import importlib.util
 import json
 import subprocess
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/validate_integration_fabric.py"
+SDK_SCRIPT = ROOT / "scripts/validate_connector_sdk.py"
 
 
 @pytest.mark.parametrize(
-    "mutation", ["unknown_adapter", "non_boolean_capability", "direct_n8n"]
+    "mutation",
+    [
+        "unknown_adapter",
+        "wrong_adapter",
+        "non_boolean_capability",
+        "direct_n8n",
+    ],
 )
 @pytest.mark.parametrize("optimized", [False, True])
 def test_invalid_registry_fails_closed(
@@ -36,6 +44,11 @@ def test_invalid_registry_fails_closed(
             and path == "connectors/generated/command-registry.v1.json"
         ):
             value["commands"][0]["connector_id"] = "missing-adapter"
+        if (
+            mutation == "wrong_adapter"
+            and path == "connectors/generated/command-registry.v1.json"
+        ):
+            value["commands"][0]["connector_id"] = "odoo-19"
         if (
             mutation == "non_boolean_capability"
             and path == "config/capabilities.v2.json"
@@ -68,3 +81,39 @@ def test_committed_fabric_is_valid() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.validate()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("command_prefixes", ["ai.", "undeclared."], "command prefixes"),
+        ("cell", "telephony-private", "adapter cell"),
+        ("repository", "appolon1908-hue/other", "adapter repository"),
+    ],
+)
+def test_sdk_validator_rejects_adapter_manifest_source_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    spec = importlib.util.spec_from_file_location("connector_sdk_validator", SDK_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    original_load_json = module.load_json
+
+    def load_json(path: Path) -> object:
+        loaded = original_load_json(path)
+        if path.name != "adapter-registry.v2.json":
+            return loaded
+        assert isinstance(loaded, dict)
+        mutated = deepcopy(loaded)
+        adapter = next(item for item in mutated["adapters"] if item["id"] == "ai-provider")
+        adapter[field] = value
+        return mutated
+
+    monkeypatch.setattr(module, "load_json", load_json)
+    assert module.main() == 1
+    assert message in capsys.readouterr().err

@@ -75,30 +75,50 @@ def validate() -> None:
             'integration fabric invariant failed: policy["unknown_outcome_requires_readback"] is True',
         )
 
-    ids: set[str] = set()
+    adapter_prefixes: dict[str, set[str]] = {}
     for adapter in registry["adapters"]:
+        adapter_id = adapter.get("id")
         require(
-            adapter["id"] not in ids,
+            isinstance(adapter_id, str) and bool(adapter_id),
+            "integration fabric invariant failed: adapter ID is invalid",
+        )
+        require(
+            adapter_id not in adapter_prefixes,
             'integration fabric invariant failed: adapter["id"] not in ids',
         )
-        ids.add(adapter["id"])
         require(
             adapter["direct_n8n"] is False,
             'integration fabric invariant failed: adapter["direct_n8n"] is False',
         )
+        command_prefixes = adapter.get("command_prefixes")
         require(
-            bool(adapter["command_prefixes"]),
+            isinstance(command_prefixes, list)
+            and bool(command_prefixes)
+            and all(
+                isinstance(prefix, str) and bool(prefix)
+                for prefix in command_prefixes
+            )
+            and len(command_prefixes) == len(set(command_prefixes)),
             'integration fabric invariant failed: adapter["command_prefixes"]',
         )
+        adapter_prefixes[adapter_id] = set(command_prefixes)
         require(
             adapter["repository"].startswith("appolon1908-hue/"),
             'integration fabric invariant failed: adapter["repository"].startswith("appolon1908-hue/")',
         )
 
     for policy in command_registry["commands"]:
+        connector_id = policy.get("connector_id")
         require(
-            policy.get("connector_id") in ids,
-            "command references an unknown adapter: " + str(policy.get("connector_id")),
+            isinstance(connector_id, str) and connector_id in adapter_prefixes,
+            "command references an unknown adapter: " + str(connector_id),
+        )
+        require(
+            policy.get("prefix") in adapter_prefixes[connector_id],
+            "command prefix is not declared by adapter: "
+            + str(policy.get("prefix"))
+            + " -> "
+            + str(connector_id),
         )
 
     beyvra = next(

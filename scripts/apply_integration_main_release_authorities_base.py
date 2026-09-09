@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as dt
 import json
 import os
@@ -68,6 +69,31 @@ def require(condition: bool, message: str) -> None:
         raise PolicyError(message)
 
 
+def require_mapping(value: object, message: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise PolicyError(message)
+    return value
+
+
+def require_list(value: object, message: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise PolicyError(message)
+    return value
+
+
+def require_string(value: object, message: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise PolicyError(message)
+    return value
+
+
+def require_string_list(value: object, message: str) -> list[str]:
+    values = require_list(value, message)
+    result = [require_string(item, message) for item in values]
+    require(len(result) == len(set(result)), message)
+    return result
+
+
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -100,24 +126,25 @@ def validate_config(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     require(config.get("allowed_merge_methods") == ["squash"], "squash-only drift")
     require(config.get("bypass_actors") == [], "bypass actors are forbidden")
 
-    rows = config.get("repositories")
-    require(isinstance(rows, list), "repositories must be a list")
+    rows = require_list(config.get("repositories"), "repositories must be a list")
     require(len(rows) == len(EXPECTED_REPOSITORIES), "repository count drift")
     observed: set[str] = set()
     normalized: list[dict[str, Any]] = []
-    for raw in rows:
-        require(isinstance(raw, dict), "repository record must be an object")
-        name = raw.get("repository")
-        require(isinstance(name, str) and name in EXPECTED_REPOSITORIES, "unknown repository")
+    for raw_value in rows:
+        raw = require_mapping(raw_value, "repository record must be an object")
+        name = require_string(raw.get("repository"), "repository name missing")
+        require(name in EXPECTED_REPOSITORIES, "unknown repository")
         require(name not in observed, f"duplicate repository: {name}")
         observed.add(name)
         expected_id, expected_checks = EXPECTED_REPOSITORIES[name]
         require(raw.get("repository_id") == expected_id, f"{name}: stable ID drift")
         require(raw.get("default_branch") == "main", f"{name}: default branch drift")
-        checks = raw.get("required_status_checks")
+        checks = require_list(
+            raw.get("required_status_checks"),
+            f"{name}: required status checks missing",
+        )
         require(
-            isinstance(checks, list)
-            and tuple(checks) == expected_checks
+            tuple(checks) == expected_checks
             and len(checks) == len(set(checks)),
             f"{name}: required status check drift",
         )
@@ -169,44 +196,86 @@ def desired_ruleset(repository: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
-    conditions = value.get("conditions")
-    require(isinstance(conditions, Mapping), "ruleset conditions missing")
-    ref_name = conditions.get("ref_name")
-    require(isinstance(ref_name, Mapping), "ruleset ref conditions missing")
-    rules = value.get("rules")
-    require(isinstance(rules, list), "ruleset rules missing")
+    conditions = require_mapping(value.get("conditions"), "ruleset conditions missing")
+    ref_name = require_mapping(
+        conditions.get("ref_name"),
+        "ruleset ref conditions missing",
+    )
+    included_refs = require_string_list(
+        ref_name.get("include"),
+        "ruleset included refs missing or invalid",
+    )
+    excluded_refs = require_string_list(
+        ref_name.get("exclude"),
+        "ruleset excluded refs missing or invalid",
+    )
+    rules = require_list(value.get("rules"), "ruleset rules missing")
 
     by_type: dict[str, Mapping[str, Any]] = {}
-    for raw in rules:
-        require(isinstance(raw, Mapping), "invalid ruleset rule")
-        kind = raw.get("type")
-        require(isinstance(kind, str) and kind, "invalid ruleset rule type")
+    for raw_value in rules:
+        raw = require_mapping(raw_value, "invalid ruleset rule")
+        kind = require_string(raw.get("type"), "invalid ruleset rule type")
         require(kind not in by_type, f"duplicate ruleset rule: {kind}")
         by_type[kind] = raw
+    required_rule_types = {
+        "deletion",
+        "non_fast_forward",
+        "required_linear_history",
+        "pull_request",
+        "required_status_checks",
+    }
     require(
-        set(by_type)
-        == {
-            "deletion",
-            "non_fast_forward",
-            "required_linear_history",
-            "pull_request",
-            "required_status_checks",
-        },
-        "ruleset rule set drift",
+        required_rule_types.issubset(by_type),
+        "required ruleset rule missing",
     )
 
-    pull = by_type["pull_request"].get("parameters")
-    status = by_type["required_status_checks"].get("parameters")
-    require(isinstance(pull, Mapping), "pull request parameters missing")
-    require(isinstance(status, Mapping), "status check parameters missing")
-    raw_checks = status.get("required_status_checks")
-    require(isinstance(raw_checks, list), "status checks missing")
-    checks: list[str] = []
-    for row in raw_checks:
-        require(isinstance(row, Mapping), "invalid status check")
-        context = row.get("context")
-        require(isinstance(context, str) and context, "invalid status context")
-        checks.append(context)
+    pull = require_mapping(
+        by_type["pull_request"].get("parameters"),
+        "pull request parameters missing",
+    )
+    status = require_mapping(
+        by_type["required_status_checks"].get("parameters"),
+        "status check parameters missing",
+    )
+    raw_checks = require_list(
+        status.get("required_status_checks"),
+        "status checks missing",
+    )
+    checks: list[dict[str, Any]] = []
+    observed_contexts: set[str] = set()
+    for row_value in raw_checks:
+        row = require_mapping(row_value, "invalid status check")
+        context = require_string(row.get("context"), "invalid status context")
+        require(context not in observed_contexts, f"duplicate status context: {context}")
+        observed_contexts.add(context)
+        check = copy.deepcopy(dict(row))
+        check["context"] = context
+        integration_id = row.get("integration_id")
+        if integration_id is not None:
+            if (
+                not isinstance(integration_id, int)
+                or isinstance(integration_id, bool)
+                or integration_id <= 0
+            ):
+                raise PolicyError(f"{context}: invalid status-check integration ID")
+            check["integration_id"] = integration_id
+        checks.append(check)
+    checks.sort(key=lambda check: str(check["context"]))
+
+    known_pull_parameters = {
+        "allowed_merge_methods",
+        "dismiss_stale_reviews_on_push",
+        "require_code_owner_review",
+        "require_extra_approval_for_unattributed_changes",
+        "require_last_push_approval",
+        "required_approving_review_count",
+        "required_review_thread_resolution",
+    }
+    known_status_parameters = {
+        "do_not_enforce_on_create",
+        "required_status_checks",
+        "strict_required_status_checks_policy",
+    }
 
     return {
         "name": value.get("name"),
@@ -215,8 +284,8 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
         "bypass_actors": value.get("bypass_actors"),
         "conditions": {
             "ref_name": {
-                "include": list(ref_name.get("include", [])),
-                "exclude": list(ref_name.get("exclude", [])),
+                "include": sorted(included_refs),
+                "exclude": sorted(excluded_refs),
             }
         },
         "rules": {
@@ -227,6 +296,9 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 "allowed_merge_methods": list(pull.get("allowed_merge_methods", [])),
                 "dismiss_stale_reviews_on_push": pull.get("dismiss_stale_reviews_on_push"),
                 "require_code_owner_review": pull.get("require_code_owner_review"),
+                "require_extra_approval_for_unattributed_changes": pull.get(
+                    "require_extra_approval_for_unattributed_changes"
+                ),
                 "require_last_push_approval": pull.get("require_last_push_approval"),
                 "required_approving_review_count": pull.get(
                     "required_approving_review_count"
@@ -234,16 +306,186 @@ def normalize_ruleset(value: Mapping[str, Any]) -> dict[str, Any]:
                 "required_review_thread_resolution": pull.get(
                     "required_review_thread_resolution"
                 ),
+                "additional_parameters": {
+                    key: copy.deepcopy(pull[key])
+                    for key in sorted(set(pull) - known_pull_parameters)
+                },
             },
             "required_status_checks": {
                 "do_not_enforce_on_create": status.get("do_not_enforce_on_create"),
-                "contexts": checks,
+                "contexts": [check["context"] for check in checks],
+                "checks": checks,
                 "strict_required_status_checks_policy": status.get(
                     "strict_required_status_checks_policy"
                 ),
+                "additional_parameters": {
+                    key: copy.deepcopy(status[key])
+                    for key in sorted(set(status) - known_status_parameters)
+                },
             },
         },
+        "additional_rules": {
+            kind: copy.deepcopy(dict(by_type[kind]))
+            for kind in sorted(set(by_type) - required_rule_types)
+        },
     }
+
+
+def rules_by_type(ruleset: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    rules = require_list(ruleset.get("rules"), "ruleset rules missing")
+    result: dict[str, Mapping[str, Any]] = {}
+    for raw_value in rules:
+        raw = require_mapping(raw_value, "invalid ruleset rule")
+        kind = require_string(raw.get("type"), "invalid ruleset rule type")
+        require(kind not in result, f"duplicate ruleset rule: {kind}")
+        result[kind] = raw
+    return result
+
+
+def merge_ruleset_preserving_stronger_controls(
+    existing: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Apply the baseline without deleting stronger live protection."""
+
+    normalize_ruleset(baseline)
+    merged = copy.deepcopy(dict(baseline))
+    existing_rules = rules_by_type(existing)
+    merged_rules = rules_by_type(merged)
+
+    existing_conditions = require_mapping(
+        existing.get("conditions"),
+        "existing ruleset conditions missing",
+    )
+    existing_ref_name = require_mapping(
+        existing_conditions.get("ref_name"),
+        "existing ruleset ref conditions missing",
+    )
+    existing_included_refs = require_string_list(
+        existing_ref_name.get("include"),
+        "existing included refs missing or invalid",
+    )
+    merged_conditions = require_mapping(
+        merged.get("conditions"),
+        "merged ruleset conditions missing",
+    )
+    merged_ref_name_value = merged_conditions.get("ref_name")
+    if not isinstance(merged_ref_name_value, dict):
+        raise PolicyError("merged ruleset ref conditions missing")
+    merged_included_refs = require_string_list(
+        merged_ref_name_value.get("include"),
+        "merged included refs missing or invalid",
+    )
+    merged_ref_name_value["include"] = list(
+        dict.fromkeys(merged_included_refs + existing_included_refs)
+    )
+
+    for kind, rule in existing_rules.items():
+        if kind not in merged_rules:
+            cast_rules = require_list(merged.get("rules"), "merged rules missing")
+            cast_rules.append(copy.deepcopy(dict(rule)))
+
+    merged_pull_value = merged_rules["pull_request"].get("parameters")
+    if not isinstance(merged_pull_value, dict):
+        raise PolicyError("merged pull request parameters missing")
+    merged_pull = merged_pull_value
+    existing_pull_rule = existing_rules.get("pull_request")
+    if existing_pull_rule is not None:
+        existing_pull = require_mapping(
+            existing_pull_rule.get("parameters"),
+            "existing pull request parameters missing",
+        )
+        for key, value in existing_pull.items():
+            if key not in merged_pull:
+                merged_pull[key] = copy.deepcopy(value)
+        for key in (
+            "dismiss_stale_reviews_on_push",
+            "require_code_owner_review",
+            "require_extra_approval_for_unattributed_changes",
+            "require_last_push_approval",
+            "required_review_thread_resolution",
+        ):
+            if existing_pull.get(key) is True:
+                merged_pull[key] = True
+        existing_count = existing_pull.get("required_approving_review_count", 0)
+        if not isinstance(existing_count, int) or isinstance(existing_count, bool):
+            raise PolicyError("existing approving-review count invalid")
+        merged_pull["required_approving_review_count"] = max(
+            int(merged_pull["required_approving_review_count"]),
+            existing_count,
+        )
+
+    merged_status_value = merged_rules["required_status_checks"].get("parameters")
+    if not isinstance(merged_status_value, dict):
+        raise PolicyError("merged status parameters missing")
+    merged_status = merged_status_value
+    baseline_checks = require_list(
+        merged_status.get("required_status_checks"),
+        "baseline status checks missing",
+    )
+    existing_checks: list[Any] = []
+    existing_status_rule = existing_rules.get("required_status_checks")
+    if existing_status_rule is not None:
+        existing_status = require_mapping(
+            existing_status_rule.get("parameters"),
+            "existing status parameters missing",
+        )
+        for key, value in existing_status.items():
+            if key not in merged_status:
+                merged_status[key] = copy.deepcopy(value)
+        existing_checks = require_list(
+            existing_status.get("required_status_checks"),
+            "existing status checks missing",
+        )
+
+    by_context: dict[str, Mapping[str, Any]] = {}
+    for row_value in existing_checks:
+        row = require_mapping(row_value, "invalid existing status check")
+        context = require_string(
+            row.get("context"),
+            "invalid existing status context",
+        )
+        require(context not in by_context, f"duplicate existing status context: {context}")
+        by_context[context] = row
+
+    combined_checks: list[dict[str, Any]] = []
+    baseline_contexts: set[str] = set()
+    for row_value in baseline_checks:
+        row = require_mapping(row_value, "invalid baseline status check")
+        context = require_string(
+            row.get("context"),
+            "invalid baseline status context",
+        )
+        require(context not in baseline_contexts, f"duplicate baseline status context: {context}")
+        baseline_contexts.add(context)
+        source = copy.deepcopy(dict(row))
+        existing_row = by_context.get(context)
+        if existing_row is not None:
+            for key, value in existing_row.items():
+                if key not in source:
+                    source[key] = copy.deepcopy(value)
+        combined_checks.append(source)
+    for row_value in existing_checks:
+        row = require_mapping(row_value, "invalid existing status check")
+        context = require_string(
+            row.get("context"),
+            "invalid existing status context",
+        )
+        if context not in baseline_contexts:
+            combined_checks.append(copy.deepcopy(dict(row)))
+    merged_status["required_status_checks"] = combined_checks
+    return merged
+
+
+def ruleset_meets_baseline(
+    actual: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+) -> bool:
+    effective = merge_ruleset_preserving_stronger_controls(actual, baseline)
+    try:
+        return normalize_ruleset(actual) == normalize_ruleset(effective)
+    except PolicyError:
+        return False
 
 
 class GitHubApi:
@@ -291,11 +533,11 @@ def repo_path(name: str) -> str:
 
 
 def find_ruleset(api: GitHubApi, repository: str) -> dict[str, Any] | None:
-    _, payload = api.request(
+    _, payload_value = api.request(
         "GET",
         f"/repos/{repo_path(repository)}/rulesets?includes_parents=false&per_page=100",
     )
-    require(isinstance(payload, list), f"{repository}: ruleset list invalid")
+    payload = require_list(payload_value, f"{repository}: ruleset list invalid")
     matches = [
         row
         for row in payload
@@ -311,20 +553,32 @@ def verify_ruleset(
     api: GitHubApi,
     repository: str,
     expected: Mapping[str, Any],
+    *,
+    exact_expected: Mapping[str, Any] | None = None,
 ) -> int:
     found = find_ruleset(api, repository)
-    require(found is not None, f"{repository}: integration ruleset missing")
+    if found is None:
+        raise PolicyError(f"{repository}: integration ruleset missing")
     ruleset_id = found.get("id")
-    require(isinstance(ruleset_id, int), f"{repository}: ruleset ID invalid")
-    _, payload = api.request(
+    if not isinstance(ruleset_id, int) or isinstance(ruleset_id, bool):
+        raise PolicyError(f"{repository}: ruleset ID invalid")
+    _, payload_value = api.request(
         "GET",
         f"/repos/{repo_path(repository)}/rulesets/{ruleset_id}",
     )
-    require(isinstance(payload, Mapping), f"{repository}: ruleset readback invalid")
-    require(
-        normalize_ruleset(payload) == normalize_ruleset(expected),
-        f"{repository}: live integration ruleset differs from committed policy",
+    payload = require_mapping(
+        payload_value,
+        f"{repository}: ruleset readback invalid",
     )
+    require(
+        ruleset_meets_baseline(payload, expected),
+        f"{repository}: live integration ruleset is weaker than committed policy",
+    )
+    if exact_expected is not None:
+        require(
+            ruleset_meets_baseline(payload, exact_expected),
+            f"{repository}: stronger live ruleset controls changed during apply",
+        )
     return ruleset_id
 
 
@@ -458,14 +712,33 @@ def execute(mode: str, confirmation: str) -> dict[str, Any]:
 
         desired = desired_ruleset(repository)
         existing = find_ruleset(api, name)
+        effective = desired
+        if existing is not None:
+            existing_ruleset_id = existing.get("id")
+            require(isinstance(existing_ruleset_id, int), f"{name}: ruleset ID invalid")
+            _, current = api.request(
+                "GET",
+                f"/repos/{encoded}/rulesets/{existing_ruleset_id}",
+            )
+            require(isinstance(current, Mapping), f"{name}: ruleset readback invalid")
+            effective = merge_ruleset_preserving_stronger_controls(current, desired)
+
         if mode == "apply":
             if existing is None:
-                api.request("POST", f"/repos/{encoded}/rulesets", desired)
+                api.request("POST", f"/repos/{encoded}/rulesets", effective)
             else:
-                ruleset_id = existing.get("id")
-                require(isinstance(ruleset_id, int), f"{name}: ruleset ID invalid")
-                api.request("PUT", f"/repos/{encoded}/rulesets/{ruleset_id}", desired)
-        ruleset_id = verify_ruleset(api, name, desired)
+                if not ruleset_meets_baseline(current, effective):
+                    api.request(
+                        "PUT",
+                        f"/repos/{encoded}/rulesets/{existing_ruleset_id}",
+                        effective,
+                    )
+        ruleset_id = verify_ruleset(
+            api,
+            name,
+            desired,
+            exact_expected=effective if mode == "apply" else None,
+        )
         results.append(
             {
                 "repository": name,

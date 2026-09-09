@@ -1,5 +1,5 @@
 schema_version: '2.0'
-inventory_base_sha: abe60e9eafaa52443ac1b05340e1b98317009570
+inventory_base_sha: 8e3534e0271371e0fee057331a9a24f391356e5e
 classification_complete: true
 unknown_endpoints: 0
 operations:

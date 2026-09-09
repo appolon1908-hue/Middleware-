@@ -150,11 +150,16 @@ async def run() -> None:
     import nats
     from nats.errors import TimeoutError as NatsTimeoutError
 
+    nats_url = settings.nats_url
+    if nats_url is None:
+        # ProjectionSettings validates this invariant for enabled workers. Keep
+        # the runner independently fail-closed if construction ever changes.
+        raise RuntimeError("enabled projection requires a validated NATS URL")
     options: dict[str, Any] = {}
     if settings.nats_credentials_file is not None:
         options["user_credentials"] = str(settings.nats_credentials_file)
     client = await nats.connect(
-        servers=[settings.nats_url],
+        servers=[nats_url],
         connect_timeout=5,
         max_reconnect_attempts=-1,
         reconnect_time_wait=1,

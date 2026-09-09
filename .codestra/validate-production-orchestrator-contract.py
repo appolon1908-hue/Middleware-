@@ -292,7 +292,6 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "f9ba7034692118c427555fab41b1b6e14"
             "a8698a761eb18ef6c957e1fb386c27a"
         ),
-        "scripts/apply_repository_governance.py": "14b93e6b4935a5ffec7a826de68f670e96f539caec1f34335c8accc4869897c7",
         "scripts/integration_ci.sh": "8d9327fd9ad51d6ba7243d051336f623a4f75d60c60e69fd012e65f598b12d4a",
         "scripts/nats_integration_ci.sh": "88d843c665cece68e0fb56a931c295ee10490446cad7b64d9f5356c1cbf7263d",
         "scripts/project_ci.sh": "12a529ea96f39baec5f1eeb287209dc9db355e5dca000cbbfd7494303501b2ae",
@@ -380,6 +379,10 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
         "scripts/apply_integration_main_release_authorities.py": (
             "95b9c27abd309b1efe579672fdb8b89feaed55e8e9334c50913b2e422ad771a7",
             frozenset({("--mode", "validate")}),
+        ),
+        "scripts/apply_repository_governance.py": (
+            "05a4185cbd432a339be676bd1fb01d1a828ba2c09d2b798ddc0f348fc9d1db5e",
+            frozenset({()}),
         ),
     },
     "appolon1908-hue/beyvra-backend": {
@@ -3126,6 +3129,24 @@ def validate_intent_negative_regressions() -> None:
     require(
         not contains_runtime_command("# docker pull example.invalid/image"),
         "comment-only runtime command was treated as executable",
+    )
+    require(
+        not contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py"
+        ),
+        "governance plan invocation was treated as runtime mutation",
+    )
+    require(
+        contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py --apply"
+        ),
+        "governance apply invocation escaped runtime-mutation classification",
+    )
+    require(
+        contains_runtime_mutation(
+            "python3 scripts/apply_repository_governance.py --verify-live"
+        ),
+        "credentialed governance verification escaped mutation classification",
     )
     enabled_mutation = """name: synthetic
 jobs:

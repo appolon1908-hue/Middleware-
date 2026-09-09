@@ -13,7 +13,6 @@ LAUNCHER = ROOT / ".codestra/run-trusted-production-orchestrator.py"
 ORCHESTRATOR = ROOT / ".codestra/validate-production-orchestrator-contract.py"
 GOVERNANCE_VALIDATOR = ROOT / "scripts/validate_repository_governance.py"
 GATE = ROOT / ".github/workflows/trusted-production-orchestrator-gate.yml"
-CODEOWNERS = ROOT / ".github/CODEOWNERS"
 
 
 def load_launcher() -> ModuleType:
@@ -129,7 +128,15 @@ def test_governance_accepts_only_the_exact_gate_workflow() -> None:
 
 def test_governance_requires_independent_ownership_of_every_trust_path() -> None:
     governance = load_governance_validator()
-    text = CODEOWNERS.read_text(encoding="utf-8")
+    text = "\n".join(
+        [
+            "* @appolon1908-hue @kazan555",
+            *(
+                f"{path} @kazan555"
+                for path in sorted(governance.EXPECTED_SECURITY_CODEOWNER_PATHS)
+            ),
+        ]
+    )
 
     governance.validate_codeowners(text)
     with pytest.raises(

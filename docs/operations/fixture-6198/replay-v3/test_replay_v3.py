@@ -1,4 +1,5 @@
 import hashlib
+import importlib
 import importlib.util
 import json
 import sys
@@ -9,10 +10,10 @@ import pytest
 MODULE_PATH = Path(__file__).with_name("replay_v3.py")
 sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("replay_v3", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 replay = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader
 SPEC.loader.exec_module(replay)
-from target_identity import Target
+Target = importlib.import_module("target_identity").Target
 
 
 def rows():
@@ -56,7 +57,10 @@ def test_exact_three_events_and_byte_identical_terminal_replay(tmp_path):
     assert [item[0]["event_type"] for item in events] == list(replay.EVENT_ORDER)
 
 
-@pytest.mark.parametrize("mutation", ["extra", "order", "linked", "hash", "marker"])
+@pytest.mark.parametrize(
+    "mutation",
+    ["extra", "order", "linked", "hash", "marker", "nested-marker", "empty-id"],
+)
 def test_selection_fails_closed(tmp_path, mutation):
     value = rows()
     if mutation == "extra":
@@ -67,6 +71,10 @@ def test_selection_fails_closed(tmp_path, mutation):
         value[0]["payload"]["asterisk_linked_id"] = "other"
     elif mutation == "hash":
         value[0]["payload"]["payload_sha256"] = "0" * 64
+    elif mutation == "nested-marker":
+        value[0]["payload"]["payload"]["TEST_EVIDENCE_ID"] = "forbidden"
+    elif mutation == "empty-id":
+        value[0]["payload"]["event_id"] = ""
     else:
         value[0]["payload"]["TEST_EVIDENCE_ID"] = "forbidden"
     with pytest.raises(SystemExit):

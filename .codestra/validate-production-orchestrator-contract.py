@@ -477,8 +477,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
     },
     "appolon1908-hue/Middleware-": {
         "scripts/apply_portfolio_release_reviewer_access.py": (
-            "f9ba7034692118c427555fab41b1b6e14"
-            "a8698a761eb18ef6c957e1fb386c27a"
+            "f34213e61c3eba4ac1a9191883421ad3e408c35cba4c91f9fda09e09ffe75d10"
         ),
         "scripts/integration_ci.sh": "8d9327fd9ad51d6ba7243d051336f623a4f75d60c60e69fd012e65f598b12d4a",
         "scripts/validate_middleware_authority_convergence.py": (
@@ -515,16 +514,16 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "f0c81e17c4e492d45aacf625af2e84e"
         ),
         "tests/test_reconciliation_activity.py": (
-            "4865d20cb4dad8f535f7142cdb7461e6"
-            "8b853b35211969d9186372ee3dd42d9e"
+            "9573de3bf0b5ad457d6c0673dfc27e53"
+            "05746161f11df7b2aa330d196bf8f1b3"
         ),
         "tests/test_vicidial_internal_call_adapter.py": (
             "9bac8378d14c57a02a1b43b30b0b8d33"
             "8b538cec3c036d3c500db57aaed6b417"
         ),
         "tests/pairing/test_selected_server_b.py": (
-            "04dfe79379cb39479be21d1817e1a0ec"
-            "7b5609287c2c8b56f9834b5b92ae2cd8"
+            "2d30e63fef9c9621a2082418ac22ab8e"
+            "30eee34a9b0d17312314822a15185b93"
         ),
         "tests/recording/test_api_contract.py": (
             "9aff153756e954091ac21d2831028a06e"
@@ -770,30 +769,37 @@ APPROVED_OFFLINE_RUN_SHA256: dict[str, dict[str, frozenset[str]]] = {
 }
 APPROVED_DEFAULT_TEST_DISCOVERY_SOURCE_SHA256 = {
     "appolon1908-hue/Middleware-": (
-        "11f3c0105f0dfefc64b03f039ff3e185"
-        "dbf742276eb798cbd7b24f573d3fad4b"
+        "ed25fb37b29e499fe17d4e027d606723"
+        "55ba87a8858a2ab5b3e1ae70d702720f"
     ),
 }
 APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
     str, dict[str, dict[str, str]]
 ] = {
     "appolon1908-hue/Middleware-": {
+        ".github/workflows/portfolio-production-ruleset-apply.yml": {
+            "config/ai-production-branch-ruleset.v1.json": "52db5e583b88edb069ba1d7b829d1f49ad820d0bb90e41bcf5b94e4074403ae1",
+            "config/portfolio-repositories.v1.json": "bcd65e22c20ee01812d0269af659fc09f81e0fdec78500437eebac937ae72fdf",
+            "scripts/apply_portfolio_production_ruleset.py": "31663d6f3101e593310b25a38035620d47a317d6a088193f6b550b730d0d39b0",
+            "scripts/portfolio_ruleset/__init__.py": "054ac3779dc21008042eada02c91f85c57612afc37163592f1aa90b9ee4b6b18",
+            "scripts/portfolio_ruleset/common.py": "1a8839c4dddbca4c3477a3a7cfd9d41a5f8d0c1f8361a07e85db2057f5dfdf70",
+            "scripts/portfolio_ruleset/github_api.py": "e0625083ed35b7a1fd46f67b3f91b7d166887f7d054d989dd2cac1d3d04dae6d",
+            "scripts/portfolio_ruleset/rollout.py": "91ccf5b6b8f4b119dbb3dc451c42200ab00026b91751ce9f014bd4a0c4275022",
+            "tests/test_portfolio_production_ruleset.py": "9f9605907a9c6a0e4a2b3446be236dbe7a5b49efeec0ce8b4d72ea30eda31e8d",
+        },
         ".github/workflows/portfolio-main-release-authorities.yml": {
             "config/portfolio-main-release-authorities.v1.json": (
                 "98da5d7935cc0f0e9e6c1fcfc820956b"
                 "618e05a5109c6ee7f16c698cff719897"
             ),
             "scripts/apply_portfolio_main_release_authorities.py": (
-                "add2e51cc09b0c4a6a3cf09944ec4b42"
-                "a2f15c37a6972a16dd77e123946103f0"
+                "1294f61d095d93328f403dfd9d2f1484f5debb3e945dca674d47bbd09f3ed0f0"
             ),
             "scripts/apply_portfolio_release_reviewer_access.py": (
-                "f9ba7034692118c427555fab41b1b6e14"
-                "a8698a761eb18ef6c957e1fb386c27a"
+                "f34213e61c3eba4ac1a9191883421ad3e408c35cba4c91f9fda09e09ffe75d10"
             ),
             "tests/test_portfolio_main_release_authorities.py": (
-                "69cec2a13ac7da3d5ddf72d6d9db78bc"
-                "b053bd4a43863ffe1fe5d135966f72d6"
+                "5d3a931ddad6f2cb68a85deee345d10a045762e6c1433f93383c4644e071d664"
             ),
             "tests/test_portfolio_release_reviewer_access.py": (
                 "1f5fe17545344ae89daed538be0b44a07"
@@ -824,8 +830,7 @@ APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
                 "d4c7c4ef69865067317d3e9300d0e6ed"
             ),
             "scripts/apply_production_reviewer_access.py": (
-                "305d52658d39cc45335676c6f3d0d780"
-                "b246b8c4c9b727c68ed705b30f99da22"
+                "ebfa963f6a4b91df0d172b16fc281bc12e67581776982e6b5c2b7458ab68abf2"
             ),
             "scripts/apply_production_reviewer_access_base.py": (
                 "22b5d7f425f949588ce29a6c3079c09f"
@@ -851,11 +856,11 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
     },
     "appolon1908-hue/Middleware-": {
         "scripts/apply_portfolio_main_release_authorities.py": (
-            "add2e51cc09b0c4a6a3cf09944ec4b42a2f15c37a6972a16dd77e123946103f0",
+            "1294f61d095d93328f403dfd9d2f1484f5debb3e945dca674d47bbd09f3ed0f0",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_portfolio_release_reviewer_access.py": (
-            "f9ba7034692118c427555fab41b1b6e14a8698a761eb18ef6c957e1fb386c27a",
+            "f34213e61c3eba4ac1a9191883421ad3e408c35cba4c91f9fda09e09ffe75d10",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/audit_release_endpoints.py": (
@@ -871,7 +876,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_production_reviewer_access.py": (
-            "305d52658d39cc45335676c6f3d0d780b246b8c4c9b727c68ed705b30f99da22",
+            "ebfa963f6a4b91df0d172b16fc281bc12e67581776982e6b5c2b7458ab68abf2",
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_repository_governance.py": (
@@ -1862,13 +1867,13 @@ def python_source_has_runtime_mutation(
             targets = [node.target]
         for target in targets:
             if isinstance(target, (ast.Attribute, ast.Subscript)):
-                root = binding_root(target)
-                if root in command_bindings:
-                    mutated_command_bindings.add(root)
+                target_root = binding_root(target)
+                if target_root is not None and target_root in command_bindings:
+                    mutated_command_bindings.add(target_root)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            root = binding_root(node.func.value)
-            if root in command_bindings and node.func.attr in command_mutators:
-                mutated_command_bindings.add(root)
+            call_root = binding_root(node.func.value)
+            if call_root is not None and call_root in command_bindings and node.func.attr in command_mutators:
+                mutated_command_bindings.add(call_root)
 
     def qualified_name(node: ast.expr, seen: frozenset[str] = frozenset()) -> str:
         if isinstance(node, ast.Name):
@@ -5106,7 +5111,10 @@ def workflow_has_runtime_mutation(
         trusted_scripts = verified_control_plane_dependencies(repository, path)
         if trusted_scripts is None:
             return True
-        if path == ".github/workflows/portfolio-main-release-authorities.yml":
+        if path in {
+            ".github/workflows/portfolio-main-release-authorities.yml",
+            ".github/workflows/portfolio-production-ruleset-apply.yml",
+        }:
             # This exact, dependency-bound workflow mutates repository
             # governance only behind its explicit manual confirmation. It has
             # no application-runtime authority and is not a production
@@ -9205,8 +9213,30 @@ def require_image_publishing_jobs_disabled(workflow: str, path: str) -> None:
     require(publishing_jobs > 0, f"image publication classification drift: {path}")
 
 
+
+def validate_portfolio_control_plane_bindings() -> None:
+    repository = "appolon1908-hue/Middleware-"
+    path = ".github/workflows/portfolio-production-ruleset-apply.yml"
+    if not (ROOT / path).is_file():
+        return
+    workflow = (ROOT / path).read_text(encoding="utf-8")
+    require(not workflow_has_runtime_mutation(workflow, path), "pinned portfolio governance was rejected")
+    require(workflow_has_runtime_mutation(workflow + "\n# changed\n", path), "portfolio workflow drift was accepted")
+    bindings = APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256[repository][path]
+    for dependency, expected in bindings.items():
+        bindings[dependency] = "0" * 64
+        try:
+            require(
+                workflow_has_runtime_mutation(workflow, path),
+                f"portfolio dependency drift was accepted: {dependency}",
+            )
+        finally:
+            bindings[dependency] = expected
+
+
 def main() -> int:
     contract = load_contract()
+    validate_portfolio_control_plane_bindings()
     validate(contract)
     validate_negative_regressions(contract)
     validate_intent_negative_regressions(contract)

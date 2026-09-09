@@ -38,7 +38,7 @@ def _request(**overrides) -> OriginateCallRequest:
         "lead_id": 42,
     }
     values.update(overrides)
-    return OriginateCallRequest(**values)
+    return OriginateCallRequest.model_validate(values)
 
 
 def test_originate_fails_closed_while_policy_is_default_deny(monkeypatch):

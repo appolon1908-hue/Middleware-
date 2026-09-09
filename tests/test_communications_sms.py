@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.commands import (
     CommandEnvelope,
+    CommandState,
     CommandPolicy,
     CommandPolicyRegistry,
     CommandService,
@@ -250,6 +251,8 @@ def test_sms_api_creates_one_canonical_telnexa_command_and_usage(test_settings) 
         )
         assert conflict.status_code == 409
 
+        assert runtime.commands is not None
+
         assert isinstance(runtime.commands.store, CapturingCommandStore)
         assert len(runtime.commands.store.submitted) == 1
         assert runtime.commands.store.authenticated_client_ids == ["kyqra"]
@@ -338,6 +341,7 @@ def test_sms_schema_sender_scope_and_kill_switch_fail_closed(test_settings) -> N
         assert blocked.status_code == 403
     assert disabled.communications is not None
     assert disabled.communications.store.messages == {}
+    assert disabled.commands is not None
     assert isinstance(disabled.commands.store, CapturingCommandStore)
     assert disabled.commands.store._commands == {}
 
@@ -403,6 +407,7 @@ def test_sms_segments_suppression_tenant_isolation_and_cancel(test_settings) -> 
             headers=_headers(key="sms-cancel-operation"),
         )
         assert cancel_replay.status_code == 200
+        assert runtime.commands is not None
         operation = asyncio.run(
             runtime.commands.store.get("tenant-1", UUID(created["operationId"]))
         )
@@ -531,14 +536,16 @@ def test_sms_unknown_outcome_is_indeterminate_without_duplicate_command(
         command_id = UUID(created["operationId"])
 
         async def make_uncertain() -> None:
-            for state, reason in (
+            assert runtime.commands is not None
+            transitions: tuple[tuple[CommandState, str], ...] = (
                 ("queued", "workflow accepted durable intent"),
                 ("dispatching", "Telnexa submission started"),
                 (
                     "reconciliation_required",
                     "Telnexa timed out after possible acceptance",
                 ),
-            ):
+            )
+            for state, reason in transitions:
                 await runtime.commands.store.transition(
                     "tenant-1",
                     command_id,
@@ -561,5 +568,6 @@ def test_sms_unknown_outcome_is_indeterminate_without_duplicate_command(
         )
         assert replay.status_code == 200
         assert replay.json()["messageId"] == created["messageId"]
+        assert runtime.commands is not None
         assert isinstance(runtime.commands.store, CapturingCommandStore)
         assert len(runtime.commands.store.submitted) == 1

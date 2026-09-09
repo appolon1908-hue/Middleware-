@@ -376,6 +376,7 @@ async def _scenario(
             assert await session.scalar(select(func.count(IntegrationEvent.id))) == 1
             assert await session.scalar(select(func.count(IntegrationDelivery.id))) == 2
             replayed = await session.get(InvalidEventQuarantine, replay_id)
+            assert replayed is not None
             assert replayed.status == "REPLAYED"
             assert replayed.replay_count == 1
 

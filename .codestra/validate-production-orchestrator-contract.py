@@ -2020,17 +2020,10 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
             while open_index < len(lower) and lower[open_index].isspace():
                 open_index += 1
             if lower.startswith("//", open_index):
-                comment_end = lower.find("\n", open_index + 2)
-                carriage_return = lower.find("\r", open_index + 2)
-                if carriage_return >= 0 and (
-                    comment_end < 0 or carriage_return < comment_end
-                ):
-                    comment_end = carriage_return
-                if comment_end < 0:
-                    # A loader followed only by a line comment cannot prove a
-                    # static, read-only import.
+                newline = re.search(r"[\r\n\u2028\u2029]", lower[open_index + 2:])
+                if newline is None:
                     return True
-                open_index = comment_end + 1
+                open_index += 2 + newline.end()
                 continue
             if not lower.startswith("/*", open_index):
                 break
@@ -2041,6 +2034,21 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
                 return True
             open_index = comment_end + 2
         if open_index >= len(lower) or lower[open_index] != "(":
+            # A loader value can escape through an alias. It is not a proven
+            # static read-only import, even if its eventual call is renamed.
+            if match.group() == "require":
+                suffix = lower[match.end():]
+                prefix = lower[:match.start()]
+                if re.match(r"\s*\.(?:apply|bind|call)\s*\(", suffix):
+                    return True
+                if (
+                    re.search(r"(?<![=!<>])=(?!=)\s*$", prefix)
+                    or re.search(r"(?:=>|\breturn)\s*$", prefix)
+                ) and re.match(
+                    r"(?:[ \t]*(?:;|,|\)|\]|\}|\r?\n|//|/\*)|[ \t]*$)",
+                    suffix,
+                ):
+                    return True
             continue
         arguments = call_arguments(open_index)
         literal = None if arguments is None else re.fullmatch(
@@ -2065,6 +2073,12 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
         ):
             # This parsed path is comment-aware, unlike a source regex, so a
             # renamed binding cannot conceal a mutating transport or launcher.
+            return True
+        if module.removeprefix("node:") in {
+            "cluster",
+            "vm",
+            "worker_threads",
+        }:
             return True
 
     if any(
@@ -4322,12 +4336,20 @@ def require_immutable_action_references(workflow: str, path: str) -> None:
 def step_has_reachable_attestation(step: dict[str, Any]) -> bool:
     if condition_is_statically_false(step.get("if")):
         return False
+    if step.get("continue-on-error", False) is not False:
+        return False
     uses = step.get("uses")
     if isinstance(uses, str) and uses.startswith(
         ("actions/attest@", "actions/attest-build-provenance@")
     ):
         return True
     run = str(step.get("run", ""))
+    shell = step.get("shell")
+    if shell is not None and (
+        not isinstance(shell, str)
+        or re.match(r"^(?:bash|sh)(?:\s|$)", shell) is None
+    ):
+        return False
     shell_source = shell_without_heredoc_bodies(run)
     raw_tokens = shell_tokens(shell_source)
     ambiguous_control = {
@@ -4373,6 +4395,31 @@ def step_has_reachable_attestation(step: dict[str, Any]) -> bool:
     return False
 
 
+def attestation_covers_publication(
+    attestation: dict[str, Any],
+    publication: dict[str, Any],
+) -> bool:
+    if attestation.get("continue-on-error", False) is not False:
+        return False
+
+    def condition(step: dict[str, Any]) -> str:
+        value = step.get("if")
+        if value is None or value is True:
+            return "success()"
+        if not isinstance(value, str):
+            return "__unproved__"
+        expression = value.strip()
+        if expression.startswith("${{") and expression.endswith("}}"):
+            expression = expression[3:-2].strip()
+        return strip_condition_parentheses(expression)
+
+    attestation_condition = condition(attestation)
+    return attestation_condition in {"success()", "true", "always()"} or (
+        attestation_condition != "__unproved__"
+        and attestation_condition == condition(publication)
+    )
+
+
 def require_reachable_signer_workflow(workflow: str, path: str) -> None:
     jobs = workflow_jobs(workflow, path)
     publication_jobs = [
@@ -4394,10 +4441,19 @@ def require_reachable_signer_workflow(workflow: str, path: str) -> None:
     )
     for publication_job in publication_jobs:
         steps = workflow_steps(publication_job, path)
-        require(
-            any(step_has_reachable_attestation(step) for step in steps),
-            f"signer publication job has no reachable attestation step: {path}",
-        )
+        for publication in steps:
+            if condition_is_statically_false(
+                publication.get("if")
+            ) or not contains_image_publication(publication):
+                continue
+            require(
+                any(
+                    step_has_reachable_attestation(step)
+                    and attestation_covers_publication(step, publication)
+                    for step in steps
+                ),
+                f"signer publication path has no guaranteed attestation step: {path}",
+            )
 
 
 def validate_intent_source_binding(intent: str) -> None:
@@ -5549,6 +5605,52 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
     else:
         raise ContractError(
             "negative regression unexpectedly passed: comment-only attestation"
+        )
+    for command in (
+        "if false; then cosign attest --yes image@example; fi",
+        "false && cosign attest --yes image@example",
+        "true || cosign attest --yes image@example",
+        "echo cosign attest --yes image@example",
+    ):
+        require(
+            not step_has_reachable_attestation({"run": command}),
+            "unreachable shell attestation was accepted",
+        )
+    require(
+        not attestation_covers_publication(
+            {"if": "${{ !inputs.publish }}"},
+            {"if": "inputs.publish"},
+        ),
+        "complementary attestation condition was accepted",
+    )
+    require(
+        attestation_covers_publication(
+            {"if": "${{ inputs.publish }}"},
+            {"if": "inputs.publish"},
+        ),
+        "identical publication/attestation conditions were rejected",
+    )
+    require(
+        attestation_covers_publication({}, {"if": "inputs.publish"}),
+        "unconditional attestation was rejected",
+    )
+    complementary_signer = reachable_signer.replace(
+        "      - uses: docker/build-push-action@",
+        "      - if: inputs.publish\n        uses: docker/build-push-action@",
+    ).replace(
+        "      - uses: actions/attest@",
+        "      - if: ${{ !inputs.publish }}\n        uses: actions/attest@",
+    )
+    try:
+        require_reachable_signer_workflow(
+            complementary_signer,
+            "synthetic-complementary-signer.yml",
+        )
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: unattested publication path"
         )
     cosign_signer = reachable_signer.replace(
         "      - uses: actions/attest@0123456789012345678901234567890123456789",
@@ -6889,6 +6991,8 @@ PY
         'run("kubectl apply -f runtime.yml")\n',
         "const cp = require('\\x63hild_process'); "
         "cp.execSync('kubectl apply -f runtime.yml')\n",
+        "const cp = require.call(null, 'child_' + 'process');\n",
+        "const cp = require.apply(null, ['child_' + 'process']);\n",
         "fetch(...args)\n",
         "process.getBuiltinModule('child_process').exec('kubectl apply')\n",
     ):

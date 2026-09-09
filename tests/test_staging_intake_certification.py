@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import urllib.request
 from pathlib import Path
 from types import ModuleType
 
@@ -154,6 +155,27 @@ def test_validate_base_url_accepts_isolated_https_staging_host() -> None:
             denied_hosts={"api.codestra.co"},
         )
         == "https://staging-api.codestra.co"
+    )
+
+
+def test_redirects_are_rejected_without_forwarding_protected_headers() -> None:
+    module = _load_script()
+    request = urllib.request.Request(
+        "https://staging-api.codestra.co/version",
+        headers={"Authorization": "Bearer protected-token"},
+    )
+    handler = module.FailClosedRedirectHandler()
+
+    assert (
+        handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://attacker.example/capture",
+        )
+        is None
     )
 
 

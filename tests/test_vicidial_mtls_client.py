@@ -168,7 +168,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
     values.update(overrides)
     # Temporary certificate paths are intentionally limited to tests. Production
     # Settings validation requires /run/secrets/vicidial-mtls.
-    return Settings.model_construct(**values)
+    return Settings.model_construct(**values)  # type: ignore[arg-type]
 
 
 def _client(settings: Settings, transport: httpx.BaseTransport) -> VicidialMtlsClient:
@@ -217,7 +217,12 @@ def test_valid_mtls_request_has_ids_and_exact_route(tmp_path: Path):
         client.close()
     request = captured[0]
     assert request.method == "POST"
+    assert request.url.host == "10.42.0.20"
     assert request.url.path == "/api/v1/transfers/authorize"
+    assert request.headers["Host"] == ("authorization.internal.codestra.agency:8443")
+    assert request.extensions["sni_hostname"] == (
+        "authorization.internal.codestra.agency"
+    )
     assert request.headers["X-Correlation-ID"]
     assert request.headers["X-Request-ID"]
 
@@ -439,10 +444,13 @@ def test_public_or_mixed_dns_resolution_fails_before_network(tmp_path: Path):
         ["::ffff:10.42.0.20"],
         [],
     ):
+        def resolve(_: str, result: list[str] = addresses) -> list[str]:
+            return result
+
         client = VicidialMtlsClient(
             _settings(tmp_path),
             transport=httpx.MockTransport(handler),
-            resolver=lambda _, result=addresses: result,
+            resolver=resolve,
         )
         try:
             with pytest.raises(VicidialMtlsError, match="private IP"):
@@ -457,14 +465,25 @@ def test_rfc1918_and_ipv6_ula_destinations_are_private(
     tmp_path: Path,
     address: str,
 ) -> None:
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={"authorized": True})
+
     client = VicidialMtlsClient(
         _settings(tmp_path),
-        transport=httpx.MockTransport(
-            lambda _: httpx.Response(200, json={"authorized": True})
-        ),
+        transport=httpx.MockTransport(handler),
         resolver=lambda _: [address],
     )
     try:
         assert client.authorize({}) == {"authorized": True}
     finally:
         client.close()
+    assert captured[0].url.host == address
+    assert captured[0].headers["Host"] == (
+        "authorization.internal.codestra.agency:8443"
+    )
+    assert captured[0].extensions["sni_hostname"] == (
+        "authorization.internal.codestra.agency"
+    )

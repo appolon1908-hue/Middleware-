@@ -178,7 +178,14 @@ class VicidialMtlsClient:
             or parsed.fragment
         ):
             raise VicidialMtlsError("VICIdial method or route is not approved")
-        self._assert_private_resolution(parsed.hostname)
+        private_addresses = self._assert_private_resolution(parsed.hostname)
+        destination = private_addresses[0]
+        destination_host = (
+            f"[{destination}]"
+            if isinstance(destination, IPv6Address)
+            else str(destination)
+        )
+        pinned_url = f"https://{destination_host}:{VICIDIAL_PRIVATE_PORT}{parsed.path}"
 
         try:
             body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
@@ -204,13 +211,18 @@ class VicidialMtlsClient:
         try:
             with self._client.stream(
                 "POST",
-                url,
+                pinned_url,
                 content=body,
                 headers={
+                    "Host": f"{parsed.hostname}:{VICIDIAL_PRIVATE_PORT}",
                     "Content-Type": "application/json",
                     "X-Correlation-ID": correlation,
                     "X-Request-ID": request,
                 },
+                # Connect to the validated numeric destination without a
+                # second DNS lookup, while still authenticating the governed
+                # hostname in the peer certificate.
+                extensions={"sni_hostname": parsed.hostname},
             ) as response:
                 response.raise_for_status()
                 chunks: list[bytes] = []
@@ -294,7 +306,9 @@ class VicidialMtlsClient:
             raise VicidialMtlsError(f"VICidial {label} is missing")
         return path
 
-    def _assert_private_resolution(self, hostname: str) -> None:
+    def _assert_private_resolution(
+        self, hostname: str
+    ) -> tuple[IPv4Address | IPv6Address, ...]:
         try:
             addresses = self._resolver(hostname)
             parsed = [ip_address(address) for address in addresses]
@@ -302,10 +316,13 @@ class VicidialMtlsClient:
             raise VicidialMtlsError(
                 "VICidial private DNS resolution failed closed"
             ) from exc
-        if not parsed or any(not _approved_private_address(address) for address in parsed):
+        if not parsed or any(
+            not _approved_private_address(address) for address in parsed
+        ):
             raise VicidialMtlsError(
                 "VICidial hostname did not resolve exclusively to the private IP"
             )
+        return tuple(parsed)
 
     @staticmethod
     def _resolve_addresses(hostname: str) -> list[str]:

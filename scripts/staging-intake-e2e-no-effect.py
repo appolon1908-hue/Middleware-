@@ -45,6 +45,24 @@ TENANT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RELEASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class FailClosedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects so protected credentials never cross authorities."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
+NO_REDIRECT_OPENER = urllib.request.build_opener(FailClosedRedirectHandler())
+
+
 def fail(message: str) -> NoReturn:
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -65,7 +83,7 @@ def request(
         headers=headers or {},
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with NO_REDIRECT_OPENER.open(req, timeout=15) as response:
             return response.status, response.read(8192).decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(8192).decode("utf-8", "replace")

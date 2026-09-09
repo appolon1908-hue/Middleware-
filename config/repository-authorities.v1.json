@@ -103,6 +103,16 @@
       "role": "social-postiz-product-source"
     },
     {
+      "component": "ai",
+      "principal_repository": "appolon1908-hue/Codestra-AI",
+      "role": "ai-provider-product-source"
+    },
+    {
+      "component": "marketing",
+      "principal_repository": "appolon1908-hue/Codestra-Marketing-",
+      "role": "marketing-provider-product-source"
+    },
+    {
       "component": "scrapper",
       "principal_repository": "appolon1908-hue/scrapper",
       "role": "legacy-business-scrapper-source-and-migration-evidence"

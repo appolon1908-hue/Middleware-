@@ -498,7 +498,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_repository_governance.py": (
-            "b5cd6b37b3927e2ab3c6d7214e1392f41717afe26d4fc20f5c59550d65e48f51",
+            "0d87e311b2225aae48e11c727c21b2a7ffb03c26fc988025275c4b94f682ef82",
             frozenset({(), ("--apply",), ("--verify-live",)}),
         ),
     },

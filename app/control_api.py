@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-import base64, hashlib, json
-from typing import Any, Literal
+import base64
+import binascii
+import hashlib
+import json
+import re
+from typing import Any, Literal, Pattern, overload
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
@@ -15,6 +19,21 @@ from .storage import PostgresInboxStore, StorageError
 
 router = APIRouter(tags=["durable-control"])
 
+CURSOR_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+TENANT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+CORRELATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,179}$")
+IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{7,179}$")
+MAX_BIGINT = (1 << 63) - 1
+
+
+def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate cursor field: {key}")
+        value[key] = item
+    return value
+
 
 class ControlMutation(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -23,30 +42,111 @@ class ControlMutation(BaseModel):
 
 
 def _cursor(value: str | None) -> int | None:
-    if value is None: return None
+    if value is None:
+        return None
     try:
-        raw=json.loads(base64.urlsafe_b64decode(value+"="*(-len(value)%4)))
-        if set(raw)!={"v","id"} or raw["v"]!=1 or not isinstance(raw["id"],int) or raw["id"]<1: raise ValueError
-        return raw["id"]
-    except Exception as exc: raise RequestValidationError("cursor is malformed") from exc
+        if not CURSOR_RE.fullmatch(value):
+            raise ValueError("cursor is not canonical base64url")
+        decoded = base64.b64decode(
+            value + "=" * (-len(value) % 4),
+            altchars=b"-_",
+            validate=True,
+        )
+        raw = json.loads(decoded, object_pairs_hook=_reject_duplicate_pairs)
+        if not isinstance(raw, dict) or set(raw) != {"v", "id"}:
+            raise ValueError("cursor field set is invalid")
+        row_id = raw["id"]
+        if type(raw["v"]) is not int or raw["v"] != 1:
+            raise ValueError("cursor version is invalid")
+        if type(row_id) is not int or not 1 <= row_id <= MAX_BIGINT:
+            raise ValueError("cursor ID is invalid")
+        if _next(row_id) != value:
+            raise ValueError("cursor encoding is not canonical")
+        return row_id
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise RequestValidationError("cursor is malformed") from exc
 
 
 def _next(row_id: int) -> str:
+    if type(row_id) is not int or not 1 <= row_id <= MAX_BIGINT:
+        raise ValueError("cursor ID is outside the PostgreSQL bigint range")
     return base64.urlsafe_b64encode(json.dumps({"v":1,"id":row_id},separators=(",",":")).encode()).decode().rstrip("=")
 
 
-async def _auth(request: Request, *, mutation: bool=False):
-    tenant=request.headers.get("X-Tenant-ID","")
-    if not tenant: raise RequestValidationError("X-Tenant-ID is required")
-    authorization=request.headers.get("Authorization","")
-    caller=caller_for_authorization(authorization)
-    claims=await request.app.state.runtime.tokens.verify(authorization,expected_client_id=caller.client_id,required_scope=caller.command_scope if mutation else caller.status_scope)
-    authorize_tenant(claims,tenant)
+def _required_header(
+    request: Request,
+    name: str,
+    *,
+    maximum: int,
+    pattern: Pattern[str] | None = None,
+) -> str:
+    values = request.headers.getlist(name)
+    if len(values) != 1:
+        raise RequestValidationError(f"{name} must be provided exactly once")
+    value = values[0]
+    if not value or len(value) > maximum or pattern is not None and not pattern.fullmatch(value):
+        raise RequestValidationError(f"{name} is malformed")
+    return value
+
+
+def _authorization_header(request: Request) -> str:
+    values = request.headers.getlist("Authorization")
+    if len(values) > 1:
+        raise RequestValidationError("Authorization must be provided at most once")
+    value = values[0] if values else ""
+    if len(value) > 8192:
+        raise RequestValidationError("Authorization is malformed")
+    return value
+
+
+@overload
+async def _auth(request: Request, *, mutation: Literal[False] = False) -> str: ...
+
+
+@overload
+async def _auth(
+    request: Request,
+    *,
+    mutation: Literal[True],
+) -> tuple[str, str, str]: ...
+
+
+async def _auth(
+    request: Request,
+    *,
+    mutation: bool = False,
+) -> str | tuple[str, str, str]:
+    tenant = _required_header(
+        request,
+        "X-Tenant-ID",
+        maximum=64,
+        pattern=TENANT_ID_RE,
+    )
+    authorization = _authorization_header(request)
+    caller = caller_for_authorization(authorization)
+    claims = await request.app.state.runtime.tokens.verify(
+        authorization,
+        expected_client_id=caller.client_id,
+        required_scope=caller.command_scope if mutation else caller.status_scope,
+    )
+    authorize_tenant(claims, tenant)
     if mutation:
-        correlation=request.headers.get("X-Correlation-ID",""); idem=request.headers.get("Idempotency-Key","")
-        actor=claims.get("sub")
-        if not correlation or not 8<=len(idem)<=180 or not isinstance(actor,str) or not actor: raise RequestValidationError("X-Correlation-ID, Idempotency-Key, and token subject are required")
-        return tenant,actor,idem
+        _required_header(
+            request,
+            "X-Correlation-ID",
+            maximum=180,
+            pattern=CORRELATION_ID_RE,
+        )
+        idem = _required_header(
+            request,
+            "Idempotency-Key",
+            maximum=180,
+            pattern=IDEMPOTENCY_KEY_RE,
+        )
+        actor = claims.get("sub")
+        if not isinstance(actor, str) or not actor:
+            raise RequestValidationError("token subject is required")
+        return tenant, actor, idem
     return tenant
 
 
@@ -65,13 +165,34 @@ def _safe_outbox(row) -> dict[str,Any]:
     return {"id":row["id"],"tenant_id":row["tenant_id"],"command_id":row["command_id"],"destination":row["destination"],"event_type":row["event_type"],"state":state,"attempt_count":row["attempt_count"],"created_at":row["created_at"],"next_attempt_at":row["next_attempt_at"],"completed_at":row["completed_at"],"cancelled_at":row["cancelled_at"],"dead_lettered_at":row["dead_lettered_at"],"reconciliation_required_at":row["reconciliation_required_at"],"safe_error_code":"delivery_error" if row["last_error"] else None,"resource_version":row["resource_version"]}
 
 
-async def _list(request:Request,kind:str,limit:int,cursor:str|None):
-    tenant=await _auth(request); pos=_cursor(cursor); pool=_pool(request); table="middleware_inbox" if kind=="inbox" else "middleware_outbox"; key="event_id" if kind=="inbox" else "id"
+async def _list(request: Request, kind: str, limit: int, cursor: str | None):
+    tenant = await _auth(request)
+    position = _cursor(cursor)
+    pool = _pool(request)
     # Inbox IDs are external strings, so its cursor follows immutable ledger sequence.
     async with pool.acquire() as conn:
-        if kind=="inbox": rows=await conn.fetch("""SELECT i.*,l.tenant_sequence AS page_id FROM middleware_inbox i JOIN middleware_event_ledger l ON l.tenant_id=i.tenant_id AND l.event_id=i.event_id WHERE i.tenant_id=$1 AND ($2::bigint IS NULL OR l.tenant_sequence>$2) ORDER BY l.tenant_sequence LIMIT $3""",tenant,pos,limit+1)
-        else: rows=await conn.fetch("SELECT *,id AS page_id FROM middleware_outbox WHERE tenant_id=$1 AND ($2::bigint IS NULL OR id>$2) ORDER BY id LIMIT $3",tenant,pos,limit+1)
-    items=rows[:limit]; return {"items":[_safe_inbox(r) if kind=="inbox" else _safe_outbox(r) for r in items],"next_cursor":_next(items[-1]["page_id"]) if len(rows)>limit else None}
+        if kind == "inbox":
+            rows = await conn.fetch(
+                """SELECT i.*,l.tenant_sequence AS page_id FROM middleware_inbox i JOIN middleware_event_ledger l ON l.tenant_id=i.tenant_id AND l.event_id=i.event_id WHERE i.tenant_id=$1 AND ($2::bigint IS NULL OR l.tenant_sequence>$2) ORDER BY l.tenant_sequence LIMIT $3""",
+                tenant,
+                position,
+                limit + 1,
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT *,id AS page_id FROM middleware_outbox WHERE tenant_id=$1 AND ($2::bigint IS NULL OR id>$2) ORDER BY id LIMIT $3",
+                tenant,
+                position,
+                limit + 1,
+            )
+    items = rows[:limit]
+    return {
+        "items": [
+            _safe_inbox(row) if kind == "inbox" else _safe_outbox(row)
+            for row in items
+        ],
+        "next_cursor": _next(items[-1]["page_id"]) if len(rows) > limit else None,
+    }
 
 
 @router.get("/v1/inbox")

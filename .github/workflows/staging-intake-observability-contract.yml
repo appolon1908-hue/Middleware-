@@ -3,16 +3,26 @@ name: Historical Stage 6 staging intake observability source contract
 on:
   pull_request:
     paths:
+      - "app/**/*.py"
+      - "config/api-webhook-contracts.json"
       - "contracts/staging-intake-observability-runtime.v1.json"
+      - "config/provider-operation-policy.json"
+      - "config/runtime-profiles.v1.json"
       - "config/environments/staging.intake-observability.runtime.env.example"
       - "scripts/validate_staging_intake_observability_contract.py"
+      - "tests/test_staging_intake_observability_contract_validation.py"
       - ".github/workflows/staging-intake-observability-contract.yml"
   push:
     branches: [main]
     paths:
+      - "app/**/*.py"
+      - "config/api-webhook-contracts.json"
       - "contracts/staging-intake-observability-runtime.v1.json"
+      - "config/provider-operation-policy.json"
+      - "config/runtime-profiles.v1.json"
       - "config/environments/staging.intake-observability.runtime.env.example"
       - "scripts/validate_staging_intake_observability_contract.py"
+      - "tests/test_staging_intake_observability_contract_validation.py"
       - ".github/workflows/staging-intake-observability-contract.yml"
 
 permissions:

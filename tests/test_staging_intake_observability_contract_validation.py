@@ -13,8 +13,11 @@ BOUND_FILES = (
     "contracts/staging-intake-observability-runtime.v1.json",
     "config/runtime-profiles.v1.json",
     "config/api-webhook-contracts.json",
+    "config/provider-operation-policy.json",
     "config/environments/staging.intake-observability.runtime.env.example",
+    ".github/workflows/staging-intake-observability-contract.yml",
     "app/appolon_factory.py",
+    "app/automation_v2.py",
     "app/n8n_control_plane.py",
     "app/operations_dashboard.py",
     "app/operations.py",
@@ -23,7 +26,9 @@ BOUND_FILES = (
     "app/domain_api.py",
     "app/webhook_api.py",
     "app/telephony_api.py",
+    "app/provider_control_api.py",
     "app/security.py",
+    "app/survey_routes.py",
 )
 
 
@@ -41,11 +46,25 @@ BOUND_FILES = (
         "unawaited_metrics_verifier",
         "decorated_metrics_handler",
         "shadow_metrics_registration",
+        "parameterized_metrics_shadow",
+        "keyword_metrics_shadow",
+        "mounted_metrics_shadow",
+        "app_alias_metrics_shadow",
         "unapproved_included_router",
         "included_router_shadow",
+        "provider_side_effect_shadow",
+        "route_helper_shadow",
         "webhook_shadow",
         "request_dependency_proxy",
         "rebound_request_type",
+        "class_request_rebind",
+        "aliased_request_rebind",
+        "missing_workflow_bound_source",
+        "middleware_short_circuit",
+        "custom_middleware",
+        "constructor_middleware",
+        "middleware_status_rewrite",
+        "middleware_path_rewrite",
     ],
 )
 def test_staging_contract_fails_closed(
@@ -59,9 +78,7 @@ def test_staging_contract_fails_closed(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(source.read_bytes())
 
-    contract_path = (
-        tmp_path / "contracts/staging-intake-observability-runtime.v1.json"
-    )
+    contract_path = tmp_path / "contracts/staging-intake-observability-runtime.v1.json"
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     if mutation == "production_authorized":
         contract["production_authorized"] = True
@@ -89,18 +106,18 @@ def test_staging_contract_fails_closed(
     }:
         factory_path = tmp_path / "app/appolon_factory.py"
         factory = factory_path.read_text(encoding="utf-8")
-        authentication = '''        await request.app.state.runtime.tokens.verify(
+        authentication = """        await request.app.state.runtime.tokens.verify(
             request.headers.get("Authorization", ""),
             expected_client_id="monitoring-readonly",
             required_scope="metrics.read",
-        )'''
+        )"""
         if mutation == "dead_metrics_authentication":
-            replacement = '''        if False:
+            replacement = """        if False:
             await request.app.state.runtime.tokens.verify(
                 request.headers.get("Authorization", ""),
                 expected_client_id="monitoring-readonly",
                 required_scope="metrics.read",
-            )'''
+            )"""
         elif mutation == "unrelated_metrics_verifier":
             replacement = authentication.replace(
                 "request.app.state.runtime.tokens.verify",
@@ -114,6 +131,10 @@ def test_staging_contract_fails_closed(
     elif mutation in {
         "decorated_metrics_handler",
         "shadow_metrics_registration",
+        "parameterized_metrics_shadow",
+        "keyword_metrics_shadow",
+        "mounted_metrics_shadow",
+        "app_alias_metrics_shadow",
         "unapproved_included_router",
     }:
         factory_path = tmp_path / "app/appolon_factory.py"
@@ -123,8 +144,28 @@ def test_staging_contract_fails_closed(
             replacement = marker + "    @replace_handler\n"
         elif mutation == "shadow_metrics_registration":
             replacement = (
-                "    app.add_api_route(\"/\" + \"metrics\", public_metrics, "
-                "methods=[\"GET\"])\n\n" + marker
+                '    app.add_api_route("/" + "metrics", public_metrics, '
+                'methods=["GET"])\n\n' + marker
+            )
+        elif mutation == "parameterized_metrics_shadow":
+            replacement = (
+                '    @app.get("/{shadow:path}")\n'
+                "    async def parameterized_shadow():\n"
+                "        return None\n\n" + marker
+            )
+        elif mutation == "keyword_metrics_shadow":
+            replacement = (
+                '    app.add_api_route(path="/metrics", endpoint=public_metrics, '
+                'methods=["GET"])\n\n' + marker
+            )
+        elif mutation == "mounted_metrics_shadow":
+            replacement = '    app.mount("/", public_app)\n\n' + marker
+        elif mutation == "app_alias_metrics_shadow":
+            replacement = (
+                "    shadow = app\n"
+                '    @shadow.get("/metrics")\n'
+                "    async def aliased_shadow():\n"
+                "        return None\n\n" + marker
             )
         else:
             replacement = "    app.include_router(public_metrics_router)\n\n" + marker
@@ -133,18 +174,44 @@ def test_staging_contract_fails_closed(
         factory_path.write_text(changed, encoding="utf-8")
     elif mutation == "included_router_shadow":
         router_path = tmp_path / "app/control_api.py"
-        source = router_path.read_text(encoding="utf-8")
-        source += (
+        module_source = router_path.read_text(encoding="utf-8")
+        module_source += (
             '\nshadow_path = "/metrics"\n'
             'router.add_api_route(shadow_path, public_metrics, methods=["GET"])\n'
         )
-        router_path.write_text(source, encoding="utf-8")
+        router_path.write_text(module_source, encoding="utf-8")
+    elif mutation == "provider_side_effect_shadow":
+        router_path = tmp_path / "app/provider_control_api.py"
+        module_source = router_path.read_text(encoding="utf-8")
+        module_source += (
+            '\n@router.get("/metrics")\n'
+            "async def public_metrics_shadow():\n"
+            "    return None\n"
+        )
+        router_path.write_text(module_source, encoding="utf-8")
+    elif mutation == "route_helper_shadow":
+        helper_path = tmp_path / "app/survey_routes.py"
+        module_source = helper_path.read_text(encoding="utf-8")
+        marker = '    @app.post("/v1/intake/surveys/responses")\n'
+        replacement = (
+            '    @app.get("/{shadow:path}")\n'
+            "    async def public_metrics_shadow():\n"
+            "        return None\n\n" + marker
+        )
+        changed = module_source.replace(marker, replacement, 1)
+        assert changed != module_source
+        helper_path.write_text(changed, encoding="utf-8")
     elif mutation == "webhook_shadow":
         webhook_path = tmp_path / "config/api-webhook-contracts.json"
         webhook_contract = json.loads(webhook_path.read_text(encoding="utf-8"))
         webhook_contract["webhooks"][0]["path"] = "/metrics"
         webhook_path.write_text(json.dumps(webhook_contract), encoding="utf-8")
-    elif mutation in {"request_dependency_proxy", "rebound_request_type"}:
+    elif mutation in {
+        "request_dependency_proxy",
+        "rebound_request_type",
+        "class_request_rebind",
+        "aliased_request_rebind",
+    }:
         factory_path = tmp_path / "app/appolon_factory.py"
         factory = factory_path.read_text(encoding="utf-8")
         if mutation == "request_dependency_proxy":
@@ -155,14 +222,66 @@ def test_staging_contract_fails_closed(
                 "    ) -> Response:\n",
                 1,
             )
-        else:
+        elif mutation == "rebound_request_type":
             factory = factory.replace(
                 "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n",
                 "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n"
                 "Request = object\n",
                 1,
             )
+        elif mutation == "class_request_rebind":
+            factory = factory.replace(
+                "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n",
+                "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n"
+                "class Request:\n"
+                "    pass\n",
+                1,
+            )
+        else:
+            factory = factory.replace(
+                "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n",
+                "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n"
+                "from proxy_module import Proxy as Request\n",
+                1,
+            )
         factory_path.write_text(factory, encoding="utf-8")
+    elif mutation == "missing_workflow_bound_source":
+        workflow_path = (
+            tmp_path / ".github/workflows/staging-intake-observability-contract.yml"
+        )
+        workflow = workflow_path.read_text(encoding="utf-8")
+        workflow = workflow.replace('      - "app/**/*.py"\n', "", 1)
+        workflow_path.write_text(workflow, encoding="utf-8")
+    elif mutation in {
+        "middleware_short_circuit",
+        "custom_middleware",
+        "constructor_middleware",
+        "middleware_status_rewrite",
+        "middleware_path_rewrite",
+    }:
+        factory_path = tmp_path / "app/appolon_factory.py"
+        factory = factory_path.read_text(encoding="utf-8")
+        if mutation == "middleware_short_circuit":
+            marker = "        request.state.correlation_id = (\n"
+            replacement = (
+                '        if request.url.path == "/metrics":\n'
+                '            return Response(content="public")\n' + marker
+            )
+        elif mutation == "custom_middleware":
+            marker = "    telemetry = MiddlewareObservability(resolved)\n"
+            replacement = "    app.add_middleware(PublicMetricsMiddleware)\n" + marker
+        elif mutation == "constructor_middleware":
+            marker = '        title="Codestra Middleware API",\n'
+            replacement = marker + "        middleware=[PublicMetricsMiddleware],\n"
+        elif mutation == "middleware_status_rewrite":
+            marker = "            return response\n"
+            replacement = "            response.status_code = 200\n" + marker
+        else:
+            marker = "        started = telemetry.start_request()\n"
+            replacement = '        request.scope["path"] = "/health"\n' + marker
+        changed = factory.replace(marker, replacement, 1)
+        assert changed != factory
+        factory_path.write_text(changed, encoding="utf-8")
 
     program = (
         "import importlib.util,pathlib;"

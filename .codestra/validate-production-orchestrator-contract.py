@@ -54,6 +54,18 @@ RUNTIME_TOOLS = {
 SHELL_INTERPRETERS = {"bash", "dash", "eval", "ksh", "sh", "zsh"}
 SCRIPT_INTERPRETERS = {"node", "perl", "php", "python", "python3", "ruby"}
 SHELL_WRAPPERS = {"!", "command", "env", "exec", "nohup", "sudo", "time"}
+GENERIC_NETWORK_CLIENTS = {
+    "curl",
+    "ftp",
+    "lftp",
+    "nc",
+    "ncat",
+    "netcat",
+    "sftp",
+    "socat",
+    "telnet",
+    "wget",
+}
 KUBECTL_MUTATIONS = {
     "annotate",
     "apply",
@@ -1587,6 +1599,11 @@ def javascript_source_has_runtime_contact(source: str) -> bool:
         # Dynamic imports can return a destructured or renamed network
         # primitive whose eventual call has no statically attributable receiver.
         return True
+    if re.search(r"\brequire\s*\(", lower):
+        # CommonJS imports can compute a module name, execute module-level
+        # effects, and freely rename the result. Without a JavaScript AST and
+        # dependency closure they are not provably contact-free.
+        return True
     return bool(
         re.search(r"\bfetch\b", lower)
         or re.search(r"\bwebsocket\b", lower)
@@ -2026,6 +2043,46 @@ def inline_interpreter_payload_has_runtime_mutation(
     return True
 
 
+def shell_tokens_have_network_device_redirect(tokens: list[str]) -> bool:
+    """Recognize Bash's socket-opening /dev/tcp and /dev/udp redirections."""
+
+    combined = re.compile(
+        r"^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?(?:<>|>>?|<)"
+        r"/dev/(?:tcp|udp)/"
+    )
+    operator = re.compile(
+        r"^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?(?:<>|>>?|<)$"
+    )
+    for index, token in enumerate(tokens):
+        if combined.match(token):
+            return True
+        if (
+            operator.fullmatch(token)
+            and index + 1 < len(tokens)
+            and tokens[index + 1].startswith(("/dev/tcp/", "/dev/udp/"))
+        ):
+            return True
+    return False
+
+
+def inline_interpreter_payload_has_runtime_contact(
+    interpreter: str,
+    payload: str,
+) -> bool:
+    """Fail closed on any unproved contact from an inline program."""
+
+    if "$" in payload:
+        return True
+    if interpreter in {"python", "python3"}:
+        return python_source_has_runtime_contact(payload)
+    if interpreter == "node":
+        return javascript_source_has_runtime_contact(payload)
+    if interpreter in SHELL_INTERPRETERS:
+        return contains_runtime_command(payload) or contains_runtime_mutation(payload)
+    # Perl, PHP, and Ruby inline programs are not statically admitted.
+    return True
+
+
 def package_manager_payloads(
     name: str,
     arguments: list[str],
@@ -2254,6 +2311,9 @@ def package_manager_payloads(
 def contains_runtime_command(script: str) -> bool:
     if heredoc_has_runtime_mutation(script, set(), None, ROOT):
         return True
+    for interpreter, body in heredoc_programs(script):
+        if inline_interpreter_payload_has_runtime_contact(interpreter, body):
+            return True
     shell_script = shell_without_heredoc_bodies(script)
     parsed_substitutions = shell_command_substitutions(shell_script)
     if parsed_substitutions is None:
@@ -2262,6 +2322,8 @@ def contains_runtime_command(script: str) -> bool:
     if any(contains_runtime_command(payload) for payload in substitutions):
         return True
     tokens = shell_tokens(shell_script)
+    if shell_tokens_have_network_device_redirect(tokens):
+        return True
     for index in command_indexes(tokens):
         bindings = shell_command_bindings(tokens, index)
         command_token = resolved_command_token(tokens[index], bindings)
@@ -2273,6 +2335,7 @@ def contains_runtime_command(script: str) -> bool:
             return True
         if (
             name in RUNTIME_TOOLS
+            or name.lower() in GENERIC_NETWORK_CLIENTS
             or name in SHELL_WRAPPERS
             or name.endswith("deploy_immutable")
             or name.endswith("apply-plan.sh")
@@ -2280,9 +2343,8 @@ def contains_runtime_command(script: str) -> bool:
         ):
             return True
         payload = interpreter_payload(tokens, index)
-        if payload is not None and inline_interpreter_payload_has_runtime_mutation(
-            name,
-            payload,
+        if payload is not None and inline_interpreter_payload_has_runtime_contact(
+            name, payload
         ):
             return True
     return False
@@ -2818,33 +2880,13 @@ def step_has_runtime_contact(
     tokens = shell_tokens(shell_without_heredoc_bodies(run))
     for index in command_indexes(tokens):
         interpreter = executable_name(tokens[index]).lower()
-        if interpreter in {
-            "curl",
-            "ftp",
-            "lftp",
-            "nc",
-            "ncat",
-            "netcat",
-            "sftp",
-            "socat",
-            "telnet",
-            "wget",
-        }:
+        if interpreter in GENERIC_NETWORK_CLIENTS:
             # Generic network clients cannot prove that a read-only-looking
             # request is not contacting the governed runtime.
             return True
         payload = interpreter_payload(tokens, index)
         if payload is not None:
-            if interpreter in {"python", "python3"}:
-                if python_source_has_runtime_contact(payload):
-                    return True
-            elif interpreter == "node":
-                if javascript_source_has_runtime_contact(payload):
-                    return True
-            elif interpreter in SHELL_INTERPRETERS:
-                if contains_runtime_command(payload) or contains_runtime_mutation(payload):
-                    return True
-            else:
+            if inline_interpreter_payload_has_runtime_contact(interpreter, payload):
                 return True
         target = interpreter_script_target(tokens, index)
         if target is not None and repository_script_has_runtime_contact(
@@ -4027,6 +4069,55 @@ jobs:
             "synthetic-release-intent-dynamic-node-runtime-read.yml",
         ),
         "dynamic Node network import escaped contact classification",
+    )
+    python_generic_client_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import subprocess
+          subprocess.run(["curl", "-fsS", "https://runtime.example/health"])
+"""
+    require(
+        workflow_has_runtime_command(
+            python_generic_client_contact,
+            "synthetic-release-intent-python-generic-network-read.yml",
+        ),
+        "Python-launched generic network client escaped contact classification",
+    )
+    computed_commonjs_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: |
+          const transport = require("node:" + "https");
+          transport.get(process.env.RUNTIME_URL);
+"""
+    require(
+        workflow_has_runtime_command(
+            computed_commonjs_contact,
+            "synthetic-release-intent-computed-commonjs-runtime-read.yml",
+        ),
+        "computed CommonJS network import escaped contact classification",
+    )
+    bash_network_device_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: exec 3<>/dev/tcp/runtime.example/443
+"""
+    require(
+        workflow_has_runtime_command(
+            bash_network_device_contact,
+            "synthetic-release-intent-bash-network-device-read.yml",
+        ),
+        "Bash network-device redirection escaped contact classification",
     )
     reusable_mutation = """name: synthetic
 jobs:

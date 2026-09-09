@@ -444,7 +444,8 @@ def workflow_bound_check_conclusions(
     jobs: dict[int, dict[str, Any]],
 ) -> dict[tuple[str, int], str | None]:
     expected = EXPECTED_CHECK_WORKFLOWS.get(repository)
-    require(isinstance(expected, dict), "required check workflow policy is missing")
+    if not isinstance(expected, dict):
+        raise PolicyError("required check workflow policy is missing")
     require(
         set(expected) >= set(required_checks),
         "required check workflow policy is incomplete",
@@ -488,13 +489,13 @@ def workflow_bound_check_conclusions(
         )
         attempt = job.get("run_attempt")
         check_id = item.get("id")
-        require(
-            isinstance(attempt, int)
-            and not isinstance(attempt, bool)
-            and attempt > 0
-            and isinstance(check_id, int),
-            f"required check job identity is invalid: {name}",
-        )
+        if (
+            not isinstance(attempt, int)
+            or isinstance(attempt, bool)
+            or attempt <= 0
+            or not isinstance(check_id, int)
+        ):
+            raise PolicyError(f"required check job identity is invalid: {name}")
         candidates[name].append(
             (run_id, attempt, check_id, item.get("conclusion"))
         )
@@ -592,12 +593,14 @@ def validate_required_check_workflow_definitions(
     administration: bool = False,
 ) -> None:
     paths = EXPECTED_CHECK_WORKFLOWS.get(repository)
-    require(isinstance(paths, dict), "required check workflow policy is missing")
-    required_paths = {paths.get(name) for name in required_checks}
-    require(
-        None not in required_paths and all(isinstance(path, str) for path in required_paths),
-        "required check workflow policy is incomplete",
-    )
+    if not isinstance(paths, dict):
+        raise PolicyError("required check workflow policy is missing")
+    required_paths: set[str] = set()
+    for name in required_checks:
+        workflow_path = paths.get(name)
+        if not isinstance(workflow_path, str):
+            raise PolicyError("required check workflow policy is incomplete")
+        required_paths.add(workflow_path)
     for path in sorted(required_paths):
         if repository == os.environ.get("GITHUB_REPOSITORY"):
             local_path = Path(path)

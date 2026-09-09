@@ -4,8 +4,9 @@ import copy
 import importlib.util
 import json
 import unittest
+import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "apply_integration_main_release_authorities_v2.py"
@@ -235,6 +236,112 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
         broken["reviewer"]["permission"] = "admin"
         with self.assertRaises(MODULE.PolicyError):
             MODULE.validate_config(broken)
+
+    def test_reviewer_permission_requires_exact_write_readback(self) -> None:
+        class FakeApi:
+            def __init__(self, responses: list[object]) -> None:
+                self.responses = responses
+                self.methods: list[str] = []
+
+            def request(
+                self,
+                method: str,
+                path: str,
+                payload: Mapping[str, Any] | None = None,
+            ) -> tuple[int, Any]:
+                self.methods.append(method)
+                response = self.responses.pop(0)
+                if isinstance(response, Exception):
+                    raise response
+                assert isinstance(response, tuple)
+                return response
+
+        existing = FakeApi([(200, {"permission": "write"})])
+        self.assertEqual(
+            MODULE.ensure_exact_reviewer_write(
+                existing,
+                "appolon1908-hue/Codestra-AI",
+                "appolon1908-hue/Codestra-AI",
+                "verify",
+            ),
+            ("verified-write", False),
+        )
+        self.assertEqual(existing.methods, ["GET"])
+
+        corrected = FakeApi(
+            [
+                (200, {"permission": "read"}),
+                (204, None),
+                (200, {"permission": "write"}),
+            ]
+        )
+        self.assertEqual(
+            MODULE.ensure_exact_reviewer_write(
+                corrected,
+                "appolon1908-hue/Codestra-AI",
+                "appolon1908-hue/Codestra-AI",
+                "apply",
+            ),
+            ("added-and-verified-write", False),
+        )
+        self.assertEqual(corrected.methods, ["GET", "PUT", "GET"])
+
+        for stronger in ("maintain", "admin"):
+            unchanged = FakeApi(
+                [
+                    (200, {"permission": stronger}),
+                    (204, None),
+                    (200, {"permission": stronger}),
+                ]
+            )
+            with self.assertRaisesRegex(MODULE.PolicyError, "exact write"):
+                MODULE.ensure_exact_reviewer_write(
+                    unchanged,
+                    "appolon1908-hue/Codestra-AI",
+                    "appolon1908-hue/Codestra-AI",
+                    "apply",
+                )
+            self.assertEqual(unchanged.methods, ["GET", "PUT", "GET"])
+
+    def test_permission_read_failure_never_becomes_an_apply(self) -> None:
+        class FailingApi:
+            def __init__(self) -> None:
+                self.methods: list[str] = []
+
+            def request(
+                self,
+                method: str,
+                path: str,
+                payload: Mapping[str, Any] | None = None,
+            ) -> tuple[int, Any]:
+                self.methods.append(method)
+                raise MODULE.GitHubApiError(500, "synthetic read failure")
+
+        api = FailingApi()
+        with self.assertRaises(MODULE.GitHubApiError):
+            MODULE.ensure_exact_reviewer_write(
+                api,
+                "appolon1908-hue/Codestra-AI",
+                "appolon1908-hue/Codestra-AI",
+                "apply",
+            )
+        self.assertEqual(api.methods, ["GET"])
+
+    def test_admin_api_redirects_are_rejected(self) -> None:
+        handler = MODULE.FailClosedRedirectHandler()
+        self.assertIsNone(
+            handler.redirect_request(
+                urllib.request.Request(
+                    "https://api.github.com/user",
+                    headers={"Authorization": "Bearer protected"},
+                ),
+                None,
+                302,
+                "Found",
+                {},
+                "https://attacker.example/capture",
+            )
+        )
 
     def test_validate_mode_is_offline_and_non_mutating(self) -> None:
         document = MODULE.execute("validate", "")

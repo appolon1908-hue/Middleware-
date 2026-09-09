@@ -88,6 +88,7 @@ def test_validate_base_url_rejects_committed_production_host() -> None:
     with pytest.raises(SystemExit):
         module.validate_base_url(
             "https://api.codestra.co",
+            approved_host="api.codestra.co",
             denied_hosts={"api.codestra.co"},
         )
 
@@ -100,12 +101,31 @@ def test_validate_base_url_rejects_committed_production_host() -> None:
         "https://staging-api.codestra.co/path",
         "https://staging-api.codestra.co?token=secret",
         "https://staging-api.codestra.co#fragment",
+        "https://staging-api.codestra.co:8443",
+        "https://[::1]",
+        "https://[fd00::1]",
+        "https://127.0.0.1",
+        "https://staging-api.codestra.co:invalid",
     ],
 )
 def test_validate_base_url_rejects_unsafe_shapes(value: str) -> None:
     module = _load_script()
     with pytest.raises(SystemExit):
-        module.validate_base_url(value, denied_hosts={"api.codestra.co"})
+        module.validate_base_url(
+            value,
+            approved_host="staging-api.codestra.co",
+            denied_hosts={"api.codestra.co"},
+        )
+
+
+def test_validate_base_url_rejects_unapproved_hostname() -> None:
+    module = _load_script()
+    with pytest.raises(SystemExit):
+        module.validate_base_url(
+            "https://attacker.example",
+            approved_host="staging-api.codestra.co",
+            denied_hosts={"api.codestra.co"},
+        )
 
 
 def test_validate_base_url_accepts_isolated_https_staging_host() -> None:
@@ -113,6 +133,7 @@ def test_validate_base_url_accepts_isolated_https_staging_host() -> None:
     assert (
         module.validate_base_url(
             "https://staging-api.codestra.co/",
+            approved_host="staging-api.codestra.co",
             denied_hosts={"api.codestra.co"},
         )
         == "https://staging-api.codestra.co"
@@ -159,6 +180,44 @@ def test_validate_runtime_evidence_rejects_identity_or_safety_drift(
             safety,
             expected_source_sha=SOURCE_SHA,
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("git_sha", "d" * 40),
+        ("schema_version", "0056_old"),
+        ("build_timestamp", "2026-09-04T00:00:01Z"),
+        ("configuration_checksum", "sha256:short"),
+        ("release_id", ""),
+    ],
+)
+def test_validate_runtime_evidence_rejects_inconsistent_version_identity(
+    field: str,
+    value: object,
+) -> None:
+    module = _load_script()
+    version = _version()
+    version[field] = value
+    with pytest.raises(SystemExit):
+        module.validate_runtime_evidence(
+            version,
+            _safety(),
+            expected_source_sha=SOURCE_SHA,
+        )
+
+
+def test_require_stable_runtime_rejects_configuration_drift() -> None:
+    module = _load_script()
+    before = module.validate_runtime_evidence(
+        _version(),
+        _safety(),
+        expected_source_sha=SOURCE_SHA,
+    )
+    after = copy.deepcopy(before)
+    after["configuration_checksum"] = "sha256:" + ("d" * 64)
+    with pytest.raises(SystemExit):
+        module.require_stable_runtime(before, after)
 
 
 def test_validate_runtime_evidence_rejects_any_enabled_effect() -> None:

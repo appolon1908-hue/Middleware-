@@ -21,7 +21,13 @@ BOUND_FILES = (
 @pytest.mark.parametrize("optimized", [False, True])
 @pytest.mark.parametrize(
     "mutation",
-    ["production_authorized", "effect_enabled", "public_metrics", "wrong_source"],
+    [
+        "production_authorized",
+        "effect_enabled",
+        "public_metrics",
+        "wrong_source",
+        "commented_metrics_route",
+    ],
 )
 def test_staging_contract_fails_closed(
     tmp_path: Path,
@@ -47,6 +53,16 @@ def test_staging_contract_fails_closed(
     elif mutation == "wrong_source":
         contract["immutable_release"]["source_sha"] = "0" * 40
     contract_path.write_text(json.dumps(contract), encoding="utf-8")
+    if mutation == "commented_metrics_route":
+        factory_path = tmp_path / "app/appolon_factory.py"
+        factory = factory_path.read_text(encoding="utf-8")
+        factory = factory.replace(
+            '    @app.get("/metrics")\n',
+            '    # @app.get("/metrics")\n',
+            1,
+        )
+        factory += '\n# @app.get("/metrics") required_scope="metrics.read"\n'
+        factory_path.write_text(factory, encoding="utf-8")
 
     program = (
         "import importlib.util,pathlib;"

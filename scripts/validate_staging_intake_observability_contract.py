@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -51,6 +52,7 @@ WEBHOOK_SECRET_NAMES = {
     "WEBHOOK_SECRET_KYQRA_GATEWAY",
     "WEBHOOK_SECRET_POSTLY_ADAPTER",
 }
+GOVERNED_READ_PATHS = {"/metrics", "/v1/runtime/safety"}
 
 
 class ContractError(ValueError):
@@ -138,6 +140,62 @@ def assert_redis_url(value: str) -> None:
         not parsed.query and not parsed.fragment,
         "Redis URL must not contain a query or fragment",
     )
+
+
+def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
+    """Extract route authentication bindings from executable Python syntax."""
+    try:
+        tree = ast.parse(source, filename="app/appolon_factory.py")
+    except SyntaxError as error:
+        raise ContractError("application factory is not valid Python") from error
+
+    routes: dict[str, tuple[str, str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        paths: list[str] = []
+        for decorator in node.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and isinstance(decorator.func.value, ast.Name)
+                and decorator.func.value.id == "app"
+                and decorator.func.attr == "get"
+                and decorator.args
+                and isinstance(decorator.args[0], ast.Constant)
+                and isinstance(decorator.args[0].value, str)
+            ):
+                paths.append(decorator.args[0].value)
+        paths = [path for path in paths if path in GOVERNED_READ_PATHS]
+        if not paths:
+            continue
+
+        bindings: list[tuple[str, str]] = []
+        for call in ast.walk(node):
+            if (
+                not isinstance(call, ast.Call)
+                or not isinstance(call.func, ast.Attribute)
+                or call.func.attr != "verify"
+            ):
+                continue
+            keywords = {item.arg: item.value for item in call.keywords if item.arg}
+            client = keywords.get("expected_client_id")
+            scope = keywords.get("required_scope")
+            if (
+                isinstance(client, ast.Constant)
+                and isinstance(client.value, str)
+                and isinstance(scope, ast.Constant)
+                and isinstance(scope.value, str)
+            ):
+                bindings.append((client.value, scope.value))
+        for path in paths:
+            require(path not in routes, f"duplicate GET route in app factory: {path}")
+            require(
+                len(bindings) == 1,
+                f"GET route lacks one static authentication binding: {path}",
+            )
+            routes[path] = bindings[0]
+    return routes
 
 
 def main() -> None:
@@ -318,16 +376,16 @@ def main() -> None:
 
     factory_source = (ROOT / "app/appolon_factory.py").read_text()
     security_source = (ROOT / "app/security.py").read_text()
-    require('@app.get("/metrics")' in factory_source, "metrics route is missing")
-    require('required_scope="metrics.read"' in factory_source, "metrics scope drift")
+    route_bindings = authenticated_get_routes(factory_source)
     require(
-        '@app.get("/v1/runtime/safety", response_model=RuntimeSafetyReadback)'
-        in factory_source,
-        "runtime safety route is missing",
+        route_bindings.get("/metrics")
+        == ("monitoring-readonly", "metrics.read"),
+        "metrics authentication binding drift",
     )
     require(
-        'required_scope="health.read"' in factory_source,
-        "runtime safety scope drift",
+        route_bindings.get("/v1/runtime/safety")
+        == ("monitoring-readonly", "health.read"),
+        "runtime safety authentication binding drift",
     )
     require(
         "expires_at - issued_at > 300" in security_source,

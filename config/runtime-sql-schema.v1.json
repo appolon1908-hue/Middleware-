@@ -1,5 +1,5 @@
 {
-  "migration_history_sha256": "sha256:acbbada6ea72fc0f46c3caf7594809309e39a66cfda235529f9a30ba09fbe9af",
+  "migration_history_sha256": "sha256:4a97d128e6dd23e5d03cda761dc3263c339e37a66ff789b4537a08b7747e3f7f",
   "schema_version": 1,
   "tables": {
     "middleware_automation_approvals": "sha256:34e5fe6cb483f2c7767dc67c9e22d62a0ac172e2d2f9cefe233cdece8333a56b",
@@ -12,7 +12,7 @@
     "middleware_automation_replay_requests": "sha256:fcd7eab6f3be44814793c3b1c487dfdc1edf12d84f05d8320a441e34c6079ef2",
     "middleware_automation_schema_migrations": "sha256:b977a24fd2a6c1e7490a6b6145c6930d04e1ac153b02ef49f490a8134ad6676a",
     "middleware_command_attempts": "sha256:0a599fd2edba5c4bf2cb25b56013cf77e803b77af97f31c3baba0501f033bc97",
-    "middleware_command_audit": "sha256:79cda84948920c1113080f306c5f623b5564ac437f50ae9cd27ed2ec9230c611",
+    "middleware_command_audit": "sha256:200576e16fd2f1a4919d78bfba0c691af4d1d4208475527667e7fa95253d423e",
     "middleware_commands": "sha256:dbc52e8025dccf549cc1934d15359f03d14796611549545714b549619101a01c",
     "middleware_communication_cancellations": "sha256:4df2d8a08ffb8f06e93dd45939f09cecda8dd61bd722671236c90d02f6aa95b1",
     "middleware_communication_events": "sha256:1f3b15130e555c5a4fc18d99c598d52bc5cc924784e701e121c72b35d5ef8984",
@@ -20,7 +20,7 @@
     "middleware_communication_messages": "sha256:cde8030c625ede3e9e2a9e85df836bf20ac99a77709041ce161bbf26f3fe4427",
     "middleware_communication_provider_events": "sha256:c0916a4ccfa54794eafb68183c16f9b85002807404248cdab95507c8bbf84fba",
     "middleware_communication_suppressions": "sha256:b1f9c5b7f90438160af7a25e03e2245238e52078c909492f1ef754e67ee10aa8",
-    "middleware_control_audit": "sha256:1823308aaaa76b63f8a0da986c5f7de6b06dd01d04f0b075af23f982ede7045e",
+    "middleware_control_audit": "sha256:1a24d43165eb060d30b30d10c9c7d5ad825e459198eb015ceafe5ed488665ebc",
     "middleware_control_mutations": "sha256:3d28f56847a6e08f703926eb12337e37db420b73eb95baf3bf22994d1d9788d4",
     "middleware_event_ledger": "sha256:b69e8361562ba8356756f82bf1ea0d5aab1872cbdebacd2490d6b6821b17bca3",
     "middleware_inbox": "sha256:91adb905a9d03d33dcd030e75ae694209b246e2583bd128167aada5ba40ce1fd",

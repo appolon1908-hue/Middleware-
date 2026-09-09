@@ -19,7 +19,7 @@ class Database:
         self.lock = lock
         self.tables = {"public." + name for name in runner.PLATFORM_TABLES}
         self.tables.update(runner.RECEIPT_TABLES.values())
-        self.receipts = {"core": list(range(1, 11)), "automation-v2": [1]}
+        self.receipts = {"core": list(range(1, 12)), "automation-v2": [1]}
         self.executed = []
         self.structural_checks = 0
         self.structural_error = False
@@ -61,28 +61,47 @@ def structural_verifier_for_ordering_unit_tests(monkeypatch):
 
 
 def run(database, *, verify_only=False):
-    return asyncio.run(runner.run_migrations(
-        database, "postgresql+asyncpg://ci@localhost/middleware_test_migrations",
-        HEAD, GRAPH, BUNDLES, verify_only=verify_only,
-    ))
+    return asyncio.run(
+        runner.run_migrations(
+            database,
+            "postgresql+asyncpg://ci@localhost/middleware_test_migrations",
+            HEAD,
+            GRAPH,
+            BUNDLES,
+            verify_only=verify_only,
+        )
+    )
 
 
 @pytest.mark.parametrize("scheme", ["postgres", "postgresql", "postgresql+asyncpg"])
 def test_exact_database_target_is_shared(scheme):
     suffix = "//u:p%25%40word@db.internal:5544/canonical?ssl=require"
     assert runner.database_urls(scheme + ":" + suffix) == (
-        "postgresql:" + suffix, "postgresql+asyncpg:" + suffix,
+        "postgresql:" + suffix,
+        "postgresql+asyncpg:" + suffix,
     )
 
 
-@pytest.mark.parametrize("url", ["", "sqlite:///db", "postgresql:///db", "postgresql://host/", "postgresql://host/db#other"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "",
+        "sqlite:///db",
+        "postgresql:///db",
+        "postgresql://host/",
+        "postgresql://host/db#other",
+    ],
+)
 def test_database_target_cannot_fall_back(url):
     with pytest.raises(runner.MigrationError):
         runner.database_urls(url)
 
 
 def test_all_sql_bundles_are_packaged():
-    assert [(name, len(files)) for name, files in BUNDLES] == [("core", 10), ("automation-v2", 1)]
+    assert [(name, len(files)) for name, files in BUNDLES] == [
+        ("core", 11),
+        ("automation-v2", 1),
+    ]
 
 
 def test_missing_sql_fails_before_connect(tmp_path, monkeypatch):
@@ -104,7 +123,10 @@ def test_unknown_database_never_reaches_upgrade_or_sql(monkeypatch, capsys):
     assert "RUNTIME_MIGRATION=PASS" not in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("revisions", [[], [HEAD, HEAD], [HEAD, "0056_klyrow_delivery_events"], [None], [" " + HEAD]])
+@pytest.mark.parametrize(
+    "revisions",
+    [[], [HEAD, HEAD], [HEAD, "0056_klyrow_delivery_events"], [None], [" " + HEAD]],
+)
 def test_corrupt_revision_state_fails_closed(revisions):
     with pytest.raises(runner.MigrationError):
         asyncio.run(runner.verify_database_lineage(Database(revisions), GRAPH))
@@ -123,7 +145,7 @@ def test_migration_applies_alembic_then_sql_then_actual_readback(monkeypatch, ca
     run(database)
     assert upgraded == [HEAD]
     assert database.structural_checks == 1
-    assert len(database.executed) == 11
+    assert len(database.executed) == 12
     assert "RUNTIME_SCHEMA_VERIFIED=PASS" in capsys.readouterr().out
 
 
@@ -201,7 +223,8 @@ def test_controller_independently_checks_all_schema_authorities_before_canary():
     migration = source.index('STAGE="migration"')
     start = source.index('STAGE="canary_start"')
     for item in (
-        "FROM public.alembic_version", "actual_alembic_head_mismatch",
+        "FROM public.alembic_version",
+        "actual_alembic_head_mismatch",
         "FROM public.middleware_automation_schema_migrations",
         "platform_schema_incomplete",
     ):
@@ -211,7 +234,10 @@ def test_controller_independently_checks_all_schema_authorities_before_canary():
 
 def test_distroless_image_carries_authority_helper_and_sql_source_exceptions():
     dockerfile = (ROOT / "Dockerfile.runtime").read_text()
-    assert "scripts/production_migration_authority.py ./scripts/production_migration_authority.py" in dockerfile
+    assert (
+        "scripts/production_migration_authority.py ./scripts/production_migration_authority.py"
+        in dockerfile
+    )
     lines = (ROOT / ".dockerignore").read_text().splitlines()
     excluded = lines.index("*.sql")
     for include in (
@@ -222,22 +248,32 @@ def test_distroless_image_carries_authority_helper_and_sql_source_exceptions():
     assert "*.dump" in lines and "*.sql.gz" in lines
 
 
-@pytest.mark.parametrize("parameter", ["host", "dbname", "database", "port", "user", "server_settings"])
+@pytest.mark.parametrize(
+    "parameter", ["host", "dbname", "database", "port", "user", "server_settings"]
+)
 def test_query_cannot_override_verified_database_identity(parameter):
     with pytest.raises(runner.MigrationError, match="override"):
-        runner.database_urls("postgresql://u@localhost/approved?" + parameter + "=other")
+        runner.database_urls(
+            "postgresql://u@localhost/approved?" + parameter + "=other"
+        )
 
 
 def test_test_image_preserves_the_complete_dockerignore_policy():
     dockerfile = (ROOT / "Dockerfile.runtime").read_text()
-    block = dockerfile.split("RUN printf '%s\\n' ", 1)[1].split("      > .dockerignore", 1)[0]
+    block = dockerfile.split("RUN printf '%s\\n' ", 1)[1].split(
+        "      > .dockerignore", 1
+    )[0]
     # This copy is inspected from inside the test image as well as from source.
-    reconstructed = [line.strip().split("'", 2)[1] for line in block.splitlines() if "'" in line]
+    reconstructed = [
+        line.strip().split("'", 2)[1] for line in block.splitlines() if "'" in line
+    ]
     assert reconstructed == (ROOT / ".dockerignore").read_text().splitlines()
 
 
 @pytest.mark.parametrize("verify_only", [False, True])
-def test_structural_failure_never_reports_schema_success(monkeypatch, capsys, verify_only):
+def test_structural_failure_never_reports_schema_success(
+    monkeypatch, capsys, verify_only
+):
     from scripts.runtime_sql_schema import SchemaDriftError
 
     database = Database([HEAD])

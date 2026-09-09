@@ -26,6 +26,18 @@ async def test_durable_inbox_outbox_control_api_is_tenant_scoped_and_idempotent(
         async with pool.acquire() as conn:
             for path in sorted(Path("migrations").glob("[0-9][0-9][0-9][0-9]_*.sql")):
                 await conn.execute(path.read_text())
+            timeline_indexes = await conn.fetch(
+                """SELECT indexname FROM pg_indexes
+                   WHERE schemaname='public' AND indexname=ANY($1::text[])""",
+                [
+                    "middleware_control_audit_timeline_idx",
+                    "middleware_command_audit_timeline_idx",
+                ],
+            )
+            assert {row["indexname"] for row in timeline_indexes} == {
+                "middleware_control_audit_timeline_idx",
+                "middleware_command_audit_timeline_idx",
+            }
             payload = {"event_id": "full-api-event-1", "tenant_id": "tenant-1"}
             digest = hashlib.sha256(
                 json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()

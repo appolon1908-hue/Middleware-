@@ -40,6 +40,7 @@ OperationApiState = Literal[
 ]
 _PERSISTED_BY_API_STATE = {value: key for key, value in API_OPERATION_STATES.items()}
 MAX_BIGINT = (1 << 63) - 1
+MAX_INTEGER = (1 << 31) - 1
 
 
 class OperationResponse(BaseModel):
@@ -165,6 +166,12 @@ def _positive_bigint(value: object) -> int:
     return value
 
 
+def _positive_integer(value: object) -> int:
+    if type(value) is not int or not 1 <= value <= MAX_INTEGER:
+        raise RequestValidationError("cursor is malformed")
+    return value
+
+
 def _operation_position(decoded: list[Any] | None) -> tuple[datetime, UUID] | None:
     if decoded is None:
         return None
@@ -190,7 +197,7 @@ def _event_position(decoded: list[Any] | None) -> tuple[datetime, int] | None:
 def _attempt_position(decoded: list[Any] | None) -> tuple[int, int] | None:
     if decoded is None:
         return None
-    return _positive_bigint(decoded[0]), _positive_bigint(decoded[1])
+    return _positive_integer(decoded[0]), _positive_bigint(decoded[1])
 
 
 async def _context(request: Request):

@@ -14,6 +14,7 @@ from app.config import Settings
 from app.main import create_app
 from app.operations import (
     MAX_BIGINT,
+    MAX_INTEGER,
     _attempt_position,
     _decode_cursor,
     _encode_cursor,
@@ -141,6 +142,64 @@ def test_event_and_attempt_cursors_reject_non_bigint_positions(value: object) ->
         _event_position([timestamp, value])
     with pytest.raises(RequestValidationError, match="cursor is malformed"):
         _attempt_position([1, value])
+
+
+def test_attempt_cursor_rejects_values_outside_postgresql_integer() -> None:
+    with pytest.raises(RequestValidationError, match="cursor is malformed"):
+        _attempt_position([MAX_INTEGER + 1, 1])
+
+
+@pytest.mark.parametrize(
+    ("path", "kind", "position"),
+    [
+        (
+            "/api/v1/operations",
+            "operations",
+            ["2026-09-09T00:00:00", str(UUID(int=1))],
+        ),
+        (
+            "/api/v1/reconciliation/operations",
+            "reconciliation",
+            ["2026-09-09T00:00:00", 1],
+        ),
+        (
+            "/api/v1/quarantine/events",
+            "quarantine",
+            ["2026-09-09T00:00:00", "event-1"],
+        ),
+    ],
+)
+def test_compatibility_lists_reject_naive_cursor_timestamps(
+    test_settings: Settings,
+    path: str,
+    kind: str,
+    position: list[object],
+) -> None:
+    headers = {
+        "Authorization": "Bearer legacy-status-token",
+        "X-Tenant-ID": "tenant-1",
+    }
+    cursor = _encode_cursor(kind, position)
+    with TestClient(_app(test_settings)) as client:
+        response = client.get(path, headers=headers, params={"cursor": cursor})
+    assert response.status_code == 400
+
+
+def test_attempt_list_rejects_cursor_outside_postgresql_integer(
+    test_settings: Settings,
+) -> None:
+    headers = {
+        "Authorization": "Bearer legacy-status-token",
+        "X-Tenant-ID": "tenant-1",
+    }
+    cursor = _encode_cursor("attempts", [MAX_INTEGER + 1, 1])
+    with TestClient(_app(test_settings)) as client:
+        response = client.get(
+            f"/v1/operations/{UUID(int=1)}/attempts",
+            headers=headers,
+            params={"cursor": cursor},
+        )
+    assert response.status_code == 400
 
 
 @pytest.mark.parametrize(

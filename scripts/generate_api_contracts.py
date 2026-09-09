@@ -21,7 +21,7 @@ MUTATION_METHODS = frozenset({"post", "put", "patch", "delete"})
 PUBLIC_PATHS = frozenset(
     {"/health", "/ready", "/readiness", "/dependencies", "/version", "/capabilities"}
 )
-INVENTORY_BASE_SHA = "55073dc8061085f51bf54180b5dc2ed2f0f4e446"
+INVENTORY_BASE_SHA = "abe60e9eafaa52443ac1b05340e1b98317009570"
 
 DESCRIPTION = (
     "Exact generated Middleware runtime contract. Bearer tokens use issuer "

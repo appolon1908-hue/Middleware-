@@ -83,6 +83,8 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
 
     def test_workflow_keeps_exact_bounded_command(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
+        apply = text.split("\n  apply:\n", 1)[1]
+        condition = apply.split("\n    permissions:\n", 1)[0]
         self.assertIn("issue_comment:", text)
         self.assertIn("github.event.issue.number == 130", text)
         self.assertIn("github.event.issue.pull_request == null", text)
@@ -90,6 +92,8 @@ class IntegrationMainReleaseAuthorityV2Tests(unittest.TestCase):
         self.assertIn("repository-administration", text)
         self.assertIn("CODESTRA_REPOSITORY_ADMIN_TOKEN", text)
         self.assertIn("git ls-remote origin refs/heads/main", text)
+        self.assertIn("RUNTIME_MUTATION_DISABLED=true", condition)
+        self.assertIn("if: ${{ false }}", condition)
         self.assertNotIn("repository_input", text)
         self.assertNotIn("reviewer_input", text)
 

@@ -103,20 +103,12 @@ class ReleaseWorkflowRegressions(unittest.TestCase):
                 self.assertNotIn("\n          ", body)
                 self.assertIn("No runtime, deployment, credential value", body)
 
-    def test_reviewer_mutation_stays_owner_command_and_environment_gated(self) -> None:
+    def test_reviewer_mutation_stays_unconditionally_disabled(self) -> None:
         text = REVIEWER.read_text(encoding="utf-8")
         apply = text.split("\n  apply:\n", 1)[1]
         condition = apply.split("\n    permissions:\n", 1)[0]
-        for expected in (
-            "github.event_name == 'issue_comment'",
-            "github.event.issue.number == 130",
-            "github.event.repository.id == 1347559071",
-            "github.event.sender.id == 275410064",
-            "github.event.comment.user.id == 275410064",
-            "'/apply-production-reviewer-access v1'",
-        ):
-            self.assertIn(expected, condition)
-        self.assertNotIn("github.event_name == 'push'", condition)
+        self.assertIn("RUNTIME_MUTATION_DISABLED=true", condition)
+        self.assertIn("if: ${{ false }}", condition)
         self.assertIn("name: repository-administration", apply)
         self.assertIn('test "$current_main" = "$GITHUB_SHA"', apply)
         self.assertIn("if: steps.rollout.outcome != 'success'", apply)

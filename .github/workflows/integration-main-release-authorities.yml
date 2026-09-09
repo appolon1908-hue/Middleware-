@@ -130,30 +130,9 @@ jobs:
   apply:
     name: apply-and-verify-integration-main-authorities
     needs: [policy]
-    if: >-
-      needs.policy.result == 'success' &&
-      (
-        (
-          github.event_name == 'workflow_dispatch' &&
-          github.ref == 'refs/heads/main' &&
-          github.actor == github.repository_owner &&
-          (inputs.mode == 'apply' || inputs.mode == 'verify')
-        ) ||
-        (
-          github.event_name == 'issue_comment' &&
-          github.event.action == 'created' &&
-          github.event.repository.id == 1347559071 &&
-          github.event.repository.full_name == 'appolon1908-hue/Middleware-' &&
-          github.event.repository.default_branch == 'main' &&
-          github.event.issue.number == 130 &&
-          github.event.issue.pull_request == null &&
-          github.event.comment.body == '/apply-integration-main-release-authority v1' &&
-          github.event.sender.id == 275410064 &&
-          github.event.sender.login == 'appolon1908-hue' &&
-          github.event.comment.user.id == 275410064 &&
-          github.event.comment.user.login == 'appolon1908-hue'
-        )
-      )
+    # RUNTIME_MUTATION_DISABLED=true — canonical Middleware is plan-only and
+    # cannot apply or verify live repository administration from this workflow.
+    if: ${{ false }}
     permissions:
       contents: read
       issues: write

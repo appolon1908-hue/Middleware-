@@ -21,6 +21,7 @@ WORKFLOW_DIR = ROOT / ".github" / "workflows"
 RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
 REQUIRED_CHECK_APP_ID = 15368
+INDEPENDENT_REVIEWER_ID = 77101516
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -105,6 +106,68 @@ def require_exact_strings(
     )
 
 
+def validate_environment_release_policy(policy: dict[str, Any]) -> None:
+    environments = require_mapping(
+        policy.get("environments"),
+        "environments policy is missing",
+    )
+    require(
+        set(environments) == {"staging", "production"},
+        "staging and production environments are required",
+    )
+    expected_reviewers = [{"type": "User", "id": INDEPENDENT_REVIEWER_ID}]
+    expected_branch_policy = {
+        "protected_branches": True,
+        "custom_branch_policies": False,
+    }
+    for name in ("staging", "production"):
+        environment = require_mapping(
+            environments.get(name),
+            f"{name}: environment policy is missing",
+        )
+        require(environment.get("wait_timer") == 0, f"{name}: wait timer drift")
+        require(
+            environment.get("prevent_self_review") is True,
+            f"{name}: self-review must be prevented",
+        )
+        require(
+            environment.get("can_admins_bypass") is False,
+            f"{name}: administrator bypass must be disabled",
+        )
+        require(
+            environment.get("reviewers") == expected_reviewers,
+            f"{name}: independent reviewer drift",
+        )
+        require(
+            environment.get("deployment_branch_policy") == expected_branch_policy,
+            f"{name}: deployments must use protected branches",
+        )
+        require(
+            environment.get("allowed_branches") == [],
+            f"{name}: custom deployment branches are forbidden",
+        )
+        require(
+            environment.get("live_write_secrets_allowed") is False,
+            f"{name}: live-write secrets must remain forbidden",
+        )
+
+    release_policy = require_mapping(
+        policy.get("release_policy"),
+        "release policy is missing",
+    )
+    require(
+        release_policy
+        == {
+            "live_writes_default": False,
+            "odoo_write_default": False,
+            "live_apply_authorized_default": False,
+            "production_release_requires_independent_human_approval": True,
+            "production_release_environment": "production",
+        },
+        "release policy drift",
+    )
+
+
 def validate_source_policy() -> dict[str, Any]:
     policy = load_json(POLICY_PATH)
     require(policy.get("schema_version") == "1.0", "unsupported governance schema")
@@ -162,6 +225,7 @@ def validate_source_policy() -> dict[str, Any]:
         EXPECTED_REQUIRED_STATUS_CHECKS,
         label="required status checks",
     )
+    validate_environment_release_policy(policy)
 
     codeowners = CODEOWNERS_PATH.read_text(encoding="utf-8")
     require(

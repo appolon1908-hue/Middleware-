@@ -696,6 +696,10 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
             "d3d6d5dd03cc9c8b2d0630ef6e1b9f"
             "df31ff2da8175d2a63e881696b25b0ee63"
         ),
+        ".github/workflows/trusted-production-orchestrator-gate.yml": (
+            "24b766af40ad1deb6c47fe1f667ed93b"
+            "29e556abdacce88d6c3daf527f4f902e"
+        ),
     },
     "appolon1908-hue/beyvra-backend": {
         ".github/workflows/ci.yml": "fffbdd8b7aad8b2679bcc608f0b487bf976c033a07786a0af5262d893867211a",
@@ -855,6 +859,10 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
         ),
     },
     "appolon1908-hue/Middleware-": {
+        ".codestra/run-trusted-production-orchestrator.py": (
+            "21a247389489d835dbb67312b7e409d789ff5de8df2a08594abc857ce937747e",
+            frozenset({()}),
+        ),
         "scripts/apply_portfolio_main_release_authorities.py": (
             "1294f61d095d93328f403dfd9d2f1484f5debb3e945dca674d47bbd09f3ed0f0",
             frozenset({("--mode", "validate")}),

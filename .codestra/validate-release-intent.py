@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 import urllib.error
 import urllib.request
@@ -69,6 +70,7 @@ CATALOG_REPOSITORIES = {
     CONTROLLER_REPOSITORY,
 }
 PR_ONLY_REQUIRED_CHECKS = {
+    "appolon1908-hue/Keycloak": frozenset({"bootstrap"}),
     "appolon1908-hue/Middleware-": frozenset(
         {
             "Validate middleware merge result",
@@ -86,6 +88,7 @@ EXPECTED_CHECK_WORKFLOWS = {
     "appolon1908-hue/Keycloak": {
         "orchestrator-contract": ".github/workflows/production-orchestrator-contract.yml",
         "validate": ".github/workflows/validate.yml",
+        "validate-source": ".github/workflows/validate.yml",
         "validate-merge-result": ".github/workflows/validate.yml",
     },
     "appolon1908-hue/Middleware-": {
@@ -210,20 +213,20 @@ EXPECTED_CHECK_WORKFLOW_SHA256 = {
     },
 }
 SHARED_PRODUCTION_VALIDATOR_SHA256 = (
-    "741105e7032e1cdbc84f1020568b0cfc"
-    "a2514d469b267bc04156b07a0fa14849"
+    "7b27c3a610bf8940736ab0b6cb340840"
+    "9fdd9d01b85876373debb4f086bff76d"
 )
 KEYCLOAK_PRODUCTION_VALIDATOR_SHA256 = (
-    "5349183d10bf98d13326044411a0f407"
-    "f121f67549af1715e8b1bfb681bda95e"
+    "7b27c3a610bf8940736ab0b6cb340840"
+    "9fdd9d01b85876373debb4f086bff76d"
 )
 MIDDLEWARE_PRODUCTION_VALIDATOR_SHA256 = (
-    "3304f7651907746ce3a80d0f13e1bbff"
-    "3cb08b2e9d103465d298fbf39c7348f7"
+    "7b27c3a610bf8940736ab0b6cb340840"
+    "9fdd9d01b85876373debb4f086bff76d"
 )
 BACKEND_PRODUCTION_VALIDATOR_SHA256 = (
-    "1c3f21052bda146654678949d7a57003"
-    "e2d4b07d994d7b49bba8044f985cd7e4"
+    "7b27c3a610bf8940736ab0b6cb340840"
+    "9fdd9d01b85876373debb4f086bff76d"
 )
 EXPECTED_CHECK_WORKFLOW_EXECUTABLE_SHA256 = {
     "appolon1908-hue/Infustruction-repo": {
@@ -371,48 +374,48 @@ EXPECTED_CHECK_WORKFLOW_EXECUTABLE_SHA256 = {
 RELEASE_VALIDATOR_SOURCE_PATH = ".codestra/validate-release-intent.py"
 EXPECTED_REQUIRED_CHECK_SOURCE_CLOSURE_SHA256 = {
     "appolon1908-hue/Infustruction-repo": (
-        "535d132d16534bc8f6012a0b3726c33"
-        "f1b423679732b91fa9d2d9ecffcb7cbcf"
+        "0fa43d09f601c9a0843bc74daded831a"
+        "48f0c9f873b7caf383cb5059763b428a"
     ),
     "appolon1908-hue/Keycloak": (
-        "6e359c5cfe3f0b6c34d10c8744f2a159"
-        "26ff3dcb339662f86bd3e8862b93ae47"
+        "170a44a4943525f6fc61a50631c17f63"
+        "08ebdac152ebb5834ec03421836bc7e6"
     ),
     "appolon1908-hue/Middleware-": (
-        "0223be02da3e7406a5252f5fb83c7c31"
-        "44f2431ab00fad459fecce6763d6bb9d"
+        "f1a83b88696b998e0f696c60c1583b68"
+        "85dd2a363339092740fd563170a7aa9c"
     ),
     "appolon1908-hue/codestra": (
-        "28be9bbe21bf44d440b35eca62b8c2b5"
-        "50e1f879a950a1258cadd92b7957f18c"
+        "be0bbfc5cdc645c3dbcc9d416d297fd4"
+        "e8df2d7982bc8599b6ae21a62547a2e9"
     ),
     "appolon1908-hue/beyvra-backend": (
-        "77911cc5755c486c05345928a908b722"
-        "6475f5d2dc5e449cc353169e3de037e2"
+        "ab0910f69d3bfba89985d7aedc106066"
+        "6325991e566bd68b3a6a4d887d164582"
     ),
     "appolon1908-hue/backend2": (
-        "01010ff0e1493d39d297c725758f303e"
-        "6311be955b828e513e436ef39e7c9dd5"
+        "1bdff81b0bc713178b69f578290022bf"
+        "9f11ac9c2f7eacc909c38110574eb06d"
     ),
     "appolon1908-hue/beyvra-frontend": (
-        "634cb7e94a531cf469c1f3b8e9d98e30"
-        "c6451dafba178dc3f13a23e7c48f94c2"
+        "d8ee0d5e1faf93a7dfaf5a36aa0d0cc"
+        "1190c275617da032824fa566375477844"
     ),
     "appolon1908-hue/scrapper": (
-        "4ab24d2c98673e456b2a303b063657c0"
-        "2d99f36a1c027637bc1b89153cd99c92"
+        "c6fb7a5ea42e983d495b5bc69f1eff8a"
+        "94be35ecb9dd315f9f7184de3d24c9c4"
     ),
     "appolon1908-hue/Breero.com": (
-        "ddd7e13f859e6d20bd77200e704db08c"
-        "120a35709102c5d15459203aeb67ed22"
+        "a049694c67a9843fe902de6deb43ad58"
+        "252c46c9ab20c346a42644dc60955131"
     ),
     "appolon1908-hue/Moneybee-Backend": (
-        "6f7f288497c2a47f3ff1cee9df2e56a3"
-        "6dac9491e0fbb9a8582896858021ccf1"
+        "64989e64252445c8d455086ab2d5e96f"
+        "65f2398e5ba56354f284277def7200e5"
     ),
     "appolon1908-hue/Telnexa-web": (
-        "af6f2d0dc3668bd498156cf8be243482"
-        "cf368015e39228674bcc2bf88846ae0c"
+        "f27a98e0379756efdb95a3352bdba629"
+        "d3b3190d523b9df85b30e612434e892c"
     ),
     CONTROLLER_REPOSITORY: (
         "4c7b54aa7cd59ac09703d235a264b830"
@@ -652,6 +655,7 @@ def workflow_bound_check_conclusions(
     bindings: dict[str, int],
     workflow_runs: dict[int, dict[str, Any]],
     jobs: dict[int, dict[str, Any]],
+    protected_branch: str,
 ) -> dict[tuple[str, int], str | None]:
     expected = EXPECTED_CHECK_WORKFLOWS.get(repository)
     if not isinstance(expected, dict):
@@ -691,11 +695,21 @@ def workflow_bound_check_conclusions(
             continue
         require(
             run.get("head_sha") == source_sha
+            and run.get("head_branch") == protected_branch
             and job.get("head_sha") == source_sha
             and job.get("run_id") == run_id
             and job.get("id") == job_id
             and job.get("name") == name,
             f"required check workflow identity is invalid: {name}",
+        )
+        allowed_events = (
+            {"push", "workflow_dispatch"}
+            if repository == CONTROLLER_REPOSITORY
+            else {"push"}
+        )
+        require(
+            run.get("event") in allowed_events,
+            f"required check did not originate from the protected branch event: {name}",
         )
         attempt = job.get("run_attempt")
         check_id = item.get("id")
@@ -733,6 +747,7 @@ def load_workflow_bound_check_conclusions(
     source_sha: str,
     required_checks: list[str],
     bindings: dict[str, int],
+    protected_branch: str,
     *,
     administration: bool = False,
 ) -> dict[tuple[str, int], str | None]:
@@ -774,11 +789,13 @@ def load_workflow_bound_check_conclusions(
         bindings,
         workflow_runs,
         jobs,
+        protected_branch,
     )
 
 
 def validate_workflow_definition_bytes(
     repository: str,
+    source_sha: str,
     path: str,
     raw: bytes,
 ) -> None:
@@ -791,10 +808,17 @@ def validate_workflow_definition_bytes(
         hashlib.sha256(raw).hexdigest() == expected,
         f"required check workflow definition drift: {repository}:{path}",
     )
-    validate_workflow_action_references(path, raw)
+    validate_workflow_action_references(repository, source_sha, path, raw)
 
 
-def validate_workflow_action_references(path: str, raw: bytes) -> None:
+def validate_workflow_action_references(
+    repository: str,
+    source_sha: str,
+    path: str,
+    raw: bytes,
+    seen: frozenset[str] = frozenset(),
+) -> None:
+    require(path not in seen, f"required check local action cycle: {path}")
     try:
         source = raw.decode("utf-8")
     except UnicodeDecodeError as error:
@@ -808,31 +832,65 @@ def validate_workflow_action_references(path: str, raw: bytes) -> None:
     except yaml.YAMLError as error:
         raise PolicyError(f"required check workflow YAML is invalid: {path}") from error
     require(isinstance(document, dict), f"required check workflow is invalid: {path}")
-    jobs = document.get("jobs")
-    require(isinstance(jobs, dict) and bool(jobs), f"required check jobs are invalid: {path}")
     references: list[str] = []
-    for job in jobs.values():
-        require(isinstance(job, dict), f"required check job is invalid: {path}")
-        if "uses" in job:
-            require(
-                isinstance(job["uses"], str) and bool(job["uses"]),
-                f"required check reusable workflow reference is invalid: {path}",
-            )
-            references.append(job["uses"])
-        steps = job.get("steps", [])
-        require(isinstance(steps, list), f"required check steps are invalid: {path}")
-        for step in steps:
-            require(isinstance(step, dict), f"required check step is invalid: {path}")
-            if "uses" not in step:
-                continue
-            require(
-                isinstance(step["uses"], str) and bool(step["uses"]),
-                f"required check action reference is invalid: {path}",
-            )
-            references.append(step["uses"])
+
+    def collect_references(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "uses":
+                    require(
+                        isinstance(child, str) and bool(child),
+                        f"required check action reference is invalid: {path}",
+                    )
+                    references.append(child)
+                else:
+                    collect_references(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_references(child)
+
+    collect_references(document)
     for reference in references:
         reference = reference.split(" #", 1)[0].strip()
         if reference.startswith("./"):
+            relative = reference[2:].rstrip("/")
+            require(
+                bool(relative)
+                and not relative.startswith("/")
+                and all(part not in {"", ".", ".."} for part in relative.split("/")),
+                f"required check local action path is invalid: {path}:{reference}",
+            )
+            candidates = (
+                [relative]
+                if relative.endswith((".yml", ".yaml"))
+                else [f"{relative}/action.yml", f"{relative}/action.yaml"]
+            )
+            nested_raw: bytes | None = None
+            nested_path = ""
+            for candidate in candidates:
+                try:
+                    nested_raw = repository_file_bytes(
+                        repository,
+                        source_sha,
+                        candidate,
+                    )
+                except urllib.error.HTTPError as error:
+                    if error.code != 404 or candidate == candidates[-1]:
+                        raise
+                    continue
+                nested_path = candidate
+                break
+            require(
+                nested_raw is not None and bool(nested_path),
+                f"required check local action is missing: {path}:{reference}",
+            )
+            validate_workflow_action_references(
+                repository,
+                source_sha,
+                nested_path,
+                nested_raw,
+                seen | {path},
+            )
             continue
         if reference.startswith("docker://"):
             require(
@@ -1114,7 +1172,7 @@ def validate_required_check_workflow_definitions(
             path,
             administration=administration,
         )
-        validate_workflow_definition_bytes(repository, path, raw)
+        validate_workflow_definition_bytes(repository, source_sha, path, raw)
         executable_policy = EXPECTED_CHECK_WORKFLOW_EXECUTABLE_SHA256.get(
             repository,
             {},
@@ -1249,6 +1307,7 @@ def validate_repository_gates(
         source_sha,
         required_checks,
         bindings,
+        str(branch_name),
     )
     missing = [name for name in required_checks if latest.get((name, bindings[name])) != "success"]
     require(not missing, f"required exact-head checks are not successful from the bound app: {missing}")
@@ -1370,6 +1429,7 @@ def download_and_validate_candidate(
         controller_head,
         controller_checks,
         controller_bindings,
+        str(branch_name),
         administration=True,
     )
     controller_missing = [
@@ -1953,6 +2013,9 @@ def main() -> int:
 
 def self_test() -> int:
     global NO_REDIRECT_OPENER
+    local_repository = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))["repository"]
+    checkout_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    os.environ.setdefault("GITHUB_REPOSITORY", local_repository)
 
     require(
         set(EXPECTED_CHECK_WORKFLOWS)
@@ -1960,11 +2023,12 @@ def self_test() -> int:
         "required source closure catalog is incomplete",
     )
     validate_workflow_action_references(
+        local_repository,
+        checkout_sha,
         "synthetic-required-check.yml",
         (
             b"jobs:\n  test:\n    steps:\n"
             b"      - uses: actions/checkout@0123456789012345678901234567890123456789\n"
-            b"      - uses: ./.github/actions/local-check\n"
             b"      - uses: docker://example/check@sha256:"
             + b"a" * 64
             + b"\n"
@@ -1978,6 +2042,8 @@ def self_test() -> int:
     ):
         try:
             validate_workflow_action_references(
+                local_repository,
+                checkout_sha,
                 "synthetic-required-check.yml",
                 mutable_workflow,
             )
@@ -1985,6 +2051,32 @@ def self_test() -> int:
             pass
         else:
             raise PolicyError("negative mutable required-check action regression passed")
+    repository_root = Path.cwd()
+    with tempfile.TemporaryDirectory(
+        prefix=".codestra-local-action-",
+        dir=repository_root,
+    ) as directory:
+        action_directory = Path(directory)
+        (action_directory / "action.yml").write_text(
+            "name: unsafe-local-action\nruns:\n  using: composite\n  steps:\n"
+            "    - uses: owner/action@main\n",
+            encoding="utf-8",
+        )
+        relative_action = action_directory.relative_to(repository_root).as_posix()
+        try:
+            validate_workflow_action_references(
+                local_repository,
+                checkout_sha,
+                "synthetic-local-action.yml",
+                (
+                    "jobs:\n  test:\n    steps:\n"
+                    f"      - uses: ./{relative_action}\n"
+                ).encode(),
+            )
+        except PolicyError:
+            pass
+        else:
+            raise PolicyError("negative recursive local-action pin regression passed")
     source_fixture_repository = CONTROLLER_REPOSITORY
     source_fixture = [
         {
@@ -2079,10 +2171,8 @@ def self_test() -> int:
         ),
         "Breero quality workflow executable closure is incomplete",
     )
-    local_repository = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))["repository"]
     workflow_path = ".github/workflows/production-orchestrator-contract.yml"
     workflow_bytes = Path(workflow_path).read_bytes()
-    checkout_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     require(
         is_exact_local_repository_source(
             local_repository,
@@ -2104,12 +2194,14 @@ def self_test() -> int:
     )
     validate_workflow_definition_bytes(
         local_repository,
+        checkout_sha,
         workflow_path,
         workflow_bytes,
     )
     try:
         validate_workflow_definition_bytes(
             local_repository,
+            checkout_sha,
             workflow_path,
             workflow_bytes + b"\n",
         )
@@ -2169,6 +2261,21 @@ def self_test() -> int:
         )
         == ["connector-runtime-build", "orchestrator-contract", "validate"],
         "PR-only required-check classification regression failed",
+    )
+    keycloak_head_checks = [
+        "orchestrator-contract",
+        "validate",
+        "validate-merge-result",
+        "validate-source",
+    ]
+    require(
+        head_applicable_required_checks(
+            "appolon1908-hue/Keycloak",
+            keycloak_head_checks + ["bootstrap"],
+            keycloak_head_checks,
+        )
+        == keycloak_head_checks,
+        "Keycloak head/PR check alignment failed",
     )
 
     digest_a = "ghcr.io/example/app@sha256:" + "a" * 64
@@ -2342,8 +2449,15 @@ def self_test() -> int:
         200: {
             "path": ".github/workflows/production-orchestrator-contract.yml",
             "head_sha": workflow_sha,
+            "head_branch": "main",
+            "event": "push",
         },
-        201: {"path": ".github/workflows/spoof.yml", "head_sha": workflow_sha},
+        201: {
+            "path": ".github/workflows/spoof.yml",
+            "head_sha": workflow_sha,
+            "head_branch": "main",
+            "event": "push",
+        },
     }
     jobs = {
         2000: {
@@ -2369,11 +2483,27 @@ def self_test() -> int:
         {"orchestrator-contract": 15368},
         workflow_runs,
         jobs,
+        "main",
     )
     require(
         workflow_latest[("orchestrator-contract", 15368)] == "success",
         "workflow-bound check regression failed",
     )
+    try:
+        workflow_bound_check_conclusions(
+            [{"check_runs": [workflow_checks[0]]}],
+            workflow_repository,
+            workflow_sha,
+            ["orchestrator-contract"],
+            {"orchestrator-contract": 15368},
+            {200: {**workflow_runs[200], "event": "pull_request"}},
+            {2000: jobs[2000]},
+            "main",
+        )
+    except PolicyError:
+        pass
+    else:
+        raise PolicyError("negative pull-request required-check regression passed")
     duplicate = deepcopy(workflow_checks[0])
     duplicate["id"] = 22
     duplicate["details_url"] = (
@@ -2392,6 +2522,7 @@ def self_test() -> int:
             {"orchestrator-contract": 15368},
             workflow_runs,
             duplicate_jobs,
+            "main",
         )
     except PolicyError:
         pass
@@ -2416,6 +2547,8 @@ def self_test() -> int:
             199: {
                 "path": ".github/workflows/production-orchestrator-contract.yml",
                 "head_sha": workflow_sha,
+                "head_branch": "main",
+                "event": "push",
             },
         },
         {
@@ -2428,6 +2561,7 @@ def self_test() -> int:
                 "head_sha": workflow_sha,
             },
         },
+        "main",
     )
     require(
         rerun_latest[("orchestrator-contract", 15368)] is None,

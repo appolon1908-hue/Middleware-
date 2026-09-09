@@ -14,13 +14,14 @@ import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,9 +42,10 @@ IMAGE_DIGEST = re.compile(
 )
 DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 TENANT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+RELEASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(1)
 
@@ -124,6 +126,21 @@ def validate_dns_hostname(value: str, *, label: str) -> str:
         # Protected tokens must never be sent to caller-selected IPv4 or IPv6
         # literals; the approved staging endpoint is a reviewed DNS identity.
         fail(f"{label} must not be an IPv4 or IPv6 address")
+    try:
+        numeric_answers = socket.getaddrinfo(
+            hostname,
+            443,
+            family=socket.AF_UNSPEC,
+            type=socket.SOCK_STREAM,
+            flags=socket.AI_NUMERICHOST,
+        )
+    except socket.gaierror:
+        numeric_answers = []
+    if numeric_answers:
+        # libc accepts legacy IPv4 text such as hexadecimal, octal, and
+        # abbreviated components even though ipaddress intentionally does not.
+        # AI_NUMERICHOST performs no DNS lookup and closes that parser gap.
+        fail(f"{label} must not use a legacy numeric address spelling")
     labels = hostname.split(".")
     if (
         len(hostname) > 253
@@ -214,8 +231,12 @@ def validate_runtime_evidence(
     ):
         fail("version read-back does not expose a canonical configuration checksum")
     release_id = version.get("release_id")
-    if not isinstance(release_id, str) or not release_id.strip():
-        fail("version read-back does not expose a release ID")
+    if (
+        not isinstance(release_id, str)
+        or RELEASE_ID.fullmatch(release_id) is None
+        or release_id.lower() == "unknown"
+    ):
+        fail("version read-back does not expose a canonical release ID")
     runtime_profile_id = version.get("runtime_profile_id")
     if not isinstance(runtime_profile_id, str) or runtime_profile_id in {
         "",

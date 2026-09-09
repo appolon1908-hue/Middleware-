@@ -129,6 +129,22 @@ def test_validate_base_url_rejects_unapproved_hostname() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "hostname",
+    ["0x7f.0.0.1", "0177.0.0.1", "127.1"],
+)
+def test_validate_base_url_rejects_legacy_numeric_host_authority(
+    hostname: str,
+) -> None:
+    module = _load_script()
+    with pytest.raises(SystemExit):
+        module.validate_base_url(
+            f"https://{hostname}",
+            approved_host=hostname,
+            denied_hosts={"api.codestra.co"},
+        )
+
+
 def test_validate_base_url_accepts_isolated_https_staging_host() -> None:
     module = _load_script()
     assert (
@@ -191,6 +207,8 @@ def test_validate_runtime_evidence_rejects_identity_or_safety_drift(
         ("build_timestamp", "2026-09-04T00:00:01Z"),
         ("configuration_checksum", "sha256:short"),
         ("release_id", ""),
+        ("release_id", "unknown"),
+        ("release_id", "release id with spaces"),
     ],
 )
 def test_validate_runtime_evidence_rejects_inconsistent_version_identity(

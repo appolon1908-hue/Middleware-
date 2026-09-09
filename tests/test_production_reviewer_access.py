@@ -105,7 +105,7 @@ class ProductionReviewerAccessTests(unittest.TestCase):
         )
         self.assertFalse(MODULE.permission_is_write(None))
 
-    def test_workflow_apply_is_disabled_and_policy_is_read_only(
+    def test_workflow_apply_is_issue_command_only_and_policy_is_read_only(
         self,
     ) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -113,8 +113,14 @@ class ProductionReviewerAccessTests(unittest.TestCase):
         self.assertNotIn("issues: write", header)
         _, apply = jobs.split("\n  apply:\n", 1)
         apply_condition = apply.split("\n    permissions:\n", 1)[0]
-        self.assertIn("RUNTIME_MUTATION_DISABLED=true", apply_condition)
-        self.assertIn("if: ${{ false }}", apply_condition)
+        self.assertIn("CONTROL_PLANE_MUTATION=repository-administration", apply_condition)
+        self.assertIn("github.event_name == 'issue_comment'", apply_condition)
+        self.assertIn("github.event.repository.id == 1347559071", apply_condition)
+        self.assertIn("github.event.sender.id == 275410064", apply_condition)
+        self.assertIn("github.event.comment.user.id == 275410064", apply_condition)
+        self.assertIn("/apply-production-reviewer-access v1", apply_condition)
+        self.assertNotIn("github.event_name == 'push'", apply_condition)
+        self.assertNotIn("if: ${{ false }}", apply_condition)
         self.assertIn("issues: write", apply)
 
 

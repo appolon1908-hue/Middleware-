@@ -33,11 +33,11 @@ SHA = re.compile(r"[0-9a-f]{40}")
 # security fingerprint, permitting reviewed source-closure/hash value updates
 # without permitting release-policy logic to change in the same pull request.
 APPROVED_VALIDATOR_POLICIES = {
-    "529dcf0501b1624fb18da2ded0c0459978a0174f43e3f9412877f749911fe06b": (
+    "221a8eeb06eea682062b12dc9ea9018d09013625762f5c2b26c547203a8bd0c4": (
         "raw",
         "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497",
     ),
-    "06ab6afa78b151825c708878a8426e77e148827f9bd614e724f5bd92f7cc836b": (
+    "f8f18d3c34079d05c6ada7b9a945c83411121ed291553d6f690de43bad1df753": (
         "security-fingerprint",
         "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec",
     ),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import runpy
 from pathlib import Path
 from types import ModuleType
 
@@ -9,11 +10,23 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / ".codestra/run-trusted-production-orchestrator.py"
+ORCHESTRATOR = ROOT / ".codestra/validate-production-orchestrator-contract.py"
+GOVERNANCE_VALIDATOR = ROOT / "scripts/validate_repository_governance.py"
 GATE = ROOT / ".github/workflows/trusted-production-orchestrator-gate.yml"
 
 
 def load_launcher() -> ModuleType:
     spec = importlib.util.spec_from_file_location("trusted_orchestrator_launcher", LAUNCHER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_governance_validator() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "repository_governance_gate", GOVERNANCE_VALIDATOR
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -77,3 +90,27 @@ def test_trust_file_comparison_rejects_candidate_drift(
 
     with pytest.raises(launcher.TrustError, match="protected-base trust file changed"):
         launcher.require_unchanged_trust_file(relative, candidate_root)
+
+
+def test_governance_accepts_only_the_exact_gate_workflow() -> None:
+    governance = load_governance_validator()
+    text = GATE.read_text(encoding="utf-8")
+
+    governance.validate_pull_request_target_workflow(GATE, text)
+    with pytest.raises(governance.GovernanceError, match="pull_request_target is forbidden"):
+        governance.validate_pull_request_target_workflow(
+            GATE,
+            text + "\n# candidate gate mutation\n",
+        )
+
+
+def test_orchestrator_accepts_only_the_exact_candidate_status_gate() -> None:
+    orchestrator = runpy.run_path(str(ORCHESTRATOR))
+    validate = orchestrator["require_mutating_jobs_disabled"]
+    error = orchestrator["ContractError"]
+    text = GATE.read_text(encoding="utf-8")
+    relative = GATE.relative_to(ROOT).as_posix()
+
+    validate(text, relative)
+    with pytest.raises(error, match="mutating job lacks disable marker"):
+        validate(text + "\n# candidate gate mutation\n", relative)

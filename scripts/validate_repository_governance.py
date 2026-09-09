@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,13 @@ RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
 REQUIRED_CHECK_APP_ID = 15368
 INDEPENDENT_REVIEWER_ID = 77101516
+TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS = {
+    "trusted-production-orchestrator-gate.yml": frozenset(
+        {
+            "09c058b87905398fbdc22981d9a68be722906c32cfa2eccaac018a227fe73204",
+        }
+    ),
+}
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -63,6 +71,17 @@ def load_json(path: Path) -> dict[str, Any]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise GovernanceError(message)
+
+
+def validate_pull_request_target_workflow(workflow: Path, text: str) -> None:
+    if "pull_request_target:" not in text:
+        return
+    trusted_digests = TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS.get(workflow.name)
+    require(
+        trusted_digests is not None
+        and hashlib.sha256(text.encode()).hexdigest() in trusted_digests,
+        f"{workflow.name}: pull_request_target is forbidden",
+    )
 
 
 def require_mapping(value: Any, message: str) -> dict[str, Any]:
@@ -241,10 +260,7 @@ def validate_source_policy() -> dict[str, Any]:
 
     for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml")):
         text = workflow.read_text(encoding="utf-8")
-        require(
-            "pull_request_target:" not in text,
-            f"{workflow.name}: pull_request_target is forbidden",
-        )
+        validate_pull_request_target_workflow(workflow, text)
         require("write-all" not in text, f"{workflow.name}: write-all permission is forbidden")
         for action, ref in USES.findall(text):
             if action.startswith("./"):

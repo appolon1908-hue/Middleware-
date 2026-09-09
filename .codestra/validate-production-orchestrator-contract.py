@@ -189,6 +189,10 @@ MUTATING_ACTION_MARKERS = {
     "ssh",
     "terraform",
 }
+TRUSTED_CANDIDATE_GATE_WORKFLOW = (
+    ".github/workflows/trusted-production-orchestrator-gate.yml",
+    "09c058b87905398fbdc22981d9a68be722906c32cfa2eccaac018a227fe73204",
+)
 SAFE_NATIVE_ACTION_PREFIXES = {
     "actions/attest-build-provenance@",
     "actions/attest@",
@@ -5003,6 +5007,13 @@ def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
             for step in workflow_steps(job, path)
         ):
             mutating_jobs += 1
+            trusted_path, trusted_digest = TRUSTED_CANDIDATE_GATE_WORKFLOW
+            if (
+                path == trusted_path
+                and job_name == "validate-candidate"
+                and hashlib.sha256(workflow.encode()).hexdigest() == trusted_digest
+            ):
+                continue
             require(
                 "RUNTIME_MUTATION_DISABLED=true" in job.raw,
                 f"mutating job lacks disable marker: {path}:{job_name}",

@@ -188,6 +188,25 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
         if isinstance(node, ast.FunctionDef) and node.name == "create_app"
     ]
     require(len(factories) == 1, "application factory definition is not unique")
+    request_imports = [
+        imported
+        for statement in tree.body
+        if isinstance(statement, ast.ImportFrom)
+        and statement.level == 0
+        and statement.module == "fastapi"
+        for imported in statement.names
+        if imported.name == "Request" and imported.asname is None
+    ]
+    require(len(request_imports) == 1, "FastAPI Request import is missing or ambiguous")
+    require(
+        not any(
+            isinstance(candidate, ast.Name)
+            and candidate.id == "Request"
+            and isinstance(candidate.ctx, (ast.Store, ast.Del))
+            for candidate in ast.walk(tree)
+        ),
+        "FastAPI Request binding is reassigned",
+    )
 
     def attribute_path(node: ast.expr) -> list[str] | None:
         parts: list[str] = []
@@ -376,14 +395,26 @@ def authenticated_get_routes(source: str) -> dict[str, tuple[str, str]]:
     )
 
     def authentication_binding(node: ast.AsyncFunctionDef) -> tuple[str, str]:
+        positional_arguments = [*node.args.posonlyargs, *node.args.args]
         request_arguments = [
-            argument.arg
-            for argument in (*node.args.posonlyargs, *node.args.args)
+            (index, argument)
+            for index, argument in enumerate(positional_arguments)
             if argument.arg == "request"
         ]
         require(
-            request_arguments == ["request"],
+            len(request_arguments) == 1,
             "governed GET route request binding is missing or ambiguous",
+        )
+        request_index, request_argument = request_arguments[0]
+        require(
+            isinstance(request_argument.annotation, ast.Name)
+            and request_argument.annotation.id == "Request",
+            "governed GET route request parameter is not FastAPI Request",
+        )
+        default_start = len(positional_arguments) - len(node.args.defaults)
+        require(
+            request_index < default_start,
+            "governed GET route request parameter has a dependency default",
         )
         statements = list(node.body)
         if (

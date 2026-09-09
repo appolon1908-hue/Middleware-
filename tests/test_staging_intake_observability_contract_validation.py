@@ -44,6 +44,8 @@ BOUND_FILES = (
         "unapproved_included_router",
         "included_router_shadow",
         "webhook_shadow",
+        "request_dependency_proxy",
+        "rebound_request_type",
     ],
 )
 def test_staging_contract_fails_closed(
@@ -142,6 +144,25 @@ def test_staging_contract_fails_closed(
         webhook_contract = json.loads(webhook_path.read_text(encoding="utf-8"))
         webhook_contract["webhooks"][0]["path"] = "/metrics"
         webhook_path.write_text(json.dumps(webhook_contract), encoding="utf-8")
+    elif mutation in {"request_dependency_proxy", "rebound_request_type"}:
+        factory_path = tmp_path / "app/appolon_factory.py"
+        factory = factory_path.read_text(encoding="utf-8")
+        if mutation == "request_dependency_proxy":
+            factory = factory.replace(
+                "    async def metrics(request: Request) -> Response:\n",
+                "    async def metrics(\n"
+                "        request: object = Depends(public_request),\n"
+                "    ) -> Response:\n",
+                1,
+            )
+        else:
+            factory = factory.replace(
+                "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n",
+                "from pydantic import AwareDatetime, BaseModel, Field, ValidationError\n"
+                "Request = object\n",
+                1,
+            )
+        factory_path.write_text(factory, encoding="utf-8")
 
     program = (
         "import importlib.util,pathlib;"

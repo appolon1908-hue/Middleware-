@@ -1180,7 +1180,11 @@ def interpreter_script_target(tokens: list[str], index: int) -> str | None:
     return None
 
 
-def python_source_has_runtime_mutation(source: str) -> bool:
+def python_source_has_runtime_mutation(
+    source: str,
+    *,
+    include_read_only_runtime_contact: bool = False,
+) -> bool:
     try:
         tree = ast.parse(source)
     except SyntaxError:
@@ -1281,6 +1285,19 @@ def python_source_has_runtime_mutation(source: str) -> bool:
         receiver_hints = set(re.split(r"[^a-z0-9_]+", receiver))
         network_receiver = bool(receiver_hints & NETWORK_CLIENT_HINTS)
         database_receiver = bool(receiver_hints & DATABASE_CLIENT_HINTS)
+        if include_read_only_runtime_contact and (
+            network_receiver
+            or database_receiver
+            or qualified
+            in {
+                "urllib.request.Request",
+                "urllib.request.urlopen",
+            }
+        ):
+            # A plan-only release intent cannot prove that a direct network or
+            # database read is not runtime contact. Fail closed even when the
+            # operation is read-only.
+            return True
         if method in NETWORK_MUTATION_METHODS and network_receiver:
             return True
         if method in DATABASE_MUTATION_METHODS and database_receiver:
@@ -1372,9 +1389,20 @@ def python_source_has_runtime_mutation(source: str) -> bool:
                 command = " ".join(values)
             else:
                 return True
-            if contains_runtime_mutation(command):
+            if (
+                contains_runtime_command(command)
+                if include_read_only_runtime_contact
+                else contains_runtime_mutation(command)
+            ):
                 return True
     return False
+
+
+def python_source_has_runtime_contact(source: str) -> bool:
+    return python_source_has_runtime_mutation(
+        source,
+        include_read_only_runtime_contact=True,
+    )
 
 
 def javascript_source_has_runtime_mutation(source: str) -> bool:
@@ -1483,6 +1511,42 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
     ):
         return True
     return False
+
+
+def javascript_source_has_runtime_contact(source: str) -> bool:
+    if javascript_source_has_runtime_mutation(source):
+        return True
+    lower = source.lower()
+    if any(
+        marker in lower
+        for marker in (
+            "@kubernetes/client-node",
+            "dockerode",
+            "node:http",
+            "node:https",
+            "node:net",
+            "node:tls",
+            "node:dgram",
+            "require('http')",
+            'require("http")',
+            "require('https')",
+            'require("https")',
+            "require('net')",
+            'require("net")',
+            "require('tls')",
+            'require("tls")',
+        )
+    ):
+        return True
+    return bool(
+        re.search(r"\bfetch\s*\(", lower)
+        or re.search(r"\bwebsocket\s*\(", lower)
+        or re.search(
+            r"\b(?:api|api_client|axios|client|connection|http|httpx|requests|session|socket)"
+            r"\s*\.\s*(?:get|head|request|send)\s*\(",
+            lower,
+        )
+    )
 
 
 def heredoc_programs(script: str) -> list[tuple[str, str]]:
@@ -2626,16 +2690,134 @@ def workflow_script_aliases(workflow: str, path: str) -> dict[str, str]:
     return aliases
 
 
+def repository_script_has_runtime_contact(
+    target: str,
+    script_aliases: dict[str, str],
+    working_directory: Path,
+) -> bool:
+    normalized_target = target.replace("$RUNNER_TEMP/", "${RUNNER_TEMP}/")
+    if normalized_target in script_aliases:
+        target = script_aliases[normalized_target]
+    else:
+        for prefix, replacement in script_aliases.items():
+            if prefix.endswith("/") and normalized_target.startswith(prefix):
+                target = replacement + normalized_target.removeprefix(prefix)
+                break
+    if "${{" in target or "$" in target:
+        return True
+    relative_target = target.removeprefix("./")
+    if Path(relative_target).is_absolute() or any(
+        marker in relative_target for marker in "*?["
+    ):
+        return True
+    candidate = working_directory / relative_target
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(ROOT.resolve())
+    except (OSError, ValueError):
+        return True
+    if candidate.is_symlink() or not resolved.is_file():
+        return True
+    if resolved == RELEASE_VALIDATOR_PATH.resolve():
+        validate_release_validator_operations(resolved.read_text(encoding="utf-8"))
+        return False
+    # A repository script can import an arbitrary local helper, so source-only
+    # inspection of its entrypoint is insufficient to prove no runtime contact.
+    # The release validator above is the sole dependency with a dedicated
+    # operation contract.
+    return True
+
+
+def step_has_runtime_contact(
+    job: WorkflowJob,
+    step: dict[str, Any],
+    path: str,
+    script_aliases: dict[str, str],
+) -> bool:
+    run = str(step.get("run", ""))
+    shell = step.get("shell", job.shell)
+    shell_name = ""
+    if shell is not None:
+        if not isinstance(shell, str) or "${{" in shell or "$" in shell:
+            return True
+        shell_name = executable_name(shell.split()[0]).lower() if shell.split() else ""
+        if shell_name in {"python", "python3"}:
+            return python_source_has_runtime_contact(run)
+        if shell_name == "node":
+            return javascript_source_has_runtime_contact(run)
+        if shell_name not in {"bash", "dash", "sh", "zsh"}:
+            return True
+    if contains_runtime_command(run) or step_has_runtime_mutation(
+        job,
+        step,
+        path,
+        script_aliases,
+    ):
+        return True
+    for interpreter, body in heredoc_programs(run):
+        if interpreter in {"python", "python3"}:
+            if python_source_has_runtime_contact(body):
+                return True
+        elif interpreter == "node":
+            if javascript_source_has_runtime_contact(body):
+                return True
+        elif interpreter in SHELL_INTERPRETERS:
+            if contains_runtime_command(body) or contains_runtime_mutation(body):
+                return True
+        else:
+            return True
+    tokens = shell_tokens(shell_without_heredoc_bodies(run))
+    for index in command_indexes(tokens):
+        interpreter = executable_name(tokens[index]).lower()
+        payload = interpreter_payload(tokens, index)
+        if payload is not None:
+            if interpreter in {"python", "python3"}:
+                if python_source_has_runtime_contact(payload):
+                    return True
+            elif interpreter == "node":
+                if javascript_source_has_runtime_contact(payload):
+                    return True
+            elif interpreter in SHELL_INTERPRETERS:
+                if contains_runtime_command(payload) or contains_runtime_mutation(payload):
+                    return True
+            else:
+                return True
+        target = interpreter_script_target(tokens, index)
+        if target is not None and repository_script_has_runtime_contact(
+            target,
+            script_aliases,
+            step_working_directory(job, step, path),
+        ):
+            return True
+        module_target = interpreter_module_target(
+            tokens,
+            index,
+            step_working_directory(job, step, path),
+        )
+        if module_target is not None:
+            return True
+        direct_target = direct_repository_script_target(
+            tokens,
+            index,
+            step_working_directory(job, step, path),
+        )
+        if direct_target is not None and repository_script_has_runtime_contact(
+            direct_target,
+            script_aliases,
+            step_working_directory(job, step, path),
+        ):
+            return True
+    return False
+
+
 def workflow_has_runtime_command(workflow: str, path: str) -> bool:
     jobs = workflow_jobs(workflow, path)
     script_aliases = workflow_script_aliases(workflow, path)
     return any(
         # Release-intent evidence promises that no runtime was contacted, so
-        # even a read-only runtime command is forbidden here. Keep that
-        # stronger boundary while layering the shell/script-aware mutation
-        # classifier on top for indirection and generated-command coverage.
-        contains_runtime_command(str(step.get("run", "")))
-        or step_has_runtime_mutation(job, step, path, script_aliases)
+        # declared Python/Node shells, inline programs, and invoked repository
+        # scripts require the stronger contact-aware classifier.
+        step_has_runtime_contact(job, step, path, script_aliases)
         for job in jobs.values()
         for step in workflow_steps(job, path)
     )
@@ -3685,6 +3867,52 @@ jobs:
             "synthetic-release-intent-runtime-read.yml",
         ),
         "negative release-intent read-only runtime regression passed",
+    )
+    python_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: python
+        run: |
+          import subprocess
+          subprocess.run(["kubectl", "get", "pods"], check=True)
+"""
+    require(
+        workflow_has_runtime_command(
+            python_runtime_contact,
+            "synthetic-release-intent-python-runtime-read.yml",
+        ),
+        "declared Python read-only runtime contact escaped classification",
+    )
+    node_runtime_contact = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: node
+        run: await fetch("https://runtime.example/health")
+"""
+    require(
+        workflow_has_runtime_command(
+            node_runtime_contact,
+            "synthetic-release-intent-node-runtime-read.yml",
+        ),
+        "declared Node read-only runtime contact escaped classification",
+    )
+    invoked_runtime_reader = """name: synthetic
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 scripts/audit_release_endpoints.py
+"""
+    require(
+        workflow_has_runtime_command(
+            invoked_runtime_reader,
+            "synthetic-release-intent-invoked-runtime-read.yml",
+        ),
+        "invoked read-only runtime script escaped classification",
     )
     reusable_mutation = """name: synthetic
 jobs:

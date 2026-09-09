@@ -102,9 +102,11 @@ def main() -> int:
                                 f"manifest={sorted(expected_prefixes)} "
                                 f"registry={sorted(observed_prefixes)}"
                             )
-                    for field in ("cell", "repository"):
-                        expected = getattr(manifest, field)
-                        expected = getattr(expected, "value", expected)
+                    expected_sources = {
+                        "cell": manifest.cell.value,
+                        "repository": manifest.repository,
+                    }
+                    for field, expected in expected_sources.items():
                         if item.get(field) != expected:
                             errors.append(
                                 f"{adapter_id} adapter {field} must match its "

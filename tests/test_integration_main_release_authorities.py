@@ -86,7 +86,15 @@ class IntegrationMainReleaseAuthorityTests(unittest.TestCase):
             "strict",
         )
         checks = {check["context"]: check for check in status["checks"]}
-        bound_check = checks[baseline["rules"][-1]["parameters"]["required_status_checks"][0]["context"]]
+        baseline_status = next(
+            rule
+            for rule in baseline["rules"]
+            if rule["type"] == "required_status_checks"
+        )
+        bound_context = baseline_status["parameters"]["required_status_checks"][0][
+            "context"
+        ]
+        bound_check = checks[bound_context]
         self.assertEqual(bound_check["integration_id"], 98765)
         self.assertEqual(bound_check["provider_slug"], "github-actions")
         self.assertIn(

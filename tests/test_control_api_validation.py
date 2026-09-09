@@ -2,19 +2,15 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Pattern
 
 import pytest
 from starlette.requests import Request
 
 from app.control_api import (
-    CORRELATION_ID_RE,
-    IDEMPOTENCY_KEY_RE,
     MAX_BIGINT,
-    TENANT_ID_RE,
+    _authorization_header,
     _cursor,
     _next,
-    _authorization_header,
     _required_header,
 )
 from app.security import RequestValidationError
@@ -81,43 +77,44 @@ def test_required_header_accepts_one_canonical_value() -> None:
         _required_header(
             request,
             "X-Tenant-ID",
-            maximum=64,
-            pattern=TENANT_ID_RE,
+            minimum=1,
+            maximum=128,
         )
         == "tenant-1"
     )
 
 
 @pytest.mark.parametrize(
-    ("name", "value", "maximum", "pattern"),
+    ("name", "value", "minimum", "maximum"),
     [
-        ("X-Tenant-ID", " tenant-1", 64, TENANT_ID_RE),
-        ("X-Tenant-ID", "tenant/other", 64, TENANT_ID_RE),
-        ("X-Tenant-ID", "t" * 65, 64, TENANT_ID_RE),
-        ("X-Correlation-ID", "contains space", 180, CORRELATION_ID_RE),
-        ("Idempotency-Key", "short", 180, IDEMPOTENCY_KEY_RE),
+        ("X-Tenant-ID", "", 1, 128),
+        ("X-Tenant-ID", "t" * 129, 1, 128),
+        ("X-Correlation-ID", "", 1, 180),
+        ("X-Correlation-ID", "c" * 181, 1, 180),
+        ("Idempotency-Key", "short", 8, 180),
+        ("Idempotency-Key", "i" * 181, 8, 180),
     ],
 )
 def test_required_header_rejects_invalid_contract_values(
     name: str,
     value: str,
+    minimum: int,
     maximum: int,
-    pattern: Pattern[str],
 ) -> None:
     request = _request((name, value))
     with pytest.raises(RequestValidationError, match=f"{name} is malformed"):
         _required_header(
             request,
             name,
+            minimum=minimum,
             maximum=maximum,
-            pattern=pattern,
         )
 
 
 def test_required_header_rejects_missing_and_duplicate_values() -> None:
     missing = _request()
     with pytest.raises(RequestValidationError, match="provided exactly once"):
-        _required_header(missing, "X-Tenant-ID", maximum=64)
+        _required_header(missing, "X-Tenant-ID", minimum=1, maximum=128)
 
     duplicate = _request(
         ("Authorization", "Bearer first"),

@@ -4,8 +4,7 @@ import base64
 import binascii
 import hashlib
 import json
-import re
-from typing import Any, Literal, Pattern, overload
+from typing import Any, Literal, overload
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
@@ -19,10 +18,6 @@ from .storage import PostgresInboxStore, StorageError
 
 router = APIRouter(tags=["durable-control"])
 
-CURSOR_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-TENANT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
-CORRELATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,179}$")
-IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{7,179}$")
 MAX_BIGINT = (1 << 63) - 1
 
 
@@ -45,7 +40,10 @@ def _cursor(value: str | None) -> int | None:
     if value is None:
         return None
     try:
-        if not CURSOR_RE.fullmatch(value):
+        if not 1 <= len(value) <= 128 or any(
+            character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            for character in value
+        ):
             raise ValueError("cursor is not canonical base64url")
         decoded = base64.b64decode(
             value + "=" * (-len(value) % 4),
@@ -77,14 +75,14 @@ def _required_header(
     request: Request,
     name: str,
     *,
+    minimum: int,
     maximum: int,
-    pattern: Pattern[str] | None = None,
 ) -> str:
     values = request.headers.getlist(name)
     if len(values) != 1:
         raise RequestValidationError(f"{name} must be provided exactly once")
     value = values[0]
-    if not value or len(value) > maximum or pattern is not None and not pattern.fullmatch(value):
+    if not minimum <= len(value) <= maximum:
         raise RequestValidationError(f"{name} is malformed")
     return value
 
@@ -119,8 +117,8 @@ async def _auth(
     tenant = _required_header(
         request,
         "X-Tenant-ID",
-        maximum=64,
-        pattern=TENANT_ID_RE,
+        minimum=1,
+        maximum=128,
     )
     authorization = _authorization_header(request)
     caller = caller_for_authorization(authorization)
@@ -134,14 +132,14 @@ async def _auth(
         _required_header(
             request,
             "X-Correlation-ID",
+            minimum=1,
             maximum=180,
-            pattern=CORRELATION_ID_RE,
         )
         idem = _required_header(
             request,
             "Idempotency-Key",
+            minimum=8,
             maximum=180,
-            pattern=IDEMPOTENCY_KEY_RE,
         )
         actor = claims.get("sub")
         if not isinstance(actor, str) or not actor:

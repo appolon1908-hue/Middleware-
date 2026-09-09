@@ -500,3 +500,51 @@ def test_n4_rejects_versioned_command_type_and_blind_unknown_outcome_retry() -> 
                 "safe_metadata": {"access_token": "forbidden"},
             }
         )
+
+
+@pytest.mark.asyncio
+async def test_replay_approval_is_bound_to_its_job() -> None:
+    from datetime import timedelta
+    from app.automation_v2 import (
+        ApprovalRecord,
+        AutomationAuthorizationDenied,
+        DeadLetterRecord,
+        DeadLetterReplayRequest,
+    )
+
+    store = MemoryAutomationStore()
+    job_id, _, event, route = await _seed(store)
+    now = datetime.now(UTC)
+    dead_id, approval_id = uuid4(), uuid4()
+    dead = DeadLetterRecord(
+        dead_letter_id=dead_id, tenant_id=event.tenant_id, job_id=job_id,
+        workflow_key=route.workflow_key, workflow_family=route.workflow_family,
+        original_effect_fingerprint='a' * 64, safe_payload={}, state='OPEN',
+        resource_version=1, created_at=now, updated_at=now,
+    )
+    approval = ApprovalRecord(
+        approval_id=approval_id, tenant_id=event.tenant_id, job_id=uuid4(),
+        approval_type='REPLAY', summary='Replay a different job', state='APPROVED',
+        requested_by='operator', decided_by='reviewer',
+        expires_at=now + timedelta(hours=1), created_at=now, updated_at=now,
+    )
+    store.dead_letters[(event.tenant_id, dead_id)] = dead
+    store.approvals[(event.tenant_id, approval_id)] = ('digest', approval)
+    body = DeadLetterReplayRequest(
+        tenant_id=event.tenant_id, correlation_id=event.correlation_id,
+        idempotency_key='replay-job-binding', approval_id=approval_id,
+        expected_version=1, original_effect_fingerprint='a' * 64,
+        safe_replay_classification='NO_EFFECT', replay_reason='Isolated test',
+    )
+    before = await store.get_job(event.tenant_id, job_id)
+    dispatch = dict(store.dispatches[(event.tenant_id, job_id)])
+    with pytest.raises(AutomationAuthorizationDenied):
+        await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert await store.get_job(event.tenant_id, job_id) == before
+    assert store.dispatches[(event.tenant_id, job_id)] == dispatch
+    assert store.dead_letters[(event.tenant_id, dead_id)] == dead
+    store.approvals[(event.tenant_id, approval_id)] = (
+        'digest', approval.model_copy(update={'job_id': job_id}),
+    )
+    result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert result.state == 'RETRY_SCHEDULED'

@@ -167,3 +167,60 @@ async def test_event_job_and_dispatch_are_atomic_and_idempotent(automation_pool:
     outcomes = await asyncio.gather(claim(uuid4()), claim(uuid4()), return_exceptions=True)
     assert sum(not isinstance(value, Exception) for value in outcomes) == 1
     assert sum(isinstance(value, AutomationConflict) for value in outcomes) == 1
+
+
+@pytest.mark.asyncio
+async def test_replay_rejects_approval_for_another_job(automation_pool: asyncpg.Pool) -> None:
+    from datetime import timedelta
+    from app.automation_v2 import (
+        ApprovalRequest, AutomationAuthorizationDenied, DeadLetterReplayRequest,
+    )
+
+    store = PostgresAutomationStore(automation_pool, owns_pool=False)
+    item = envelope()
+    route = WorkflowRouter.load().by_event[item.event_type][0]
+    await store.enqueue_event(item, route, source_client_id=item.source)
+    other = item.model_copy(update={'event_id': 'another-automation-event'})
+    await store.enqueue_event(other, route, source_client_id=other.source)
+    async with automation_pool.acquire() as conn:
+        rows = await conn.fetch('SELECT job_id,event_id FROM middleware_automation_jobs')
+    jobs = {row['event_id']: row['job_id'] for row in rows}
+    job_id = jobs[item.event_id]
+    approval = await store.request_approval(
+        ApprovalRequest(
+            tenant_id=item.tenant_id, correlation_id=item.correlation_id,
+            idempotency_key='approval-binding-test', job_id=jobs[other.event_id],
+            approval_type='REPLAY', summary='Replay another job',
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ), client_id=route.client_id, requested_by='operator',
+    )
+    dead_id = uuid4()
+    async with automation_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE middleware_automation_approvals SET state='APPROVED',decided_by='reviewer' WHERE approval_id=$1",
+            approval.approval_id,
+        )
+        await conn.execute(
+            """INSERT INTO middleware_automation_dead_letters
+            (tenant_id,dead_letter_id,job_id,workflow_key,workflow_family,original_effect_fingerprint,state)
+            VALUES($1,$2,$3,$4,$5,$6,'OPEN')""",
+            item.tenant_id, dead_id, job_id, route.workflow_key, route.workflow_family, 'a' * 64,
+        )
+        before = await conn.fetchrow('SELECT * FROM middleware_automation_jobs WHERE job_id=$1', job_id)
+        count = await conn.fetchval('SELECT count(*) FROM middleware_automation_dispatch_outbox')
+    body = DeadLetterReplayRequest(
+        tenant_id=item.tenant_id, correlation_id=item.correlation_id,
+        idempotency_key='replay-binding-test', approval_id=approval.approval_id,
+        expected_version=1, original_effect_fingerprint='a' * 64,
+        safe_replay_classification='NO_EFFECT', replay_reason='Isolated test',
+    )
+    with pytest.raises(AutomationAuthorizationDenied):
+        await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    async with automation_pool.acquire() as conn:
+        assert await conn.fetchrow('SELECT * FROM middleware_automation_jobs WHERE job_id=$1', job_id) == before
+        assert await conn.fetchval('SELECT count(*) FROM middleware_automation_dispatch_outbox') == count
+        assert await conn.fetchval('SELECT count(*) FROM middleware_automation_replay_requests') == 0
+        assert await conn.fetchval('SELECT state FROM middleware_automation_dead_letters WHERE dead_letter_id=$1', dead_id) == 'OPEN'
+        await conn.execute('UPDATE middleware_automation_approvals SET job_id=$1 WHERE approval_id=$2', job_id, approval.approval_id)
+    result = await store.replay_dead_letter(dead_id, body, client_id='n8n-operations-automation')
+    assert result.state == 'RETRY_SCHEDULED'

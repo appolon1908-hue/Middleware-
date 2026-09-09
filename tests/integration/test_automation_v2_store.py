@@ -50,12 +50,9 @@ async def automation_pool() -> asyncpg.Pool:
         for path in sorted(Path("migrations/automation").glob("[0-9][0-9][0-9][0-9]_*.sql"))
     ]
     async with pool.acquire() as conn:
-        # Recreate dependent observability tables before cascading ledger drops.
-        await conn.execute("DROP TABLE IF EXISTS middleware_observability_incident_mutations CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_observability_notification_intents CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_observability_incident_audit CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_observability_incident_events CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS middleware_observability_incidents CASCADE")
+        # Reset only automation-owned schema. Root ledgers and observability
+        # tables are shared by other modules in this integration session; a
+        # cascading drop silently removes their foreign-key authority.
         await conn.execute("DROP TABLE IF EXISTS middleware_automation_replay_requests CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_automation_reconciliation_runs CASCADE")
         await conn.execute("DROP TABLE IF EXISTS middleware_automation_dead_letters CASCADE")

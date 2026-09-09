@@ -3,7 +3,7 @@
 from pathlib import Path
 import unittest
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML is pinned without type stubs.
 
 
 ROOT = Path(__file__).resolve().parents[1]

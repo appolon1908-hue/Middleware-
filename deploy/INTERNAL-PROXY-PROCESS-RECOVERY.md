@@ -57,6 +57,27 @@ for the selected release/backup tuple before claiming deployment readiness.
 
 Source tests and a successful proxy restart do not certify a production release.
 
+## Recovery readback on 2026-09-09
+
+The existing Odoo proxy was restarted at 17:54:19Z and the existing n8n proxy at
+17:55:52Z. Both retained their container IDs, image, configuration and networks.
+The n8n comparison initially differed because Docker returned its mount list
+in another order; reordering those four records reproduced the exact pre-change
+configuration hash. No configuration value had changed.
+
+At 18:01:23Z, both proxies and all six requested core services were healthy.
+Recent health checks returned exit 0 without seccomp errors. Zombie ssl_client
+processes dropped from 32,043 to 25, and labelled JIT virtual allocations dropped
+from 661,925,888 to 6,189,056 bytes with bpf_jit_limit unchanged. This controlled
+result supports retained proxy children as the cause of the observed pressure.
+
+The small new zombie count also confirms that restart alone does not prevent
+recurrence. The init/PID-limit source fix still needs protected deployment.
+The sanitized observation is recorded in
+`evidence/private-proxy-recovery-20260909.json`. Automatic approval review rejected
+the subsequent protected backup-validation invocation before execution; this
+receipt contains no backup-validation or restore-certification PASS claim.
+
 ## Offline regression check
 
 ```sh

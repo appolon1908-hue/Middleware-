@@ -125,7 +125,13 @@ def validate_environment_release_policy(policy: dict[str, Any]) -> None:
             environments.get(name),
             f"{name}: environment policy is missing",
         )
-        require(environment.get("wait_timer") == 0, f"{name}: wait timer drift")
+        wait_timer = environment.get("wait_timer")
+        require(
+            isinstance(wait_timer, int)
+            and not isinstance(wait_timer, bool)
+            and wait_timer == 0,
+            f"{name}: wait timer drift",
+        )
         require(
             environment.get("prevent_self_review") is True,
             f"{name}: self-review must be prevented",

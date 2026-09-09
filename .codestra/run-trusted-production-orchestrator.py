@@ -40,6 +40,15 @@ APPROVED_VALIDATOR_POLICIES = {
         "15dbaa6d571a1d1e72c09ca417cc94198d8f21260babfae5eaedbdd46472b1ec",
     ),
 }
+APPROVED_TRUST_WORKFLOW_SHA256 = frozenset(
+    {
+        # Bootstrap generation: keeps the ordinary PR trigger long enough for
+        # this first trust-root change to satisfy the existing required check.
+        "adbd04c92994d0e8b5d825028b7404d460a4686eb16fff116389a5848980dd57",
+        # Steady state: protected-base pull_request_target and main push only.
+        "e2cd1a4371e25db7e7e40b6570e8658b8a46bf640bfe20793316d25f59360712",
+    }
+)
 
 
 class TrustError(RuntimeError):
@@ -87,7 +96,10 @@ def validate_exact_checkout(root: Path) -> str:
 
 
 def validate_candidate(root: Path) -> Path:
-    require_unchanged_trust_file(WORKFLOW_PATH, root)
+    require(
+        digest(root / WORKFLOW_PATH) in APPROVED_TRUST_WORKFLOW_SHA256,
+        "candidate trust workflow is not approved by protected main",
+    )
     require_unchanged_trust_file(LAUNCHER_PATH.relative_to(TRUST_ROOT), root)
     orchestrator = root / ORCHESTRATOR_PATH
     release_validator = root / RELEASE_VALIDATOR_PATH

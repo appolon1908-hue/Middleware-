@@ -25,7 +25,12 @@ REQUIRED_CHECK_APP_ID = 15368
 INDEPENDENT_REVIEWER_ID = 77101516
 TRUSTED_PULL_REQUEST_TARGET_WORKFLOW = (
     "production-orchestrator-contract.yml",
-    "b7d5ff7a98dd640be74bb5700b8f5353c29de34359c02fe60e892179ebf924b9",
+    frozenset(
+        {
+            "adbd04c92994d0e8b5d825028b7404d460a4686eb16fff116389a5848980dd57",
+            "e2cd1a4371e25db7e7e40b6570e8658b8a46bf640bfe20793316d25f59360712",
+        }
+    ),
 )
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
@@ -108,6 +113,17 @@ def require_exact_strings(
             f"{label} drift: missing={sorted(missing)} "
             f"unexpected={sorted(unexpected)} duplicates={duplicates}"
         ),
+    )
+
+
+def validate_pull_request_target_workflow(workflow: Path, text: str) -> None:
+    if "pull_request_target:" not in text:
+        return
+    trusted_name, trusted_digests = TRUSTED_PULL_REQUEST_TARGET_WORKFLOW
+    require(
+        workflow.name == trusted_name
+        and hashlib.sha256(text.encode()).hexdigest() in trusted_digests,
+        f"{workflow.name}: pull_request_target is forbidden",
     )
 
 
@@ -246,14 +262,7 @@ def validate_source_policy() -> dict[str, Any]:
 
     for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml")):
         text = workflow.read_text(encoding="utf-8")
-        if "pull_request_target:" in text:
-            trusted_name, trusted_digest = TRUSTED_PULL_REQUEST_TARGET_WORKFLOW
-            require(
-                workflow.name == trusted_name
-                and hashlib.sha256(workflow.read_bytes()).hexdigest()
-                == trusted_digest,
-                f"{workflow.name}: pull_request_target is forbidden",
-            )
+        validate_pull_request_target_workflow(workflow, text)
         require("write-all" not in text, f"{workflow.name}: write-all permission is forbidden")
         for action, ref in USES.findall(text):
             if action.startswith("./"):

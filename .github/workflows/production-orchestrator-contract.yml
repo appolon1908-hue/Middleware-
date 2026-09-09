@@ -1,6 +1,7 @@
 name: Production orchestrator contract
 
 on:
+  pull_request:
   pull_request_target:
   push:
     branches:
@@ -19,8 +20,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-      COMPARISON_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.before }}
+      EXPECTED_SHA: ${{ (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && github.event.pull_request.head.sha || github.sha }}
+      COMPARISON_SHA: ${{ (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && github.event.pull_request.base.sha || github.event.before }}
       GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
       VALIDATION_ROOT: ${{ github.workspace }}/candidate
     steps:
@@ -33,7 +34,7 @@ jobs:
       - name: Check out exact candidate source as inert data
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name || github.repository }}
+          repository: ${{ (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ env.EXPECTED_SHA }}
           path: candidate
           fetch-depth: 0

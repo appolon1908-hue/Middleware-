@@ -77,31 +77,27 @@ def test_candidate_cannot_replace_trust_workflow(tmp_path: Path) -> None:
     workflow = candidate / ".github/workflows/production-orchestrator-contract.yml"
     workflow.write_bytes(workflow.read_bytes() + b"\n# candidate trust bypass\n")
 
-    with pytest.raises(launcher.TrustError, match="protected-base trust file changed"):
+    with pytest.raises(launcher.TrustError, match="trust workflow is not approved"):
         launcher.validate_candidate(candidate)
 
 
 def test_repository_governance_accepts_only_exact_trusted_target_workflow(
-    tmp_path: Path,
 ) -> None:
     governance = load_governance_validator()
-    workflow = tmp_path / "production-orchestrator-contract.yml"
-    shutil.copyfile(ROOT / ".github/workflows" / workflow.name, workflow)
-    governance.WORKFLOW_DIR = tmp_path
-    governance.validate_source_policy()
+    workflow = ROOT / ".github/workflows/production-orchestrator-contract.yml"
+    text = workflow.read_text(encoding="utf-8")
+    governance.validate_pull_request_target_workflow(workflow, text)
 
-    workflow.write_bytes(workflow.read_bytes() + b"\n# candidate target bypass\n")
     with pytest.raises(governance.GovernanceError, match="pull_request_target is forbidden"):
-        governance.validate_source_policy()
+        governance.validate_pull_request_target_workflow(
+            workflow, text + "\n# candidate target bypass\n"
+        )
 
 
 def test_repository_governance_rejects_other_target_workflow(tmp_path: Path) -> None:
     governance = load_governance_validator()
-    (tmp_path / "untrusted.yml").write_text(
-        "on:\n  pull_request_target:\npermissions: read-all\n",
-        encoding="utf-8",
-    )
-    governance.WORKFLOW_DIR = tmp_path
+    workflow = tmp_path / "untrusted.yml"
+    text = "on:\n  pull_request_target:\npermissions: read-all\n"
 
     with pytest.raises(governance.GovernanceError, match="pull_request_target is forbidden"):
-        governance.validate_source_policy()
+        governance.validate_pull_request_target_workflow(workflow, text)

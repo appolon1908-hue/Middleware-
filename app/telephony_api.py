@@ -21,6 +21,11 @@ from .storage import StorageError
 
 router = APIRouter(prefix="/v1/telephony/calls", tags=["odoo-calling"])
 
+# Compatibility ingress for the reviewed Middleware contract. This route is
+# handled by the same internal-only ledger as the canonical telephony path; it
+# is never forwarded to Server B's external /v1/calls/originate endpoint.
+compat_router = APIRouter(prefix="/v1/calls", tags=["odoo-calling"])
+
 
 class CallingResponse(BaseModel):
     dialing: Literal["attempting", "unknown", "blocked"]
@@ -119,6 +124,15 @@ async def originate(body: OriginateRequest, request: Request) -> JSONResponse:
         raise AuthorizationError(str(exc)) from exc
     operation = await ledger.originate(principal, body, correlation, grant)
     return _json(operation_response(operation), 200 if operation.duplicate else 202)
+
+
+# The external adapter also owns a /v1/calls/originate route. Keep this
+# compatibility ingress local to Middleware and reuse the exact authenticated
+# handler so it cannot accidentally become a PSTN bypass.
+compat_router.add_api_route(
+    "/originate", originate, methods=["POST"], name="middleware_internal_originate_compat",
+    response_model=CallingResponse, responses={202: {"model": CallingResponse}},
+)
 
 
 @router.get("/requests/{operation_id}", response_model=CallingResponse)

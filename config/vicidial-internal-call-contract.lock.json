@@ -1,8 +1,8 @@
 {
   "repository": "appolon1908-hue/Vicidialer-Codestra",
-  "pull_request": 29,
-  "tested_sha": "9ac8ef4840f78ba4ad9b816e4e409298505103ce",
-  "protected_release": false,
+  "pull_request": 48,
+  "tested_sha": "8bb08bb72f121c4304f72604765afb342234269c",
+  "protected_release": true,
   "routes": {
     "originate": "/v1/calls/internal/originate",
     "readback": "/v1/calls/internal/{operation_id}",

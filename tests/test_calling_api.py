@@ -116,6 +116,25 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         return await asgi_request(self.app, "POST", "/v1/telephony/calls/originate",
                                   body or originate().model_dump(), **kwargs)
 
+    async def test_compatibility_originate_route_reuses_internal_only_handler(self):
+        body = originate().model_dump()
+        status, response, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate", body,
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(response["dialing"], "unknown")
+        self.assertEqual(response["external_dialing"], False)
+        self.assertEqual(len(self.store._commands), 1)
+
+    async def test_compatibility_route_never_accepts_external_destination(self):
+        status, response, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate",
+            originate(destination_class="mobile", destination="+12025550124").model_dump(),
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(response["dialing"], "blocked")
+        self.assertFalse(self.store._commands)
+
     async def accept_call(self):
         _, data, _ = await self.call()
         identity = UUID(data["operation_id"])
@@ -128,7 +147,8 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         from app.config import Settings
         from app.main import create_app
         paths = create_app(settings=Settings.from_env({"APP_ENV": "test", "ALLOW_IN_MEMORY_STORAGE": "true"})).openapi()["paths"]
-        for path in ["/v1/telephony/calls/originate", "/v1/telephony/calls/requests/{operation_id}",
+        for path in ["/v1/telephony/calls/originate", "/v1/calls/originate",
+                     "/v1/telephony/calls/requests/{operation_id}",
                      "/v1/telephony/calls/requests/{operation_id}/reconcile", "/v1/telephony/calls/requests/{operation_id}/hangup"]:
             self.assertIn(path, paths)
 

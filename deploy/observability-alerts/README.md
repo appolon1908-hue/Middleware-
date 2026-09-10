@@ -7,7 +7,7 @@ The production request path is:
 ```text
 Prometheus -> Alertmanager -> Middleware alert API -> durable command/outbox
            -> Temporal command worker -> Klyrow alert adapter -> Klyrow API
-           -> alerts@codestra.co -> appolon@codestra.co
+           -> alerts@codestra.co -> appolon1908@gmail.com
 ```
 
 This repository defines desired state only. `observability-alert-api` has no

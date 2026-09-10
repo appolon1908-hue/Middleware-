@@ -29,6 +29,9 @@ def test_odoo_submission_and_get_only_recovery_are_tenant_bound(test_settings):
             assert read.json() == created.json()
         assert len(runtime.commands.store.submitted) == 1
         assert client.get(path, headers=headers()).status_code == 403
+        missing_key = headers("odoo.sms.status.read")
+        del missing_key["Idempotency-Key"]
+        assert client.get(path, headers=missing_key).status_code == 400
         assert client.get(path, headers=headers("odoo.sms.status.read", "other-tenant")).status_code == 404
         assert client.get(path, headers=headers("odoo.sms.status.read", key="missing-1")).status_code == 404
         forged = headers("odoo.sms.status.read")

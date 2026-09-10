@@ -2,7 +2,7 @@
 
 Odoo submits native CRM SMS through `POST /v1/communications/messages` using
 the dedicated Keycloak machine client `odoo-sms`. Its command scope is
-`odoo.sms.command.write`, restricted to `sms.message.submit.*` targeting
+`odoo.sms.command.write`, restricted to the registered `sms.*` namespace targeting
 `telnexa-sms`. Status requests require `odoo.sms.status.read`. The verified token
 tenant must match `X-Tenant-ID`; original bearer verification remains mandatory.
 This registry entry does not create a Keycloak client or grant live delivery.

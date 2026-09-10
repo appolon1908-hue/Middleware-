@@ -1011,6 +1011,12 @@ operations:
   canonical_operation_id: browser_event_v1_telemetry_browser_events_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: calls
+  method: POST
+  path: /v1/calls/originate
+  canonical_operation_id: middleware_internal_originate_compat_v1_calls_originate_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: telephony
   method: POST
   path: /v1/telephony/calls/originate

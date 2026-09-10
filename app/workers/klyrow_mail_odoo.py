@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+import ssl
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import text
@@ -91,9 +93,29 @@ class RestrictedOdooTransport:
             )
         ):
             raise DeliveryFailure("odoo_not_configured", permanent=True)
+        origin = urlsplit(settings.klyrow_mail_odoo_url)
+        if (
+            origin.scheme != "https"
+            or not origin.hostname
+            or origin.username is not None
+            or origin.password is not None
+            or origin.path not in {"", "/"}
+            or origin.query
+            or origin.fragment
+        ):
+            raise DeliveryFailure("odoo_https_origin_required", permanent=True)
+        if not settings.klyrow_mail_odoo_ca_file:
+            raise DeliveryFailure("odoo_tls_unavailable", permanent=True)
+        try:
+            tls = ssl.create_default_context(cafile=settings.klyrow_mail_odoo_ca_file)
+        except (OSError, ssl.SSLError) as exc:
+            raise DeliveryFailure("odoo_tls_unavailable", permanent=True) from exc
+        tls.minimum_version = ssl.TLSVersion.TLSv1_2
         url = settings.klyrow_mail_odoo_url.rstrip("/") + "/jsonrpc"
         try:
-            async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
+            async with httpx.AsyncClient(
+                timeout=20, trust_env=False, verify=tls, follow_redirects=False
+            ) as client:
                 auth = await client.post(
                     url,
                     json={

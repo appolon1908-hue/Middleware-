@@ -126,7 +126,7 @@ def runtime(active: bool = True) -> Runtime:
 def webhook() -> dict[str, Any]:
     return {
         "version": "4",
-        "groupKey": "{}:{alertname=\"HostDown\"}",
+        "groupKey": '{}:{alertname="HostDown"}',
         "truncatedAlerts": 0,
         "status": "firing",
         "receiver": "codestra-observability-email",
@@ -223,8 +223,7 @@ def test_firing_alert_is_durable_and_replay_safe() -> None:
         assert replay.status_code == 200
         assert replay.json()["operations"][0]["duplicate"] is True
         assert (
-            replay.json()["operations"][0]["operation_id"]
-            == operation["operation_id"]
+            replay.json()["operations"][0]["operation_id"] == operation["operation_id"]
         )
 
         detail = client.get(
@@ -317,8 +316,9 @@ def test_notification_content_can_preserve_persisted_first_seen_time() -> None:
         persisted_first_seen.isoformat()
     )
     assert command.payload["alert"]["starts_at"] == alert.starts_at.isoformat()
-    assert f"First seen: {persisted_first_seen.isoformat()}" in (
-        command.payload["content"]["text"]
+    assert (
+        f"First seen: {persisted_first_seen.isoformat()}"
+        in (command.payload["content"]["text"])
     )
 
 
@@ -360,9 +360,7 @@ def test_invalid_later_alert_does_not_partially_persist_batch() -> None:
 
 def test_same_identity_with_changed_payload_is_a_conflict() -> None:
     changed = copy.deepcopy(webhook())
-    changed["alerts"][0]["annotations"]["summary"] = (
-        "Different semantic payload"
-    )
+    changed["alerts"][0]["annotations"]["summary"] = "Different semantic payload"
     with TestClient(app()) as client:
         first = client.post(
             "/v1/observability/alerts",
@@ -488,8 +486,10 @@ def test_delivery_activation_queues_a_previously_state_only_warning() -> None:
             "firing",
             "firing",
         ]
-        assert timeline[-1].safe_metadata["activated_transition"].startswith(
-            "alert-transition-v1:"
+        assert (
+            timeline[-1]
+            .safe_metadata["activated_transition"]
+            .startswith("alert-transition-v1:")
         )
 
     asyncio.run(scenario())
@@ -702,8 +702,7 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
         )
         assert suppressed_replay.status_code == 200
         assert (
-            suppressed_replay.json()["operations"][0]["operation_id"]
-            == first_operation
+            suppressed_replay.json()["operations"][0]["operation_id"] == first_operation
         )
 
         repeated = client.post(
@@ -754,14 +753,19 @@ def test_warning_repeat_uses_persisted_notification_timing() -> None:
             headers=headers(key="warning-repeat-third-0001"),
         )
         assert repeat_suppressed.status_code == 200
-        assert repeat_suppressed.json()["operations"][0]["notification_status"] == "queued"
+        assert (
+            repeat_suppressed.json()["operations"][0]["notification_status"] == "queued"
+        )
         repeat_suppressed_replay = client.post(
             "/v1/integrations/alertmanager/events",
             json=value,
             headers=headers(key="warning-repeat-third-0001"),
         )
         assert repeat_suppressed_replay.status_code == 200
-        assert repeat_suppressed_replay.json()["operations"][0]["notification_status"] == "queued"
+        assert (
+            repeat_suppressed_replay.json()["operations"][0]["notification_status"]
+            == "queued"
+        )
 
 
 def test_warning_resolution_cancels_pending_grouped_notification() -> None:
@@ -949,7 +953,7 @@ def test_delayed_webhook_cannot_replace_a_newer_alert_occurrence() -> None:
         delayed = client.post(
             "/v1/integrations/alertmanager/events",
             json=first_value,
-            headers=headers(key="occurrence-delayed-0001"),
+            headers=headers(key="delayed-0001"),
         )
         assert delayed.status_code == 409
         assert delayed.json()["code"] == "incident_conflict"
@@ -983,9 +987,7 @@ def test_delayed_firing_webhook_cannot_reopen_an_already_ended_occurrence() -> N
         assert delayed.json()["code"] == "incident_conflict"
         detail = client.get(
             f"/v1/observability/incidents/{incident_id}",
-            headers=headers(
-                "observability-operator", key="ended-occurrence-read-0001"
-            ),
+            headers=headers("observability-operator", key="ended-occurrence-read-0001"),
         )
         assert detail.status_code == 200
         assert detail.json()["state"] == "resolved"
@@ -1422,3 +1424,162 @@ def test_wrong_caller_and_environment_are_denied() -> None:
             headers=headers(key="environment-test-key"),
         )
         assert wrong_environment.status_code == 403
+
+
+def native_headers(client_id: str = "alertmanager-service") -> dict[str, str]:
+    value = headers(client_id)
+    value.pop("Idempotency-Key")
+    value.pop("X-Correlation-ID")
+    value["X-Alertmanager-Native-Webhook"] = "v4"
+    return value
+
+
+def test_native_webhook_derives_transport_identity_and_deduplicates() -> None:
+    value = webhook()
+    value["receiver"] = "middleware-critical"
+    with TestClient(app(active=False)) as client:
+        first = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=native_headers()
+        )
+        assert first.status_code == 202
+        assert first.headers["X-Correlation-ID"].startswith("alertmanager-native-")
+        assert first.json()["operations"][0]["notification_status"] == "disabled"
+        replay = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=native_headers()
+        )
+        assert replay.status_code == 200
+        assert replay.json()["operations"][0]["duplicate"] is True
+        assert (
+            replay.json()["operations"][0]["incident_id"]
+            == first.json()["operations"][0]["incident_id"]
+        )
+
+
+def test_native_webhook_cannot_bypass_workload_or_tenant() -> None:
+    with TestClient(app(active=False)) as client:
+        wrong_client = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=native_headers("observability-operator"),
+        )
+        assert wrong_client.status_code == 403
+        wrong_tenant = native_headers()
+        wrong_tenant["X-Tenant-ID"] = "another-tenant"
+        response = client.post(
+            "/v1/integrations/alertmanager/events", json=webhook(), headers=wrong_tenant
+        )
+        assert response.status_code == 403
+
+
+def test_native_webhook_rejects_unknown_receiver_and_truncation() -> None:
+    with TestClient(app(active=False)) as client:
+        for value in [
+            dict(webhook(), receiver="arbitrary-receiver"),
+            dict(webhook(), truncatedAlerts=1),
+        ]:
+            response = client.post(
+                "/v1/integrations/alertmanager/events",
+                json=value,
+                headers=native_headers(),
+            )
+            assert response.status_code in {400, 403}
+
+
+def test_explicit_transport_keeps_required_headers_and_receiver() -> None:
+    with TestClient(app(active=False)) as client:
+        missing = native_headers()
+        missing.pop("X-Alertmanager-Native-Webhook")
+        response = client.post(
+            "/v1/integrations/alertmanager/events", json=webhook(), headers=missing
+        )
+        assert response.status_code == 400
+        value = dict(webhook(), receiver="middleware-critical")
+        response = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=headers()
+        )
+        assert response.status_code == 403
+
+
+def test_native_changed_semantic_payload_still_conflicts() -> None:
+    value = webhook()
+    with TestClient(app(active=False)) as client:
+        first = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=native_headers()
+        )
+        assert first.status_code == 202
+        value["alerts"][0]["annotations"]["summary"] = "changed semantic payload"
+        conflict = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=native_headers()
+        )
+        assert conflict.status_code == 409
+
+
+def test_native_preserves_source_and_metadata_requirements() -> None:
+    with TestClient(app(active=False)) as client:
+        missing_source = native_headers()
+        missing_source.pop("X-Source-Deployment")
+        response = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=missing_source,
+        )
+        assert response.status_code == 400
+        missing_host = webhook()
+        del missing_host["alerts"][0]["labels"]["host"]
+        response = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=missing_host,
+            headers=native_headers(),
+        )
+        assert response.status_code == 400
+
+
+def test_native_batch_is_bounded_and_works_with_single_alert_explicit_policy() -> None:
+    selected = policy().model_copy(update={"max_alerts_per_request": 1})
+    service = create_app(
+        settings=settings(), runtime=runtime(active=False), policy=selected, env={}
+    )
+    value = webhook()
+    second = copy.deepcopy(value["alerts"][0])
+    second["fingerprint"] = "def456abc123"
+    second["labels"]["host"] = "another-provider-host"
+    value["alerts"].append(second)
+    with TestClient(service) as client:
+        response = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=native_headers()
+        )
+        assert response.status_code == 202
+        assert len(response.json()["operations"]) == 2
+        excessive = webhook()
+        excessive["alerts"] = [
+            copy.deepcopy(excessive["alerts"][0]) for _ in range(101)
+        ]
+        rejected = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=excessive,
+            headers=native_headers(),
+        )
+        assert rejected.status_code == 400
+
+
+def test_native_informational_is_normalized_to_state_only_info() -> None:
+    selected = policy().model_copy(
+        update={
+            "allowed_severities": ["info"],
+            "immediate_severities": [],
+            "grouped_severities": [],
+            "state_only_severities": ["info"],
+        }
+    )
+    service = create_app(
+        settings=settings(), runtime=runtime(active=False), policy=selected, env={}
+    )
+    value = webhook()
+    value["receiver"] = "middleware-informational"
+    value["alerts"][0]["labels"]["severity"] = "informational"
+    with TestClient(service) as client:
+        response = client.post(
+            "/v1/integrations/alertmanager/events", json=value, headers=native_headers()
+        )
+        assert response.status_code == 202
+        assert response.json()["operations"][0]["operation_id"] is None

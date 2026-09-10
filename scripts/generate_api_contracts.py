@@ -173,6 +173,8 @@ def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
                 if method in MUTATION_METHODS:
                     _ensure_header(parameters, "X-Correlation-ID")
                     _ensure_header(parameters, "Idempotency-Key")
+                elif path == "/v1/communications/messages/by-idempotency":
+                    _ensure_header(parameters, "Idempotency-Key")
 
             responses = operation.setdefault("responses", {})
             # Preserve business-specific 422 responses emitted by the runtime.

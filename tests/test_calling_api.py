@@ -135,6 +135,19 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["dialing"], "blocked")
         self.assertFalse(self.store._commands)
 
+    async def test_compatibility_route_replays_same_operation_without_duplicate(self):
+        body = originate().model_dump()
+        first_status, first, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate", body,
+        )
+        second_status, second, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate", body,
+        )
+        self.assertEqual((first_status, second_status), (202, 200))
+        self.assertEqual(first["operation_id"], second["operation_id"])
+        self.assertTrue(second["duplicate"])
+        self.assertEqual(len(self.store._commands), 1)
+
     async def accept_call(self):
         _, data, _ = await self.call()
         identity = UUID(data["operation_id"])

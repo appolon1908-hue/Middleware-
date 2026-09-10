@@ -17,7 +17,8 @@ concurrency:
 jobs:
   attest-pinned-release:
     name: Recover provenance for the pinned signed release
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    # RUNTIME_MUTATION_DISABLED=true: registry attestations require separate release authorization.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -90,10 +91,8 @@ jobs:
           retention-days: 90
   release:
     name: Build, scan, sign, and verify immutable image
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+    # RUNTIME_MUTATION_DISABLED=true: image publication requires separate release authorization.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

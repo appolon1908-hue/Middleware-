@@ -19,10 +19,8 @@ permissions:
 
 jobs:
   build:
-    if: >-
-      github.repository == 'appolon1908-hue/Middleware-' &&
-      (github.event_name == 'pull_request' ||
-       (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    # RUNTIME_MUTATION_DISABLED=true: candidate publication requires separate release authorization.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

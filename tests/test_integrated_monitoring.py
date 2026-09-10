@@ -26,7 +26,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
 from app.core.config import settings
-from app.monitoring.backends import Backends, load_config
+from app.monitoring.backends import Backends, load_config, load_github_secret
 from app.monitoring.routes import get_backends, get_session, router
 from app.monitoring.store import metadata
 
@@ -294,6 +294,7 @@ def system(tmp_path, monkeypatch):
     app.include_router(router)
     app.dependency_overrides[get_session] = db
     app.dependency_overrides[load_config] = lambda: config
+    app.dependency_overrides[load_github_secret] = lambda: secret.read_bytes().strip()
     app.dependency_overrides[get_backends] = lambda: Backends(
         config, httpx.MockTransport(backend)
     )
@@ -1191,3 +1192,45 @@ def test_release_artifact_reader_rejects_links_and_oversized_files(tmp_path):
     artifact.write_bytes(b"x" * (MAX_RESPONSE_BYTES + 1))
     with pytest.raises(ValueError, match="size limit"):
         read_artifact(str(tmp_path), "api.json", expected)
+
+
+def test_webhook_secret_uses_mounted_release_configuration(tmp_path, monkeypatch):
+    secret = tmp_path / "webhook-key"
+    value = b"synthetic-webhook-key-for-isolated-tests"
+    secret.write_bytes(value + b"\n")
+    config = tmp_path / "release.json"
+    config.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "revision": "test",
+                "services": {},
+                "github": {"secret_file": str(secret)},
+            }
+        )
+    )
+    monkeypatch.setenv("MONITORING_CONFIG_FILE", str(config))
+    assert load_github_secret() == value
+
+
+@pytest.mark.parametrize("size", [8, 8193])
+def test_webhook_secret_rejects_invalid_length(tmp_path, monkeypatch, size):
+    from fastapi import HTTPException
+
+    secret = tmp_path / "webhook-key"
+    secret.write_bytes(b"x" * size)
+    config = tmp_path / "release.json"
+    config.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "revision": "test",
+                "services": {},
+                "github": {"secret_file": str(secret)},
+            }
+        )
+    )
+    monkeypatch.setenv("MONITORING_CONFIG_FILE", str(config))
+    with pytest.raises(HTTPException) as error:
+        load_github_secret()
+    assert error.value.status_code == 503

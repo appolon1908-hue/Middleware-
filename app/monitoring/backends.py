@@ -68,6 +68,21 @@ def service_for(config, principal, service_id, environment=None):
     return service
 
 
+def load_github_secret():
+    """Load webhook identity from mounted release configuration, not HTTP input."""
+    config = load_config()
+    try:
+        path = config["github"]["secret_file"]
+        with Path(path).open("rb") as stream:
+            raw = stream.read(8193)
+        secret = raw.strip()
+        if len(raw) > 8192 or len(secret) < 32:
+            raise ValueError("secret length")
+        return secret
+    except (KeyError, OSError, ValueError, TypeError):
+        raise HTTPException(503, "GitHub webhook identity unavailable") from None
+
+
 class Backends:
     def __init__(self, config, transport=None):
         self.config = config

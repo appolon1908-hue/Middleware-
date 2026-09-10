@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import json
-from pathlib import Path
 import re
 from uuid import uuid4
 
@@ -18,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.session import get_session
 from .auth import Principal, READ_ROLES, require
 from .artifacts import read_artifact
-from .backends import Backends, load_config, redact, service_for
+from .backends import Backends, load_config, load_github_secret, redact, service_for
 from .models import (
     BrowserEvent,
     ContractRefresh,
@@ -566,16 +565,12 @@ async def bounded_body(request):
 
 @router.post("/platform/v1/integrations/github/events", response_model=Envelope)
 async def github_event(
-    request: Request, store=Depends(get_store), config=Depends(load_config)
+    request: Request,
+    store=Depends(get_store),
+    config=Depends(load_config),
+    secret: bytes = Depends(load_github_secret),
 ):
     raw = await bounded_body(request)
-    try:
-        binding = config["github"]
-        secret = Path(binding["secret_file"]).read_bytes().strip()
-        if len(secret) < 32:
-            raise ValueError("secret")
-    except (KeyError, OSError, ValueError):
-        raise HTTPException(503, "GitHub webhook identity unavailable") from None
     signature = request.headers.get("X-Hub-Signature-256", "")
     expected = "sha256=" + hmac.new(secret, raw, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):

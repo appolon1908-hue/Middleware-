@@ -366,7 +366,7 @@ def create_app(
                     request_idempotency_key=supplied_idempotency,
                 )
             except (IncidentConflict, CommandError, StorageError) as exc:
-                if not native:
+                if not native or len(webhook.alerts) == 1:
                     raise
                 # Native Alertmanager retries the complete webhook on non-2xx.
                 # Report per-alert failure instead so one conflicting transition

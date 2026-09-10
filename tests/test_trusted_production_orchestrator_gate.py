@@ -181,3 +181,8 @@ def test_orchestrator_classifies_the_evidence_gate_as_read_only() -> None:
     relative = GATE.relative_to(ROOT).as_posix()
 
     assert orchestrator["workflow_has_runtime_mutation"](text, relative) is False
+
+
+def test_current_candidate_passes_the_unchanged_protected_trust_launcher() -> None:
+    launcher = load_launcher()
+    assert launcher.validate_candidate(ROOT) == ORCHESTRATOR

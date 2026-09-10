@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,13 @@ RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
 REQUIRED_CHECK_APP_ID = 15368
 INDEPENDENT_REVIEWER_ID = 77101516
+TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS = {
+    "trusted-production-orchestrator-gate.yml": frozenset(
+        {
+            "24b766af40ad1deb6c47fe1f667ed93b29e556abdacce88d6c3daf527f4f902e",
+        }
+    ),
+}
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -36,7 +44,21 @@ EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
         "Disposable NATS JetStream integration",
         "Temporal critical workflow integration",
         "Synthetic no-effect acceptance E2E",
-        "orchestrator-contract",
+    }
+)
+EXPECTED_SECURITY_CODEOWNER_PATHS = frozenset(
+    {
+        "/.github/CODEOWNERS",
+        "/.github/workflows/manual-release-intent.yml",
+        "/.github/workflows/production-orchestrator-contract.yml",
+        "/.github/workflows/trusted-production-orchestrator-gate.yml",
+        "/.codestra/production-orchestrator-contract.v1.json",
+        "/.codestra/run-trusted-production-orchestrator.py",
+        "/.codestra/validate-production-orchestrator-contract.py",
+        "/.codestra/validate-release-intent.py",
+        "/config/repository-governance.v1.json",
+        "/scripts/apply_repository_governance.py",
+        "/scripts/validate_repository_governance.py",
     }
 )
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -63,6 +85,17 @@ def load_json(path: Path) -> dict[str, Any]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise GovernanceError(message)
+
+
+def validate_pull_request_target_workflow(workflow: Path, text: str) -> None:
+    if "pull_request_target:" not in text:
+        return
+    trusted_digests = TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS.get(workflow.name)
+    require(
+        trusted_digests is not None
+        and hashlib.sha256(text.encode()).hexdigest() in trusted_digests,
+        f"{workflow.name}: pull_request_target is forbidden",
+    )
 
 
 def require_mapping(value: Any, message: str) -> dict[str, Any]:
@@ -104,6 +137,33 @@ def require_exact_strings(
             f"unexpected={sorted(unexpected)} duplicates={duplicates}"
         ),
     )
+
+
+def validate_codeowners(text: str) -> None:
+    assignments: dict[str, tuple[str, ...]] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        require(len(parts) >= 2, "CODEOWNERS entry has no owner")
+        pattern, *owners = parts
+        require(pattern not in assignments, f"duplicate CODEOWNERS pattern: {pattern}")
+        require(
+            all(owner.startswith("@") and len(owner) > 1 for owner in owners),
+            f"CODEOWNERS entry has an invalid owner: {pattern}",
+        )
+        assignments[pattern] = tuple(owners)
+
+    require(
+        assignments.get("*") == ("@appolon1908-hue", "@kazan555"),
+        "CODEOWNERS does not identify both repository reviewers",
+    )
+    for pattern in EXPECTED_SECURITY_CODEOWNER_PATHS:
+        require(
+            assignments.get(pattern) == ("@kazan555",),
+            f"independent security CODEOWNER drift: {pattern}",
+        )
 
 
 def validate_environment_release_policy(policy: dict[str, Any]) -> None:
@@ -212,6 +272,7 @@ def validate_source_policy() -> dict[str, Any]:
     require(rules.get("enforcement") == "active", "ruleset must be active")
     for key in (
         "require_pull_request",
+        "require_code_owner_review",
         "require_review_thread_resolution",
         "require_linear_history",
         "require_status_checks_to_pass",
@@ -233,18 +294,11 @@ def validate_source_policy() -> dict[str, Any]:
     )
     validate_environment_release_policy(policy)
 
-    codeowners = CODEOWNERS_PATH.read_text(encoding="utf-8")
-    require(
-        "@appolon1908-hue" in codeowners,
-        "CODEOWNERS does not identify the repository owner",
-    )
+    validate_codeowners(CODEOWNERS_PATH.read_text(encoding="utf-8"))
 
     for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml")):
         text = workflow.read_text(encoding="utf-8")
-        require(
-            "pull_request_target:" not in text,
-            f"{workflow.name}: pull_request_target is forbidden",
-        )
+        validate_pull_request_target_workflow(workflow, text)
         require("write-all" not in text, f"{workflow.name}: write-all permission is forbidden")
         for action, ref in USES.findall(text):
             if action.startswith("./"):
@@ -442,6 +496,11 @@ def validate_live_ruleset(
         pull_request_parameters.get("dismiss_stale_reviews_on_push")
         is encoded.get("dismiss_stale_reviews"),
         "live stale-review dismissal drift",
+    )
+    require(
+        pull_request_parameters.get("require_code_owner_review")
+        is encoded.get("require_code_owner_review"),
+        "live code-owner review requirement drift",
     )
     require(
         pull_request_parameters.get("required_review_thread_resolution")

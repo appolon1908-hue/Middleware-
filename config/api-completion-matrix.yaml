@@ -293,6 +293,12 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: communications
   method: GET
+  path: /v1/communications/messages/by-idempotency
+  canonical_operation_id: get_communication_by_idempotency_v1_communications_messages_by_idempotency_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: communications
+  method: GET
   path: /v1/communications/messages/{messageId}
   canonical_operation_id: get_communication_message_v1_communications_messages__messageId__get
   implementation_file: registered FastAPI runtime

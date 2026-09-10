@@ -40,6 +40,7 @@
     "enforcement": "active",
     "require_pull_request": true,
     "required_approvals": 1,
+    "require_code_owner_review": true,
     "require_extra_approval_for_unattributed_changes": false,
     "reason_required_approvals": "the repository has a second collaborator with write access, so one independent human approval is required in addition to the exact-head CI, security, contract, rollback, and deployment gates.",
     "dismiss_stale_reviews": true,
@@ -61,8 +62,7 @@
       "Disposable PostgreSQL Redis integration",
       "Disposable NATS JetStream integration",
       "Temporal critical workflow integration",
-      "Synthetic no-effect acceptance E2E",
-      "orchestrator-contract"
+      "Synthetic no-effect acceptance E2E"
     ]
   },
   "actions_policy": {

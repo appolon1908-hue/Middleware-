@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
 from app.api.v1.automation import router as automation_router
+from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.campaign_search import router as campaign_search_router
 from app.api.v1.commands import router as commands_router
 from app.api.v1.control import router as control_router
@@ -55,6 +56,7 @@ app.include_router(events_router)
 app.include_router(callbacks_router)
 app.include_router(control_router)
 app.include_router(automation_router)
+app.include_router(campaign_design_router)
 app.include_router(reports_router)
 app.include_router(operations_router)
 app.include_router(lead_reconciliation_router)
@@ -161,6 +163,8 @@ CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
 N8N_SERVICE_JWT_ROUTES = frozenset(
     {
         ("POST", "/api/v1/automation/policy-check"),
+        ("POST", "/api/v1/campaign-designs/preview"),
+        ("POST", "/api/v1/campaign-designs/approvals"),
         ("POST", "/api/v1/integrations/n8n/results"),
     }
 )

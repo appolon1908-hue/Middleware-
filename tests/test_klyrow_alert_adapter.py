@@ -7,7 +7,7 @@ import pytest
 from app.commands import CommandEnvelope
 from app.config import ConfigurationError, Settings
 from app.klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
-from app.temporal_workflows import CommandExecutionRequest
+from app.temporal_workflows import ActivityResult, CommandExecutionRequest
 
 
 def settings() -> Settings:
@@ -78,6 +78,49 @@ def test_changed_recipient_is_rejected() -> None:
     changed = replace(current, payload=payload)
     with pytest.raises(KlyrowAlertAdapterError, match="recipient"):
         KlyrowAlertAdapter(settings(), env={})._validate_payload(changed)
+
+
+
+def legacy_request() -> CommandExecutionRequest:
+    current = request()
+    payload = dict(current.payload)
+    payload["to"] = ["appolon@codestra.co"]
+    payload["reply_to"] = "appolon@codestra.co"
+    return replace(current, payload=payload)
+
+
+def test_legacy_recipient_is_readback_only() -> None:
+    adapter = KlyrowAlertAdapter(settings(), env={})
+    with pytest.raises(KlyrowAlertAdapterError, match="recipient"):
+        adapter._validate_payload(legacy_request())
+    payload = adapter._validate_payload(
+        legacy_request(),
+        allow_legacy_recipient=True,
+    )
+    assert payload["to"] == ["appolon@codestra.co"]
+
+
+@pytest.mark.asyncio
+async def test_legacy_queued_alert_is_never_resubmitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = KlyrowAlertAdapter(
+        settings(),
+        env={
+            "OBSERVABILITY_ALERT_EMAIL_DELIVERY": "true",
+            "OBSERVABILITY_ALERT_ACTIVATION_ID": "CHG-TEST-OBS-ALERT-01",
+            "LIVE_EMAIL_DELIVERY": "false",
+        },
+    )
+
+    async def unmatched_readback(
+        _request: CommandExecutionRequest,
+    ) -> ActivityResult:
+        return ActivityResult(status="mismatch", detail="not accepted")
+
+    monkeypatch.setattr(adapter, "readback", unmatched_readback)
+    with pytest.raises(KlyrowAlertAdapterError, match="controlled reissue"):
+        await adapter.execute(legacy_request())
 
 
 def test_delivery_defaults_disabled() -> None:

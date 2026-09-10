@@ -9335,7 +9335,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Originate",
+        "summary": "Middleware Internal Originate Compat",
         "tags": [
           "domain-control",
           "odoo-calling"

@@ -138,7 +138,10 @@ def problem(
     status_code: int,
     code: str,
 ) -> JSONResponse:
-    correlation_id = request.headers.get("X-Correlation-ID", "")
+    correlation_id = (
+        request.headers.get("X-Correlation-ID", "").strip()
+        or getattr(request.state, "correlation_id", "")
+    )
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else None
     return JSONResponse(
         status_code=status_code,
@@ -287,15 +290,21 @@ def create_app(
         if native_header not in {"", "v4"}:
             raise RequestValidationError("unsupported native Alertmanager webhook mode")
         native = native_header == "v4"
+        if native:
+            request.state.correlation_id = (
+                request.headers.get("X-Correlation-ID", "").strip()
+                or "alertmanager-native-" + uuid.uuid4().hex
+            )
         actor, correlation_id = await authorize(
             request,
             expected_client_id=ALERTMANAGER_CLIENT_ID,
             scope_kind="command",
             policy=active_policy,
-            correlation_fallback=("alertmanager-native-" + uuid.uuid4().hex)
+            correlation_fallback=getattr(request.state, "correlation_id", "")
             if native
             else "",
         )
+        request.state.correlation_id = correlation_id
         supplied_idempotency = request.headers.get("Idempotency-Key", "").strip()
         if (supplied_idempotency or not native) and not IDEMPOTENCY_RE.fullmatch(
             supplied_idempotency
@@ -345,15 +354,31 @@ def create_app(
                 raise AuthorizationError("alert severity is not approved")
 
         operations = []
+        failures = []
         for alert in webhook.alerts:
-            result = await request.app.state.runtime.incidents.ingest(
-                group_key=webhook.group_key,
-                alert=alert,
-                actor_id=actor,
-                correlation_id=correlation_id,
-                source_deployment=deployment,
-                request_idempotency_key=supplied_idempotency,
-            )
+            try:
+                result = await request.app.state.runtime.incidents.ingest(
+                    group_key=webhook.group_key,
+                    alert=alert,
+                    actor_id=actor,
+                    correlation_id=correlation_id,
+                    source_deployment=deployment,
+                    request_idempotency_key=supplied_idempotency,
+                )
+            except (IncidentConflict, CommandError, StorageError) as exc:
+                if not native:
+                    raise
+                # Native Alertmanager retries the complete webhook on non-2xx.
+                # Report per-alert failure instead so one conflicting transition
+                # cannot cause already-persisted siblings to be replayed forever.
+                failures.append(
+                    {
+                        "alert_fingerprint": alert.fingerprint,
+                        "code": getattr(exc, "code", exc.__class__.__name__),
+                        "retryable": bool(getattr(exc, "retryable", False)),
+                    }
+                )
+                continue
             metric = "duplicates" if result.duplicate else "ingested"
             request.app.state.metrics[metric] += 1
             operation = result.operation
@@ -385,10 +410,13 @@ def create_app(
             sender_policy_id=active_policy.sender_policy_id,
             operations=[AlertOperationView.model_validate(item) for item in operations],
         )
-        duplicate = all(item["duplicate"] for item in operations)
+        duplicate = bool(operations) and all(item["duplicate"] for item in operations)
+        content = response.model_dump(mode="json")
+        if native and failures:
+            content["failures"] = failures
         return JSONResponse(
-            status_code=200 if duplicate else 202,
-            content=response.model_dump(mode="json"),
+            status_code=207 if native and failures else (200 if duplicate else 202),
+            content=content,
             headers={"X-Correlation-ID": correlation_id},
         )
 

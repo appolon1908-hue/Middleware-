@@ -24,10 +24,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/AlertmanagerWebhook'}
+            schema:
+              oneOf:
+                - {$ref: '#/components/schemas/AlertmanagerWebhook'}
+                - {$ref: '#/components/schemas/NativeAlertmanagerWebhook'}
       responses:
         '202': {description: New durable operations were accepted}
         '200': {description: Exact idempotent replay}
+        '207': {description: Native batch accepted with explicit per-alert failures}
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
@@ -107,10 +111,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/AlertmanagerWebhook'}
+            schema:
+              oneOf:
+                - {$ref: '#/components/schemas/AlertmanagerWebhook'}
+                - {$ref: '#/components/schemas/NativeAlertmanagerWebhook'}
       responses:
         '202': {description: A new durable operation was accepted}
         '200': {description: Exact idempotent replay}
+        '207': {description: Native batch accepted with explicit per-alert failures}
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
@@ -364,6 +372,43 @@ components:
           type: array
           minItems: 1
           maxItems: 1
+          items: {$ref: '#/components/schemas/Alert'}
+    NativeAlertmanagerWebhook:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - groupKey
+        - truncatedAlerts
+        - status
+        - receiver
+        - groupLabels
+        - commonLabels
+        - commonAnnotations
+        - externalURL
+        - alerts
+      properties:
+        version: {const: '4'}
+        groupKey: {type: string, minLength: 1, maxLength: 2048}
+        truncatedAlerts: {type: integer, const: 0}
+        status: {enum: [firing, resolved]}
+        receiver:
+          enum:
+            - codestra-observability-email
+            - middleware-default
+            - middleware-heartbeat
+            - middleware-critical
+            - middleware-high
+            - middleware-warning
+            - middleware-informational
+        groupLabels: {type: object, additionalProperties: {type: string}}
+        commonLabels: {type: object, additionalProperties: {type: string}}
+        commonAnnotations: {type: object, additionalProperties: {type: string}}
+        externalURL: {type: string, format: uri, maxLength: 2048}
+        alerts:
+          type: array
+          minItems: 1
+          maxItems: 100
           items: {$ref: '#/components/schemas/Alert'}
     AlertmanagerStatusSnapshot:
       type: object

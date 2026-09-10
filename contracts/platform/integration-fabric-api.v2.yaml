@@ -5919,6 +5919,36 @@ paths:
       - *id001
       - *id003
       - *id004
+  /v1/communications/messages/by-idempotency:
+    get:
+      summary: Get Communication By Idempotency
+      operationId: get_communication_by_idempotency_v1_communications_messages_by_idempotency_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunicationMessage'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id004
   /v1/communications/messages/{messageId}:
     get:
       summary: Get Communication Message

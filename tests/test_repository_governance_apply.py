@@ -53,6 +53,7 @@ def policy() -> dict:
         "default_branch_ruleset": {
             "enforcement": "active",
             "required_approvals": 1,
+            "require_code_owner_review": True,
             "dismiss_stale_reviews": True,
             "require_review_thread_resolution": True,
             "require_branch_up_to_date": True,
@@ -68,7 +69,6 @@ def policy() -> dict:
                 "Disposable NATS JetStream integration",
                 "Temporal critical workflow integration",
                 "Synthetic no-effect acceptance E2E",
-                "orchestrator-contract",
             ],
         },
     }
@@ -137,6 +137,7 @@ def test_ruleset_has_no_bypass_and_exact_required_checks(policy: dict) -> None:
     pull_request = rules["pull_request"]["parameters"]
     assert pull_request["allowed_merge_methods"] == ["squash"]
     assert pull_request["required_approving_review_count"] == 1
+    assert pull_request["require_code_owner_review"] is True
     assert (
         pull_request["require_extra_approval_for_unattributed_changes"] is False
     )
@@ -175,6 +176,22 @@ def test_live_ruleset_requires_github_actions_app_binding(policy: dict) -> None:
     )["parameters"]["required_status_checks"]
     checks[0]["integration_id"] = 1
     with pytest.raises(GovernanceError, match="app binding drift"):
+        validate_live_ruleset(live, policy["default_branch_ruleset"])
+
+
+def test_live_ruleset_requires_code_owner_review(policy: dict) -> None:
+    payload = ruleset_payload(policy)
+    live = {
+        **payload,
+        "source_type": "Repository",
+        "source": "appolon1908-hue/Middleware-",
+    }
+    pull_request = next(
+        item for item in live["rules"] if item["type"] == "pull_request"
+    )
+    pull_request["parameters"]["require_code_owner_review"] = False
+
+    with pytest.raises(GovernanceError, match="code-owner review requirement drift"):
         validate_live_ruleset(live, policy["default_branch_ruleset"])
 
 

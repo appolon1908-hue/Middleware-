@@ -3258,13 +3258,13 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
-  /v1/calls/originate:
+  /v1/telephony/calls/originate:
     post:
       tags:
       - domain-control
       - odoo-calling
       summary: Originate
-      operationId: middleware_internal_originate_compat_v1_calls_originate_post
+      operationId: originate_v1_telephony_calls_originate_post
       requestBody:
         content:
           application/json:
@@ -3307,13 +3307,13 @@ paths:
       - *id001
       - *id003
       - *id004
-  /v1/telephony/calls/originate:
+  /v1/calls/originate:
     post:
       tags:
       - domain-control
       - odoo-calling
       summary: Originate
-      operationId: originate_v1_telephony_calls_originate_post
+      operationId: middleware_internal_originate_compat_v1_calls_originate_post
       requestBody:
         content:
           application/json:

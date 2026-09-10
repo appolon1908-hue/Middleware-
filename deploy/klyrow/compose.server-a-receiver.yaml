@@ -19,3 +19,7 @@ services:
       KLYROW_MAIL_ODOO_DELIVERY_ENABLED: "true"
       KLYROW_MAIL_ODOO_DATABASE: codestra_odoo
       KLYROW_MAIL_ODOO_USERNAME: codestra.middleware@service.internal
+    networks:
+      middleware_backend: {}
+      codestra_internal_integration:
+        ipv4_address: ${KLYROW_MAIL_RPC_CLIENT_IP:?reserve the reviewed private mail-worker IPv4 address}

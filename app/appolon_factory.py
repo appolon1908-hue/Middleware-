@@ -178,6 +178,8 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    from .monitoring.routes import router as monitoring_router
+    app.include_router(monitoring_router)
 
     def realtime_store(request: Request):
         active = request.app.state.runtime

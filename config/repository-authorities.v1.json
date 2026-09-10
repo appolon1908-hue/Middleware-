@@ -24,128 +24,153 @@
     {
       "component": "middleware",
       "principal_repository": "appolon1908-hue/Middleware-",
-      "role": "cross-system-control-plane"
+      "role": "cross-system-control-plane",
+      "github_repository_id": 1347559071
     },
     {
       "component": "caddy",
       "principal_repository": "appolon1908-hue/Caddy",
-      "role": "shared-edge-tls-reverse-proxy"
+      "role": "shared-edge-tls-reverse-proxy",
+      "github_repository_id": 1350228103
     },
     {
       "component": "kong",
       "principal_repository": "appolon1908-hue/Kong",
-      "role": "api-gateway-policy-routes-plugins"
+      "role": "api-gateway-policy-routes-plugins",
+      "github_repository_id": 1347790742
     },
     {
       "component": "keycloak",
       "principal_repository": "appolon1908-hue/Keycloak",
-      "role": "identity-clients-scopes-token-issuance"
+      "role": "identity-clients-scopes-token-issuance",
+      "github_repository_id": 1347523366
     },
     {
       "component": "n8n",
       "principal_repository": "appolon1908-hue/N8N",
-      "role": "automation-workflow-source"
+      "role": "automation-workflow-source",
+      "github_repository_id": 1347560645
     },
     {
       "component": "odoo",
       "principal_repository": "appolon1908-hue/Odoo",
-      "role": "odoo-modules-business-crm-source"
+      "role": "odoo-modules-business-crm-source",
+      "github_repository_id": 1347522940
     },
     {
       "component": "telnexa-sms",
       "principal_repository": "appolon1908-hue/telnexa",
-      "role": "jasmin-sms-runtime-billing-webhooks"
+      "role": "jasmin-sms-runtime-billing-webhooks",
+      "github_repository_id": 1334764612
     },
     {
       "component": "telnexa-web",
       "principal_repository": "appolon1908-hue/Telnexa-web",
-      "role": "telnexa-public-website-onboarding"
+      "role": "telnexa-public-website-onboarding",
+      "github_repository_id": 1346958528
     },
     {
       "component": "klyrow-email",
       "principal_repository": "appolon1908-hue/klyrow.com",
-      "role": "email-postal-mautic-runtime"
+      "role": "email-postal-mautic-runtime",
+      "github_repository_id": 1334863061
     },
     {
       "component": "klyrow-web",
       "principal_repository": "appolon1908-hue/klyrow-Website-",
-      "role": "klyrow-public-marketing-frontend"
+      "role": "klyrow-public-marketing-frontend",
+      "github_repository_id": 1346968526
     },
     {
       "component": "kyqra-crawler",
       "principal_repository": "appolon1908-hue/kyqra-crawler",
-      "role": "canonical-crawler-runtime"
+      "role": "canonical-crawler-runtime",
+      "github_repository_id": 1334792686
     },
     {
       "component": "kyqra-legacy",
       "principal_repository": "appolon1908-hue/kyqra",
       "role": "legacy-reference-only",
-      "status": "deprecated"
+      "status": "deprecated",
+      "github_repository_id": 1334764212
     },
     {
       "component": "vicidial-asterisk",
       "principal_repository": "appolon1908-hue/Vicidialer-Codestra",
-      "role": "voice-contact-center-connector-runtime"
+      "role": "voice-contact-center-connector-runtime",
+      "github_repository_id": 1347744324
     },
     {
       "component": "provisioning",
       "principal_repository": "appolon1908-hue/codestra-provisioning-service",
-      "role": "identity-access-provisioning-runtime"
+      "role": "identity-access-provisioning-runtime",
+      "github_repository_id": 1339900477
     },
     {
       "component": "sdk",
       "principal_repository": "appolon1908-hue/SDK-repository",
-      "role": "developer-facing-contracts-sdks-connector-kit"
+      "role": "developer-facing-contracts-sdks-connector-kit",
+      "github_repository_id": 1349042079
     },
     {
       "component": "social",
       "principal_repository": "appolon1908-hue/social.codestra.co",
-      "role": "social-postiz-product-source"
+      "role": "social-postiz-product-source",
+      "github_repository_id": 1348783113
     },
     {
       "component": "ai",
       "principal_repository": "appolon1908-hue/Codestra-AI",
-      "role": "ai-provider-product-source"
+      "role": "ai-provider-product-source",
+      "github_repository_id": 1351354401
     },
     {
       "component": "marketing",
       "principal_repository": "appolon1908-hue/Codestra-Marketing-",
-      "role": "marketing-provider-product-source"
+      "role": "marketing-provider-product-source",
+      "github_repository_id": 1351352422
     },
     {
       "component": "scrapper",
       "principal_repository": "appolon1908-hue/scrapper",
-      "role": "legacy-business-scrapper-source-and-migration-evidence"
+      "role": "legacy-business-scrapper-source-and-migration-evidence",
+      "github_repository_id": 1329513537
     },
     {
       "component": "beyvra-backend",
       "principal_repository": "appolon1908-hue/beyvra-backend",
-      "role": "independent-product-backend"
+      "role": "independent-product-backend",
+      "github_repository_id": 1319831182
     },
     {
       "component": "beyvra-frontend",
       "principal_repository": "appolon1908-hue/beyvra-frontend",
-      "role": "independent-product-frontend"
+      "role": "independent-product-frontend",
+      "github_repository_id": 1320246591
     },
     {
       "component": "moneybee-backend",
       "principal_repository": "appolon1908-hue/Moneybee-Backend",
-      "role": "independent-product-backend"
+      "role": "independent-product-backend",
+      "github_repository_id": 1343760409
     },
     {
       "component": "moneybee-frontend",
       "principal_repository": "appolon1908-hue/Moneybee-frontend-",
-      "role": "independent-product-frontend"
+      "role": "independent-product-frontend",
+      "github_repository_id": 1343759743
     },
     {
       "component": "breero",
       "principal_repository": "appolon1908-hue/Breero.com",
-      "role": "independent-product"
+      "role": "independent-product",
+      "github_repository_id": 1331354808
     },
     {
       "component": "larim-a-backend",
       "principal_repository": "appolon1908-hue/LARIM-A-Backend",
-      "role": "independent-product-backend"
+      "role": "independent-product-backend",
+      "github_repository_id": 1343962951
     },
     {
       "component": "larim-a-frontend",
@@ -158,12 +183,14 @@
     {
       "component": "booked4seasons",
       "principal_repository": "appolon1908-hue/booked4seasons",
-      "role": "independent-product"
+      "role": "independent-product",
+      "github_repository_id": 1332044491
     },
     {
       "component": "codestra-public-site",
       "principal_repository": "appolon1908-hue/codestra",
-      "role": "public-site-source"
+      "role": "public-site-source",
+      "github_repository_id": 1319808791
     },
     {
       "component": "restaurant-frontend",

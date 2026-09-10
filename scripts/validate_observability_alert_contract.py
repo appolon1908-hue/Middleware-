@@ -18,9 +18,9 @@ POLICY_SCALARS: dict[str, object] = {
     "receiver": "codestra-observability-email",
     "recipient_policy_id": "codestra-observability-admin-v1",
     "sender_policy_id": "codestra-alert-sender-v1",
-    "recipient": "appolon@codestra.co",
+    "recipient": "appolon1908@gmail.com",
     "sender": "alerts@codestra.co",
-    "reply_to": "appolon@codestra.co",
+    "reply_to": "appolon1908@gmail.com",
     "warning_group_wait_seconds": 300,
     "warning_repeat_interval_seconds": 14400,
     "max_alerts_per_request": 1,
@@ -659,7 +659,7 @@ def validate(root: Path = ROOT) -> tuple[int, int]:
         'MESSAGE_PATH = "/v1/email/messages"',
         'MESSAGE_STATUS_PATH = "/v1/email/messages/{message_id}"',
         'CLIENT_ID = "middleware-alert-delivery"',
-        '"appolon@codestra.co"',
+        '"appolon1908@gmail.com"',
         '"alerts@codestra.co"',
         "general LIVE_EMAIL_DELIVERY must remain disabled",
     ):
@@ -692,7 +692,7 @@ def main() -> None:
     print("OBSERVABILITY_ALERT_CONTRACT=PASS")
     print(f"OBSERVABILITY_ALERT_ROUTES={route_count}")
     print(f"REPOSITORY_CAPABILITIES_DISABLED={capability_count}")
-    print("ALERT_RECIPIENT=appolon@codestra.co")
+    print("ALERT_RECIPIENT=appolon1908@gmail.com")
     print("ALERT_SENDER=alerts@codestra.co")
     print("DIRECT_SMTP_ALLOWED=NO")
     print("ALERT_DELIVERY_DEFAULT=DISABLED")

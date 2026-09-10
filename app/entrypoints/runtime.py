@@ -29,6 +29,7 @@ from sqlalchemy import text
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
 from app.db.session import engine
+from app.monitoring.routes import is_monitoring_route as _is_monitoring_route
 
 logger = logging.getLogger("codestra.runtime")
 WORKER_CYCLES = Counter(
@@ -251,6 +252,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
             and not signed_write
             and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
             and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
+            and not _is_monitoring_route(request)
         ):
             try:
                 verify_bearer(

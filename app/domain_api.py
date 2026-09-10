@@ -20,10 +20,12 @@ from .operations import (
 )
 from .security import AuthorizationError, RequestValidationError
 from .storage import StorageError
+from .telephony_api import compat_router as calling_compat_router
 from .telephony_api import router as calling_router
 
 router = APIRouter(tags=["domain-control"])
 router.include_router(calling_router)
+router.include_router(calling_compat_router)
 
 _PREFIXES = {
     "odoo": "crm.",

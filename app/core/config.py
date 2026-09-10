@@ -244,6 +244,7 @@ class Settings(BaseSettings):
     klyrow_mail_odoo_database: str = ""
     klyrow_mail_odoo_username: str = ""
     klyrow_mail_odoo_api_key_file: str = ""
+    klyrow_mail_odoo_ca_file: str = ""
     klyrow_mail_worker_batch_size: int = 8
     klyrow_mail_worker_lease_seconds: int = 60
     klyrow_mail_worker_max_attempts: int = 8

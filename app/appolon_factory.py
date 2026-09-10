@@ -7,13 +7,14 @@ from datetime import UTC, datetime
 from typing import AsyncIterator
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
 from .api_inputs import (
     authenticated_tenant,
+    restrict_sms_identity,
     authorization_header,
     optional_header,
     required_header,
@@ -27,6 +28,7 @@ from .communications import (
     CommunicationMessagePage,
     CommunicationUsageReport,
     CommunicationsError,
+    CommunicationsNotFound,
     CommunicationsService,
     CreateMessageRequest,
     MemoryCommunicationsStore,
@@ -54,6 +56,7 @@ from .observability import (
     safe_traceparent,
 )
 from .operations_dashboard import router as operations_dashboard_router
+from .monitoring.routes import router as monitoring_router
 from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
@@ -163,6 +166,7 @@ def create_app(
     app = FastAPI(
         title="Codestra Middleware API",
         version=resolved.app_version,
+        dependencies=[Depends(restrict_sms_identity)],
         docs_url=None if resolved.app_env in {"staging", "production"} else "/docs",
         redoc_url=None,
         lifespan=lifespan,
@@ -177,6 +181,7 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(monitoring_router)
 
     def realtime_store(request: Request):
         active = request.app.state.runtime
@@ -492,6 +497,17 @@ def create_app(
             content=message.model_dump(mode="json"),
             headers={"X-Correlation-ID": message.correlationId},
         )
+
+    @app.get("/v1/communications/messages/by-idempotency", response_model=CommunicationMessage)
+    async def get_communication_by_idempotency(request: Request) -> CommunicationMessage:
+        caller, _, tenant_id = await authenticated_tenant(request)
+        key = required_header(request, "Idempotency-Key", minimum=8, maximum=180)
+        message = await communications_service(request).store.message_by_idempotency(
+            tenant_id, key,
+        )
+        if caller.client_id == "odoo-sms" and message.channel != "sms":
+            raise CommunicationsNotFound("message was not found")
+        return message
 
     @app.get("/v1/communications/messages", response_model=CommunicationMessagePage)
     async def list_communication_messages(request: Request) -> JSONResponse:

@@ -5,7 +5,21 @@ from typing import Any
 from fastapi import Request
 
 from .control_plane_auth import ControlPlaneCaller, caller_for_authorization
-from .security import RequestValidationError, authorize_tenant
+from .security import AuthorizationError, RequestValidationError, SecurityError, authorize_tenant
+
+
+async def restrict_sms_identity(request: Request) -> None:
+    # This global dependency can only deny. The canonical endpoints still
+    # verify the original JWT, scope and tenant before any read or submission.
+    try:
+        caller = caller_for_authorization(request.headers.get("Authorization", ""))
+    except SecurityError:
+        return
+    if caller.client_id == "odoo-sms" and (request.method, request.url.path) not in {
+        ("POST", "/v1/communications/messages"),
+        ("GET", "/v1/communications/messages/by-idempotency"),
+    }:
+        raise AuthorizationError("SMS bridge is restricted to message submission and idempotency readback")
 
 
 def reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

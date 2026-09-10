@@ -25,7 +25,7 @@ _SPEC.loader.exec_module(_BASE)
 
 ROOT = _BASE.ROOT
 # Forward schema requirement; preserve the reviewed historical base verbatim.
-_BASE.CURRENT_SCHEMA_HEAD = "0058_campaign_design"
+setattr(_BASE, "CURRENT_SCHEMA_HEAD", "0058_campaign_design")
 SOURCE_RESOLUTION = (
     "resolve the exact protected-main GitHub event SHA at workflow execution"
 )

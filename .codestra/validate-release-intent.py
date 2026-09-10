@@ -158,7 +158,7 @@ EXPECTED_CHECK_WORKFLOWS = {
     },
 }
 ORCHESTRATOR_CONTRACT_WORKFLOW_SHA256 = (
-    "5d5f118c8089a7298cc7439327689f862bf669bad46ec9160a0b5763fa11e869"
+    "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f"
 )
 EXPECTED_CHECK_WORKFLOW_SHA256 = {
     "appolon1908-hue/Infustruction-repo": {
@@ -171,7 +171,7 @@ EXPECTED_CHECK_WORKFLOW_SHA256 = {
     },
     "appolon1908-hue/Middleware-": {
         ".github/workflows/production-orchestrator-contract.yml": ORCHESTRATOR_CONTRACT_WORKFLOW_SHA256,
-        ".github/workflows/middleware-ci.yml": "385d1f652556de076cb26a480351ab6bb2c5f1d6200b9e7beae06add8ee75d42",
+        ".github/workflows/middleware-ci.yml": "9131b5568cc945c943cf3a831d754b33f1f9194161a3879c8c36a3cf43e40952",
     },
     "appolon1908-hue/codestra": {
         ".github/workflows/production-orchestrator-contract.yml": ORCHESTRATOR_CONTRACT_WORKFLOW_SHA256,
@@ -221,8 +221,8 @@ KEYCLOAK_PRODUCTION_VALIDATOR_SHA256 = (
     "83d2fce102104543b871530f11115f20"
 )
 MIDDLEWARE_PRODUCTION_VALIDATOR_SHA256 = (
-    "6006bbc7850ce7666de926b6cad2585b"
-    "83d2fce102104543b871530f11115f20"
+    "db2954b0342fa1fa97d99e7fb31ee7aa"
+    "dd183c15715018d3b827fd1eda73efe4"
 )
 BACKEND_PRODUCTION_VALIDATOR_SHA256 = (
     "6006bbc7850ce7666de926b6cad2585b"

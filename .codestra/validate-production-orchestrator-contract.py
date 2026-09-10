@@ -37,8 +37,8 @@ STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "8d8f21260babfae5eaedbdd46472b1ec"
 )
 MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "15dbaa6d571a1d1e72c09ca417cc9419"
-    "8d8f21260babfae5eaedbdd46472b1ec"
+    "db7d2424693aa230c20c7d58056f0c4a"
+    "3e52b5da90bdd37caabe7971f504c4a5"
 )
 BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "15dbaa6d571a1d1e72c09ca417cc9419"
@@ -665,16 +665,16 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
             "9e21c8a67466533112117d6cf671ad4"
         ),
         ".github/workflows/exact-main-production-release.yml": (
-            "d172f545ce3200d9d82eb991887a0f1d"
-            "642a8dd11e5c472331fed9af8055f8d3"
+            "104527ac89e4dcf68309198105ecb4438"
+            "b0881d31e009e7d37b6f5a0e873ca80"
         ),
         ".github/workflows/lead-automation-n8n-source-v1.yml": (
             "6b0cb7126987c14757bd1f48667bf81d"
             "50caaed769389cb30fc725766ea6bed6"
         ),
         ".github/workflows/middleware-ci.yml": (
-            "385d1f652556de076cb26a480351ab6b"
-            "b2c5f1d6200b9e7beae06add8ee75d42"
+            "9131b5568cc945c943cf3a831d754b33"
+            "f1f9194161a3879c8c36a3cf43e40952"
         ),
         ".github/workflows/integration-main-release-authorities.yml": (
             "43323ab7203be3317f700e099a01ca03f"
@@ -738,6 +738,7 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
         ".github/workflows/connector-runtime-api-ci.yml": "917ab06febf30f0d81146fc147794dace9510f7bb0a6fb903dd69b2244d4e1d0",
         ".github/workflows/connector-storage-ci.yml": "eada698e8756b76431a43f8d54d1aa192b9d964bca9a5e76d90476f35135bc7a",
         ".github/workflows/lead-automation-v1.yml": "9cdf5b9ce21f528bb8d0cb29b170586d212f5dfeb0e4ad237bb531a41bd89274",
+        ".github/workflows/integrated-monitoring.yml": "a48fce82339f859f7d4c5b8a7e7f3fa6a0ed33bcbf7217232928629bc7c76fdf",
         ".github/workflows/odoo-calling-contract.yml": (
             "0010271981bd5683a5c28af02ba24cb3d"
             "0387c7920d1f2f59c6235166341e5b2"
@@ -762,6 +763,14 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
     },
 }
 APPROVED_OFFLINE_RUN_SHA256: dict[str, dict[str, frozenset[str]]] = {
+    "appolon1908-hue/Middleware-": {
+        ".github/workflows/trusted-production-orchestrator-gate.yml": frozenset(
+            {"6ceced166ce773d56bb54f544dee4508a60803465987e93cb8d719ee96df6df3"}
+        ),
+        ".github/workflows/production-orchestrator-contract.yml": frozenset(
+            {"42481d485e47eb31f2e133ba690417a5a5927fccfb40ecd18836e5ad1ee3b1a9"}
+        ),
+    },
     "appolon1908-hue/beyvra-backend": {
         ".github/workflows/certification-ci.yml": frozenset(
             {"90342c1a6aff24d02b18a064f6fc1affcddbe05fb894ccb22122b9a649358387"}
@@ -770,8 +779,8 @@ APPROVED_OFFLINE_RUN_SHA256: dict[str, dict[str, frozenset[str]]] = {
 }
 APPROVED_DEFAULT_TEST_DISCOVERY_SOURCE_SHA256 = {
     "appolon1908-hue/Middleware-": (
-        "317e69eb9ba8393187cc7ef73655121b"
-        "2ec4879f6a57e055f5f72c051bb3b354"
+        "d3d59eef5a3163f18396f481c84f1fe9"
+        "e73bc2b49880d879c023be8552bdeeb7"
     ),
 }
 APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
@@ -859,6 +868,14 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
         ),
     },
     "appolon1908-hue/Middleware-": {
+        "scripts/run_ci.sh": (
+            "64d7c92279dd442144c7e1f74c3e48f0ab5d5db105238a534dcf8ccd99e93138",
+            frozenset({()}),
+        ),
+        "scripts/validate_middleware_authority_convergence.py": (
+            "07c3a1bd8780de9cf3d2f04f441c4d1423a781b2a4d0f5d24d0bd792b7daa1c7",
+            frozenset({()}),
+        ),
         "scripts/apply_portfolio_main_release_authorities.py": (
             "1294f61d095d93328f403dfd9d2f1484f5debb3e945dca674d47bbd09f3ed0f0",
             frozenset({("--mode", "validate")}),
@@ -5068,12 +5085,37 @@ def step_has_runtime_mutation(
         # The exception binds the complete execution envelope, not only the
         # run bytes. Environment or shell changes can turn the same fixture
         # into an executable preload or redirect its fake tools.
+        # Exact-hash offline run blocks may use GitHub's default bash shell
+        # or declare `shell: bash` explicitly. No environment, working-directory,
+        # or extra step keys are admitted because those can redirect execution.
+        allowed_step_keys = {"name", "run"}
+        if "shell" in step:
+            allowed_step_keys.add("shell")
+        allowed_job_environment: dict[str, object] = {}
+        if repository == "appolon1908-hue/Middleware-" and path in {
+            ".github/workflows/trusted-production-orchestrator-gate.yml",
+            ".github/workflows/production-orchestrator-contract.yml",
+        }:
+            if path == ".github/workflows/trusted-production-orchestrator-gate.yml":
+                allowed_job_environment = {
+                    "EXPECTED_SHA": "${{ github.event.pull_request.head.sha }}",
+                    "COMPARISON_SHA": "${{ github.event.pull_request.base.sha }}",
+                    "GITHUB_REPOSITORY_ID": "${{ github.repository_id }}",
+                    "VALIDATION_ROOT": "${{ github.workspace }}/candidate",
+                }
+            else:
+                allowed_job_environment = {
+                    "EXPECTED_SHA": "${{ (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && github.event.pull_request.head.sha || github.sha }}",
+                    "COMPARISON_SHA": "${{ (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && github.event.pull_request.base.sha || github.event.before }}",
+                    "GITHUB_REPOSITORY_ID": "${{ github.repository_id }}",
+                    "VALIDATION_ROOT": "${{ github.workspace }}/candidate",
+                }
         if (
-            set(step) != {"name", "run", "shell"}
-            or step.get("shell") != "bash"
+            set(step) != allowed_step_keys
+            or step.get("shell") not in {None, "bash"}
             or job.shell is not None
             or job.working_directory is not None
-            or bool(job.environment)
+            or job.environment != allowed_job_environment
         ):
             return True
         return False

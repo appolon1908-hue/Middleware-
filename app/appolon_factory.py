@@ -7,13 +7,14 @@ from datetime import UTC, datetime
 from typing import AsyncIterator
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
 from .api_inputs import (
     authenticated_tenant,
+    restrict_sms_identity,
     authorization_header,
     optional_header,
     required_header,
@@ -163,6 +164,7 @@ def create_app(
     app = FastAPI(
         title="Codestra Middleware API",
         version=resolved.app_version,
+        dependencies=[Depends(restrict_sms_identity)],
         docs_url=None if resolved.app_env in {"staging", "production"} else "/docs",
         redoc_url=None,
         lifespan=lifespan,
@@ -240,28 +242,7 @@ def create_app(
         started = telemetry.start_request()
         status_code = 500
         try:
-            # This unverified selector can only deny access. The two allowed
-            # endpoints still verify the original JWT, scope and tenant. Keep
-            # the SMS bridge out of generic commands and operation controls,
-            # which do not enforce the communications submission policy.
-            try:
-                caller = caller_for_authorization(request.headers.get("Authorization", ""))
-            except SecurityError:
-                caller = None
-            if caller is not None and caller.client_id == "odoo-sms" and (
-                request.method, request.url.path
-            ) not in {
-                ("POST", "/v1/communications/messages"),
-                ("GET", "/v1/communications/messages/by-idempotency"),
-            }:
-                telemetry.record_auth_denial(_operation(request), AuthorizationError.code)
-                response = _error_response(
-                    request, status_code=403, code=AuthorizationError.code,
-                    message="SMS bridge is restricted to message submission and idempotency readback",
-                    retryable=False,
-                )
-            else:
-                response = await call_next(request)
+            response = await call_next(request)
             status_code = response.status_code
             response.headers["X-Correlation-ID"] = request.state.correlation_id
             if request.state.traceparent is not None:

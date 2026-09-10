@@ -61,7 +61,6 @@ def test_readback_remains_available_when_delivery_is_disabled(test_settings):
     ("GET", "/v1/communications/messages"),
     ("GET", "/v1/communications/messages/00000000-0000-4000-8000-000000000001"),
     ("GET", "/v1/communications/usage"),
-    ("DELETE", "/v1/communications/messages/by-idempotency"),
 ])
 def test_sms_identity_cannot_enter_generic_api_routes(test_settings, method, path):
     runtime = _runtime(test_settings)

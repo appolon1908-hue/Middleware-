@@ -27,7 +27,8 @@ EXPECTED_FAMILY_COUNT = 16
 EXPECTED_WORKLOAD_COUNT = 31
 EXPECTED_REGISTRY_MIRRORS = 4
 EXPECTED_LOCAL_BACKUPS = 11
-CURRENT_SCHEMA_HEAD = "0057_platform_service_catalog"
+CURRENT_SCHEMA_HEAD = "0059_integrated_monitoring"
+OBSERVED_SIGNED_SCHEMA_HEAD = "0057_platform_service_catalog"
 PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -89,8 +90,8 @@ def _validate_observed_signed_evidence(
         errors.append(f"{label} image digest is malformed")
     if value.get("imageReference") != f"{CANONICAL_IMAGE}@{digest}":
         errors.append(f"{label} image reference is not canonical and digest-bound")
-    if value.get("schemaHead") != CURRENT_SCHEMA_HEAD:
-        errors.append(f"{label} schema head must be {CURRENT_SCHEMA_HEAD}")
+    if value.get("schemaHead") != OBSERVED_SIGNED_SCHEMA_HEAD:
+        errors.append(f"{label} schema head must be {OBSERVED_SIGNED_SCHEMA_HEAD}")
     for field in (
         "artifactArchiveDigest",
         "releaseManifestSha256",

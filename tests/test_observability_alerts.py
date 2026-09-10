@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 import jwt
-import yaml
+import yaml  # type: ignore[import-untyped]
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -69,9 +69,9 @@ def policy() -> AlertPolicy:
             "receiver": "codestra-observability-email",
             "recipient_policy_id": "codestra-observability-admin-v1",
             "sender_policy_id": "codestra-alert-sender-v1",
-            "recipient": "appolon@codestra.co",
+            "recipient": "appolon1908@gmail.com",
             "sender": "alerts@codestra.co",
-            "reply_to": "appolon@codestra.co",
+            "reply_to": "appolon1908@gmail.com",
             "allowed_environments": ["test"],
             "allowed_severities": ["critical", "warning"],
             "immediate_severities": ["critical"],

@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+  "aiosqlite==0.22.1",
   "mypy==1.17.1",
   "pytest==9.1.1",
   "ruff==0.12.10",

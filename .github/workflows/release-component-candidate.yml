@@ -68,7 +68,8 @@ env:
 
 jobs:
   build:
-    if: inputs.operation == 'build' && github.ref == 'refs/heads/main'
+    # RUNTIME_MUTATION_DISABLED=true: package publication requires separate release authorization.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -244,7 +245,8 @@ jobs:
             decision-SHA256SUMS
 
   sign:
-    if: inputs.operation == 'sign' && github.ref == 'refs/heads/main'
+    # RUNTIME_MUTATION_DISABLED=true: signing and registry writes require separate authorization.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: security-owner-staging-candidate
     timeout-minutes: 35

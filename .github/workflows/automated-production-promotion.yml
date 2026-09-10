@@ -90,6 +90,8 @@ jobs:
 
   production-read-only-admission:
     name: Admit signed release to production read-only canary
+    # RUNTIME_MUTATION_DISABLED=true: production admission requires separate authorization.
+    if: ${{ false }}
     needs: verify-release
     environment: production
     runs-on: ubuntu-24.04

@@ -17,6 +17,7 @@ BOUND_FILES = (
     "config/environments/staging.intake-observability.runtime.env.example",
     ".github/workflows/staging-intake-observability-contract.yml",
     "app/appolon_factory.py",
+    "app/monitoring/routes.py",
     "app/automation_v2.py",
     "app/n8n_control_plane.py",
     "app/operations_dashboard.py",

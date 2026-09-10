@@ -44,6 +44,7 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
 from app.api.v1.platform import router as platform_router
+from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
@@ -78,6 +79,7 @@ app.include_router(orders_router)
 app.include_router(ai_router)
 app.include_router(provider_commands_router)
 app.include_router(platform_router)
+app.include_router(monitoring_router)
 app.include_router(integrations_router)
 app.include_router(postiz_router)
 app.include_router(campaign_search_router)
@@ -225,6 +227,7 @@ async def control_request_guard(request: Request, call_next):
         and not _is_ai_console_jwt_route(request)
         and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
         and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
+        and not is_monitoring_route(request)
     ):
         try:
             verify_bearer(

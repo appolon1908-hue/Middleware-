@@ -155,7 +155,12 @@ def test_signature_attestations_and_independent_verification_are_exact():
         assert f"--type {predicate_type}" in TEXT or '--type "${type}"' in TEXT
     assert "--type slsaprovenance" not in TEXT
     assert 'output_name="${type##*/}"' in TEXT
-    assert "independently-verify:\n    needs: publish-sign\n    runs-on: ubuntu-latest" in TEXT
+    verification_job = TEXT.split("  independently-verify:\n", 1)[1].split(
+        "    runs-on: ubuntu-latest", 1
+    )[0]
+    assert "needs: publish-sign" in verification_job
+    assert "RUNTIME_MUTATION_DISABLED=true" in verification_job
+    assert "if: ${{ false }}" in verification_job
     assert "--certificate-identity \"${EXPECTED_IDENTITY}\"" in TEXT
     assert "--certificate-oidc-issuer \"${EXPECTED_ISSUER}\"" in TEXT
     assert (

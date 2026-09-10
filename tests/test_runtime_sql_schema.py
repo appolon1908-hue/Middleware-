@@ -193,6 +193,47 @@ def test_checked_contract_covers_source_and_exact_migration_history():
     assert "middleware_automation_schema_migrations" in contract
     assert len(schema.campaign_tables(ROOT)) == 6
     assert set(schema.campaign_tables(ROOT)).issubset(contract)
+    assert set(schema.monitoring_tables(ROOT)) == {
+        "monitoring_resources",
+        "monitoring_operations",
+        "monitoring_events",
+    }
+    assert set(schema.monitoring_tables(ROOT)).issubset(contract)
+
+
+@pytest.mark.parametrize("namespace", ["campaign", "monitoring"])
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "op.create_table('unrelated_table')",
+        "op.create_table(table_name)",
+        "",
+    ],
+)
+def test_alembic_namespace_rejects_unproved_tables(tmp_path, namespace, declaration):
+    path = (
+        tmp_path / "migrations/versions" / schema.ALEMBIC_CATALOG_MIGRATIONS[namespace]
+    )
+    path.parent.mkdir(parents=True)
+    path.write_text(declaration)
+    with pytest.raises(schema.SchemaDriftError):
+        schema.alembic_tables(tmp_path, namespace)
+
+
+def test_monitoring_baseline_covers_exact_source_ddl():
+    evidence = json.loads(
+        (
+            ROOT / "docs/production/evidence/monitoring-schema-0059-baseline.json"
+        ).read_text()
+    )
+    contract = json.loads((ROOT / schema.CONTRACT_PATH).read_text())
+    rows = {row["table_name"]: row for row in evidence["rows"]}
+    assert set(rows) == set(schema.monitoring_tables(ROOT))
+    for name, row in rows.items():
+        assert (
+            schema.structure_digest(json.loads(row["structure"]))
+            == contract["tables"][name]
+        )
 
 
 @pytest.mark.parametrize(

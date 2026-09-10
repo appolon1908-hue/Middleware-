@@ -12,7 +12,7 @@ import pytest
 
 from scripts import migrate_runtime as runner
 from scripts.production_migration_authority import validate_authority
-from scripts.runtime_sql_schema import campaign_tables
+from scripts.runtime_sql_schema import campaign_tables, monitoring_tables
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUNTIME_INTEGRATION_TESTS") != "1", reason="disposable PostgreSQL only"
@@ -133,6 +133,18 @@ SQL_CORRUPTIONS.update(
         "campaign_revision_trigger": "ALTER TABLE public.campaign_design_revision DISABLE TRIGGER campaign_design_revision_immutable",
         "campaign_approval_function": "CREATE OR REPLACE FUNCTION public.reject_campaign_approval_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END; $$",
         "campaign_revision_function": "CREATE OR REPLACE FUNCTION public.enforce_campaign_design_revision_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END; $$",
+    }
+)
+
+SQL_CORRUPTIONS.update(
+    {
+        **{
+            f"missing_{table}": f"DROP TABLE public.{table}"
+            for table in monitoring_tables(runner.ROOT)
+        },
+        "monitoring_replay_unique": "ALTER TABLE public.monitoring_operations DROP CONSTRAINT uq_monitoring_operation_replay",
+        "monitoring_scope_index": "DROP INDEX public.ix_monitoring_resource_scope",
+        "monitoring_tenant_nullability": "ALTER TABLE public.monitoring_events ALTER COLUMN tenant DROP NOT NULL",
     }
 )
 

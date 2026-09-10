@@ -5594,6 +5594,1533 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /platform/v1/repositories:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Repositories
+      operationId: repositories_platform_v1_repositories_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/hosts:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Hosts
+      operationId: hosts_platform_v1_hosts_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/hosts/{host_id}:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Host
+      operationId: host_platform_v1_hosts__host_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Host Id
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/services/{service_id}/deployments:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Deployments
+      operationId: deployments_platform_v1_services__service_id__deployments_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+          default: production
+          title: Environment
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/services/{service_id}/endpoints:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Endpoints
+      operationId: endpoints_platform_v1_services__service_id__endpoints_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+          default: production
+          title: Environment
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/services/{service_id}/dependencies:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Dependencies
+      operationId: dependencies_platform_v1_services__service_id__dependencies_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/services/{service_id}/coverage:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Coverage
+      operationId: coverage_platform_v1_services__service_id__coverage_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+          default: production
+          title: Environment
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/services/{service_id}/telemetry-profile:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Profile
+      operationId: profile_platform_v1_services__service_id__telemetry_profile_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Profile'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/services/{service_id}/contract-refresh:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Contract Refresh
+      operationId: contract_refresh_platform_v1_services__service_id__contract_refresh_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractRefresh'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/sync/status:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Sync Status
+      operationId: sync_status_platform_v1_sync_status_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+          default: production
+          title: Environment
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/sync/reconciliations:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Reconcile
+      operationId: reconcile_platform_v1_sync_reconciliations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reconciliation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/sync/reconciliations/{reconciliation_id}:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Reconciliation Result
+      operationId: reconciliation_result_platform_v1_sync_reconciliations__reconciliation_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: reconciliation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Reconciliation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/integrations/github/events:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Github Event
+      operationId: github_event_platform_v1_integrations_github_events_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/runtime/observations:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Observe
+      operationId: observe_platform_v1_runtime_observations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Observation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/telemetry/heartbeats:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Heartbeat
+      operationId: heartbeat_platform_v1_telemetry_heartbeats_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Heartbeat'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/overview:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Overview
+      operationId: overview_v1_observability_overview_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/observability/services/{service_id}/health:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Health
+      operationId: health_v1_observability_services__service_id__health_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+          default: production
+          title: Environment
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/topology:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Topology
+      operationId: topology_v1_observability_topology_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/observability/metrics/query:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Query Metrics
+      operationId: query_metrics_v1_observability_metrics_query_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /v1/observability/metrics/query-range:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Query Metrics Range
+      operationId: query_metrics_range_v1_observability_metrics_query_range_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /v1/observability/logs/query:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Query Logs
+      operationId: query_logs_v1_observability_logs_query_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /v1/observability/traces/search:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Query Traces Search
+      operationId: query_traces_search_v1_observability_traces_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /v1/observability/traces/{trace_id}:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Trace
+      operationId: trace_v1_observability_traces__trace_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: trace_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trace Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/slo:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: List Monitoring Slo
+      operationId: list_monitoring_slo_v1_observability_slo_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/dashboards:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: List Monitoring Dashboard
+      operationId: list_monitoring_dashboard_v1_observability_dashboards_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/certificates:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: List Monitoring Certificate
+      operationId: list_monitoring_certificate_v1_observability_certificates_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/backups:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: List Monitoring Backup
+      operationId: list_monitoring_backup_v1_observability_backups_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/secrets/health:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Secrets Health
+      operationId: secrets_health_v1_observability_secrets_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/observability/integrations:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Integrations
+      operationId: integrations_v1_observability_integrations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+  /v1/observability/integrations/{integration_id}:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Integration
+      operationId: integration_v1_observability_integrations__integration_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: integration_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Integration Id
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/agents:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Agents
+      operationId: agents_v1_observability_agents_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: campaign_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Campaign Id
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/campaigns/{campaign_id}:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Campaign
+      operationId: campaign_v1_observability_campaigns__campaign_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Campaign Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/events/stream:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Stream
+      operationId: stream_v1_observability_events_stream_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          type: string
+          default: '0'
+          title: Last-Event-Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/probe-runs:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Probe
+      operationId: probe_v1_observability_probe_runs_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProbeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
+  /v1/observability/probe-runs/{probe_run_id}:
+    get:
+      tags:
+      - integrated-monitoring
+      summary: Probe Result
+      operationId: probe_result_v1_observability_probe_runs__probe_run_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: probe_run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Probe Run Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/telemetry/browser-events:
+    post:
+      tags:
+      - integrated-monitoring
+      summary: Browser Event
+      operationId: browser_event_v1_telemetry_browser_events_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrowserEvent'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
+      - *id003
+      - *id004
   /health:
     get:
       summary: Health
@@ -6959,6 +8486,69 @@ components:
       - occurred_at
       - payload
       title: AutomationCommandRequest
+    BrowserEvent:
+      properties:
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        event_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Event Id
+        event_type:
+          type: string
+          enum:
+          - error
+          - performance
+          title: Event Type
+        release:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Release
+        route_template:
+          type: string
+          maxLength: 256
+          pattern: ^/[A-Za-z0-9_/{}:.-]*$
+          title: Route Template
+        metric:
+          type: string
+          enum:
+          - lcp_ms
+          - inp_ms
+          - cls
+          - error_count
+          title: Metric
+        value:
+          type: number
+          maximum: 1000000.0
+          minimum: 0.0
+          title: Value
+        occurred_at:
+          type: string
+          format: date-time
+          title: Occurred At
+      additionalProperties: false
+      type: object
+      required:
+      - service_id
+      - environment
+      - event_id
+      - event_type
+      - release
+      - route_template
+      - metric
+      - value
+      - occurred_at
+      title: BrowserEvent
     CallingResponse:
       properties:
         dialing:
@@ -7257,6 +8847,36 @@ components:
       - to
       - totals
       title: CommunicationUsageReport
+    ContractRefresh:
+      properties:
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        artifact_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Artifact Id
+        sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Sha256
+      additionalProperties: false
+      type: object
+      required:
+      - environment
+      - expected_revision
+      - artifact_id
+      - sha256
+      title: ContractRefresh
     ControlMutation:
       properties:
         expected_version:
@@ -7377,6 +8997,45 @@ components:
       - safe_replay_classification
       - replay_reason
       title: DeadLetterReplayRequest
+    Envelope:
+      properties:
+        data:
+          title: Data
+        observed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Observed At
+        freshness:
+          type: string
+          enum:
+          - fresh
+          - stale
+          - unknown
+          - not-applicable
+          title: Freshness
+        source_revision:
+          anyOf:
+          - type: string
+          - type: integer
+          - type: 'null'
+          title: Source Revision
+        correlation_id:
+          type: string
+          title: Correlation Id
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      type: object
+      required:
+      - data
+      - observed_at
+      - freshness
+      - correlation_id
+      title: Envelope
     FailureResult:
       properties:
         tenant_id:
@@ -7439,6 +9098,52 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    Heartbeat:
+      properties:
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        source_deployment:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Source Deployment
+        sequence:
+          type: integer
+          minimum: 1.0
+          title: Sequence
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        signals:
+          items:
+            type: string
+            enum:
+            - metrics
+            - logs
+            - traces
+          type: array
+          maxItems: 3
+          title: Signals
+      additionalProperties: false
+      type: object
+      required:
+      - service_id
+      - environment
+      - source_deployment
+      - sequence
+      - observed_at
+      - signals
+      title: Heartbeat
     HeartbeatRequest:
       properties:
         tenant_id:
@@ -7650,6 +9355,74 @@ components:
       - expected_version
       - reason
       title: MutationRequest
+    Observation:
+      properties:
+        kind:
+          type: string
+          enum:
+          - host
+          - deployment
+          - health
+          - integration
+          - agent
+          - campaign
+          - certificate
+          - backup
+          - slo
+          - dashboard
+          - security
+          - error
+          - config
+          title: Kind
+        resource_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Resource Id
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        source_deployment:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Source Deployment
+        sequence:
+          type: integer
+          minimum: 1.0
+          title: Sequence
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        campaign_id:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          - type: 'null'
+          title: Campaign Id
+        data:
+          type: object
+          title: Data
+      additionalProperties: false
+      type: object
+      required:
+      - kind
+      - resource_id
+      - service_id
+      - environment
+      - source_deployment
+      - sequence
+      - observed_at
+      - data
+      title: Observation
     OperationAttemptListResponse:
       properties:
         items:
@@ -8067,6 +9840,86 @@ components:
       - capability
       - proposed_action
       title: PolicyDecisionRequest
+    ProbeRequest:
+      properties:
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        target_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Target Id
+      additionalProperties: false
+      type: object
+      required:
+      - service_id
+      - environment
+      - target_id
+      title: ProbeRequest
+    Profile:
+      properties:
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        config_digest:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Config Digest
+        metrics_owner:
+          type: string
+          enum:
+          - prometheus
+          - otel
+          - not-applicable
+          title: Metrics Owner
+        logs_owner:
+          type: string
+          enum:
+          - alloy
+          - otel
+          - not-applicable
+          title: Logs Owner
+        traces_owner:
+          type: string
+          enum:
+          - otel
+          - not-applicable
+          title: Traces Owner
+        dashboard_ids:
+          items:
+            type: string
+            pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          type: array
+          maxItems: 20
+          title: Dashboard Ids
+      additionalProperties: false
+      type: object
+      required:
+      - environment
+      - expected_revision
+      - config_digest
+      - metrics_owner
+      - logs_owner
+      - traces_owner
+      title: Profile
     ProviderControlRequest:
       properties:
         operation_id:
@@ -8255,6 +10108,79 @@ components:
       - domains
       - providers
       title: ProviderReputationReport
+    QueryRequest:
+      properties:
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        query_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Query Id
+        start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start
+        end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End
+        step_seconds:
+          type: integer
+          maximum: 86400.0
+          minimum: 1.0
+          title: Step Seconds
+          default: 60
+        limit:
+          type: integer
+          maximum: 1000.0
+          minimum: 1.0
+          title: Limit
+          default: 100
+      additionalProperties: false
+      type: object
+      required:
+      - service_id
+      - environment
+      - query_id
+      title: QueryRequest
+    Reconciliation:
+      properties:
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        service_ids:
+          items:
+            type: string
+            pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Service Ids
+      additionalProperties: false
+      type: object
+      required:
+      - environment
+      - service_ids
+      title: Reconciliation
     ReconciliationRequest:
       properties:
         tenant_id:
@@ -8608,6 +10534,9 @@ components:
       - type
       title: ValidationError
   securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
     bearerAuth:
       type: http
       scheme: bearer

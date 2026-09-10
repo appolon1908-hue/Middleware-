@@ -416,6 +416,8 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
 }
 APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     "appolon1908-hue/Middleware-": {
+        ".github/workflows/middleware-ci.yml": "9131b5568cc945c943cf3a831d754b33f1f9194161a3879c8c36a3cf43e40952",
+        ".github/workflows/exact-main-production-release.yml": "104527ac89e4dcf68309198105ecb4438b0881d31e009e7d37b6f5a0e873ca80",
         ".github/workflows/integration-main-release-authorities.yml": (
             "43323ab7203be3317f700e099a01ca03f"
             "b9828292754fc67bd681d1d410a53f3"
@@ -481,6 +483,14 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
     str, dict[str, tuple[str, frozenset[tuple[str, ...]]]]
 ] = {
     "appolon1908-hue/Middleware-": {
+        "scripts/run_ci.sh": (
+            "64d7c92279dd442144c7e1f74c3e48f0ab5d5db105238a534dcf8ccd99e93138",
+            frozenset({()}),
+        ),
+        "scripts/validate_middleware_authority_convergence.py": (
+            "07c3a1bd8780de9cf3d2f04f441c4d1423a781b2a4d0f5d24d0bd792b7daa1c7",
+            frozenset({()}),
+        ),
         "scripts/audit_release_endpoints.py": (
             "636088666d9e0f605325073b7e06596192cc20247207ae1f0e4531ca4cbf8628",
             frozenset({()}),

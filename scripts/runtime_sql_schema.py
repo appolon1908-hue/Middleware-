@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 CONTRACT_PATH = "config/runtime-sql-schema.v1.json"
-ALEMBIC_CATALOG_MIGRATIONS = ("0058_campaign_design.py", "0059_integrated_monitoring.py")
+ALEMBIC_CATALOG_MIGRATIONS = ("0058_campaign_design.py",)
 SQL_GLOB = "[0-9][0-9][0-9][0-9]_*.sql"
 TABLE_RE = re.compile(
     r"\bCREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(middleware_[a-z0-9_]+)\s*\(", re.I

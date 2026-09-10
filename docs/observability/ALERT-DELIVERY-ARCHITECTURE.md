@@ -13,7 +13,7 @@ Prometheus
   -> `KlyrowAlertAdapter`
   -> Klyrow private API `/v1/email/messages`
   -> fixed sender `alerts@codestra.co`
-  -> fixed recipient `appolon@codestra.co`
+  -> fixed recipient `appolon1908@gmail.com`
 ```
 
 This preserves authentication, tenant policy, idempotency, audit, retries, unknown-outcome reconciliation, and provider read-back.

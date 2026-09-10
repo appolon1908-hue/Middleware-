@@ -8,6 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -438,22 +439,28 @@ async def test_durable_job_lifecycle_tenant_stream_cancel_and_recovery(
     assert (
         await auth_client.post(verify_path, headers=bad_signature)
     ).status_code == 401
-    expired = worker_headers(
-        "POST",
-        verify_path,
-        b"",
-        client_certificate,
-        timestamp=str(int(time.time()) - 301),
-    )
-    assert (await auth_client.post(verify_path, headers=expired)).status_code == 401
-    future = worker_headers(
-        "POST",
-        verify_path,
-        b"",
-        client_certificate,
-        timestamp=str(int(time.time()) + 301),
-    )
-    assert (await auth_client.post(verify_path, headers=future)).status_code == 401
+    # Pin only the verifier clock so CI scheduling cannot move a request from
+    # outside the signature window onto its accepted boundary. Certificate
+    # validity and durable nonce timestamps continue using the real clock.
+    signed_now = int(time.time())
+    with monkeypatch.context() as clock:
+        clock.setattr(worker_api, "time", SimpleNamespace(time=lambda: signed_now))
+        clock.setattr(settings, "ai_signature_ttl_seconds", 300)
+        for offset, expected_status in (
+            (-301, 401),
+            (-300, 200),
+            (300, 200),
+            (301, 401),
+        ):
+            headers = worker_headers(
+                "POST",
+                verify_path,
+                b"",
+                client_certificate,
+                timestamp=str(signed_now + offset),
+            )
+            response = await auth_client.post(verify_path, headers=headers)
+            assert response.status_code == expected_status, offset
     wrong_service = worker_headers(
         "POST", verify_path, b"", client_certificate, service_id="wrong-service"
     )

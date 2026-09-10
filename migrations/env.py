@@ -4,6 +4,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.db.models import Base
+from app.monitoring.store import metadata as monitoring_metadata
 
 config = context.config
 supplied_connection = config.attributes.get("connection")
@@ -13,7 +14,7 @@ if supplied_connection is None:
     config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 if config.config_file_name and config.get_section("loggers"):
     fileConfig(config.config_file_name)
-target_metadata = Base.metadata
+target_metadata = [Base.metadata, monitoring_metadata]
 
 
 def run_migrations_offline():

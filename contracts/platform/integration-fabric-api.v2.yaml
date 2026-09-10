@@ -3312,7 +3312,7 @@ paths:
       tags:
       - domain-control
       - odoo-calling
-      summary: Originate
+      summary: Middleware Internal Originate Compat
       operationId: middleware_internal_originate_compat_v1_calls_originate_post
       requestBody:
         content:

@@ -953,7 +953,7 @@ def test_delayed_webhook_cannot_replace_a_newer_alert_occurrence() -> None:
         delayed = client.post(
             "/v1/integrations/alertmanager/events",
             json=first_value,
-            headers=headers(key="occurrence-delayed-0001"),
+            headers=headers(key="delayed-0001"),
         )
         assert delayed.status_code == 409
         assert delayed.json()["code"] == "incident_conflict"

@@ -1,14 +1,14 @@
 """Durable monitoring projections, replay records and resumable events.
 
-Revision ID: 0058_integrated_monitoring
-Revises: 0057_platform_service_catalog
+Revision ID: 0059_integrated_monitoring
+Revises: 0058_campaign_design
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0058_integrated_monitoring"
-down_revision = "0057_platform_service_catalog"
+revision = "0059_integrated_monitoring"
+down_revision = "0058_campaign_design"
 branch_labels = None
 depends_on = None
 

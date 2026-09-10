@@ -1,7 +1,13 @@
 {
-  "migration_history_sha256": "sha256:4a97d128e6dd23e5d03cda761dc3263c339e37a66ff789b4537a08b7747e3f7f",
+  "migration_history_sha256": "sha256:84aadc76a88a46e6354307c6df8fcb2ad12820f89fb590ccc7f3c58640513ba7",
   "schema_version": 1,
   "tables": {
+    "campaign_design_approval": "sha256:658b1ff152fd2b5b696ab37d44d5d7b447970674784b43c59c6db6ca742ead71",
+    "campaign_design_current": "sha256:43204c0804440718756cac82de99a13f272bc0bffb31ceefa0238922cfef9d80",
+    "campaign_design_failure": "sha256:fa36512db56138fa2dac5b3fc46d3aa3819b6ec4f95418b741f965de1584ef18",
+    "campaign_design_revision": "sha256:a33258c4f96f3f2a0b720cb91513f62145d7166a214498d84e77d2e7579df649",
+    "campaign_event_inbox": "sha256:650171c28837066bd2182199de7d5adc9d3b277406de3f2eaf9757288d4ea37a",
+    "campaign_resource_allocation": "sha256:ffe6bdf0645b65b945b2a198b71927477517ee44cfb815b8ef82ddfd1a80d9e7",
     "middleware_automation_approvals": "sha256:34e5fe6cb483f2c7767dc67c9e22d62a0ac172e2d2f9cefe233cdece8333a56b",
     "middleware_automation_audit": "sha256:a02905034b2ad41eba267e1ca81344552d29d5ae2815c1ac4a938126f0a132ba",
     "middleware_automation_dead_letters": "sha256:1029c2acfd342fbae3f87ff90894d4d740834108b7afc0903a2992176611125f",

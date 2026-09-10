@@ -33,7 +33,7 @@ certified.
 The current source requires migration head:
 
 ```text
-0057_platform_service_catalog
+0058_campaign_design
 ```
 
 The current signed candidate state is:
@@ -46,7 +46,7 @@ PENDING_EXACT_PROTECTED_MERGE_BUILD
 its eventual protected squash-merge SHA or immutable image digest in advance.
 The field may be populated only by a separately reviewed evidence update after
 the exact protected-main merge has been built, signed, scanned, and verified with
-schema `0057_platform_service_catalog`.
+schema `0058_campaign_design`.
 
 The authority record separately preserves two verified, non-authoritative
 `0057_platform_service_catalog` bundles. `latestVerifiedSignedEvidence` binds
@@ -78,7 +78,7 @@ must include:
 - exact source SHA and source tree;
 - immutable image digest and verified provenance;
 - signed release manifest and SBOM;
-- schema head `0057_platform_service_catalog`;
+- schema head `0058_campaign_design`;
 - locked runtime profile;
 - effective source/digest/schema/profile and capability read-back;
 - backup and isolated restore;

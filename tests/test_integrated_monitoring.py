@@ -276,7 +276,7 @@ def system(tmp_path, monkeypatch):
     def apply_migration(connection):
         with Operations.context(MigrationContext.configure(connection)):
             importlib.import_module(
-                "migrations.versions.0058_integrated_monitoring"
+                "migrations.versions.0059_integrated_monitoring"
             ).upgrade()
 
     async def create():
@@ -1020,7 +1020,7 @@ def test_empty_migration_downgrade_and_reupgrade(system):
 
     def rehearsal(connection):
         migration = importlib.import_module(
-            "migrations.versions.0058_integrated_monitoring"
+            "migrations.versions.0059_integrated_monitoring"
         )
         with Operations.context(MigrationContext.configure(connection)):
             migration.downgrade()
@@ -1048,7 +1048,7 @@ def test_downgrade_cannot_delete_observation_evidence(system):
     def downgrade(connection):
         with Operations.context(MigrationContext.configure(connection)):
             importlib.import_module(
-                "migrations.versions.0058_integrated_monitoring"
+            "migrations.versions.0059_integrated_monitoring"
             ).downgrade()
 
     async def run():

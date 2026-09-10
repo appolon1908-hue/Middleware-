@@ -15,7 +15,7 @@ Alembic includes monitoring metadata and its scoped indexes in autogeneration.
 
 ## Configuration and identity
 
-Apply Alembic `0058_integrated_monitoring` separately before enabling ingestion. Runtime uses the existing async PostgreSQL session and never creates tables at startup. Mount `MONITORING_CONFIG_FILE` as a reviewed JSON release artifact; missing configuration returns 503. Set the existing Keycloak issuer, audience, JWKS URL and authorized-party settings. JWT claims include `sub`, `azp`, `tenant_id`, `realm_access.roles`, `scope` and, for collectors, approved `services`/`campaigns`.
+Apply Alembic `0059_integrated_monitoring` after `0058_campaign_design` before enabling ingestion. Runtime uses the existing async PostgreSQL session and never creates tables at startup. Mount `MONITORING_CONFIG_FILE` as a reviewed JSON release artifact; missing configuration returns 503. Set the existing Keycloak issuer, audience, JWKS URL and authorized-party settings. JWT claims include `sub`, `azp`, `tenant_id`, `realm_access.roles`, `scope` and, for collectors, approved `services`/`campaigns`.
 
 | Configuration key | Required contents |
 | --- | --- |

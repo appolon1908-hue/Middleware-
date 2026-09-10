@@ -63,7 +63,7 @@ async def get_store(db=Depends(get_session)):
     except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(
-            503, "monitoring persistence unavailable; verify migration 0058"
+            503, "monitoring persistence unavailable; verify migration 0059"
         ) from None
 
 

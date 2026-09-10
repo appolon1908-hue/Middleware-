@@ -51,6 +51,28 @@ def test_readback_remains_available_when_delivery_is_disabled(test_settings):
         assert result.json()["messageId"] == accepted["messageId"]
 
 
+@pytest.mark.parametrize("method,path", [
+    ("POST", "/v1/commands"),
+    ("POST", "/v1/sms/commands"),
+    ("GET", "/v1/operations"),
+    ("GET", "/v1/operations/00000000-0000-4000-8000-000000000001"),
+    ("POST", "/v1/operations/00000000-0000-4000-8000-000000000001/cancel"),
+    ("POST", "/v1/operations/00000000-0000-4000-8000-000000000001/reconcile"),
+    ("GET", "/v1/communications/messages"),
+    ("GET", "/v1/communications/messages/00000000-0000-4000-8000-000000000001"),
+    ("GET", "/v1/communications/usage"),
+    ("DELETE", "/v1/communications/messages/by-idempotency"),
+])
+def test_sms_identity_cannot_enter_generic_api_routes(test_settings, method, path):
+    runtime = _runtime(test_settings)
+    with TestClient(create_app(settings=test_settings, runtime=runtime)) as client:
+        for scope in ("odoo.sms.command.write", "odoo.sms.status.read"):
+            response = client.request(method, path, headers=headers(scope))
+            assert response.status_code == 403, response.text
+            assert response.json()["error"]["code"] == "authorization_denied"
+    assert not runtime.commands.store.submitted
+
+
 def test_postgres_readback_queries_shared_durable_store(test_settings):
     import asyncio
 

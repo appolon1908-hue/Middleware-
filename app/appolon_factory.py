@@ -240,7 +240,28 @@ def create_app(
         started = telemetry.start_request()
         status_code = 500
         try:
-            response = await call_next(request)
+            # This unverified selector can only deny access. The two allowed
+            # endpoints still verify the original JWT, scope and tenant. Keep
+            # the SMS bridge out of generic commands and operation controls,
+            # which do not enforce the communications submission policy.
+            try:
+                caller = caller_for_authorization(request.headers.get("Authorization", ""))
+            except SecurityError:
+                caller = None
+            if caller is not None and caller.client_id == "odoo-sms" and (
+                request.method, request.url.path
+            ) not in {
+                ("POST", "/v1/communications/messages"),
+                ("GET", "/v1/communications/messages/by-idempotency"),
+            }:
+                telemetry.record_auth_denial(_operation(request), AuthorizationError.code)
+                response = _error_response(
+                    request, status_code=403, code=AuthorizationError.code,
+                    message="SMS bridge is restricted to message submission and idempotency readback",
+                    retryable=False,
+                )
+            else:
+                response = await call_next(request)
             status_code = response.status_code
             response.headers["X-Correlation-ID"] = request.state.correlation_id
             if request.state.traceparent is not None:

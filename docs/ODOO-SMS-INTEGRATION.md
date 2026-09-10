@@ -6,6 +6,9 @@ the dedicated Keycloak machine client `odoo-sms`. Its command scope is
 `telnexa-sms`. Status requests require `odoo.sms.status.read`. The verified token
 tenant must match `X-Tenant-ID`; original bearer verification remains mandatory.
 This registry entry does not create a Keycloak client or grant live delivery.
+The HTTP boundary permits this identity only to POST the canonical messages
+endpoint and GET its by-idempotency readback. Generic commands, operation
+controls, message lists and unrelated channel resources return 403.
 
 The Odoo outbox retains one immutable identity per native SMS. Its request carries
 `Idempotency-Key: odoo-sms:<sms-uuid>`, `X-Correlation-ID: <sms-uuid>` and metadata

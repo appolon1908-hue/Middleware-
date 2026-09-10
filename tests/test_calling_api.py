@@ -17,7 +17,7 @@ from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, TARGET
 from app.calling_ledger import operation_response
 from app.commands import CommandEnvelope, CommandError, CommandOperation, CommandPolicyRegistry, CommandService, MemoryCommandStore
 from app.security import AuthenticationError, SecurityError, validate_claims
-from app.telephony_api import router
+from app.telephony_api import compat_router, router
 from tests.test_calling_contract import SOURCE_SHA, grant, originate, principal
 
 
@@ -98,6 +98,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.app = FastAPI()
         self.app.include_router(router)
+        self.app.include_router(compat_router)
         self.store = MemoryCommandStore()
         self.tokens = FakeCallingTokens()
         self.runtime = SimpleNamespace(commands=CommandService(self.store, CommandPolicyRegistry.load()),

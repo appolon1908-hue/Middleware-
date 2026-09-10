@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 import jwt
-import yaml
+import yaml  # type: ignore[import-untyped]
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

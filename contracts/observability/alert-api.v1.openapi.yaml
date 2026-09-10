@@ -15,9 +15,10 @@ paths:
       summary: Persist Alertmanager transitions as durable operations
       security: [{bearerAuth: []}]
       parameters:
+        - {$ref: '#/components/parameters/NativeWebhook'}
         - {$ref: '#/components/parameters/TenantId'}
-        - {$ref: '#/components/parameters/CorrelationId'}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/WebhookCorrelationId'}
+        - {$ref: '#/components/parameters/WebhookIdempotencyKey'}
         - {$ref: '#/components/parameters/SourceDeployment'}
       requestBody:
         required: true
@@ -97,9 +98,10 @@ paths:
       summary: Persist one Alertmanager transition as one durable command
       security: [{bearerAuth: []}]
       parameters:
+        - {$ref: '#/components/parameters/NativeWebhook'}
         - {$ref: '#/components/parameters/TenantId'}
-        - {$ref: '#/components/parameters/CorrelationId'}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/WebhookCorrelationId'}
+        - {$ref: '#/components/parameters/WebhookIdempotencyKey'}
         - {$ref: '#/components/parameters/SourceDeployment'}
       requestBody:
         required: true
@@ -262,6 +264,32 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    NativeWebhook:
+      name: X-Alertmanager-Native-Webhook
+      in: header
+      required: false
+      description: >-
+        Explicit v4 compatibility mode for the authenticated alertmanager-service.
+        Supports the six canonical middleware-* receivers, at most 100 alerts,
+        server-derived idempotency and correlation, and informational-to-info
+        normalization. Tenant, scope, source deployment, metadata and body limits
+        remain enforced. Truncated payloads are rejected.
+      schema: {type: string, enum: [v4]}
+    WebhookCorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: Required unless native v4 mode is selected; generated per attempt otherwise.
+      schema: {type: string, minLength: 1, maxLength: 180}
+    WebhookIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        Required unless native v4 mode is selected. An omitted native key is derived
+        from the validated sanitized payload, tenant and source deployment. Explicit
+        keys retain existing conflict checks; semantic transition identity is unchanged.
+      schema: {type: string, minLength: 8, maxLength: 180}
     TenantId:
       name: X-Tenant-ID
       in: header

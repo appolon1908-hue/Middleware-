@@ -23,6 +23,7 @@ its domain router and are included in OpenAPI.
 | Method | Path | Required scope |
 |---|---|---|
 | POST | `/v1/telephony/calls/originate` | `telephony.calls.originate` |
+| POST | `/v1/calls/originate` | `telephony.calls.originate` (Middleware compatibility ingress) |
 | GET | `/v1/telephony/calls/requests/{operation_id}` | `telephony.calls.read` |
 | POST | `/v1/telephony/calls/requests/{operation_id}/reconcile` | `telephony.calls.reconcile` |
 | POST | `/v1/telephony/calls/requests/{operation_id}/hangup` | `telephony.calls.hangup` |
@@ -30,6 +31,12 @@ its domain router and are included in OpenAPI.
 The operation ID is a Middleware request UUID, not an Asterisk uniqueid. The
 provider's call ID is returned separately only when it exists in authoritative
 ledger state. Hangup never accepts a caller-supplied provider call ID.
+
+`/v1/calls/originate` is a Middleware-only compatibility ingress for the reviewed
+Odoo event transport. It invokes the same internal-only handler as the canonical
+`/v1/telephony/calls/originate` path and is never forwarded to Server B's external
+`/v1/calls/originate` endpoint. It accepts only the named `internal_test` alias;
+public E.164 destinations remain blocked.
 
 The original short-lived Keycloak bearer must authenticate `azp=odoo-integration`
 with the runtime's configured issuer and audience. The existing verifier enforces

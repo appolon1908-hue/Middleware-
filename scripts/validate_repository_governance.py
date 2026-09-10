@@ -24,6 +24,11 @@ RULESET_NAME = "middleware-main-production-authority"
 REQUIRED_CHECK_APP_ID = 15368
 INDEPENDENT_REVIEWER_ID = 77101516
 TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS = {
+    "production-orchestrator-contract.yml": frozenset(
+        {
+            "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f",
+        }
+    ),
     "trusted-production-orchestrator-gate.yml": frozenset(
         {
             "24b766af40ad1deb6c47fe1f667ed93b29e556abdacce88d6c3daf527f4f902e",

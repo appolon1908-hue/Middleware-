@@ -36,8 +36,8 @@ def request() -> CommandExecutionRequest:
                 "schema_version": "1.0",
                 "message_id": "8b8cc64c-607e-4ab2-8640-7608a0b922b0",
                 "from": "alerts@codestra.co",
-                "to": ["appolon@codestra.co"],
-                "reply_to": "appolon@codestra.co",
+                "to": ["appolon1908@gmail.com"],
+                "reply_to": "appolon1908@gmail.com",
                 "content": {
                     "subject": "[Codestra][FIRING][CRITICAL] HostDown",
                     "text": "State: FIRING",
@@ -67,7 +67,7 @@ def test_payload_is_fixed_to_reviewed_sender_and_recipient() -> None:
     payload = adapter._validate_payload(request())
     document = adapter._provider_document(request(), payload)
     assert document["sender"] == "alerts@codestra.co"
-    assert document["recipients"] == ["appolon@codestra.co"]
+    assert document["recipients"] == ["appolon1908@gmail.com"]
     assert document["stream"] == "operational"
 
 

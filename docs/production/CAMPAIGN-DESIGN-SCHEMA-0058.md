@@ -46,3 +46,17 @@ subtests passed. Ruff and targeted mypy passed. Catalog generation verified
 40 tables, including all six campaign tables, and preserved all 34 existing
 numbered-SQL signatures. Production migration and campaign execution were
 not run.
+
+## Required CI clock-boundary repair
+
+Required CI run 34433763999 failed in the real-database AI lifecycle test:
+the future timestamp used the wall clock plus 301 seconds, and request
+processing could cross a second boundary before the verifier checked it.
+The deterministic fixture pins only the verifier clock and explicitly tests
+both inclusive 300-second boundaries and rejection at 301 seconds.
+Certificate validity and durable nonce timing retain the real clock.
+
+The complete AI job platform test file passed all 10 tests against a fresh
+PostgreSQL 17.10 database, with no skips. Ruff and targeted mypy passed.
+Workflow trust transitions remain tracked separately in PRs #215 and #219;
+their required independent reviews are pending.

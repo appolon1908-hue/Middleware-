@@ -64,6 +64,23 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError(
-        "Monitoring audit/replay evidence must be exported and restored through the reviewed recovery procedure; automatic destructive downgrade is disabled"
-    )
+    connection = op.get_bind()
+    # Support the existing disposable migration rehearsal without ever dropping
+    # collected evidence. Lock out concurrent writers before testing emptiness.
+    if connection.dialect.name == "postgresql":
+        connection.execute(
+            sa.text(
+                "LOCK TABLE monitoring_resources, monitoring_operations, monitoring_events IN ACCESS EXCLUSIVE MODE"
+            )
+        )
+    elif connection.dialect.name == "sqlite":
+        connection.exec_driver_sql("BEGIN EXCLUSIVE")
+    else:
+        raise RuntimeError("Monitoring downgrade requires a verified locking dialect")
+    for table in ("monitoring_events", "monitoring_operations", "monitoring_resources"):
+        if connection.execute(sa.text("SELECT 1 FROM " + table + " LIMIT 1")).first():
+            raise RuntimeError(
+                "Monitoring evidence is nonempty; preserve tables and use the reviewed export/restore procedure"
+            )
+    for table in ("monitoring_events", "monitoring_operations", "monitoring_resources"):
+        op.drop_table(table)

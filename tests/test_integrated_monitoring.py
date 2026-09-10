@@ -1011,3 +1011,49 @@ def test_ingress_budget_and_backend_error_are_not_success(system):
         headers=system.auth(),
     )
     assert response.status_code == 503
+
+
+def test_empty_migration_downgrade_and_reupgrade(system):
+    from sqlalchemy import inspect
+
+    def rehearsal(connection):
+        migration = importlib.import_module(
+            "migrations.versions.0058_integrated_monitoring"
+        )
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.downgrade()
+            assert not set(metadata.tables).intersection(
+                inspect(connection).get_table_names()
+            )
+            migration.upgrade()
+            assert set(metadata.tables).issubset(inspect(connection).get_table_names())
+
+    async def run():
+        async with system.engine.begin() as connection:
+            await connection.run_sync(rehearsal)
+
+    asyncio.run(run())
+
+
+def test_downgrade_cannot_delete_observation_evidence(system):
+    response = system.client.post(
+        "/platform/v1/runtime/observations",
+        json=observation("host", data={"host_id": "retained"}),
+        headers=system.auth(role="monitoring_collector", client="collector"),
+    )
+    assert response.status_code == 200
+
+    def downgrade(connection):
+        with Operations.context(MigrationContext.configure(connection)):
+            importlib.import_module(
+                "migrations.versions.0058_integrated_monitoring"
+            ).downgrade()
+
+    async def run():
+        with pytest.raises(RuntimeError, match="evidence is nonempty"):
+            async with system.engine.begin() as connection:
+                await connection.run_sync(downgrade)
+
+    asyncio.run(run())
+    response = system.client.get("/platform/v1/hosts/retained", headers=system.auth())
+    assert response.status_code == 200

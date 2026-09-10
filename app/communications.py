@@ -303,6 +303,16 @@ class MemoryCommunicationsStore:
     async def close(self) -> None:
         return None
 
+    async def message_by_idempotency(
+        self, tenant_id: str, idempotency_key: str,
+    ) -> CommunicationMessage:
+        entry = self.idempotency.get(
+            (tenant_id, "POST /v1/communications/messages", idempotency_key)
+        )
+        if entry is None:
+            raise CommunicationsNotFound("message was not found")
+        return self.messages[(tenant_id, entry[1])].model_copy(deep=True)
+
     def add_event(
         self,
         tenant_id: str,
@@ -339,6 +349,26 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__()
         self.pool = pool
+
+    async def message_by_idempotency(
+        self, tenant_id: str, idempotency_key: str,
+    ) -> CommunicationMessage:
+        # Read the durable projection for every reconciliation. A different API
+        # process or event worker may have accepted or updated this message.
+        async with self.pool.acquire() as conn:
+            raw = await conn.fetchval(
+                "SELECT m.payload FROM middleware_communication_idempotency i "
+                "JOIN middleware_communication_messages m "
+                "ON m.tenant_id=i.tenant_id AND m.message_id=i.message_id "
+                "WHERE i.tenant_id=$1 AND i.route=$2 AND i.idempotency_key=$3",
+                tenant_id, "POST /v1/communications/messages", idempotency_key,
+            )
+        if raw is None:
+            raise CommunicationsNotFound("message was not found")
+        return (
+            CommunicationMessage.model_validate_json(raw)
+            if isinstance(raw, str) else CommunicationMessage.model_validate(raw)
+        )
 
     @classmethod
     async def connect(cls, database_url: str) -> "PostgresCommunicationsStore":

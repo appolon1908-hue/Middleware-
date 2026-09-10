@@ -7,6 +7,14 @@
   "maximum_token_lifetime_seconds": 300,
   "tenant_claim": "tenant_id",
   "callers": {
+    "odoo-sms": {
+      "command_scope": "odoo.sms.command.write",
+      "status_scope": "odoo.sms.status.read",
+      "allowed_command_prefixes": ["sms.message.submit."],
+      "allowed_targets": ["telnexa-sms"],
+      "compatibility_only": false,
+      "staging_auth_matrix": true
+    },
     "kong-gateway": {
       "command_scope": "middleware.request.forward",
       "status_scope": "middleware.status.read",

@@ -172,9 +172,9 @@ class KlyrowAlertAdapter:
             )
         if payload.get("from") != "alerts@codestra.co":
             raise KlyrowAlertAdapterError("alert sender is not approved")
-        if payload.get("to") != ["appolon@codestra.co"]:
+        if payload.get("to") != ["appolon1908@gmail.com"]:
             raise KlyrowAlertAdapterError("alert recipient is not approved")
-        if payload.get("reply_to") != "appolon@codestra.co":
+        if payload.get("reply_to") != "appolon1908@gmail.com":
             raise KlyrowAlertAdapterError("alert reply-to is not approved")
         if payload.get("classification") != "operational-alert":
             raise KlyrowAlertAdapterError("alert classification is not approved")

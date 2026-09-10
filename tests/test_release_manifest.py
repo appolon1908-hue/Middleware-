@@ -57,7 +57,7 @@ def test_generated_release_manifest_matches_json_schema(tmp_path: Path) -> None:
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
     assert value["image"]["reference"].endswith(IMAGE_DIGEST)
     assert value["promotion"]["staging_and_production_same_digest"] is True
-    assert value["runtime"]["schema_or_migration_head"] == "0057_platform_service_catalog"
+    assert value["runtime"]["schema_or_migration_head"] == "0058_campaign_design"
 
 
 def test_manifest_is_canonical_and_binds_workspace_evidence(tmp_path: Path) -> None:

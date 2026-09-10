@@ -12,7 +12,7 @@
     "imageRepository": "ghcr.io/appolon1908-hue/codestra-middleware",
     "releaseWorkflow": ".github/workflows/release.yml",
     "releaseManifestSchema": "contracts/release-manifest.v1.schema.json",
-    "requiredSchemaHead": "0057_platform_service_catalog",
+    "requiredSchemaHead": "0058_campaign_design",
     "candidateStatus": "PENDING_EXACT_PROTECTED_MERGE_BUILD",
     "currentSignedCandidate": null,
     "latestVerifiedSignedEvidence": {
@@ -84,7 +84,7 @@
       "vulnerabilityGate": "PASS",
       "verification": "PASS"
     },
-    "requiredMigrationHistorySha256": "sha256:4a97d128e6dd23e5d03cda761dc3263c339e37a66ff789b4537a08b7747e3f7f"
+    "requiredMigrationHistorySha256": "sha256:669107c6b21d2f1e82f777b5c96a3e0d47347c25eb651354fc3980b318eccf5b"
   },
   "runtimeAuthority": {
     "runtimeState": "must_be_proven_at_execution",
@@ -93,7 +93,7 @@
     "requiredEvidence": [
       "signed release manifest bound to exact protected-main source",
       "immutable image digest and verified provenance",
-      "schema head 0057_platform_service_catalog",
+      "schema head 0058_campaign_design",
       "effective source, digest, schema, profile, and capability read-back",
       "backup and isolated restore evidence",
       "rollback rehearsal and data-integrity evidence",

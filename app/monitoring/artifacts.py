@@ -6,7 +6,9 @@ import os
 from pathlib import PurePosixPath
 import stat
 
-from .backends import MAX_RESPONSE_BYTES
+from fastapi import HTTPException
+
+from .backends import MAX_RESPONSE_BYTES, load_config, service_for
 
 
 def read_artifact(root: str, relative_path: str, expected_digest: str) -> bytes:
@@ -40,3 +42,19 @@ def read_artifact(root: str, relative_path: str, expected_digest: str) -> bytes:
     if "sha256:" + hashlib.sha256(raw).hexdigest() != expected_digest:
         raise ValueError("artifact digest mismatch")
     return raw
+
+
+def read_approved_artifact(principal, service_id, environment, artifact_id, digest):
+    """Resolve an approved identifier using one mounted configuration snapshot."""
+    config = load_config()
+    service = service_for(config, principal, service_id, environment)
+    binding = config.get("artifacts", {}).get(artifact_id, {})
+    if (
+        binding.get("service_id") != service_id
+        or binding.get("environment") != environment
+        or binding.get("sha256") != digest
+    ):
+        raise HTTPException(
+            403, "artifact is not approved for this service and environment"
+        )
+    return service, read_artifact(config["artifact_root"], binding["path"], digest)

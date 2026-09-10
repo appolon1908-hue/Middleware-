@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import get_session
 from .auth import Principal, READ_ROLES, require
-from .artifacts import read_artifact
+from .artifacts import read_approved_artifact
 from .backends import Backends, load_config, load_github_secret, redact, service_for
 from .models import (
     BrowserEvent,
@@ -361,20 +361,11 @@ async def contract_refresh(
     body: ContractRefresh,
     principal: Principal = Depends(require("platform.services.write", ADMIN)),
     store=Depends(get_store),
-    config=Depends(load_config),
 ):
-    service = service_for(config, principal, service_id, body.environment)
-    binding = config.get("artifacts", {}).get(body.artifact_id, {})
-    if (
-        binding.get("service_id") != service_id
-        or binding.get("environment") != body.environment
-        or binding.get("sha256") != body.sha256
-    ):
-        raise HTTPException(
-            403, "artifact is not approved for this service and environment"
-        )
     try:
-        raw = read_artifact(config["artifact_root"], binding["path"], body.sha256)
+        service, raw = read_approved_artifact(
+            principal, service_id, body.environment, body.artifact_id, body.sha256
+        )
         schema = json.loads(raw)
         if not str(schema.get("openapi", "")).startswith("3.") or not isinstance(
             schema.get("paths"), dict

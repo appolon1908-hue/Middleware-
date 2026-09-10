@@ -293,6 +293,7 @@ def system(tmp_path, monkeypatch):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_session] = db
+    monkeypatch.setattr("app.monitoring.artifacts.load_config", lambda: config)
     app.dependency_overrides[load_config] = lambda: config
     app.dependency_overrides[load_github_secret] = lambda: secret.read_bytes().strip()
     app.dependency_overrides[get_backends] = lambda: Backends(

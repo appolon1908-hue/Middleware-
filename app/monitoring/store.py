@@ -16,6 +16,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Integer,
+    Index,
     JSON,
     MetaData,
     String,
@@ -43,6 +44,13 @@ resources = Table(
     Column("revision", Integer, nullable=False),
     Column("observed_at", DateTime(timezone=True), nullable=False),
     Column("payload", JSON, nullable=False),
+)
+Index(
+    "ix_monitoring_resource_scope",
+    resources.c.tenant,
+    resources.c.kind,
+    resources.c.service_id,
+    resources.c.environment,
 )
 operations = Table(
     "monitoring_operations",
@@ -73,6 +81,7 @@ events = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("data", JSON, nullable=False),
 )
+Index("ix_monitoring_event_scope", events.c.tenant, events.c.id)
 
 
 def utc(value):
@@ -113,6 +122,8 @@ class Store:
         *,
         service=None,
         environment=None,
+        host_id=None,
+        resource_id=None,
         campaigns=None,
         cursor="",
         limit=100,
@@ -126,6 +137,19 @@ class Store:
             q = q.where(resources.c.service_id == service)
         if environment:
             q = q.where(resources.c.environment == environment)
+        if host_id is not None:
+            q = q.where(resources.c.payload["host_id"].as_string() == host_id)
+        if resource_id is not None:
+            q = q.where(
+                resources.c.resource_key
+                == resources.c.environment
+                + ":"
+                + resources.c.service_id
+                + ":"
+                + resources.c.source_deployment
+                + ":"
+                + resource_id
+            )
         if campaigns is not None:
             q = q.where(resources.c.campaign_id.in_(list(campaigns)))
         return list(

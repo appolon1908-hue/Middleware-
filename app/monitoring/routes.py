@@ -17,7 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import get_session
 from .auth import Principal, READ_ROLES, require
-from .backends import Backends, MAX_RESPONSE_BYTES, load_config, redact, service_for
+from .artifacts import read_artifact
+from .backends import Backends, load_config, redact, service_for
 from .models import (
     BrowserEvent,
     ContractRefresh,
@@ -122,6 +123,8 @@ async def resource_page(
     *,
     service=None,
     environment=None,
+    host_id=None,
+    resource_id=None,
     campaign=None,
     cursor="",
     limit=100,
@@ -139,6 +142,8 @@ async def resource_page(
         kind,
         service=service,
         environment=environment,
+        host_id=host_id,
+        resource_id=resource_id,
         campaigns=campaigns,
         cursor=cursor,
         limit=limit + 1,
@@ -182,16 +187,23 @@ async def hosts(
 async def host(
     request: Request,
     host_id: str,
+    cursor: str = Query("", max_length=512),
+    limit: int = Query(100, ge=1, le=200),
     principal: Principal = Depends(require("platform.services.read")),
     store=Depends(get_store),
 ):
-    rows = await store.list(principal.tenant, "host", limit=1000)
-    matches = [r for r in rows if r["payload"].get("host_id") == host_id]
-    if not matches:
-        raise HTTPException(404, "host not observed")
-    return envelope(
-        request, [row_data(r) for r in matches], min(r["observed_at"] for r in matches)
+    page = await resource_page(
+        request,
+        store,
+        principal,
+        "host",
+        host_id=host_id,
+        cursor=cursor,
+        limit=limit,
     )
+    if not page["data"] and not cursor:
+        raise HTTPException(404, "host not observed")
+    return page
 
 
 @router.get("/platform/v1/services/{service_id}/deployments", response_model=Envelope)
@@ -363,17 +375,7 @@ async def contract_refresh(
             403, "artifact is not approved for this service and environment"
         )
     try:
-        root = Path(config["artifact_root"]).resolve(strict=True)
-        artifact = (root / binding["path"]).resolve(strict=True)
-        if not artifact.is_relative_to(root):
-            raise ValueError("path")
-        with artifact.open("rb") as f:
-            raw = f.read(MAX_RESPONSE_BYTES + 1)
-        if (
-            len(raw) > MAX_RESPONSE_BYTES
-            or "sha256:" + hashlib.sha256(raw).hexdigest() != body.sha256
-        ):
-            raise ValueError("digest")
+        raw = read_artifact(config["artifact_root"], binding["path"], body.sha256)
         schema = json.loads(raw)
         if not str(schema.get("openapi", "")).startswith("3.") or not isinstance(
             schema.get("paths"), dict
@@ -984,6 +986,8 @@ async def integrations(
 async def integration(
     request: Request,
     integration_id: str,
+    cursor: str = Query("", max_length=512),
+    limit: int = Query(100, ge=1, le=200),
     principal: Principal = Depends(require("observability.integrations.read")),
     config=Depends(load_config),
     store=Depends(get_store),
@@ -1000,7 +1004,14 @@ async def integration(
             datetime.now(UTC),
         )
     return await resource_page(
-        request, store, principal, "integration", service=binding["service_id"]
+        request,
+        store,
+        principal,
+        "integration",
+        service=binding["service_id"],
+        resource_id=integration_id,
+        cursor=cursor,
+        limit=limit,
     )
 
 

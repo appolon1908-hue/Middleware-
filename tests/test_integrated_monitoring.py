@@ -1057,3 +1057,137 @@ def test_downgrade_cannot_delete_observation_evidence(system):
     asyncio.run(run())
     response = system.client.get("/platform/v1/hosts/retained", headers=system.auth())
     assert response.status_code == 200
+
+
+def test_host_lookup_filters_before_pagination(system):
+    from sqlalchemy import insert
+    from app.monitoring.store import resources
+
+    async def seed():
+        now = datetime.now(UTC)
+        rows = [
+            dict(
+                tenant="codestra-platform",
+                kind="host",
+                resource_key=f"host-{i:04d}",
+                service_id="sample-api",
+                environment="production",
+                campaign_id=None,
+                source_deployment="release-a",
+                sequence=1,
+                revision=1,
+                observed_at=now,
+                payload={"host_id": "target" if i >= 1001 else "other"},
+            )
+            for i in range(1004)
+        ]
+        rows.append(
+            {**rows[-1], "tenant": "another-tenant", "resource_key": "host-foreign"}
+        )
+        async with system.engine.begin() as connection:
+            await connection.execute(insert(resources), rows)
+
+    asyncio.run(seed())
+    response = system.client.get(
+        "/platform/v1/hosts/target", params={"limit": 2}, headers=system.auth()
+    )
+    assert response.status_code == 200
+    page = response.json()
+    assert [r["resource_id"] for r in page["data"]] == ["host-1001", "host-1002"]
+    response = system.client.get(
+        "/platform/v1/hosts/target",
+        params={"limit": 2, "cursor": page["next_cursor"]},
+        headers=system.auth(),
+    )
+    assert [r["resource_id"] for r in response.json()["data"]] == ["host-1003"]
+    assert response.json()["next_cursor"] is None
+    assert (
+        system.client.get(
+            "/platform/v1/hosts/absent", headers=system.auth()
+        ).status_code
+        == 404
+    )
+
+
+def test_generic_integration_details_isolate_resource_identity(system):
+    for name in ("queue-one", "queue-two", "prefix:queue-one"):
+        system.config["integrations"][name] = {
+            "service_id": "sample-api",
+            "backend": "queue",
+        }
+        response = system.client.post(
+            "/platform/v1/runtime/observations",
+            json=observation("integration", resource=name, data={"queue_depth": 1}),
+            headers=system.auth(role="monitoring_collector", client="collector"),
+        )
+        assert response.status_code == 200
+    response = system.client.get(
+        "/v1/observability/integrations/queue-one", headers=system.auth()
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) == 1
+    assert data[0]["resource_id"] == "production:sample-api:release-a:queue-one"
+
+
+def test_alembic_tracks_monitoring_tables_and_indexes(system):
+    from alembic.autogenerate import compare_metadata
+    from alembic.config import Config
+    from alembic.runtime.environment import EnvironmentContext
+    from alembic.script import ScriptDirectory
+
+    def check(connection):
+        config = Config()
+        config.set_main_option(
+            "script_location", str(Path(__file__).parents[1] / "migrations")
+        )
+        config.attributes["connection"] = connection
+        script = ScriptDirectory.from_config(config)
+        seen = []
+
+        def inspect_environment(revision, context):
+            seen.extend(context.opts["target_metadata"])
+            return []
+
+        # The application Alembic environment owns PostgreSQL's public schema;
+        # SQLite exercises the isolated monitoring migration and index model.
+        if connection.dialect.name == "postgresql":
+            with EnvironmentContext(config, script, fn=inspect_environment):
+                script.run_env()
+            assert metadata in seen
+        context = MigrationContext.configure(connection)
+        assert compare_metadata(context, metadata) == []
+
+    async def run():
+        async with system.engine.begin() as connection:
+            await connection.run_sync(check)
+
+    asyncio.run(run())
+
+
+def test_release_artifact_reader_accepts_nested_regular_files(tmp_path):
+    from app.monitoring.artifacts import read_artifact
+
+    directory = tmp_path / "contracts"
+    directory.mkdir()
+    content = b'{"openapi":"3.1.0","paths":{}}'
+    (directory / "api.json").write_bytes(content)
+    expected = "sha256:" + hashlib.sha256(content).hexdigest()
+    assert read_artifact(str(tmp_path), "contracts/api.json", expected) == content
+    with pytest.raises(ValueError, match="digest mismatch"):
+        read_artifact(str(tmp_path), "contracts/api.json", DIGEST)
+
+
+def test_release_artifact_reader_rejects_links_and_oversized_files(tmp_path):
+    from app.monitoring.artifacts import read_artifact
+    from app.monitoring.backends import MAX_RESPONSE_BYTES
+
+    artifact = tmp_path / "api.json"
+    artifact.write_bytes(b"{}")
+    expected = "sha256:" + hashlib.sha256(b"{}").hexdigest()
+    (tmp_path / "linked.json").symlink_to(artifact)
+    with pytest.raises(OSError):
+        read_artifact(str(tmp_path), "linked.json", expected)
+    artifact.write_bytes(b"x" * (MAX_RESPONSE_BYTES + 1))
+    with pytest.raises(ValueError, match="size limit"):
+        read_artifact(str(tmp_path), "api.json", expected)

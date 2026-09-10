@@ -2,6 +2,17 @@
 
 The 36 operations extend the existing platform and alert APIs. They are registered on `app.main`, `app.entrypoints.integration_api` and `app.appolon_factory.create_app`. The extension owns original-JWT validation; legacy shared-secret guards exempt only its exact registered method/path pairs.
 
+Host details filter the requested host in the database before keyset pagination.
+Host and generic integration detail reads accept `cursor` and `limit` (1–200)
+and return `next_cursor` when more observations exist. A generic integration
+observation's `resource_id` must equal its configured integration ID; details
+include only that ID within the authorized tenant and service.
+
+OpenAPI imports read regular files beneath the configured artifact root through
+directory descriptors. The root and each artifact path component must not be a
+symbolic link. Reads enforce the byte budget and approved SHA-256 before parsing.
+Alembic includes monitoring metadata and its scoped indexes in autogeneration.
+
 ## Configuration and identity
 
 Apply Alembic `0058_integrated_monitoring` separately before enabling ingestion. Runtime uses the existing async PostgreSQL session and never creates tables at startup. Mount `MONITORING_CONFIG_FILE` as a reviewed JSON release artifact; missing configuration returns 503. Set the existing Keycloak issuer, audience, JWKS URL and authorized-party settings. JWT claims include `sub`, `azp`, `tenant_id`, `realm_access.roles`, `scope` and, for collectors, approved `services`/`campaigns`.

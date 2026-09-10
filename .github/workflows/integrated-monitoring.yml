@@ -28,7 +28,7 @@ jobs:
           POSTGRES_PASSWORD: isolated-ci-only
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U monitoring_ci -d monitoring_test_ci'
+          --health-cmd "pg_isready -U monitoring_ci -d monitoring_test_ci"
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

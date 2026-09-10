@@ -63,6 +63,7 @@ EXPECTED_INCLUDED_ROUTERS = {
     "compatibility_api_router": "compatibility_api",
     "domain_api_router": "domain_api",
     "webhook_api_router": "webhook_api",
+    "monitoring_router": "monitoring.routes",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}
 EXPECTED_ROUTE_HELPERS = {"register_survey_routes": "survey_routes"}
@@ -1088,12 +1089,12 @@ def authenticated_get_routes(
 
     def load_router_module(module_name: str) -> ast.Module:
         require(
-            bool(re.fullmatch(r"[a-z][a-z0-9_]*", module_name)),
+            bool(re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*", module_name)),
             "included router module name is invalid",
         )
         if module_name in module_trees:
             return module_trees[module_name]
-        module_path = ROOT / "app" / f"{module_name}.py"
+        module_path = ROOT / "app" / (module_name.replace(".", "/") + ".py")
         try:
             module_tree = ast.parse(
                 module_path.read_text(encoding="utf-8"),

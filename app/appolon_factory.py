@@ -55,6 +55,7 @@ from .observability import (
     safe_traceparent,
 )
 from .operations_dashboard import router as operations_dashboard_router
+from .monitoring.routes import router as monitoring_router
 from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
@@ -178,7 +179,6 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
-    from .monitoring.routes import router as monitoring_router
     app.include_router(monitoring_router)
 
     def realtime_store(request: Request):

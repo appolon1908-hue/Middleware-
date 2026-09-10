@@ -1174,6 +1174,8 @@ async def browser_event(
 def is_monitoring_route(request: Request) -> bool:
     """Exact registered method/path only; every route owns authentication."""
     return any(
-        request.method in route.methods and route.path_regex.fullmatch(request.url.path)
+        isinstance(route, APIRoute)
+        and request.method in (route.methods or set())
+        and route.path_regex.fullmatch(request.url.path)
         for route in router.routes
     )

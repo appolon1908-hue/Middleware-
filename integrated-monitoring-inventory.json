@@ -731,9 +731,10 @@
     {
       "repository": "appolon1908-hue/Codestra-Postgres-Exporter",
       "component": "PostgreSQL Exporter",
-      "documented_dns": "pgex.codestra.media",
+      "documented_dns": null,
       "owns": "Database availability, pools, locks, replication and storage",
-      "flow": "Each PostgreSQL deployment \u2192 Prometheus"
+      "flow": "Each PostgreSQL deployment \u2192 Prometheus",
+      "private_service_identity": "postgres-exporter:9187"
     },
     {
       "repository": "appolon1908-hue/Codestra-Blackbox-Exporter",

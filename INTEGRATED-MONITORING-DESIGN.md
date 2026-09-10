@@ -1,7 +1,7 @@
 # Appolon integrated monitoring design
 
-**Owner:** Ralph Appolon / appolon1908-hue  
-**Prepared:** 10 September 2026  
+**Owner:** Ralph Appolon / appolon1908-hue
+**Prepared:** 10 September 2026
 **Status:** Integration design with 36 Middleware operations implemented in a review branch. This document does not certify production integration.
 
 Build one operational view over the 17 monitoring repositories, backed by Middleware's service catalog and durable incident APIs. Register every deployable application, website, worker, integration and host; reconcile approved monitoring configuration from Git; verify that expected telemetry and alerts actually arrive. Keep all 63 repositories visible in the inventory, including shared libraries and deployment/configuration repositories that have no standalone runtime.

@@ -13,6 +13,7 @@ LAUNCHER = ROOT / ".codestra/run-trusted-production-orchestrator.py"
 ORCHESTRATOR = ROOT / ".codestra/validate-production-orchestrator-contract.py"
 GOVERNANCE_VALIDATOR = ROOT / "scripts/validate_repository_governance.py"
 GATE = ROOT / ".github/workflows/trusted-production-orchestrator-gate.yml"
+PRODUCTION_WORKFLOW = ROOT / ".github/workflows/production-orchestrator-contract.yml"
 
 
 def load_launcher() -> ModuleType:
@@ -137,6 +138,18 @@ def test_governance_accepts_only_the_exact_gate_workflow() -> None:
         )
 
 
+def test_governance_accepts_only_the_exact_production_workflow() -> None:
+    governance = load_governance_validator()
+    text = PRODUCTION_WORKFLOW.read_text(encoding="utf-8")
+
+    governance.validate_pull_request_target_workflow(PRODUCTION_WORKFLOW, text)
+    with pytest.raises(governance.GovernanceError, match="pull_request_target is forbidden"):
+        governance.validate_pull_request_target_workflow(
+            PRODUCTION_WORKFLOW,
+            text + "\n# candidate production workflow mutation\n",
+        )
+
+
 def test_governance_requires_independent_ownership_of_every_trust_path() -> None:
     governance = load_governance_validator()
     text = "\n".join(
@@ -168,3 +181,8 @@ def test_orchestrator_classifies_the_evidence_gate_as_read_only() -> None:
     relative = GATE.relative_to(ROOT).as_posix()
 
     assert orchestrator["workflow_has_runtime_mutation"](text, relative) is False
+
+
+def test_current_candidate_passes_the_unchanged_protected_trust_launcher() -> None:
+    launcher = load_launcher()
+    assert launcher.validate_candidate(ROOT) == ORCHESTRATOR

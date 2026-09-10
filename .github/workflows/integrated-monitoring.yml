@@ -46,7 +46,7 @@ jobs:
         run: python -m pip install --require-hashes -r requirements-test.txt
       - name: Check code and contract
         run: |
-          ruff check app/monitoring migrations/versions/0058_integrated_monitoring.py tests/test_integrated_monitoring.py scripts/generate_integrated_monitoring_openapi.py
+          ruff check app/monitoring migrations/versions/0059_integrated_monitoring.py tests/test_integrated_monitoring.py scripts/generate_integrated_monitoring_openapi.py
           python scripts/generate_integrated_monitoring_openapi.py --check
       - name: Verify 36 operations, migration and PostgreSQL concurrency
         env:

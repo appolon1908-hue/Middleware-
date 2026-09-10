@@ -23,6 +23,12 @@ def upgrade():
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
         ),
         sa.PrimaryKeyConstraint("integration_uuid", "revision"),
+        sa.UniqueConstraint(
+            "integration_uuid",
+            "revision",
+            "manifest_hash",
+            name="uq_campaign_revision_manifest",
+        ),
         sa.CheckConstraint("revision >= 1", name="ck_campaign_design_revision"),
         sa.CheckConstraint(
             "approval_state IN ('preview','approved')",
@@ -165,10 +171,11 @@ def upgrade():
             name="uq_campaign_approval_revision",
         ),
         sa.ForeignKeyConstraint(
-            ["integration_uuid", "design_revision"],
+            ["integration_uuid", "design_revision", "manifest_hash"],
             [
                 "campaign_design_revision.integration_uuid",
                 "campaign_design_revision.revision",
+                "campaign_design_revision.manifest_hash",
             ],
             name="fk_campaign_approval_revision",
         ),
@@ -210,9 +217,31 @@ def upgrade():
         """
     )
 
+    op.execute("""
+        CREATE FUNCTION reject_campaign_approval_mutation()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+          RAISE EXCEPTION 'campaign design approvals are append-only';
+        END;
+        $$;
+    """)
+    op.execute("""
+        CREATE TRIGGER campaign_design_approval_immutable
+        BEFORE UPDATE OR DELETE ON campaign_design_approval
+        FOR EACH ROW EXECUTE FUNCTION reject_campaign_approval_mutation();
+    """)
+    op.execute("""
+        CREATE TRIGGER campaign_design_approval_no_truncate
+        BEFORE TRUNCATE ON campaign_design_approval
+        FOR EACH STATEMENT EXECUTE FUNCTION reject_campaign_approval_mutation();
+    """)
+
 
 def downgrade():
     op.drop_table("campaign_design_approval")
+    op.execute("DROP FUNCTION reject_campaign_approval_mutation()")
     op.drop_table("campaign_design_failure")
     op.drop_table("campaign_event_inbox")
     op.drop_table("campaign_resource_allocation")

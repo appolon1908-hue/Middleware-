@@ -356,17 +356,17 @@ The repository names below were observed from GitHub. The group/profile is a pro
 | # | Repository | Design group | Monitoring profile |
 | --- | --- | --- | --- |
 | 1 | [Frontend-Resturant-](https://github.com/appolon1908-hue/Frontend-Resturant-) | Applications/websites | runtime-or-website |
-| 2 | [codestra-production-platform](https://github.com/appolon1908-hue/codestra-production-platform) | Governance/shared source | release-and-dependency |
+| 2 | [codestra-production-platform](https://github.com/appolon1908-hue/codestra-production-platform) | Runtime and shared source | runtime-or-website |
 | 3 | [Codestraxxxx](https://github.com/appolon1908-hue/Codestraxxxx) | Classification pending | classify-before-target-registration |
 | 4 | [codestra](https://github.com/appolon1908-hue/codestra) | Classification pending | classify-before-target-registration |
 | 5 | [beyvra-backend](https://github.com/appolon1908-hue/beyvra-backend) | Applications/websites | runtime-or-website |
 | 6 | [codestra-backend](https://github.com/appolon1908-hue/codestra-backend) | Applications/websites | runtime-or-website |
 | 7 | [backend2](https://github.com/appolon1908-hue/backend2) | Classification pending | classify-before-target-registration |
 | 8 | [beyvra-frontend](https://github.com/appolon1908-hue/beyvra-frontend) | Applications/websites | runtime-or-website |
-| 9 | [scrapper](https://github.com/appolon1908-hue/scrapper) | Applications/websites | runtime-or-website |
+| 9 | [scrapper](https://github.com/appolon1908-hue/scrapper) | Archival source | release-and-dependency |
 | 10 | [Breero.com](https://github.com/appolon1908-hue/Breero.com) | Applications/websites | runtime-or-website |
 | 11 | [booked4seasons](https://github.com/appolon1908-hue/booked4seasons) | Classification pending | classify-before-target-registration |
-| 12 | [kyqra](https://github.com/appolon1908-hue/kyqra) | Applications/websites | runtime-or-website |
+| 12 | [kyqra](https://github.com/appolon1908-hue/kyqra) | Archival source | release-and-dependency |
 | 13 | [telnexa](https://github.com/appolon1908-hue/telnexa) | Platform/integrations | runtime-or-website |
 | 14 | [kyqra-crawler](https://github.com/appolon1908-hue/kyqra-crawler) | Applications/websites | runtime-or-website |
 | 15 | [klyrow.com](https://github.com/appolon1908-hue/klyrow.com) | Platform/integrations | runtime-or-website |
@@ -386,7 +386,7 @@ The repository names below were observed from GitHub. The group/profile is a pro
 | 29 | [Vicidialer-Codestra](https://github.com/appolon1908-hue/Vicidialer-Codestra) | Platform/integrations | runtime-or-website |
 | 30 | [Kong](https://github.com/appolon1908-hue/Kong) | Platform/integrations | runtime-or-website |
 | 31 | [social.codestra.co](https://github.com/appolon1908-hue/social.codestra.co) | Platform/integrations | runtime-or-website |
-| 32 | [SDK-repository](https://github.com/appolon1908-hue/SDK-repository) | Governance/shared source | release-and-dependency |
+| 32 | [SDK-repository](https://github.com/appolon1908-hue/SDK-repository) | Runtime and shared source | runtime-or-website |
 | 33 | [Caddy](https://github.com/appolon1908-hue/Caddy) | Platform/integrations | runtime-or-website |
 | 34 | [documentaions](https://github.com/appolon1908-hue/documentaions) | Governance/shared source | release-and-dependency |
 | 35 | [Infustruction-repo](https://github.com/appolon1908-hue/Infustruction-repo) | Governance/shared source | release-and-dependency |
@@ -413,7 +413,7 @@ The repository names below were observed from GitHub. The group/profile is a pro
 | 56 | [codestra-production-runtime-authority](https://github.com/appolon1908-hue/codestra-production-runtime-authority) | Governance/shared source | release-and-dependency |
 | 57 | [Websocket-](https://github.com/appolon1908-hue/Websocket-) | Platform/integrations | runtime-or-website |
 | 58 | [Database-migrations-](https://github.com/appolon1908-hue/Database-migrations-) | Governance/shared source | release-and-dependency |
-| 59 | [codestra-server-c](https://github.com/appolon1908-hue/codestra-server-c) | Governance/shared source | release-and-dependency |
+| 59 | [codestra-server-c](https://github.com/appolon1908-hue/codestra-server-c) | Runtime and shared source | runtime-or-website |
 | 60 | [codestra-ruleset-toolkit](https://github.com/appolon1908-hue/codestra-ruleset-toolkit) | Governance/shared source | release-and-dependency |
 
 | 61 | [Backstage](https://github.com/appolon1908-hue/Backstage) | Monitoring | native-component |
@@ -470,3 +470,5 @@ Run `pytest -q tests/test_integrated_monitoring.py` in Middleware. Its success-p
 Roll out only from reviewed protected-branch artifacts. Apply the forward migration separately; mount reviewed `MONITORING_CONFIG_FILE`, approved OpenAPI artifacts, Keycloak settings and backend identities. Enforce private ingress, 64 KiB request budgets and tenant/client quotas at Kong/BFF; use bounded OTLP/exporter queues and retention appropriate to the deployment. Test one synthetic service through health, metrics, logs, trace, incident and recovery before registering the remaining services. Preserve audit/replay tables when rolling back the application; use a reviewed export/restore procedure for nonempty monitoring tables. The migration permits downgrade/reupgrade only when all three tables are empty under an exclusive lock.
 
 This change does not deploy production, publish a UI, install app SDKs, activate dialing/delivery, or certify every application endpoint. The per-repository record is an explicit onboarding contract, with unverified runtime fields kept empty until supported by evidence.
+
+Source-only profiles require source CI, reviewed releases, ownership and dependency evidence; they do not require invented runtime image or telemetry identity. `scrapper` and `kyqra` are archival lineages; crawler runtime onboarding belongs only to `kyqra-crawler`. SDK-repository, codestra-production-platform and codestra-server-c contain deployable units and retain runtime evidence requirements before activation.

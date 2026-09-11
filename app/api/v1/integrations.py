@@ -27,6 +27,19 @@ from app.db.session import get_session
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
 
 
+class RuntimeIntegrationStatus(BaseModel):
+    """Read-only, secret-free runtime gate snapshot for certification tooling."""
+
+    status: Literal["blocked", "ready"]
+    source_sha: str
+    image_digest: str
+    environment: str
+    auth_ready: bool
+    external_effects_enabled: bool
+    gates: dict[str, bool]
+    timestamp: datetime
+
+
 class CommandRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     command_id: str = Field(min_length=1, max_length=128)
@@ -105,6 +118,47 @@ def _authenticate_n8n(authorization: str, required_scope: str) -> dict[str, Any]
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
         raise HTTPException(401, str(exc)) from exc
+
+
+@router.get("/runtime", response_model=RuntimeIntegrationStatus)
+async def runtime_integration_status() -> RuntimeIntegrationStatus:
+    """Expose the current no-effect integration gates without secrets or endpoints.
+
+    This is intentionally a snapshot of local configuration and source identity;
+    it never labels a deployment certified and performs no provider or database
+    mutation.
+    """
+    effects = {
+        "callback_dispatch": settings.callback_dispatch_enabled,
+        "email_delivery": settings.messaging_enabled,
+        "external_delivery": settings.enable_external_delivery,
+        "live_writes": settings.live_writes_enabled,
+        "n8n_delivery": settings.n8n_event_delivery_enabled,
+        "odoo_writes": settings.odoo_write_enabled or settings.odoo_automation_writes_enabled,
+        "production_dialing": settings.external_dial_enabled,
+        "sms_delivery": settings.messaging_enabled,
+        "social_publish": getattr(settings, "social_publish_enabled", False),
+        "vicidial_writes": settings.vicidial_write_enabled,
+    }
+    gates = {
+        "authorization": settings.auth_ready,
+        "database_configured": bool(settings.database_url or settings.database_url_file),
+        "redis_configured": bool(settings.redis_url or settings.redis_url_file),
+        "effects_disabled": not any(effects.values()),
+        "source_identified": bool(__import__("os").getenv("SOURCE_SHA")),
+        "image_identified": bool(__import__("os").getenv("IMAGE_DIGEST")),
+    }
+    ready = all(gates.values())
+    return RuntimeIntegrationStatus(
+        status="ready" if ready else "blocked",
+        source_sha=__import__("os").getenv("SOURCE_SHA", "unknown"),
+        image_digest=__import__("os").getenv("IMAGE_DIGEST", "unknown"),
+        environment=settings.environment,
+        auth_ready=settings.auth_ready,
+        external_effects_enabled=any(effects.values()),
+        gates=gates,
+        timestamp=datetime.now(timezone.utc),
+    )
 
 
 @router.get("/odoo/health")

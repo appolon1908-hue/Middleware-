@@ -303,3 +303,88 @@ async def test_telephony_assignments_pagination_cursor_advances(client, authorit
     first_ids = {item["employee_id"] for item in first_body["items"]}
     second_ids = {item["employee_id"] for item in second_body["items"]}
     assert first_ids.isdisjoint(second_ids)
+
+
+@pytest.mark.asyncio
+async def test_email_identities_campaign_id_filter_scopes_results(client, authority):
+    await _provision(client, authority)
+    await _provision(
+        client, authority,
+        request_id=f"req_other_campaign_{uuid4().hex[:8]}",
+        employee_id="COD.2026.00099",
+        campaigns=[{
+            "campaign_id": "OTHER_CAMPAIGN", "role": "agent",
+            "campaign_email": "other@codestra-test.invalid", "sms_sender": "CODESTRA2",
+        }],
+    )
+
+    scoped_to_test_syn = await client.get(
+        "/platform/v1/email/identities?tenant_id=COD&campaign_id=TEST_SYN",
+        headers={"Authorization": f"Bearer {authority()}"},
+    )
+    assert scoped_to_test_syn.status_code == 200
+    ids = {item["employee_id"] for item in scoped_to_test_syn.json()["items"]}
+    assert "COD.2026.00016" in ids
+    assert "COD.2026.00099" not in ids
+
+    scoped_to_other = await client.get(
+        "/platform/v1/email/identities?tenant_id=COD&campaign_id=OTHER_CAMPAIGN",
+        headers={"Authorization": f"Bearer {authority()}"},
+    )
+    assert scoped_to_other.status_code == 200
+    ids = {item["employee_id"] for item in scoped_to_other.json()["items"]}
+    assert "COD.2026.00099" in ids
+    assert "COD.2026.00016" not in ids
+
+    # No filter: unscoped behavior is unchanged, both are visible.
+    unscoped = await client.get(
+        "/platform/v1/email/identities?tenant_id=COD",
+        headers={"Authorization": f"Bearer {authority()}"},
+    )
+    ids = {item["employee_id"] for item in unscoped.json()["items"]}
+    assert {"COD.2026.00016", "COD.2026.00099"} <= ids
+
+
+@pytest.mark.asyncio
+async def test_email_identities_read_is_audited(client, authority):
+    await _provision(client, authority)
+    response = await client.get(
+        "/platform/v1/email/identities?tenant_id=COD",
+        headers={"Authorization": f"Bearer {authority()}"},
+    )
+    assert response.status_code == 200
+
+    engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+    async with engine.connect() as connection:
+        rows = (
+            await connection.execute(
+                text(
+                    "SELECT action, actor_subject FROM agent_provisioning_audit "
+                    "WHERE action = 'email_identity.read'"
+                )
+            )
+        ).fetchall()
+    await engine.dispose()
+    assert len(rows) >= 1
+    assert rows[0].actor_subject == "provisioning-service-subject"
+
+
+@pytest.mark.asyncio
+async def test_email_identities_read_rate_limited(client, authority, monkeypatch):
+    monkeypatch.setattr(agent_provisioning_reads, "_SENDER_IDENTITY_READS_PER_MINUTE", 3)
+    agent_provisioning_reads._sender_identity_read_requests.clear()
+    token = authority(tenant_ids=("RATE_LIMIT_TEST_TENANT",))
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for _ in range(3):
+        response = await client.get(
+            "/platform/v1/email/identities?tenant_id=RATE_LIMIT_TEST_TENANT",
+            headers=headers,
+        )
+        assert response.status_code == 200
+
+    limited = await client.get(
+        "/platform/v1/email/identities?tenant_id=RATE_LIMIT_TEST_TENANT",
+        headers=headers,
+    )
+    assert limited.status_code == 429

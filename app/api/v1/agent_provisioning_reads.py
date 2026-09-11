@@ -33,6 +33,8 @@ adapters, never re-readable here.
 from __future__ import annotations
 
 import base64
+import time
+from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -45,6 +47,7 @@ from app.api.v1.agent_provisioning import (
     AgentProvisioningRequest,
     AgentProvisioningStep,
     ProvisioningPrincipal,
+    _append_audit,
     _public_view,
     _steps_for,
     require_provisioning_scope,
@@ -67,6 +70,26 @@ _CHANNEL_SYSTEMS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
+
+# Sender-identity reads (email/sms) are the only reads in this module backed
+# by a shared, tenant-wide, multi-campaign resource (Klyrow/Telnexa have no
+# per-campaign workspace - see this module's docstring and
+# KlyrowSenderIdentityAdapter's own docstring), so they get the same
+# in-process rate-limit pattern already used for mutating telephony
+# operations (app.api.v1.telephony._rate_limit_originate) rather than a new
+# mechanism, to bound how fast a caller can enumerate campaign sender data.
+_SENDER_IDENTITY_READS_PER_MINUTE = 30
+_sender_identity_read_requests: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _rate_limit_sender_identity_read(key: str) -> None:
+    now = time.monotonic()
+    bucket = _sender_identity_read_requests[key]
+    while bucket and bucket[0] < now - 60:
+        bucket.popleft()
+    if len(bucket) >= _SENDER_IDENTITY_READS_PER_MINUTE:
+        raise HTTPException(429, "sender identity read rate limit exceeded")
+    bucket.append(now)
 
 
 async def _latest_request(
@@ -253,24 +276,50 @@ async def list_telephony_assignments(
     return {"items": items, "next_cursor": next_cursor}
 
 
+def _matching_campaign(
+    request: AgentProvisioningRequest, campaign_id: str | None,
+) -> dict[str, Any] | None:
+    """The campaign entry a caller is actually allowed to see for this row.
+
+    Klyrow/Telnexa have no per-campaign workspace, so multiple campaigns'
+    sender identities can live in one request's ``campaigns_json``. Without a
+    filter, list_email_identities/list_sms_identities used to always report
+    ``campaigns_json[0]`` regardless of which campaign a caller actually
+    asked about - effectively handing back whichever campaign happened to be
+    first, even to a caller only entitled to see one specific campaign. When
+    ``campaign_id`` is supplied, a row that does not actually contain that
+    campaign is not a match at all (the caller gets nothing for it, not
+    another campaign's data); when omitted, behavior is unchanged from
+    before (first entry), since scoping is opt-in via the new parameter.
+    """
+    campaigns = request.campaigns_json or []
+    if campaign_id is None:
+        return campaigns[0] if campaigns else {}
+    return next((c for c in campaigns if c.get("campaign_id") == campaign_id), None)
+
+
 @router.get("/email/identities")
 async def list_email_identities(
     tenant_id: str = Query(..., min_length=1, max_length=64),
     employee_id: str | None = Query(default=None, max_length=128),
+    campaign_id: str | None = Query(default=None, max_length=64),
     limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     cursor: str | None = Query(default=None),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     require_tenant_match(principal, tenant_id)
+    _rate_limit_sender_identity_read(f"{tenant_id}:{principal.subject}")
     rows, next_cursor = await _list_by_channel(
         session, tenant_id=tenant_id, channels=("email",),
         employee_id=employee_id, limit=limit, cursor=cursor,
     )
     items = []
     for request in rows:
+        campaign = _matching_campaign(request, campaign_id)
+        if campaign is None:
+            continue
         steps = await _steps_for(session, request)
-        campaign = request.campaigns_json[0] if request.campaigns_json else {}
         state = _channel_state("email", request, steps)
         items.append({
             "employee_id": request.employee_id,
@@ -279,6 +328,12 @@ async def list_email_identities(
             "campaign_email": campaign.get("campaign_email"),
             **state,
         })
+        await _append_audit(
+            session, request, from_state=request.state, to_state=request.state,
+            action="email_identity.read", principal=principal,
+        )
+    if items:
+        await session.commit()
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -286,20 +341,24 @@ async def list_email_identities(
 async def list_sms_identities(
     tenant_id: str = Query(..., min_length=1, max_length=64),
     employee_id: str | None = Query(default=None, max_length=128),
+    campaign_id: str | None = Query(default=None, max_length=64),
     limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     cursor: str | None = Query(default=None),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     require_tenant_match(principal, tenant_id)
+    _rate_limit_sender_identity_read(f"{tenant_id}:{principal.subject}")
     rows, next_cursor = await _list_by_channel(
         session, tenant_id=tenant_id, channels=("sms",),
         employee_id=employee_id, limit=limit, cursor=cursor,
     )
     items = []
     for request in rows:
+        campaign = _matching_campaign(request, campaign_id)
+        if campaign is None:
+            continue
         steps = await _steps_for(session, request)
-        campaign = request.campaigns_json[0] if request.campaigns_json else {}
         state = _channel_state("sms", request, steps)
         items.append({
             "employee_id": request.employee_id,
@@ -308,4 +367,10 @@ async def list_sms_identities(
             "sms_sender": campaign.get("sms_sender"),
             **state,
         })
+        await _append_audit(
+            session, request, from_state=request.state, to_state=request.state,
+            action="sms_identity.read", principal=principal,
+        )
+    if items:
+        await session.commit()
     return {"items": items, "next_cursor": next_cursor}

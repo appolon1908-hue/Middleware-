@@ -13,6 +13,8 @@ concurrency:
 
 jobs:
   plan:
+    # RUNTIME_MUTATION_DISABLED=true: legacy rollback image mirroring requires a separate reviewed activation before running.
+    if: ${{ false }}
     name: Validate authority record and build exact mirror plan
     runs-on: ubuntu-24.04
     timeout-minutes: 10

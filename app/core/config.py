@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     odoo_automation_writes_enabled: bool = False
     vicidial_read_enabled: bool = False
     vicidial_write_enabled: bool = False
+    klyrow_write_enabled: bool = False
+    telnexa_write_enabled: bool = False
+    klyrow_default_domain_claim_id: str = ""
     transfer_control_enabled: bool = False
     vicidial_authorization_url: str = ""
     vicidial_edge_url: str = ""

@@ -26,6 +26,7 @@ from sqlalchemy.pool import NullPool
 
 from app.api.v1 import agent_provisioning
 from app.core.config import settings
+from app.telnexa_sender_profile_adapter import TelnexaSenderProfileAdapterError
 
 ISSUER = "https://identity.example.invalid/realms/agent-provisioning-test"
 AUDIENCE = "middleware-api-test"
@@ -611,3 +612,189 @@ async def test_reconcile_resumes_past_a_partial_webrtc_failure_without_redoing_p
         and step["state"] == "succeeded"
     ]
     assert len(extension_steps) == 1
+
+
+@pytest.mark.asyncio
+async def test_email_and_sms_channels_reach_effective_when_adapters_succeed(
+    client, authority, monkeypatch,
+):
+    """Milestones 8/9: with both write-enable switches open and the Klyrow/
+    Telnexa adapters succeeding, the saga must report EFFECTIVE for email/sms
+    - not the pre-Mission-8/9 CHANNEL_ADAPTER_NOT_IMPLEMENTED stub."""
+    from app.adapters.keycloak.lifecycle_client import KeycloakLifecycleAdapter
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class _KeycloakRecord:
+        keycloak_subject: str
+        enabled: bool = True
+
+    async def _query_user(self, email):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _create_user(self, email, first_name, last_name):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _assign_roles(self, subject, roles):
+        return None
+
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "query_user_by_email", _query_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "create_user", _create_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "assign_approved_roles", _assign_roles)
+
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeKlyrowAdapter:
+        def __init__(self, _settings):
+            pass
+
+        async def provision_sender_identity(self, **kwargs):
+            calls.append(("provision_sender_identity", kwargs))
+            return {"id": "sender-identity-1", "status": "ACTIVE"}
+
+    class _FakeTelnexaAdapter:
+        def __init__(self, _settings):
+            pass
+
+        async def provision_sender_profile(self, **kwargs):
+            calls.append(("provision_sender_profile", kwargs))
+            return {"id": "sender-profile-1", "status": "requested"}
+
+    monkeypatch.setattr(settings, "live_identity_provisioning_enabled", True)
+    monkeypatch.setattr(settings, "klyrow_write_enabled", True)
+    monkeypatch.setattr(settings, "telnexa_write_enabled", True)
+    monkeypatch.setattr(settings, "live_writes_enabled", True)
+    monkeypatch.setattr(settings, "klyrow_default_domain_claim_id", "claim-cod")
+    monkeypatch.setattr(agent_provisioning, "KlyrowSenderIdentityAdapter", _FakeKlyrowAdapter)
+    monkeypatch.setattr(agent_provisioning, "TelnexaSenderProfileAdapter", _FakeTelnexaAdapter)
+
+    token = authority()
+    body = _body(
+        channels={"odoo": True, "phone": False, "webrtc": False, "sms": True, "email": True},
+        campaigns=[{
+            "campaign_id": "TEST_SYN", "role": "supervisor",
+            "campaign_email": "maria.transport@codestra.agency",
+            "sms_sender": "CODESTRA",
+        }],
+    )
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["state"] == "EFFECTIVE", payload["steps"]
+
+    steps_by_operation = {step["operation"]: step for step in payload["steps"]}
+    assert steps_by_operation["provision_sender_identity"]["state"] == "succeeded"
+    assert steps_by_operation["provision_sender_identity"]["external_reference"] == "sender-identity-1"
+    assert steps_by_operation["provision_sender_profile"]["state"] == "succeeded"
+    assert steps_by_operation["provision_sender_profile"]["external_reference"] == "sender-profile-1"
+    assert {name for name, _ in calls} == {"provision_sender_identity", "provision_sender_profile"}
+
+
+@pytest.mark.asyncio
+async def test_email_channel_blocked_when_campaign_email_missing(
+    client, authority, monkeypatch,
+):
+    monkeypatch.setattr(settings, "klyrow_write_enabled", True)
+    monkeypatch.setattr(settings, "live_writes_enabled", True)
+    monkeypatch.setattr(settings, "klyrow_default_domain_claim_id", "claim-cod")
+
+    token = authority()
+    body = _body(
+        channels={"odoo": True, "phone": False, "webrtc": False, "sms": False, "email": True},
+        campaigns=[{"campaign_id": "TEST_SYN", "role": "supervisor"}],
+    )
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["state"] != "EFFECTIVE", payload["steps"]
+    steps_by_operation = {step["operation"]: step for step in payload["steps"]}
+    assert steps_by_operation["provision_sender_identity"]["state"] == "blocked"
+    assert steps_by_operation["provision_sender_identity"]["error_code"] == "CHANNEL_CONFIGURATION_INCOMPLETE"
+
+
+@pytest.mark.asyncio
+async def test_sms_reconcile_does_not_replay_a_succeeded_sender_profile_step(
+    client, authority, monkeypatch,
+):
+    """Retry-safety mirror of the phone/webrtc reconcile fix: a /reconcile
+    call after a succeeded provision_sender_profile step must not call the
+    Telnexa adapter again (Telnexa's real POST /api/v1/senders has no
+    idempotency key of its own, so double-invoking would double-create)."""
+    from app.adapters.keycloak.lifecycle_client import KeycloakLifecycleAdapter
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class _KeycloakRecord:
+        keycloak_subject: str
+        enabled: bool = True
+
+    async def _query_user(self, email):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _create_user(self, email, first_name, last_name):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _assign_roles(self, subject, roles):
+        return None
+
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "query_user_by_email", _query_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "create_user", _create_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "assign_approved_roles", _assign_roles)
+
+    calls: list[str] = []
+
+    class _FlakyTelnexaAdapter:
+        attempt = 0
+
+        def __init__(self, _settings):
+            pass
+
+        async def provision_sender_profile(self, **kwargs):
+            _FlakyTelnexaAdapter.attempt += 1
+            calls.append("provision_sender_profile")
+            if _FlakyTelnexaAdapter.attempt == 1:
+                raise TelnexaSenderProfileAdapterError("synthetic transient failure")
+            return {"id": "sender-profile-1", "status": "approved"}
+
+    monkeypatch.setattr(settings, "live_identity_provisioning_enabled", True)
+    monkeypatch.setattr(settings, "telnexa_write_enabled", True)
+    monkeypatch.setattr(settings, "live_writes_enabled", True)
+    monkeypatch.setattr(agent_provisioning, "TelnexaSenderProfileAdapter", _FlakyTelnexaAdapter)
+
+    token = authority()
+    body = _body(
+        channels={"odoo": True, "phone": False, "webrtc": False, "sms": True, "email": False},
+        campaigns=[{
+            "campaign_id": "TEST_SYN", "role": "supervisor", "sms_sender": "CODESTRA",
+        }],
+    )
+    first = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert first.status_code == 202
+    first_payload = first.json()
+    assert first_payload["state"] in ("FAILED", "PARTIAL"), first_payload["steps"]
+
+    request_pk = await _internal_id_for(body["request_id"])
+    reconcile = await client.post(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}/reconcile",
+        json={"reason": "retry after synthetic transient failure"},
+        headers=_headers(token),
+    )
+    assert reconcile.status_code == 200
+    second_payload = reconcile.json()
+    assert second_payload["state"] == "EFFECTIVE", second_payload["steps"]
+    assert calls == ["provision_sender_profile", "provision_sender_profile"]
+
+    succeeded_steps = [
+        step for step in second_payload["steps"]
+        if step["operation"] == "provision_sender_profile" and step["state"] == "succeeded"
+    ]
+    assert len(succeeded_steps) == 1

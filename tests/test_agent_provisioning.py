@@ -192,9 +192,10 @@ async def test_kill_switch_closed_lands_in_partial_with_honest_step_records(clie
     assert steps_by_operation["create_user"]["state"] == "skipped"
     assert steps_by_operation["create_user"]["error_code"] == "KILL_SWITCH_CLOSED"
     assert steps_by_operation["provision_phone"]["system"] == "vicidial"
-    assert steps_by_operation["provision_phone"]["state"] == "blocked"
-    assert steps_by_operation["provision_phone"]["error_code"] == "CHANNEL_ADAPTER_NOT_IMPLEMENTED"
-    assert steps_by_operation["provision_webrtc"]["state"] == "blocked"
+    assert steps_by_operation["provision_phone"]["state"] == "skipped"
+    assert steps_by_operation["provision_phone"]["error_code"] == "KILL_SWITCH_CLOSED"
+    assert steps_by_operation["provision_webrtc"]["state"] == "skipped"
+    assert steps_by_operation["provision_webrtc"]["error_code"] == "KILL_SWITCH_CLOSED"
     assert "provision_sms" not in steps_by_operation
     assert "provision_email" not in steps_by_operation
 
@@ -368,3 +369,116 @@ async def test_real_identity_failure_emits_provision_failed_outbox_event(
     assert len(rows) == 1
     assert rows[0].status == "pending"
     assert rows[0].payload["state"] == "FAILED"
+
+
+@pytest.mark.asyncio
+async def test_phone_and_webrtc_channels_reach_effective_when_adapters_succeed(
+    client, authority, monkeypatch,
+):
+    """Mission 6: with both the identity and telephony kill switches open
+    and every adapter call succeeding, the saga must actually report
+    EFFECTIVE for phone/webrtc - not remain PARTIAL forever the way the
+    pre-Mission-6 stub always did (CHANNEL_ADAPTER_NOT_IMPLEMENTED)."""
+    from app.adapters.keycloak.lifecycle_client import KeycloakLifecycleAdapter
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class _KeycloakRecord:
+        keycloak_subject: str
+        enabled: bool = True
+
+    async def _query_user(self, email):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _create_user(self, email, first_name, last_name):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _assign_roles(self, subject, roles):
+        return None
+
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "query_user_by_email", _query_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "create_user", _create_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "assign_approved_roles", _assign_roles)
+
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeVicidialClient:
+        def __init__(self, _settings):
+            pass
+
+        def sync_agent(self, payload):
+            calls.append(("sync_agent", payload))
+            return {"actual": {"user_id": payload["agent"]["user_id"], "active": False}}
+
+        def reserve_extension(self, payload):
+            calls.append(("reserve_extension", payload))
+            return {"actual": {"extension": "6203", "active": True}}
+
+        def adopt_extension(self, payload):
+            calls.append(("adopt_extension", payload))
+            return {"actual": {"extension": payload["adoption"]["extension"], "active": True}}
+
+        def provision_webrtc(self, payload):
+            calls.append(("provision_webrtc", payload))
+            return {"extension": "6203", "credential": "synthetic", "expires_at": "later"}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(settings, "live_identity_provisioning_enabled", True)
+    monkeypatch.setattr(settings, "vicidial_write_enabled", True)
+    monkeypatch.setattr(settings, "live_writes_enabled", True)
+    monkeypatch.setattr(agent_provisioning, "VicidialMtlsClient", _FakeVicidialClient)
+
+    token = authority()
+    body = _body(
+        channels={"odoo": True, "phone": True, "webrtc": True, "sms": False, "email": False},
+        campaigns=[{
+            "campaign_id": "TEST_SYN", "role": "supervisor",
+            "vicidial_user_id": "COD0016", "vicidial_user_group": "COD_TEST_SDR",
+            "vicidial_supervisor_subject": "supervisor-cod",
+        }],
+        telephony={
+            "existing_extension": None, "extension_pool": "moneybee",
+            "incoming_allowed": True, "outgoing_allowed": True, "max_webrtc_sessions": 1,
+        },
+    )
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["state"] == "EFFECTIVE", payload["steps"]
+
+    steps_by_operation = {step["operation"]: step for step in payload["steps"]}
+    assert steps_by_operation["reserve_extension"]["state"] == "succeeded"
+    assert steps_by_operation["reserve_extension"]["external_reference"] == "6203"
+    assert steps_by_operation["provision_webrtc"]["state"] == "succeeded"
+    assert [name for name, _ in calls] == ["sync_agent", "reserve_extension", "provision_webrtc"]
+
+
+@pytest.mark.asyncio
+async def test_phone_channel_blocked_when_vicidial_identifiers_missing(
+    client, authority, monkeypatch,
+):
+    """Requesting phone/webrtc without the VICIdial-specific campaign
+    fields must fail closed with a clear, distinct error code - not crash,
+    and not silently proceed with a guessed identifier."""
+    monkeypatch.setattr(settings, "vicidial_write_enabled", True)
+    monkeypatch.setattr(settings, "live_writes_enabled", True)
+
+    token = authority()
+    body = _body(
+        channels={"odoo": True, "phone": True, "webrtc": False, "sms": False, "email": False},
+        campaigns=[{"campaign_id": "TEST_SYN", "role": "supervisor"}],
+    )
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["state"] == "PARTIAL"
+    steps_by_operation = {step["operation"]: step for step in payload["steps"]}
+    assert steps_by_operation["provision_phone"]["error_code"] == "CHANNEL_CONFIGURATION_INCOMPLETE"

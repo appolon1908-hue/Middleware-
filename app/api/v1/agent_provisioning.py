@@ -18,14 +18,19 @@ mounted at ``/platform/v1/agent-provisioning`` instead.
 
 Every mutating saga step is fail-closed behind
 ``settings.live_identity_provisioning_enabled`` (Keycloak) and
-``settings.live_writes_enabled`` (channel adapters), matching this
-codebase's existing default-closed posture (see
-``app.api.v1.telephony._fail_closed_action`` for the same idiom). No adapter
-in this repository today can create/bind a VICIdial agent account, a Klyrow
-mailbox, or a Telnexa SMS profile - only call origination and message
-sending exist - so CHANNEL_PROVISIONING steps for phone/webrtc/sms/email
-are recorded as blocked pending that adapter work, and the saga reports
-PARTIAL rather than claiming a channel is live when it is not.
+``settings.vicidial_write_enabled``/``settings.live_writes_enabled``
+(VICIdial channel adapter), matching this codebase's existing
+default-closed posture (see ``app.api.v1.telephony._fail_closed_action``
+for the same idiom).
+
+CHANNEL_PROVISIONING now provisions phone/webrtc for real through
+``app.adapters.vicidial.mtls_client`` (sync_agent -> reserve or adopt an
+extension -> provision_webrtc if requested). sms/email still have no
+account-provisioning adapter anywhere in this repository - only message
+sending exists (``app.telnexa_provider_adapter``,
+``app.klyrow_email_adapter``) - so those two channels are still recorded
+as blocked, and the saga reports PARTIAL rather than claiming a channel
+is live when it is not.
 """
 
 from __future__ import annotations
@@ -48,6 +53,7 @@ from app.adapters.keycloak.lifecycle_client import (
     KeycloakLifecycleDisabled,
     KeycloakLifecycleError,
 )
+from app.adapters.vicidial.mtls_client import VicidialMtlsClient, VicidialMtlsError
 from app.core.config import settings
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
@@ -74,6 +80,20 @@ TERMINAL_REVOKED_STATES = frozenset({"REVOKED"})
 class CampaignAssignment(BaseModel):
     campaign_id: str = Field(min_length=1, max_length=64)
     role: str = Field(min_length=1, max_length=64)
+    # Vicidialer-Codestra's own AgentSpec requires exactly these two
+    # fields (user_id ^[A-Z]{3}[0-9]{4,12}$, user_group) and binds an
+    # agent to exactly one campaign - so they only make sense on the
+    # single campaign the phone/webrtc channels will actually use. Optional
+    # because odoo/sms/email-only requests never need a VICIdial agent.
+    vicidial_user_id: str | None = Field(default=None, pattern=r"^[A-Z]{3}[0-9]{4,12}$")
+    vicidial_user_group: str | None = Field(default=None, pattern=r"^[A-Z0-9_]{2,20}$")
+    # Vicidialer-Codestra requires every phone/webrtc mutation's context to
+    # exactly match a pre-registered campaign_authority row (tenant_id,
+    # business_unit, supervisor_subject) - it does not trust the caller's
+    # bare say-so. This campaign must already have been provisioned there
+    # (a separate, earlier flow); this field is not itself a provisioning
+    # request for it.
+    vicidial_supervisor_subject: str | None = Field(default=None, max_length=128)
 
 
 class ChannelSelection(BaseModel):
@@ -89,6 +109,13 @@ class TelephonySelection(BaseModel):
     incoming_allowed: bool = True
     outgoing_allowed: bool = True
     max_webrtc_sessions: int = Field(default=1, ge=1, le=1)
+    # One of Vicidialer-Codestra's six named campaign-type pools
+    # (transportation/moneybee/web_ai/senior_products/student_repayment/
+    # supervisor_qa). Required only when reserving a NEW extension
+    # (existing_extension unset) - there is no confirmed mapping from this
+    # codebase's campaign/business-unit identifiers onto those pool names,
+    # so the caller must state it explicitly rather than have it guessed.
+    extension_pool: str | None = Field(default=None, max_length=32)
 
 
 class IdentitySelection(BaseModel):
@@ -271,32 +298,180 @@ async def _run_entitlements_step(
 async def _run_channel_provisioning_step(
     session: AsyncSession, request: AgentProvisioningRequest,
 ) -> StepOutcome:
-    """CHANNEL_PROVISIONING: no create/bind adapter exists yet for any channel.
+    """CHANNEL_PROVISIONING: phone/webrtc now provision for real through
+    the Vicidialer-Codestra adapter (Mission 6: sync_agent -> reserve or
+    adopt an extension -> provision_webrtc if requested). sms/email still
+    have no account-provisioning adapter anywhere in this codebase (only
+    message-sending exists via app.telnexa_provider_adapter and
+    app.klyrow_email_adapter), so those two remain recorded honestly as
+    blocked rather than pretending they went live.
 
-    app.adapters.vicidial.mtls_client only supports call origination and
-    transfer authorization; app.telnexa_provider_adapter and
-    app.klyrow_email_adapter only send messages. None can create a VICIdial
-    agent account, bind an extension, create a Klyrow mailbox, or create a
-    Telnexa SMS profile. Recording this honestly (rather than pretending a
-    channel went live) is what makes the saga's "gated" outcome meaningful,
-    and distinct from a real per-adapter "failed" error.
+    Known limitation: a /reconcile re-run of this step after a prior
+    PARTIAL/FAILED phone or webrtc attempt does not yet retry correctly -
+    Vicidialer-Codestra's resource_versions optimistic-concurrency claim
+    for "agent:<id>"/"extension:<id>"/"webrtc:<id>" starts each request at
+    expected_version=0, and this saga does not track the version a prior
+    partial attempt may have already advanced it to. The IDENTITY step
+    does not have this problem (Keycloak's adapter is naturally
+    idempotent via query-then-create); this one currently is not. Flagged
+    as explicit follow-up, not silently swallowed.
     """
     channels = request.channels_json
-    system_by_channel = {
-        "phone": "vicidial", "webrtc": "vicidial", "sms": "telnexa", "email": "klyrow",
-    }
-    requested = [name for name in system_by_channel if channels.get(name)]
-    for name in requested:
+    outcomes: list[StepOutcome] = []
+
+    for name, system in (("sms", "telnexa"), ("email", "klyrow")):
+        if channels.get(name):
+            await _add_step(
+                session, request, system=system, operation=f"provision_{name}",
+                state="blocked", error_code="CHANNEL_ADAPTER_NOT_IMPLEMENTED",
+                error_summary=(
+                    f"No {system} account-provisioning adapter exists in this "
+                    "codebase yet; only message-sending is implemented."
+                ),
+            )
+            outcomes.append("gated")
+
+    if not (channels.get("phone") or channels.get("webrtc")):
+        return "ok" if not outcomes else "gated"
+
+    if not (settings.vicidial_write_enabled and settings.live_writes_enabled):
+        for name in ("phone", "webrtc"):
+            if channels.get(name):
+                await _add_step(
+                    session, request, system="vicidial", operation=f"provision_{name}",
+                    state="skipped", error_code="KILL_SWITCH_CLOSED",
+                    error_summary="vicidial_write_enabled/live_writes_enabled is false",
+                )
+        outcomes.append("gated")
+        return "gated" if "failed" not in outcomes else "failed"
+
+    campaign = request.campaigns_json[0] if request.campaigns_json else {}
+    telephony = channels.get("_telephony", {})
+    identity = channels.get("_identity", {})
+    vicidial_user_id = campaign.get("vicidial_user_id")
+    vicidial_user_group = campaign.get("vicidial_user_group")
+    vicidial_supervisor_subject = campaign.get("vicidial_supervisor_subject")
+    business_unit = vicidial_user_id[:3] if vicidial_user_id else None
+
+    if (
+        not campaign or not vicidial_user_id or not vicidial_user_group
+        or not vicidial_supervisor_subject
+        or business_unit not in {
+            "MOY", "COD", "SCP", "MBL", "RLP", "FTP", "TRX", "CAL", "TEST",
+        }
+    ):
         await _add_step(
-            session, request, system=system_by_channel[name],
-            operation=f"provision_{name}",
-            state="blocked", error_code="CHANNEL_ADAPTER_NOT_IMPLEMENTED",
+            session, request, system="vicidial", operation="provision_phone",
+            state="blocked", error_code="CHANNEL_CONFIGURATION_INCOMPLETE",
             error_summary=(
-                f"No {system_by_channel[name]} account-provisioning adapter exists in "
-                "this codebase yet; only message-sending/call-origination is implemented."
+                "phone/webrtc requested but campaigns[0].vicidial_user_id/"
+                "vicidial_user_group/vicidial_supervisor_subject were not "
+                "supplied, or vicidial_user_id's business-unit prefix is "
+                "not a recognized code"
             ),
         )
-    return "ok" if not requested else "gated"
+        outcomes.append("gated")
+        return "failed" if "failed" in outcomes else "gated"
+
+    context_payload = {
+        "correlation_id": request.correlation_id, "actor": request.requested_by,
+        "tenant_id": request.tenant_id, "business_unit": business_unit,
+        "campaign_id": campaign["campaign_id"],
+        "supervisor_subject": vicidial_supervisor_subject,
+        "expected_version": 0, "reason": "agent provisioning saga",
+        "requested_at": _now().isoformat(),
+    }
+    adapter = VicidialMtlsClient(settings)
+    try:
+        try:
+            adapter.sync_agent({
+                "context": context_payload,
+                "agent": {
+                    "user_id": vicidial_user_id,
+                    "full_name": (
+                        f"{identity.get('first_name', '')} {identity.get('last_name', '')}"
+                    ).strip() or vicidial_user_id,
+                    "user_group": vicidial_user_group,
+                    "campaigns": [campaign["campaign_id"]],
+                    "inbound_groups": [], "active": False,
+                },
+            })
+            await _add_step(
+                session, request, system="vicidial", operation="sync_agent",
+                state="succeeded", external_reference=vicidial_user_id,
+            )
+        except VicidialMtlsError as exc:
+            await _add_step(
+                session, request, system="vicidial", operation="sync_agent",
+                state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
+            )
+            return "failed"
+
+        extension = None
+        try:
+            if telephony.get("existing_extension"):
+                result = adapter.adopt_extension({
+                    "context": context_payload,
+                    "adoption": {
+                        "user_id": vicidial_user_id,
+                        "extension": telephony["existing_extension"],
+                        "webrtc_enabled": bool(channels.get("webrtc")),
+                        "incoming_allowed": telephony.get("incoming_allowed", True),
+                        "outgoing_allowed": telephony.get("outgoing_allowed", True),
+                    },
+                })
+                operation = "adopt_extension"
+            elif telephony.get("extension_pool"):
+                result = adapter.reserve_extension({
+                    "context": context_payload,
+                    "reservation": {
+                        "user_id": vicidial_user_id, "pool": telephony["extension_pool"],
+                        "webrtc_enabled": bool(channels.get("webrtc")),
+                        "incoming_allowed": telephony.get("incoming_allowed", True),
+                        "outgoing_allowed": telephony.get("outgoing_allowed", True),
+                    },
+                })
+                operation = "reserve_extension"
+            else:
+                await _add_step(
+                    session, request, system="vicidial", operation="provision_phone",
+                    state="blocked", error_code="CHANNEL_CONFIGURATION_INCOMPLETE",
+                    error_summary="neither existing_extension nor extension_pool was supplied",
+                )
+                return "gated"
+            extension = (result.get("actual") or {}).get("extension")
+            await _add_step(
+                session, request, system="vicidial", operation=operation,
+                state="succeeded", external_reference=extension,
+                readback_state="phone_active",
+            )
+        except VicidialMtlsError as exc:
+            await _add_step(
+                session, request, system="vicidial", operation="provision_phone",
+                state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
+            )
+            return "failed"
+
+        if channels.get("webrtc"):
+            try:
+                adapter.provision_webrtc({
+                    "context": context_payload, "webrtc": {"user_id": vicidial_user_id},
+                })
+                await _add_step(
+                    session, request, system="vicidial", operation="provision_webrtc",
+                    state="succeeded", external_reference=extension,
+                    readback_state="webrtc_session_issued",
+                )
+            except VicidialMtlsError as exc:
+                await _add_step(
+                    session, request, system="vicidial", operation="provision_webrtc",
+                    state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
+                )
+                return "failed"
+    finally:
+        adapter.close()
+
+    return "gated" if outcomes else "ok"
 
 
 async def _run_readback_step(

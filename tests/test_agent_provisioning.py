@@ -1,0 +1,370 @@
+"""Real-database regressions for the Mission 3 agent provisioning saga.
+
+These tests run only when a disposable PostgreSQL is available (see
+tests/integration/conftest.py and scripts/integration_ci.sh, the same
+convention tests/test_ai_job_platform.py uses) - they are the tests
+required-ci.yml actually exercises against the real database after
+`alembic upgrade head`.
+"""
+
+from __future__ import annotations
+
+import os
+import time
+from types import SimpleNamespace
+from uuid import uuid4
+
+import jwt
+import pytest
+import pytest_asyncio
+from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from app.api.v1 import agent_provisioning
+from app.core.config import settings
+
+ISSUER = "https://identity.example.invalid/realms/agent-provisioning-test"
+AUDIENCE = "middleware-api-test"
+
+pytestmark = pytest.mark.skipif(
+    "DATABASE_URL" not in os.environ, reason="disposable PostgreSQL required"
+)
+
+
+@pytest.fixture
+def authority(monkeypatch):
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    class Keys:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def get_signing_key_from_jwt(self, _token):
+            return SimpleNamespace(key=private.public_key())
+
+    monkeypatch.setattr(jwt, "PyJWKClient", Keys)
+    for key, value in {
+        "keycloak_issuer": ISSUER,
+        "keycloak_audience": AUDIENCE,
+        "keycloak_jwks_url": ISSUER + "/certs",
+        "agent_provisioning_authorized_parties": "provisioning-service",
+        "agent_provisioning_policy_revision": "7",
+        "live_identity_provisioning_enabled": False,
+        "live_writes_enabled": False,
+    }.items():
+        monkeypatch.setattr(settings, key, value)
+
+    def token(
+        scope="identity.request integration.configure tenant.provision",
+        subject="provisioning-service-subject",
+        azp="provisioning-service",
+        tenant_ids=("COD",),
+        **overrides,
+    ):
+        current = int(time.time())
+        claims = {
+            "iss": ISSUER, "aud": AUDIENCE, "azp": azp,
+            "sub": subject, "iat": current, "exp": current + 300,
+            "jti": str(uuid4()), "scope": scope, "tenant_ids": list(tenant_ids),
+            **overrides,
+        }
+        return jwt.encode(claims, private, algorithm="RS256")
+
+    return token
+
+
+@pytest_asyncio.fixture
+async def client():
+    engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def isolated_session():
+        async with session_factory() as session:
+            yield session
+
+    app = FastAPI()
+    app.include_router(agent_provisioning.router)
+    app.dependency_overrides[agent_provisioning.get_session] = isolated_session
+
+    async with engine.begin() as connection:
+        await connection.execute(text("DELETE FROM agent_provisioning_audit"))
+        await connection.execute(text("DELETE FROM agent_provisioning_step"))
+        await connection.execute(text("DELETE FROM agent_provisioning_request"))
+        await connection.execute(
+            text("DELETE FROM idempotency_record WHERE scope = 'agent_provisioning'")
+        )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as http_client:
+        yield http_client
+
+    app.dependency_overrides.clear()
+    await engine.dispose()
+
+
+def _body(**overrides) -> dict:
+    body = {
+        "request_id": f"req_{uuid4().hex[:12]}",
+        "tenant_id": "COD",
+        "employee_id": "COD.2026.00016",
+        "identity": {"email": "appolon1908@gmail.com", "first_name": "A", "last_name": "P"},
+        "campaigns": [{"campaign_id": "TEST_SYN", "role": "supervisor"}],
+        "channels": {"odoo": True, "phone": True, "webrtc": True, "sms": False, "email": False},
+        "telephony": {
+            "existing_extension": "6101", "incoming_allowed": True,
+            "outgoing_allowed": True, "max_webrtc_sessions": 1,
+        },
+    }
+    body.update(overrides)
+    return body
+
+
+def _headers(token: str, *, idempotency_key: str | None = None, policy_revision: str = "7") -> dict:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": idempotency_key or uuid4().hex,
+        "X-Correlation-ID": str(uuid4()),
+        "X-Policy-Revision": policy_revision,
+    }
+
+
+@pytest.mark.asyncio
+async def test_missing_bearer_token_is_rejected_before_any_db_write(client, authority):
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(),
+        headers={"Idempotency-Key": uuid4().hex, "X-Policy-Revision": "7"},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_wrong_scope_is_denied(client, authority):
+    token = authority(scope="some.other.scope")
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(),
+        headers=_headers(token),
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_tenant_claim_mismatch_is_denied(client, authority):
+    token = authority(tenant_ids=("OTHER_TENANT",))
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(tenant_id="COD"),
+        headers=_headers(token),
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_stale_policy_revision_is_rejected(client, authority):
+    token = authority()
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(),
+        headers=_headers(token, policy_revision="stale-revision"),
+    )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_kill_switch_closed_lands_in_partial_with_honest_step_records(client, authority):
+    """The default posture (both kill switches closed) must never claim a
+    channel is live. Odoo needs every step visible, not just the final
+    state - this is the "display every step of its progress" requirement.
+    """
+    token = authority()
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(),
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["state"] == "PARTIAL"
+    assert payload["keycloak_subject"] is None
+
+    steps_by_operation = {step["operation"]: step for step in payload["steps"]}
+    assert steps_by_operation["create_user"]["state"] == "skipped"
+    assert steps_by_operation["create_user"]["error_code"] == "KILL_SWITCH_CLOSED"
+    assert steps_by_operation["provision_phone"]["system"] == "vicidial"
+    assert steps_by_operation["provision_phone"]["state"] == "blocked"
+    assert steps_by_operation["provision_phone"]["error_code"] == "CHANNEL_ADAPTER_NOT_IMPLEMENTED"
+    assert steps_by_operation["provision_webrtc"]["state"] == "blocked"
+    assert "provision_sms" not in steps_by_operation
+    assert "provision_email" not in steps_by_operation
+
+
+async def _internal_id_for(request_id: str) -> str:
+    engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text("SELECT id FROM agent_provisioning_request WHERE request_id = :rid"),
+                {"rid": request_id},
+            )
+            return str(result.scalar_one())
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_get_returns_the_same_saga_and_steps_as_create(client, authority):
+    token = authority()
+    body = _body()
+    create_response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert create_response.status_code == 202
+    request_pk = await _internal_id_for(body["request_id"])
+
+    get_response = await client.get(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert get_response.status_code == 200
+    assert get_response.json() == create_response.json()
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_replay_returns_the_identical_response(client, authority):
+    token = authority()
+    body = _body()
+    key = uuid4().hex
+    first = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token, idempotency_key=key),
+    )
+    second = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token, idempotency_key=key),
+    )
+    assert first.status_code == second.status_code == 202
+    assert first.json() == second.json()
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_reused_with_a_different_body_is_rejected(client, authority):
+    token = authority()
+    key = uuid4().hex
+    first = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(),
+        headers=_headers(token, idempotency_key=key),
+    )
+    assert first.status_code == 202
+    second = await client.post(
+        "/platform/v1/agent-provisioning/requests",
+        json=_body(request_id=f"req_{uuid4().hex[:12]}"),
+        headers=_headers(token, idempotency_key=key),
+    )
+    assert second.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_duplicate_request_id_is_rejected(client, authority):
+    token = authority()
+    request_id = f"req_{uuid4().hex[:12]}"
+    first = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(request_id=request_id),
+        headers=_headers(token),
+    )
+    assert first.status_code == 202
+    second = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=_body(request_id=request_id),
+        headers=_headers(token),
+    )
+    assert second.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_suspend_reactivate_and_revoke_transition_lifecycle(client, authority):
+    token = authority()
+    body = _body()
+    create_response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert create_response.status_code == 202
+    request_pk = await _internal_id_for(body["request_id"])
+
+    suspend_response = await client.post(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}/suspend",
+        json={"reason": "security review"}, headers=_headers(token),
+    )
+    assert suspend_response.status_code == 200
+    assert suspend_response.json()["state"] == "SUSPENDED"
+
+    reactivate_response = await client.post(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}/reactivate",
+        json={"reason": "review cleared"}, headers=_headers(token),
+    )
+    assert reactivate_response.status_code == 200
+    assert reactivate_response.json()["state"] == "PARTIAL"
+
+    revoke_response = await client.post(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}/revoke",
+        json={"reason": "offboarding"}, headers=_headers(token),
+    )
+    assert revoke_response.status_code == 200
+    assert revoke_response.json()["state"] == "REVOKED"
+
+    blocked_response = await client.post(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}/reconcile",
+        json={"reason": "retry after revoke"}, headers=_headers(token),
+    )
+    assert blocked_response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_real_identity_failure_emits_provision_failed_outbox_event(
+    client, authority, monkeypatch,
+):
+    """Mission 4E: n8n reacts only to a real outbox event, never decides
+    identity/provisioning state itself. Forcing a genuine adapter error
+    (not a kill-switch gate) must land the saga FAILED and enqueue exactly
+    one platform.user.provision_failed row for the existing outbox worker
+    to deliver - this test does not touch n8n at all, only the event it
+    would eventually receive.
+    """
+    from app.adapters.keycloak.lifecycle_client import (
+        KeycloakLifecycleAdapter,
+        KeycloakLifecycleError,
+    )
+
+    async def _boom(self, email):
+        raise KeycloakLifecycleError("synthetic adapter failure")
+
+    monkeypatch.setattr(settings, "live_identity_provisioning_enabled", True)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "query_user_by_email", _boom)
+
+    token = authority()
+    body = _body(channels={"odoo": True, "phone": False, "webrtc": False, "sms": False, "email": False})
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    assert response.json()["state"] == "FAILED"
+
+    engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text(
+                    "SELECT topic, status, payload FROM outbox_event "
+                    "WHERE topic = 'platform.user.provision_failed' "
+                    "AND payload->>'request_id' = :rid"
+                ),
+                {"rid": body["request_id"]},
+            )
+            rows = result.all()
+    finally:
+        await engine.dispose()
+    assert len(rows) == 1
+    assert rows[0].status == "pending"
+    assert rows[0].payload["state"] == "FAILED"

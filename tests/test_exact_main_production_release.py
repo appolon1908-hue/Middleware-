@@ -55,7 +55,7 @@ def test_release_is_separate_from_staging_candidate_workflow() -> None:
 def test_release_requires_the_klyrow_delivery_migration_head() -> None:
     value = source()
     assert 'alembic heads' in value
-    assert '= "0059_integrated_monitoring"' in value
+    assert '= "0060_agent_provisioning"' in value
 
 
 def test_release_uses_protected_production_environment() -> None:

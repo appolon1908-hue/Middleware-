@@ -30,6 +30,8 @@ APPROVED_ROUTES = frozenset(
         ),
         ("POST", "edge.internal.codestra.agency", "/v1/transfers/execute"),
         ("POST", "edge.internal.codestra.agency", "/v1/calls/originate"),
+        ("POST", "edge.internal.codestra.agency", "/v1/agents/sync"),
+        ("POST", "edge.internal.codestra.agency", "/v1/agents/disable"),
     }
 )
 APPROVED_PRIVATE_IPV4_NETWORKS = (
@@ -163,6 +165,58 @@ class VicidialMtlsClient:
         return self.request(
             "POST",
             f"{self._settings.vicidial_edge_url}/v1/calls/originate",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def sync_agent(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or update one agent (Mission 4A create_agent/update_agent).
+
+        Calls the real, general ``POST /v1/agents/sync`` endpoint of the
+        Vicidialer-Codestra adapter (``codestra_vicidial.app``), which takes
+        an unrestricted ``AgentCommand`` - unlike
+        ``/v1/agents/provision-disabled``, which is hard-locked to one
+        synthetic break-glass test agent and is deliberately never called
+        here. ``payload["agent"]`` must already be shaped like that
+        service's ``AgentSpec`` (``user_id`` matching ``^[A-Z]{3}[0-9]{4,12}$``,
+        exactly one campaign, ``active: False`` - VICIdial itself always
+        provisions disabled, activation is a separate step there).
+        """
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial agent sync is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/agents/sync",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def disable_agent(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Disable one agent (Mission 4A disable_agent).
+
+        Calls the real ``POST /v1/agents/disable`` endpoint. ``payload``
+        must contain ``context`` and ``user_id`` matching
+        ``DisableAgentCommand``.
+        """
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial agent disable is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/agents/disable",
             payload,
             correlation_id=correlation_id,
             request_id=request_id,

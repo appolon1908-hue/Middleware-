@@ -32,6 +32,11 @@ APPROVED_ROUTES = frozenset(
         ("POST", "edge.internal.codestra.agency", "/v1/calls/originate"),
         ("POST", "edge.internal.codestra.agency", "/v1/agents/sync"),
         ("POST", "edge.internal.codestra.agency", "/v1/agents/disable"),
+        ("POST", "edge.internal.codestra.agency", "/v1/extensions/reserve"),
+        ("POST", "edge.internal.codestra.agency", "/v1/extensions/adopt"),
+        ("POST", "edge.internal.codestra.agency", "/v1/webrtc/provision"),
+        ("POST", "edge.internal.codestra.agency", "/v1/webrtc/rotate"),
+        ("POST", "edge.internal.codestra.agency", "/v1/webrtc/revoke"),
     }
 )
 APPROVED_PRIVATE_IPV4_NETWORKS = (
@@ -222,6 +227,112 @@ class VicidialMtlsClient:
             request_id=request_id,
         )
 
+    def reserve_extension(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Allocate the next free extension from one named pool
+        (Mission 6 reserve_extension). ``payload["reservation"]`` must be
+        shaped like Vicidialer-Codestra's ``ExtensionReserveSpec``
+        (``user_id``, ``pool``). The response's ``actual`` already reflects
+        that service's own internal read-back - a distinct GET call is not
+        needed, matching how ``sync_agent``/``disable_agent`` work today.
+        """
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial extension reservation is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/extensions/reserve",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def adopt_extension(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Bind an already-existing extension (e.g. 6101) without ever
+        consuming a pool slot (Mission 6 adopt_extension). Deliberately a
+        separate method from reserve_extension, calling a separate route -
+        never conflate the two, since adopt must never rotate a
+        potentially-live SIP credential (see the Vicidialer-Codestra side
+        for the corresponding safety logic).
+        """
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial extension adoption is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/extensions/adopt",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def provision_webrtc(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Issue a short-lived, single-use WebRTC registration credential
+        (Mission 6/7). A concurrent second call for the same user returns
+        409 WEBRTC_SESSION_ALREADY_ACTIVE from the edge service - callers
+        must not treat that as a generic adapter failure."""
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial WebRTC provisioning is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/webrtc/provision",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def rotate_webrtc_secret(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial WebRTC credential rotation is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/webrtc/rotate",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def revoke_webrtc(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Atomically invalidate the session ticket, credential reference,
+        and phone-row SIP secret for one user (Mission 6) - one call, not
+        several independently-callable steps that could partially fail."""
+        if not (self._settings.vicidial_write_enabled and self._settings.live_writes_enabled):
+            raise VicidialMtlsError("VICIdial WebRTC revocation is disabled")
+        return self.request(
+            "POST",
+            f"{self._settings.vicidial_edge_url}/v1/webrtc/revoke",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
     def request(
         self,
         method: str,
@@ -276,7 +387,7 @@ class VicidialMtlsClient:
         )
         try:
             with self._clients[parsed.hostname].stream(
-                "POST",
+                method.upper(),
                 pinned_url,
                 content=body,
                 headers={

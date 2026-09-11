@@ -592,3 +592,58 @@ def test_disable_agent_valid_request_hits_approved_route(tmp_path: Path):
     request = captured[0]
     assert request.method == "POST"
     assert request.url.path == "/v1/agents/disable"
+
+
+@pytest.mark.parametrize(
+    ("method_name", "match", "path"),
+    [
+        ("reserve_extension", "extension reservation is disabled", "/v1/extensions/reserve"),
+        ("adopt_extension", "extension adoption is disabled", "/v1/extensions/adopt"),
+        ("provision_webrtc", "WebRTC provisioning is disabled", "/v1/webrtc/provision"),
+        ("rotate_webrtc_secret", "WebRTC credential rotation is disabled", "/v1/webrtc/rotate"),
+        ("revoke_webrtc", "WebRTC revocation is disabled", "/v1/webrtc/revoke"),
+    ],
+)
+def test_new_telephony_methods_disabled_without_write_and_live_flags(
+    tmp_path: Path, method_name: str, match: str, path: str,
+) -> None:
+    settings = _settings(tmp_path, vicidial_write_enabled=False, live_writes_enabled=False)
+    client = _client(settings, lambda request: httpx.Response(200, json={}))
+    try:
+        with pytest.raises(VicidialMtlsError, match=match):
+            getattr(client, method_name)({})
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "path"),
+    [
+        ("reserve_extension", "/v1/extensions/reserve"),
+        ("adopt_extension", "/v1/extensions/adopt"),
+        ("provision_webrtc", "/v1/webrtc/provision"),
+        ("rotate_webrtc_secret", "/v1/webrtc/rotate"),
+        ("revoke_webrtc", "/v1/webrtc/revoke"),
+    ],
+)
+def test_new_telephony_methods_valid_request_hits_approved_route(
+    tmp_path: Path, method_name: str, path: str,
+) -> None:
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={"status": "ok"})
+
+    settings = _settings(tmp_path, vicidial_write_enabled=True, live_writes_enabled=True)
+    client = _client(settings, handler)
+    try:
+        assert getattr(client, method_name)({}) == {"status": "ok"}
+    finally:
+        client.close()
+    request = captured[0]
+    assert request.method == "POST"
+    assert request.url.path == path
+    assert request.headers["X-Correlation-ID"]
+    assert request.headers["X-Request-ID"]
+

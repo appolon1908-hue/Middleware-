@@ -53,7 +53,10 @@ env:
 jobs:
   release:
     name: Exact Main Production Release
-    if: github.repository == 'appolon1908-hue/Middleware-' && github.ref == 'refs/heads/main'
+    # RUNTIME_MUTATION_DISABLED=true: production release requires separate release authorization.
+    if: ${{ false }}
+    # Original release predicate retained in the protected release record.
+    # if: github.repository == 'appolon1908-hue/Middleware-' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     environment: production-release

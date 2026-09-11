@@ -193,6 +193,8 @@ class VicidialMtlsClient:
         *,
         correlation_id: str | None = None,
         request_id: str | None = None,
+        idempotency_key: str | None = None,
+        signed: bool = False,
     ) -> dict[str, Any]:
         """Create or update one agent (Mission 4A create_agent/update_agent).
 
@@ -214,6 +216,8 @@ class VicidialMtlsClient:
             payload,
             correlation_id=correlation_id,
             request_id=request_id,
+            idempotency_key=idempotency_key or "",
+            scope="telephony:agent-sync" if signed else None,
         )
 
     def disable_agent(
@@ -222,6 +226,8 @@ class VicidialMtlsClient:
         *,
         correlation_id: str | None = None,
         request_id: str | None = None,
+        idempotency_key: str | None = None,
+        signed: bool = False,
     ) -> dict[str, Any]:
         """Disable one agent (Mission 4A disable_agent).
 
@@ -237,6 +243,135 @@ class VicidialMtlsClient:
             payload,
             correlation_id=correlation_id,
             request_id=request_id,
+            idempotency_key=idempotency_key or "",
+            scope="telephony:agent-sync" if signed else None,
+        )
+
+    def _lifecycle_request(
+        self,
+        method: str,
+        path: str,
+        payload: Mapping[str, Any],
+        *,
+        scope: str,
+        idempotency_key: str,
+        correlation_id: str | None,
+        request_id: str | None,
+        require_webrtc: bool = False,
+    ) -> dict[str, Any]:
+        if not (
+            self._settings.vicidial_provisioning_enabled
+            and self._settings.vicidial_write_enabled
+            and self._settings.live_writes_enabled
+        ):
+            raise VicidialMtlsError("VICIdial lifecycle writes are disabled")
+        if require_webrtc and not (
+            self._settings.pjsip_provisioning_enabled
+            and self._settings.webphone_session_issuer_enabled
+        ):
+            raise VicidialMtlsError("VICIdial WebRTC lifecycle is disabled")
+        if not idempotency_key:
+            raise VicidialMtlsError("VICIdial lifecycle idempotency key is required")
+        return self.request(
+            method,
+            f"{self._settings.vicidial_edge_url.rstrip('/')}{path}",
+            payload,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            scope=scope,
+            idempotency_key=idempotency_key,
+        )
+
+    def reserve_extension(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        idempotency_key: str,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._lifecycle_request(
+            "POST",
+            "/v1/extensions/reserve",
+            payload,
+            scope="telephony:extension-reserve",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def adopt_extension(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        idempotency_key: str,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._lifecycle_request(
+            "POST",
+            "/v1/extensions/adopt",
+            payload,
+            scope="telephony:extension-adopt",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def extension_readback(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        idempotency_key: str,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._lifecycle_request(
+            "POST",
+            "/v1/extensions/readback",
+            payload,
+            scope="telephony:read",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+            request_id=request_id,
+        )
+
+    def issue_webrtc_credentials(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        idempotency_key: str,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._lifecycle_request(
+            "POST",
+            "/v1/webrtc/credentials",
+            payload,
+            scope="telephony:webrtc-provision",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            require_webrtc=True,
+        )
+
+    def revoke_webrtc(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        idempotency_key: str,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._lifecycle_request(
+            "POST",
+            "/v1/webrtc/revoke",
+            payload,
+            scope="telephony:webrtc-revoke",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            require_webrtc=True,
         )
 
     def request(

@@ -222,7 +222,7 @@ def database():
                     )
                     spec = importlib.util.spec_from_file_location(
                         "campaign_migration",
-                        ROOT / "migrations/versions/0058_campaign_design.py",
+                        ROOT / "migrations/versions/0059_integrated_monitoring.py",
                     )
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)

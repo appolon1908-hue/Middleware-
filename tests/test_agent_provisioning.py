@@ -482,3 +482,132 @@ async def test_phone_channel_blocked_when_vicidial_identifiers_missing(
     assert payload["state"] == "PARTIAL"
     steps_by_operation = {step["operation"]: step for step in payload["steps"]}
     assert steps_by_operation["provision_phone"]["error_code"] == "CHANNEL_CONFIGURATION_INCOMPLETE"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_resumes_past_a_partial_webrtc_failure_without_redoing_prior_steps(
+    client, authority, monkeypatch,
+):
+    """Root cause of the original reconciliation gap: Vicidialer-Codestra's
+    per-resource optimistic-concurrency claim ("agent:<id>"/
+    "extension:<id>"/"webrtc:<id>") only ever accepts expected_version=0
+    once - a second call against an already-advanced resource key raises
+    StaleResourceVersion. The fix is to never re-issue a call this saga's
+    own AgentProvisioningStep history already shows as "succeeded" for
+    this exact request. This test forces sync_agent and reserve_extension
+    to succeed, provision_webrtc to fail on the first attempt (a
+    transient VicidialMtlsError - the kind that leaves Vicidialer's
+    webrtc:<id> resource key untouched), then reconciles and asserts:
+    sync_agent/reserve_extension are NOT called a second time (proving no
+    double-allocation and no StaleResourceVersion retry of an
+    already-succeeded step), provision_webrtc IS retried and this time
+    succeeds, and the saga reaches EFFECTIVE.
+    """
+    from app.adapters.keycloak.lifecycle_client import KeycloakLifecycleAdapter
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class _KeycloakRecord:
+        keycloak_subject: str
+        enabled: bool = True
+
+    async def _query_user(self, email):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _create_user(self, email, first_name, last_name):
+        return _KeycloakRecord(keycloak_subject="kc-subject-synthetic-0016")
+
+    async def _assign_roles(self, subject, roles):
+        return None
+
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "query_user_by_email", _query_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "create_user", _create_user)
+    monkeypatch.setattr(KeycloakLifecycleAdapter, "assign_approved_roles", _assign_roles)
+
+    from app.adapters.vicidial.mtls_client import VicidialMtlsError
+
+    calls: list[str] = []
+    webrtc_should_fail = {"value": True}
+
+    class _FlakyVicidialClient:
+        def __init__(self, _settings):
+            pass
+
+        def sync_agent(self, payload):
+            calls.append("sync_agent")
+            return {"actual": {"user_id": payload["agent"]["user_id"], "active": False}}
+
+        def reserve_extension(self, payload):
+            calls.append("reserve_extension")
+            return {"actual": {"extension": "6204", "active": True}}
+
+        def adopt_extension(self, payload):
+            calls.append("adopt_extension")
+            return {"actual": {"extension": payload["adoption"]["extension"], "active": True}}
+
+        def provision_webrtc(self, payload):
+            calls.append("provision_webrtc")
+            if webrtc_should_fail["value"]:
+                raise VicidialMtlsError("synthetic transient failure")
+            return {"extension": "6204", "credential": "synthetic", "expires_at": "later"}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(settings, "live_identity_provisioning_enabled", True)
+    monkeypatch.setattr(settings, "vicidial_write_enabled", True)
+    monkeypatch.setattr(settings, "live_writes_enabled", True)
+    monkeypatch.setattr(agent_provisioning, "VicidialMtlsClient", _FlakyVicidialClient)
+
+    token = authority()
+    body = _body(
+        channels={"odoo": True, "phone": True, "webrtc": True, "sms": False, "email": False},
+        campaigns=[{
+            "campaign_id": "TEST_SYN", "role": "supervisor",
+            "vicidial_user_id": "COD0017", "vicidial_user_group": "COD_TEST_SDR",
+            "vicidial_supervisor_subject": "supervisor-cod",
+        }],
+        telephony={
+            "existing_extension": None, "extension_pool": "moneybee",
+            "incoming_allowed": True, "outgoing_allowed": True, "max_webrtc_sessions": 1,
+        },
+    )
+    create_response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert create_response.status_code == 202
+    first = create_response.json()
+    assert first["state"] == "FAILED"
+    assert calls == ["sync_agent", "reserve_extension", "provision_webrtc"]
+    steps_by_operation = {step["operation"]: step for step in first["steps"]}
+    assert steps_by_operation["sync_agent"]["state"] == "succeeded"
+    assert steps_by_operation["reserve_extension"]["state"] == "succeeded"
+    assert steps_by_operation["reserve_extension"]["external_reference"] == "6204"
+    assert steps_by_operation["provision_webrtc"]["state"] == "failed"
+
+    webrtc_should_fail["value"] = False
+    calls.clear()
+    request_pk = await _internal_id_for(body["request_id"])
+    reconcile_response = await client.post(
+        f"/platform/v1/agent-provisioning/requests/{request_pk}/reconcile",
+        json={"reason": "retry after transient webrtc failure"}, headers=_headers(token),
+    )
+    assert reconcile_response.status_code == 200
+    second = reconcile_response.json()
+
+    # The whole point of the fix: sync_agent/reserve_extension must NOT be
+    # called again on reconcile - only the step that actually failed.
+    assert calls == ["provision_webrtc"]
+    assert second["state"] == "EFFECTIVE", second["steps"]
+    steps_by_operation = {step["operation"]: step for step in second["steps"]}
+    assert steps_by_operation["provision_webrtc"]["state"] == "succeeded"
+
+    # No double allocation: still exactly one succeeded
+    # reserve_extension/adopt_extension step across both attempts.
+    extension_steps = [
+        step for step in second["steps"]
+        if step["operation"] in ("reserve_extension", "adopt_extension")
+        and step["state"] == "succeeded"
+    ]
+    assert len(extension_steps) == 1

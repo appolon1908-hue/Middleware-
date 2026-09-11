@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     vicidial_client_cert_file: str = ""
     vicidial_client_key_file: str = ""
     vicidial_crl_file: str = ""
+    vicidial_adapter_identity: str = "codestra-middleware"
+    vicidial_adapter_hmac_secret_file: str = ""
+    vicidial_adapter_scopes: str = (
+        "telephony:read telephony:agent-sync telephony:extension-reserve "
+        "telephony:extension-adopt telephony:webrtc-provision telephony:webrtc-revoke"
+    )
     callback_dispatch_enabled: bool = False
     callback_scheduler_enabled: bool = False
     callback_test_syn_enabled: bool = False

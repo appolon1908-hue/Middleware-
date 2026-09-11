@@ -295,6 +295,22 @@ async def _run_entitlements_step(
         return "failed"
 
 
+async def _prior_succeeded_step(
+    session: AsyncSession, request: AgentProvisioningRequest, operations: tuple[str, ...],
+) -> AgentProvisioningStep | None:
+    stmt = (
+        select(AgentProvisioningStep)
+        .where(
+            AgentProvisioningStep.request_id == request.id,
+            AgentProvisioningStep.system == "vicidial",
+            AgentProvisioningStep.operation.in_(operations),
+            AgentProvisioningStep.state == "succeeded",
+        )
+        .order_by(AgentProvisioningStep.created_at.desc())
+    )
+    return (await session.execute(stmt)).scalars().first()
+
+
 async def _run_channel_provisioning_step(
     session: AsyncSession, request: AgentProvisioningRequest,
 ) -> StepOutcome:
@@ -306,15 +322,23 @@ async def _run_channel_provisioning_step(
     app.klyrow_email_adapter), so those two remain recorded honestly as
     blocked rather than pretending they went live.
 
-    Known limitation: a /reconcile re-run of this step after a prior
-    PARTIAL/FAILED phone or webrtc attempt does not yet retry correctly -
-    Vicidialer-Codestra's resource_versions optimistic-concurrency claim
-    for "agent:<id>"/"extension:<id>"/"webrtc:<id>" starts each request at
-    expected_version=0, and this saga does not track the version a prior
-    partial attempt may have already advanced it to. The IDENTITY step
-    does not have this problem (Keycloak's adapter is naturally
-    idempotent via query-then-create); this one currently is not. Flagged
-    as explicit follow-up, not silently swallowed.
+    Reconciliation: Vicidialer-Codestra's resource_versions optimistic
+    claim for "agent:<id>"/"extension:<id>"/"webrtc:<id>" only ever
+    accepts expected_version=0 once - a second call against an already
+    -advanced resource key raises StaleResourceVersion. Rather than track
+    and replay numeric versions (a new, fragile piece of state), this
+    reuses the exact durable record this saga already keeps for every
+    other idempotency decision: this request's own AgentProvisioningStep
+    history. Before calling any of sync_agent/reserve_extension/
+    adopt_extension/provision_webrtc, check whether a "succeeded" step
+    for that exact operation already exists for this request_id, and skip
+    the call entirely if so (reusing its recorded external_reference).
+    That keeps every call this function actually makes to Vicidialer
+    hitting its resource key for the first time - the same principle the
+    IDENTITY step already gets "for free" from Keycloak's own
+    query-then-create idempotency - so /reconcile can resume past
+    whichever step first failed instead of re-failing every step that
+    already succeeded.
     """
     channels = request.channels_json
     outcomes: list[StepOutcome] = []
@@ -383,91 +407,100 @@ async def _run_channel_provisioning_step(
     }
     adapter = VicidialMtlsClient(settings)
     try:
-        try:
-            adapter.sync_agent({
-                "context": context_payload,
-                "agent": {
-                    "user_id": vicidial_user_id,
-                    "full_name": (
-                        f"{identity.get('first_name', '')} {identity.get('last_name', '')}"
-                    ).strip() or vicidial_user_id,
-                    "user_group": vicidial_user_group,
-                    "campaigns": [campaign["campaign_id"]],
-                    "inbound_groups": [], "active": False,
-                },
-            })
-            await _add_step(
-                session, request, system="vicidial", operation="sync_agent",
-                state="succeeded", external_reference=vicidial_user_id,
-            )
-        except VicidialMtlsError as exc:
-            await _add_step(
-                session, request, system="vicidial", operation="sync_agent",
-                state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
-            )
-            return "failed"
-
-        extension = None
-        try:
-            if telephony.get("existing_extension"):
-                result = adapter.adopt_extension({
-                    "context": context_payload,
-                    "adoption": {
-                        "user_id": vicidial_user_id,
-                        "extension": telephony["existing_extension"],
-                        "webrtc_enabled": bool(channels.get("webrtc")),
-                        "incoming_allowed": telephony.get("incoming_allowed", True),
-                        "outgoing_allowed": telephony.get("outgoing_allowed", True),
-                    },
-                })
-                operation = "adopt_extension"
-            elif telephony.get("extension_pool"):
-                result = adapter.reserve_extension({
-                    "context": context_payload,
-                    "reservation": {
-                        "user_id": vicidial_user_id, "pool": telephony["extension_pool"],
-                        "webrtc_enabled": bool(channels.get("webrtc")),
-                        "incoming_allowed": telephony.get("incoming_allowed", True),
-                        "outgoing_allowed": telephony.get("outgoing_allowed", True),
-                    },
-                })
-                operation = "reserve_extension"
-            else:
-                await _add_step(
-                    session, request, system="vicidial", operation="provision_phone",
-                    state="blocked", error_code="CHANNEL_CONFIGURATION_INCOMPLETE",
-                    error_summary="neither existing_extension nor extension_pool was supplied",
-                )
-                return "gated"
-            extension = (result.get("actual") or {}).get("extension")
-            await _add_step(
-                session, request, system="vicidial", operation=operation,
-                state="succeeded", external_reference=extension,
-                readback_state="phone_active",
-            )
-        except VicidialMtlsError as exc:
-            await _add_step(
-                session, request, system="vicidial", operation="provision_phone",
-                state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
-            )
-            return "failed"
-
-        if channels.get("webrtc"):
+        prior_sync = await _prior_succeeded_step(session, request, ("sync_agent",))
+        if prior_sync is None:
             try:
-                adapter.provision_webrtc({
-                    "context": context_payload, "webrtc": {"user_id": vicidial_user_id},
+                adapter.sync_agent({
+                    "context": context_payload,
+                    "agent": {
+                        "user_id": vicidial_user_id,
+                        "full_name": (
+                            f"{identity.get('first_name', '')} {identity.get('last_name', '')}"
+                        ).strip() or vicidial_user_id,
+                        "user_group": vicidial_user_group,
+                        "campaigns": [campaign["campaign_id"]],
+                        "inbound_groups": [], "active": False,
+                    },
                 })
                 await _add_step(
-                    session, request, system="vicidial", operation="provision_webrtc",
-                    state="succeeded", external_reference=extension,
-                    readback_state="webrtc_session_issued",
+                    session, request, system="vicidial", operation="sync_agent",
+                    state="succeeded", external_reference=vicidial_user_id,
                 )
             except VicidialMtlsError as exc:
                 await _add_step(
-                    session, request, system="vicidial", operation="provision_webrtc",
+                    session, request, system="vicidial", operation="sync_agent",
                     state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
                 )
                 return "failed"
+
+        extension = None
+        prior_extension = await _prior_succeeded_step(
+            session, request, ("reserve_extension", "adopt_extension"))
+        if prior_extension is not None:
+            extension = prior_extension.external_reference
+        else:
+            try:
+                if telephony.get("existing_extension"):
+                    result = adapter.adopt_extension({
+                        "context": context_payload,
+                        "adoption": {
+                            "user_id": vicidial_user_id,
+                            "extension": telephony["existing_extension"],
+                            "webrtc_enabled": bool(channels.get("webrtc")),
+                            "incoming_allowed": telephony.get("incoming_allowed", True),
+                            "outgoing_allowed": telephony.get("outgoing_allowed", True),
+                        },
+                    })
+                    operation = "adopt_extension"
+                elif telephony.get("extension_pool"):
+                    result = adapter.reserve_extension({
+                        "context": context_payload,
+                        "reservation": {
+                            "user_id": vicidial_user_id, "pool": telephony["extension_pool"],
+                            "webrtc_enabled": bool(channels.get("webrtc")),
+                            "incoming_allowed": telephony.get("incoming_allowed", True),
+                            "outgoing_allowed": telephony.get("outgoing_allowed", True),
+                        },
+                    })
+                    operation = "reserve_extension"
+                else:
+                    await _add_step(
+                        session, request, system="vicidial", operation="provision_phone",
+                        state="blocked", error_code="CHANNEL_CONFIGURATION_INCOMPLETE",
+                        error_summary="neither existing_extension nor extension_pool was supplied",
+                    )
+                    return "gated"
+                extension = (result.get("actual") or {}).get("extension")
+                await _add_step(
+                    session, request, system="vicidial", operation=operation,
+                    state="succeeded", external_reference=extension,
+                    readback_state="phone_active",
+                )
+            except VicidialMtlsError as exc:
+                await _add_step(
+                    session, request, system="vicidial", operation="provision_phone",
+                    state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
+                )
+                return "failed"
+
+        if channels.get("webrtc"):
+            prior_webrtc = await _prior_succeeded_step(session, request, ("provision_webrtc",))
+            if prior_webrtc is None:
+                try:
+                    adapter.provision_webrtc({
+                        "context": context_payload, "webrtc": {"user_id": vicidial_user_id},
+                    })
+                    await _add_step(
+                        session, request, system="vicidial", operation="provision_webrtc",
+                        state="succeeded", external_reference=extension,
+                        readback_state="webrtc_session_issued",
+                    )
+                except VicidialMtlsError as exc:
+                    await _add_step(
+                        session, request, system="vicidial", operation="provision_webrtc",
+                        state="failed", error_code="VICIDIAL_ADAPTER_ERROR", error_summary=str(exc),
+                    )
+                    return "failed"
     finally:
         adapter.close()
 

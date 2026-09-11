@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   calling-contract:
-    # RUNTIME_MUTATION_DISABLED=true: calling contract is disabled until its external fixture is approved.
+    # RUNTIME_MUTATION_DISABLED=true: calling-contract is disabled until its external fixture is approved.
     if: ${{ false }}
     name: Calling contract (${{ matrix.source }})
     runs-on: ubuntu-24.04

@@ -13,6 +13,8 @@ concurrency:
 
 jobs:
   plan:
+    # RUNTIME_MUTATION_DISABLED=true: legacy rollback image mirroring requires a separate reviewed activation before running.
+    if: ${{ false }}
     name: Validate authority record and build exact mirror plan
     # RUNTIME_MUTATION_DISABLED=true: registry mirror planning is disabled pending release authorization.
     if: ${{ false }}

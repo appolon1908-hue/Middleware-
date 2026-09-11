@@ -665,8 +665,8 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
             "9e21c8a67466533112117d6cf671ad4"
         ),
         ".github/workflows/exact-main-production-release.yml": (
-            "3fc60dff04ab22dbd2560833100fb1fe4d"
-            "aa1498f9f0d8ea54e2da64c5eba035"
+            "104527ac89e4dcf68309198105ecb4438"
+            "b0881d31e009e7d37b6f5a0e873ca80"
         ),
         ".github/workflows/lead-automation-n8n-source-v1.yml": (
             "6b0cb7126987c14757bd1f48667bf81d"

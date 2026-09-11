@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   campaign-design-postgres:
+    # RUNTIME_MUTATION_DISABLED=true: disposable campaign database validation is disabled until its workflow is admitted by the protected control-plane contract.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:

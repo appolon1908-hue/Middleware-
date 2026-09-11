@@ -125,35 +125,45 @@ class SchemaDriftError(RuntimeError):
     """A sanitized mismatch; no credentials or business records are included."""
 
 
-def campaign_tables(root: Path) -> tuple[str, ...]:
-    """Derive every campaign table from the source-locked Alembic migration."""
+def alembic_tables(root: Path, namespace: str) -> tuple[str, ...]:
+    """Derive each table from its declared, source-locked Alembic namespace."""
     names: set[str] = set()
-    for filename in ALEMBIC_CATALOG_MIGRATIONS:
-        path = root / "migrations" / "versions" / filename
-        if not path.is_file() or path.is_symlink():
-            raise SchemaDriftError("campaign schema source migration is missing")
-        for call in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if not (
-                isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Attribute)
-                and isinstance(call.func.value, ast.Name)
-                and call.func.value.id == "op"
-                and call.func.attr == "create_table"
-            ):
-                continue
-            if not call.args or not isinstance(call.args[0], ast.Constant):
-                raise SchemaDriftError("campaign schema table name must be literal")
-            name = call.args[0].value
-            if not isinstance(name, str) or not re.fullmatch(
-                r"campaign_[a-z0-9_]+", name
-            ):
-                raise SchemaDriftError("campaign schema table name is invalid")
-            if name in names:
-                raise SchemaDriftError("campaign schema table is declared twice")
-            names.add(name)
+    filename = ALEMBIC_CATALOG_MIGRATIONS[namespace]
+    path = root / "migrations" / "versions" / filename
+    if not path.is_file() or path.is_symlink():
+        raise SchemaDriftError(f"{namespace} schema source migration is missing")
+    for call in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "op"
+            and call.func.attr == "create_table"
+        ):
+            continue
+        if not call.args or not isinstance(call.args[0], ast.Constant):
+            raise SchemaDriftError(f"{namespace} schema table name must be literal")
+        name = call.args[0].value
+        if not isinstance(name, str) or not re.fullmatch(
+            re.escape(namespace) + r"_[a-z0-9_]+", name
+        ):
+            raise SchemaDriftError(f"{namespace} schema table name is invalid")
+        if name in names:
+            raise SchemaDriftError(f"{namespace} schema table is declared twice")
+        names.add(name)
     if not names:
-        raise SchemaDriftError("campaign schema has no managed tables")
+        raise SchemaDriftError(f"{namespace} schema has no managed tables")
     return tuple(sorted(names))
+
+
+def campaign_tables(root: Path) -> tuple[str, ...]:
+    """Return only the six campaign tables, preserving existing callers."""
+    return alembic_tables(root, "campaign")
+
+
+def monitoring_tables(root: Path) -> tuple[str, ...]:
+    """Return the durable monitoring tables required for runtime admission."""
+    return alembic_tables(root, "monitoring")
 
 
 def managed_tables(root: Path) -> tuple[str, ...]:
@@ -169,6 +179,7 @@ def managed_tables(root: Path) -> tuple[str, ...]:
     if not names:
         raise SchemaDriftError("SQL schema has no managed tables")
     names.update(campaign_tables(root))
+    names.update(monitoring_tables(root))
     return tuple(sorted(names))
 
 

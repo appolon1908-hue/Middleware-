@@ -9,6 +9,7 @@ concurrency:
   group: odoo-calling-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # RUNTIME_MUTATION_DISABLED=true: calling-contract validates isolated contracts only.
   calling-contract:
     name: Calling contract (${{ matrix.source }})
     runs-on: ubuntu-24.04

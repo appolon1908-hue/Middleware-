@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
+import secrets
 import socket
 import ssl
+import time
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -32,6 +36,11 @@ APPROVED_ROUTES = frozenset(
         ("POST", "edge.internal.codestra.agency", "/v1/calls/originate"),
         ("POST", "edge.internal.codestra.agency", "/v1/agents/sync"),
         ("POST", "edge.internal.codestra.agency", "/v1/agents/disable"),
+        ("POST", "edge.internal.codestra.agency", "/v1/extensions/reserve"),
+        ("POST", "edge.internal.codestra.agency", "/v1/extensions/adopt"),
+        ("POST", "edge.internal.codestra.agency", "/v1/extensions/readback"),
+        ("POST", "edge.internal.codestra.agency", "/v1/webrtc/credentials"),
+        ("POST", "edge.internal.codestra.agency", "/v1/webrtc/revoke"),
     }
 )
 APPROVED_PRIVATE_IPV4_NETWORKS = (
@@ -50,6 +59,14 @@ def _approved_private_address(address: IPv4Address | IPv6Address) -> bool:
 
 class VicidialMtlsError(RuntimeError):
     """A secret-safe, fail-closed VICIdial transport error."""
+
+
+class VicidialMtlsConflict(VicidialMtlsError):
+    """A bounded VICIdial conflict that callers can map without leaking data."""
+
+    def __init__(self, code: str = "VICIDIAL_CONFLICT") -> None:
+        self.code = code if code.isupper() else "VICIDIAL_CONFLICT"
+        super().__init__(self.code)
 
 
 class VicidialMtlsClient:

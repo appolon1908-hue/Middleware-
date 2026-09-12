@@ -206,8 +206,14 @@ def create_app(
     app.state.metrics = {"ingested": 0, "duplicates": 0, "status_sync": 0}
 
     async def project_incident(request: Request, incident) -> None:
+        projection = request.app.state.odoo_projection
+        # Memory-only alert runtimes deliberately have no Odoo queue. Keep
+        # local incident behavior usable while production Postgres runtimes
+        # fail closed if their durable projection queue is unavailable.
+        if not projection.enabled:
+            return
         try:
-            await request.app.state.odoo_projection.enqueue_incident(incident)
+            await projection.enqueue_incident(incident)
         except Exception as exc:
             raise StorageError("observability Odoo projection queue unavailable") from exc
 

@@ -1422,6 +1422,14 @@ class TelephonyCallLifecycle(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     disposition: Mapped[str | None] = mapped_column(String(64))
     hangup_cause: Mapped[str | None] = mapped_column(String(64))
+    fine_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="requested"
+    )
+    fine_state_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_event_sequence: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    hangup_leg: Mapped[str | None] = mapped_column(String(16))
     last_event_type: Mapped[str | None] = mapped_column(String(64))
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_extension: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -1440,6 +1448,17 @@ class TelephonyCallLifecycle(Base):
         CheckConstraint(
             "lifecycle_state IN ('STARTED','CONNECTED','ENDED')",
             name="ck_telephony_call_lifecycle_state",
+        ),
+        CheckConstraint(
+            "fine_state IN ("
+            "'requested','accepted','queued','dialing','ringing','answered',"
+            "'connected','completed','failed','busy','no_answer','canceled',"
+            "'rejected','timeout')",
+            name="ck_telephony_call_fine_state",
+        ),
+        CheckConstraint(
+            "hangup_leg IS NULL OR hangup_leg IN ('agent_leg','peer_leg')",
+            name="ck_telephony_call_hangup_leg",
         ),
     )
 

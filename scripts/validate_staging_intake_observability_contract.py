@@ -63,6 +63,13 @@ EXPECTED_INCLUDED_ROUTERS = {
     "compatibility_api_router": "compatibility_api",
     "domain_api_router": "domain_api",
     "webhook_api_router": "webhook_api",
+    "agent_provisioning_router": "api.v1.agent_provisioning",
+    "agent_provisioning_reads_router": "api.v1.agent_provisioning_reads",
+    "session_context_router": "api.v1.session_context",
+    "calls_router": "api.v1.calls",
+    "activity_router": "api.v1.activity",
+    "presence_router": "api.v1.presence",
+    "queues_router": "api.v1.queues",
     "monitoring_router": "monitoring.routes",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}

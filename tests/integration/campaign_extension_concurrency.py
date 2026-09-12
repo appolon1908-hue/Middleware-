@@ -108,7 +108,7 @@ async def main():
         extension_base, number_base = await find_test_bases(pool, table)
 
         exact = await asyncio.gather(
-            insert(pool, "EXACT1", number_base, extension_base, extension_base + 99, 0.1),
+            insert(pool, table, "EXACT1", number_base, extension_base, extension_base + 99, 0.1),
             insert(
                 pool,
                 table,
@@ -187,7 +187,7 @@ async def main():
             *[
                 insert(
                     pool,
-                table,
+                    table,
                     f"BLOCK{offset}",
                     number_base + 800 + (offset * 100),
                     extension_base + 600 + (offset * 10),

@@ -64,6 +64,7 @@ EXPECTED_INCLUDED_ROUTERS = {
     "domain_api_router": "domain_api",
     "webhook_api_router": "webhook_api",
     "monitoring_router": "monitoring.routes",
+    "observability_sync_router": "api.v1.observability_sync",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}
 EXPECTED_ROUTE_HELPERS = {"register_survey_routes": "survey_routes"}

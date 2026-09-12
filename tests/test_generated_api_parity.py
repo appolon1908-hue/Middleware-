@@ -62,68 +62,7 @@ def test_generated_openapi_contract_and_matrix_match_runtime(test_settings) -> N
 def test_committed_contract_artifacts_exactly_match_the_generator() -> None:
     schema, matrix = build_documents()
     for path, expected in render_documents(schema, matrix).items():
-        actual = path.read_text(encoding="utf-8")
-        if actual != expected and path.suffix == ".json":
-            actual_doc = json.loads(actual)
-            expected_doc = json.loads(expected)
-            actual_paths = set(actual_doc.get("paths", {}))
-            expected_paths = set(expected_doc.get("paths", {}))
-            print(
-                "CONTRACT_DEBUG_PATH_COUNTS "
-                f"actual={len(actual_paths)} expected={len(expected_paths)}"
-            )
-            print(
-                "CONTRACT_DEBUG_MISSING "
-                + json.dumps(sorted(expected_paths - actual_paths))
-            )
-            print(
-                "CONTRACT_DEBUG_EXTRA "
-                + json.dumps(sorted(actual_paths - expected_paths))
-            )
-            diffs = []
-            for route in sorted(actual_paths & expected_paths):
-                if actual_doc["paths"][route] == expected_doc["paths"][route]:
-                    continue
-                actual_item = actual_doc["paths"][route]
-                expected_item = expected_doc["paths"][route]
-                diffs.append(
-                    {
-                        "route": route,
-                        "actual": {
-                            method: {
-                                "parameters": [
-                                    (item.get("in"), item.get("name"))
-                                    for item in operation.get("parameters", [])
-                                ],
-                                "responses": {
-                                    code: sorted(response)
-                                    for code, response in operation.get(
-                                        "responses", {}
-                                    ).items()
-                                },
-                            }
-                            for method, operation in actual_item.items()
-                        },
-                        "expected": {
-                            method: {
-                                "parameters": [
-                                    (item.get("in"), item.get("name"))
-                                    for item in operation.get("parameters", [])
-                                ],
-                                "responses": {
-                                    code: sorted(response)
-                                    for code, response in operation.get(
-                                        "responses", {}
-                                    ).items()
-                                },
-                            }
-                            for method, operation in expected_item.items()
-                        },
-                    }
-                )
-            print("CONTRACT_DEBUG_DIFF_COUNT=" + str(len(diffs)))
-            print("CONTRACT_DEBUG_DIFFS=" + json.dumps(diffs))
-        assert actual == expected
+        assert path.read_text(encoding="utf-8") == expected
 
 
 def test_generated_contract_documents_each_required_header_once() -> None:

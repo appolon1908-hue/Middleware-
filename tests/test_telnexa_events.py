@@ -187,6 +187,7 @@ def test_exact_route_is_registered_with_closed_event_schema() -> None:
     app.include_router(router)
     route = next(item for item in router.routes if getattr(item, "path", None) == PATH)
     assert isinstance(route, APIRoute)
+    assert route.methods is not None
     assert "POST" in route.methods
     schema = TelnexaDeliveryEvent.model_json_schema()
     assert schema["additionalProperties"] is False

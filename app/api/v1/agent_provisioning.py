@@ -55,6 +55,14 @@ from app.adapters.keycloak.lifecycle_client import (
 )
 from app.adapters.vicidial.mtls_client import VicidialMtlsClient, VicidialMtlsError
 from app.core.config import settings
+from app.klyrow_sender_identity_adapter import (
+    KlyrowSenderIdentityAdapter,
+    KlyrowSenderIdentityAdapterError,
+)
+from app.telnexa_sender_profile_adapter import (
+    TelnexaSenderProfileAdapter,
+    TelnexaSenderProfileAdapterError,
+)
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
     require_current_policy_revision,
@@ -94,6 +102,14 @@ class CampaignAssignment(BaseModel):
     # (a separate, earlier flow); this field is not itself a provisioning
     # request for it.
     vicidial_supervisor_subject: str | None = Field(default=None, max_length=128)
+    # Per-campaign product identities (Milestones 8/9). A human can be
+    # Supervisor in one campaign and Agent in another with a different
+    # email/sender per campaign, all under the same Keycloak identity -
+    # so these live on the campaign assignment, not on IdentitySelection.
+    campaign_email: str | None = Field(default=None, min_length=3, max_length=255)
+    sms_sender: str | None = Field(default=None, min_length=1, max_length=20)
+    sms_sender_type: str = Field(default="alphanumeric", max_length=32)
+    sms_countries: list[str] = Field(default_factory=list, max_length=64)
 
 
 class ChannelSelection(BaseModel):
@@ -297,12 +313,13 @@ async def _run_entitlements_step(
 
 async def _prior_succeeded_step(
     session: AsyncSession, request: AgentProvisioningRequest, operations: tuple[str, ...],
+    *, system: str = "vicidial",
 ) -> AgentProvisioningStep | None:
     stmt = (
         select(AgentProvisioningStep)
         .where(
             AgentProvisioningStep.request_id == request.id,
-            AgentProvisioningStep.system == "vicidial",
+            AgentProvisioningStep.system == system,
             AgentProvisioningStep.operation.in_(operations),
             AgentProvisioningStep.state == "succeeded",
         )
@@ -314,13 +331,17 @@ async def _prior_succeeded_step(
 async def _run_channel_provisioning_step(
     session: AsyncSession, request: AgentProvisioningRequest,
 ) -> StepOutcome:
-    """CHANNEL_PROVISIONING: phone/webrtc now provision for real through
-    the Vicidialer-Codestra adapter (Mission 6: sync_agent -> reserve or
-    adopt an extension -> provision_webrtc if requested). sms/email still
-    have no account-provisioning adapter anywhere in this codebase (only
-    message-sending exists via app.telnexa_provider_adapter and
-    app.klyrow_email_adapter), so those two remain recorded honestly as
-    blocked rather than pretending they went live.
+    """CHANNEL_PROVISIONING provisions all four channels for real:
+    phone/webrtc through the Vicidialer-Codestra adapter (Mission 6:
+    sync_agent -> reserve or adopt an extension -> provision_webrtc if
+    requested); email through Klyrow's service-authenticated
+    /v1/internal/sender-identities (Mission 8, KlyrowSenderIdentityAdapter);
+    sms through Telnexa's existing tenant-scoped /api/v1/senders (Mission 9,
+    TelnexaSenderProfileAdapter). Email/sms are gated on
+    campaigns[0].campaign_email / campaigns[0].sms_sender being supplied
+    and on their own klyrow_write_enabled/telnexa_write_enabled switches
+    (both still additionally require live_writes_enabled), independent of
+    phone/webrtc's vicidial_write_enabled gate.
 
     Reconciliation: Vicidialer-Codestra's resource_versions optimistic
     claim for "agent:<id>"/"extension:<id>"/"webrtc:<id>" only ever
@@ -342,18 +363,120 @@ async def _run_channel_provisioning_step(
     """
     channels = request.channels_json
     outcomes: list[StepOutcome] = []
+    early_campaign = request.campaigns_json[0] if request.campaigns_json else {}
+    early_identity = channels.get("_identity", {})
 
-    for name, system in (("sms", "telnexa"), ("email", "klyrow")):
-        if channels.get(name):
+    if channels.get("email"):
+        if not (settings.klyrow_write_enabled and settings.live_writes_enabled):
             await _add_step(
-                session, request, system=system, operation=f"provision_{name}",
-                state="blocked", error_code="CHANNEL_ADAPTER_NOT_IMPLEMENTED",
+                session, request, system="klyrow", operation="provision_sender_identity",
+                state="skipped", error_code="KILL_SWITCH_CLOSED",
+                error_summary="klyrow_write_enabled/live_writes_enabled is false",
+            )
+            outcomes.append("gated")
+        elif not early_campaign.get("campaign_email") or not settings.klyrow_default_domain_claim_id:
+            await _add_step(
+                session, request, system="klyrow", operation="provision_sender_identity",
+                state="blocked", error_code="CHANNEL_CONFIGURATION_INCOMPLETE",
                 error_summary=(
-                    f"No {system} account-provisioning adapter exists in this "
-                    "codebase yet; only message-sending is implemented."
+                    "email requested but campaigns[0].campaign_email or "
+                    "settings.klyrow_default_domain_claim_id was not supplied"
                 ),
             )
             outcomes.append("gated")
+        else:
+            prior_email = await _prior_succeeded_step(
+                session, request, ("provision_sender_identity",), system="klyrow",
+            )
+            if prior_email is None:
+                try:
+                    klyrow_adapter = KlyrowSenderIdentityAdapter(settings)
+                    identity_result = await klyrow_adapter.provision_sender_identity(
+                        tenant_id=request.tenant_id,
+                        domain_claim_id=settings.klyrow_default_domain_claim_id,
+                        email=early_campaign["campaign_email"],
+                        display_name=(
+                            f"{early_identity.get('first_name', '')} "
+                            f"{early_identity.get('last_name', '')}"
+                        ).strip() or early_campaign["campaign_email"],
+                        correlation_id=request.correlation_id,
+                    )
+                    if str(identity_result.get("status", "")).upper() == "ACTIVE":
+                        await _add_step(
+                            session, request, system="klyrow",
+                            operation="provision_sender_identity", state="succeeded",
+                            external_reference=identity_result.get("id"),
+                            readback_state="sender_identity_active",
+                        )
+                    else:
+                        await _add_step(
+                            session, request, system="klyrow",
+                            operation="provision_sender_identity", state="failed",
+                            external_reference=identity_result.get("id"),
+                            error_code="SENDER_IDENTITY_NOT_ACTIVE",
+                            error_summary=f"status={identity_result.get('status')!r}",
+                        )
+                        return "failed"
+                except KlyrowSenderIdentityAdapterError as exc:
+                    await _add_step(
+                        session, request, system="klyrow",
+                        operation="provision_sender_identity", state="failed",
+                        error_code="KLYROW_ADAPTER_ERROR", error_summary=str(exc),
+                    )
+                    return "failed"
+
+    if channels.get("sms"):
+        if not (settings.telnexa_write_enabled and settings.live_writes_enabled):
+            await _add_step(
+                session, request, system="telnexa", operation="provision_sender_profile",
+                state="skipped", error_code="KILL_SWITCH_CLOSED",
+                error_summary="telnexa_write_enabled/live_writes_enabled is false",
+            )
+            outcomes.append("gated")
+        elif not early_campaign.get("sms_sender"):
+            await _add_step(
+                session, request, system="telnexa", operation="provision_sender_profile",
+                state="blocked", error_code="CHANNEL_CONFIGURATION_INCOMPLETE",
+                error_summary="sms requested but campaigns[0].sms_sender was not supplied",
+            )
+            outcomes.append("gated")
+        else:
+            prior_sms = await _prior_succeeded_step(
+                session, request, ("provision_sender_profile",), system="telnexa",
+            )
+            if prior_sms is None:
+                try:
+                    telnexa_adapter = TelnexaSenderProfileAdapter(settings)
+                    profile_result = await telnexa_adapter.provision_sender_profile(
+                        tenant_id=request.tenant_id,
+                        sender=early_campaign["sms_sender"],
+                        sender_type=early_campaign.get("sms_sender_type", "alphanumeric"),
+                        countries=early_campaign.get("sms_countries") or [],
+                    )
+                    status_value = str(profile_result.get("status", "")).lower()
+                    if status_value in {"requested", "approved"}:
+                        await _add_step(
+                            session, request, system="telnexa",
+                            operation="provision_sender_profile", state="succeeded",
+                            external_reference=profile_result.get("id"),
+                            readback_state=f"sender_profile_{status_value}",
+                        )
+                    else:
+                        await _add_step(
+                            session, request, system="telnexa",
+                            operation="provision_sender_profile", state="failed",
+                            external_reference=profile_result.get("id"),
+                            error_code="SENDER_PROFILE_REJECTED",
+                            error_summary=f"status={profile_result.get('status')!r}",
+                        )
+                        return "failed"
+                except TelnexaSenderProfileAdapterError as exc:
+                    await _add_step(
+                        session, request, system="telnexa",
+                        operation="provision_sender_profile", state="failed",
+                        error_code="TELNEXA_ADAPTER_ERROR", error_summary=str(exc),
+                    )
+                    return "failed"
 
     if not (channels.get("phone") or channels.get("webrtc")):
         return "ok" if not outcomes else "gated"

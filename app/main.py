@@ -44,6 +44,15 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
 from app.api.v1.platform import router as platform_router
+from app.api.v1.agent_provisioning import router as agent_provisioning_router
+from app.api.v1.agent_provisioning_reads import (
+    router as agent_provisioning_reads_router,
+)
+from app.api.v1.session_context import router as session_context_router
+from app.api.v1.calls import router as calls_router
+from app.api.v1.activity import router as activity_router
+from app.api.v1.presence import router as presence_router
+from app.api.v1.queues import router as queues_router
 from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
 from app.core.auth import BearerAuthError, verify_bearer
@@ -89,6 +98,13 @@ app.include_router(recordings_router)
 app.include_router(sales_router)
 app.include_router(social_router)
 app.include_router(provider_webhooks_router)
+app.include_router(agent_provisioning_router)
+app.include_router(agent_provisioning_reads_router)
+app.include_router(session_context_router)
+app.include_router(calls_router)
+app.include_router(activity_router)
+app.include_router(presence_router)
+app.include_router(queues_router)
 app.mount("/metrics", make_asgi_app())
 
 

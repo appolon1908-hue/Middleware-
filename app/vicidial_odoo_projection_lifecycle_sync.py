@@ -1,17 +1,9 @@
-"""Keep telephony_call_lifecycle in sync with projected VICIdial call events.
+"""Keep the durable Odoo/Middleware call read-back aligned with AMI evidence.
 
-This module is a side effect of the existing NATS -> Odoo call-event
-dispatcher (see workers/run_vicidial_odoo_projection.py): every event that
-already reaches the dispatcher for delivery to Odoo is also, best-effort,
-applied here so that GET /platform/v1/calls (app/api/v1/calls.py) reflects
-live call state instead of staying frozen at whatever
-POST /v1/telephony/calls/originate wrote at origination.
-
-This intentionally does NOT populate telephony_call_lifecycle_event -- that
-child table's integration_event_id column is a NOT NULL, UNIQUE foreign key
-into the integration_event table, which is populated by a different
-ingestion path (POST /api/v1/events/vicidial), not by this NATS-sourced
-envelope. Writing that table correctly is that other path's job.
+The table retains its legacy coarse lifecycle_state for compatibility, while
+fine_state exposes the evidence-backed call vocabulary. Raw event_type and
+sequence are retained so a browser refresh can read the same durable snapshot
+that a live subscriber would have received.
 """
 
 from __future__ import annotations
@@ -26,19 +18,94 @@ from app.vicidial_odoo_projection_models import OdooCallEvent
 
 log = logging.getLogger("codestra.vicidial_odoo_projection.lifecycle_sync")
 
-# Coarse, monotonic states the read-side table actually tracks. A call may
-# only move forward through this ordering; a redelivered or out-of-order
-# event that maps to an earlier or equal state than what's stored is a no-op
-# for lifecycle_state (idempotent under JetStream at-least-once redelivery).
+# The existing API keeps this three-state compatibility field.
 _STATE_RANK = {"STARTED": 1, "CONNECTED": 2, "ENDED": 3}
 
-_STARTED_TYPES = frozenset({"call.created", "call.offered", "call.ringing"})
-_CONNECTED_TYPES = frozenset({"call.answered", "call.connected"})
-_ENDED_TYPES = frozenset({"call.hangup", "call.completed", "call.failed", "call.missed"})
+# This is the read-back vocabulary, not a list of invented AMI events. The
+# request route writes requested; adapter acceptance/channel creation writes
+# accepted; the remaining values are produced only by the adapter's evidence
+# mapper.
+_FINE_STATE_RANK = {
+    "requested": 0,
+    "accepted": 1,
+    "queued": 2,
+    "dialing": 3,
+    "ringing": 4,
+    "answered": 5,
+    "connected": 6,
+    "completed": 100,
+    "failed": 100,
+    "busy": 100,
+    "no_answer": 100,
+    "canceled": 100,
+    "rejected": 100,
+    "timeout": 100,
+}
+_TERMINAL_FINE_STATES = frozenset(
+    {
+        "completed",
+        "failed",
+        "busy",
+        "no_answer",
+        "canceled",
+        "rejected",
+        "timeout",
+    }
+)
+_FINE_STATE_BY_TYPE = {
+    "call.created": "accepted",
+    "call.offered": "accepted",
+    "call.queued": "queued",
+    "call.dialing": "dialing",
+    "call.ringing": "ringing",
+    "call.answered": "answered",
+    "call.connected": "connected",
+    # Hold/resume are real events, but the requested public vocabulary has no
+    # separate hold state. Keep the raw event and the durable connected state.
+    "call.held": "connected",
+    "call.resumed": "connected",
+    "call.completed": "completed",
+    "call.failed": "failed",
+    "call.busy": "busy",
+    "call.no_answer": "no_answer",
+    "call.canceled": "canceled",
+    "call.rejected": "rejected",
+}
+_STARTED_TYPES = frozenset(
+    {
+        "call.created",
+        "call.offered",
+        "call.queued",
+        "call.dialing",
+        "call.ringing",
+    }
+)
+_CONNECTED_TYPES = frozenset(
+    {"call.answered", "call.connected", "call.held", "call.resumed"}
+)
+# Hangup is an intermediate channel-end signal. The adapter publishes
+# completed/failed/etc. after it has enough evidence to classify the outcome.
+_ENDED_TYPES = frozenset(
+    {
+        "call.completed",
+        "call.failed",
+        "call.busy",
+        "call.no_answer",
+        "call.rejected",
+        "call.canceled",
+    }
+)
+_NON_COARSE_TYPES = frozenset(
+    {"call.held", "call.resumed", "call.transfer.started", "call.transfer.completed", "call.hangup"}
+)
 _DISPOSITION_BY_TYPE = {
     "call.completed": "COMPLETED",
     "call.failed": "FAILED",
-    "call.missed": "MISSED",
+    "call.busy": "BUSY",
+    "call.no_answer": "NO_ANSWER",
+    "call.rejected": "REJECTED",
+    "call.canceled": "CANCELED",
+    "call.timeout": "TIMEOUT",
 }
 
 
@@ -49,21 +116,24 @@ def _coarse_state(event_type: str) -> str | None:
         return "CONNECTED"
     if event_type in _ENDED_TYPES:
         return "ENDED"
-    # call.held / call.resumed / call.transfer.* don't move the coarse
-    # STARTED/CONNECTED/ENDED state this table tracks.
     return None
 
 
 async def sync_call_lifecycle(session: AsyncSession, event: OdooCallEvent) -> None:
-    """Best-effort, idempotent update of telephony_call_lifecycle.
+    """Apply one canonical event to the durable read-back row.
 
-    Never raises for "expected" conditions (no matching row, event type that
-    doesn't move the coarse state) -- this is a side effect of Odoo
-    delivery, not a condition that should affect message ack/nak/term
-    decisions in the caller's redelivery state machine.
+    The worker remains responsible for event-id idempotency and delivery
+    acknowledgement. This side effect independently guards sequence order so
+    a delayed event cannot regress the browser-refresh/read API snapshot.
     """
+
     new_state = _coarse_state(event.event_type)
-    if new_state is None:
+    is_known_lifecycle = (
+        new_state is not None
+        or event.event_type in _NON_COARSE_TYPES
+        or event.event_type in _FINE_STATE_BY_TYPE
+    )
+    if not is_known_lifecycle:
         return
 
     row = (
@@ -82,19 +152,52 @@ async def sync_call_lifecycle(session: AsyncSession, event: OdooCallEvent) -> No
         )
         return
 
+    last_sequence = int(row.last_event_sequence or 0)
+    if event.sequence <= last_sequence:
+        # The canonical worker has already handled this sequence or a newer
+        # one. Do not replace last_event_type with a delayed duplicate.
+        return
+
+    row.last_event_sequence = event.sequence
+    row.last_event_type = event.event_type
+    row.last_event_at = event.timestamp
+
+    if event.hangup_cause is not None and row.hangup_cause is None:
+        row.hangup_cause = event.hangup_cause
+    if event.hangup_leg is not None and row.hangup_leg is None:
+        row.hangup_leg = event.hangup_leg
+
+    target_fine_state = _FINE_STATE_BY_TYPE.get(event.event_type)
+    current_fine_state = row.fine_state or "requested"
+    if target_fine_state is not None:
+        current_rank = _FINE_STATE_RANK.get(current_fine_state, 0)
+        target_rank = _FINE_STATE_RANK[target_fine_state]
+        if current_fine_state in _TERMINAL_FINE_STATES:
+            if target_fine_state != current_fine_state:
+                log.warning(
+                    "ignoring terminal fine-state conflict for correlation_id=%s: "
+                    "%s -> %s",
+                    event.correlation_id,
+                    current_fine_state,
+                    target_fine_state,
+                )
+        elif target_rank >= current_rank:
+            row.fine_state = target_fine_state
+            row.fine_state_at = event.timestamp
+
     if new_state == "STARTED" and row.started_at is None:
         row.started_at = event.timestamp
     elif new_state == "CONNECTED" and row.connected_at is None:
         row.connected_at = event.timestamp
     elif new_state == "ENDED" and row.ended_at is None:
         row.ended_at = event.timestamp
-        if event.hangup_cause is not None:
-            row.hangup_cause = event.hangup_cause
         disposition = _DISPOSITION_BY_TYPE.get(event.event_type)
         if disposition is not None:
             row.disposition = disposition
 
-    if _STATE_RANK[new_state] > _STATE_RANK.get(row.lifecycle_state, 0):
+    if new_state is not None and _STATE_RANK[new_state] > _STATE_RANK.get(
+        row.lifecycle_state, 0
+    ):
         row.lifecycle_state = new_state
 
     await session.commit()

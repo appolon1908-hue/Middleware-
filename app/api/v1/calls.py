@@ -23,11 +23,12 @@ not fail open.
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.provisioning_auth import (
@@ -58,21 +59,30 @@ def _call_out(call: TelephonyCallLifecycle) -> dict[str, Any]:
         "dialplan_context": call.dialplan_context,
         "disposition": call.disposition,
         "hangup_cause": call.hangup_cause,
+        "fine_state": call.fine_state,
+        "fine_state_at": call.fine_state_at.isoformat() if call.fine_state_at else None,
+        "last_event_sequence": call.last_event_sequence,
+        "hangup_leg": call.hangup_leg,
+        "last_event_type": call.last_event_type,
+        "last_event_at": call.last_event_at.isoformat() if call.last_event_at else None,
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "connected_at": call.connected_at.isoformat() if call.connected_at else None,
         "ended_at": call.ended_at.isoformat() if call.ended_at else None,
     }
 
 
-def _encode_cursor(created_at, call_id: UUID) -> str:
+def _encode_cursor(created_at: datetime, call_id: UUID) -> str:
     return base64.urlsafe_b64encode(f"{created_at.isoformat()}|{call_id}".encode()).decode()
 
 
-def _decode_cursor(cursor: str) -> tuple[str, str]:
+def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
     try:
         raw = base64.urlsafe_b64decode(cursor.encode()).decode()
-        created_at, call_id = raw.split("|", 1)
-        return created_at, call_id
+        created_at_raw, call_id_raw = raw.split("|", 1)
+        created_at = datetime.fromisoformat(created_at_raw)
+        if created_at.tzinfo is None:
+            raise ValueError("cursor timestamp must include a timezone")
+        return created_at, UUID(call_id_raw)
     except Exception as exc:  # noqa: BLE001 - any malformed cursor is a 422
         raise HTTPException(422, "invalid cursor") from exc
 
@@ -108,8 +118,13 @@ async def list_calls(
     if cursor is not None:
         created_at, call_id = _decode_cursor(cursor)
         stmt = stmt.where(
-            (TelephonyCallLifecycle.created_at, TelephonyCallLifecycle.id)
-            < (created_at, call_id)
+            or_(
+                TelephonyCallLifecycle.created_at < created_at,
+                and_(
+                    TelephonyCallLifecycle.created_at == created_at,
+                    TelephonyCallLifecycle.id < call_id,
+                ),
+            )
         )
     stmt = stmt.order_by(
         TelephonyCallLifecycle.created_at.desc(), TelephonyCallLifecycle.id.desc()

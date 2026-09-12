@@ -25,6 +25,8 @@ router = APIRouter(tags=["agent-realtime"])
 EventType = Literal[
     "call.created",
     "call.offered",
+    "call.queued",
+    "call.dialing",
     "call.ringing",
     "call.answered",
     "call.connected",
@@ -36,7 +38,10 @@ EventType = Literal[
     "call.hangup",
     "call.completed",
     "call.failed",
-    "call.missed",
+    "call.busy",
+    "call.no_answer",
+    "call.rejected",
+    "call.canceled",
     "call.disposition.updated",
     "call.recording.started",
     "call.recording.completed",
@@ -44,11 +49,20 @@ EventType = Literal[
 ]
 
 TERMINAL_EVENTS = frozenset(
-    {"call.hangup", "call.completed", "call.failed", "call.missed"}
+    {
+        "call.completed",
+        "call.failed",
+        "call.busy",
+        "call.no_answer",
+        "call.rejected",
+        "call.canceled",
+    }
 )
 STATE_RANK = {
     "call.created": 10,
-    "call.offered": 20,
+    "call.offered": 15,
+    "call.queued": 20,
+    "call.dialing": 30,
     "call.ringing": 30,
     "call.answered": 40,
     "call.connected": 50,
@@ -60,7 +74,10 @@ STATE_RANK = {
     "call.hangup": 100,
     "call.completed": 100,
     "call.failed": 100,
-    "call.missed": 100,
+    "call.busy": 100,
+    "call.no_answer": 100,
+    "call.rejected": 100,
+    "call.canceled": 100,
     "call.disposition.updated": 110,
     "call.recording.started": 55,
     "call.recording.completed": 105,
@@ -167,15 +184,19 @@ async def ingest_agent_event(
             context_json=event.payload,
         )
         db.add(current)
-    elif applied:
+    elif current is not None:
         if (
             current.tenant_id != event.tenant_id
             or current.business_unit_id != event.business_unit_id
             or current.campaign_id != event.campaign_id
             or current.agent_id != event.agent_id
             or current.extension != event.extension
+            or current.correlation_id != event.correlation_id
+            or current.asterisk_uniqueid != event.asterisk_uniqueid
+            or current.linkedid != event.linkedid
         ):
-            raise HTTPException(409, "call scope is immutable")
+            raise HTTPException(409, "call identity or scope is immutable")
+    if current is not None and applied:
         current.event_type = event.event_type
         current.state_rank = STATE_RANK[event.event_type]
         current.sequence = event.sequence

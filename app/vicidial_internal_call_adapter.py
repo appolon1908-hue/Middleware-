@@ -299,7 +299,8 @@ class VicidialInternalCallAdapter:
             actor = CallPrincipal.model_validate(request.payload["actor"])
         except (KeyError, TypeError, ValueError):
             raise VicidialInternalCallError("Server B evidence contract is invalid") from None
-        if (evidence.operation_id != original or evidence.correlation_id != request.correlation_id
+        if (evidence.operation_id != original
+                or evidence.correlation_id != request.correlation_id
                 or evidence.tenant_id != request.tenant_id or evidence.subject != actor.subject
                 or evidence.employee_id != actor.employee_id or evidence.extension != actor.extension
                 or evidence.campaign != actor.campaign_id or evidence.internal_only is not True
@@ -309,7 +310,8 @@ class VicidialInternalCallAdapter:
                     and evidence.asterisk_uniqueid != request.payload.get("call_id"))):
             raise VicidialInternalCallError("Server B evidence binding mismatch")
         terminal = evidence.terminal and evidence.call_state in {
-            "completed", "failed", "missed", "rejected", "cancelled", "transferred",
+            "completed", "failed", "busy", "no_answer", "canceled", "rejected",
+            "missed", "cancelled", "transferred",
         }
         if terminal and (not evidence.ended_at or not evidence.linkedid
                          or evidence.duration_seconds is None or not evidence.evidence):

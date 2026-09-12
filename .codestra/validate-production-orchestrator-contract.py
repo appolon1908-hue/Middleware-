@@ -9287,6 +9287,20 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
     )
 
 
+# Narrow, explicit, hash-pinned exemption for the one reviewed job whose only
+# mutation is posting its own required-check status back to GitHub. The job
+# remains counted as mutating; only the two global disable requirements are
+# skipped when this exact repository/path/job content matches this exact hash.
+APPROVED_SELF_STATUS_MUTATION_SHA256: dict[str, dict[str, str]] = {
+    "appolon1908-hue/Middleware-": {
+        ".github/workflows/required-ci.yml:test": (
+            "7a085e87d05b0a9848f57438efa27b84"
+            "d8aa6f7d4d1f9435bc3e3608b71f9ad7"
+        ),
+    },
+}
+
+
 def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
     mutating_jobs = 0
     script_aliases = workflow_script_aliases(workflow, path)
@@ -9327,14 +9341,21 @@ def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
             )
         if mutating:
             mutating_jobs += 1
-            require(
-                "RUNTIME_MUTATION_DISABLED=true" in job.raw,
-                f"mutating job lacks disable marker: {path}:{job_name}",
+            approved_self_status_mutation = (
+                APPROVED_SELF_STATUS_MUTATION_SHA256.get(repository, {}).get(
+                    f"{path}:{job_name}"
+                )
+                == hashlib.sha256(job.raw.encode()).hexdigest()
             )
-            require(
-                job_condition(job) == "${{ false }}",
-                f"mutating job is not unconditionally disabled: {path}:{job_name}",
-            )
+            if not approved_self_status_mutation:
+                require(
+                    "RUNTIME_MUTATION_DISABLED=true" in job.raw,
+                    f"mutating job lacks disable marker: {path}:{job_name}",
+                )
+                require(
+                    job_condition(job) == "${{ false }}",
+                    f"mutating job is not unconditionally disabled: {path}:{job_name}",
+                )
     require(mutating_jobs > 0, f"native mutation classification drift: {path}")
 
 

@@ -1252,7 +1252,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "title": "Resolved At"
           },
           "resource_version": {

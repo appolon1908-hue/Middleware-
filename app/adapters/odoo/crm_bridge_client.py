@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from fastapi import Request
 
 from app.core.config import Settings, settings
 
@@ -332,15 +333,17 @@ class OdooCrmBridgeClient:
         )
 
 
-_singleton: OdooCrmBridgeClient | None = None
-
-
-def get_crm_bridge_client() -> OdooCrmBridgeClient:
+def get_crm_bridge_client(request: Request) -> OdooCrmBridgeClient:
     """FastAPI dependency. Constructed lazily (not at import time) so an
     unconfigured deployment surfaces as a per-request 503 from the router,
-    not an app-startup crash.
+    not an app-startup crash. The active factory runtime owns the settings;
+    the module-global settings are only a compatibility fallback for the
+    legacy module-level application that does not install a runtime state.
     """
-    global _singleton
-    if _singleton is None:
-        _singleton = OdooCrmBridgeClient(settings)
-    return _singleton
+    client = getattr(request.app.state, "crm_bridge_client", None)
+    if client is None:
+        runtime = getattr(request.app.state, "runtime", None)
+        configured_settings = getattr(runtime, "settings", settings)
+        client = OdooCrmBridgeClient(configured_settings)
+        request.app.state.crm_bridge_client = client
+    return client

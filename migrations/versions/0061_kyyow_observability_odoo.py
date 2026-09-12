@@ -43,7 +43,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
                 "endpoint_key": endpoint_key,
             },
         )
-        op.execute(
+        connection.execute(sa.text(
             """
             INSERT INTO integration_schema_version
               (schema_version_id,service_key,endpoint_key,api_version,
@@ -54,7 +54,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
             ON CONFLICT (service_key,endpoint_key,api_version)
             DO UPDATE SET enabled=true, schema_reference=EXCLUDED.schema_reference,
                           checksum=EXCLUDED.checksum
-            """,
+            """),
             {
                 "schema_id": schema_id,
                 "endpoint_key": endpoint_key,
@@ -62,7 +62,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
                 "checksum": checksum,
             },
         )
-        op.execute(
+        connection.execute(sa.text(
             """
             INSERT INTO integration_endpoint_version
               (endpoint_version_id,endpoint_id,configuration_version,base_url,
@@ -81,7 +81,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
                'BOUNDED_TRANSIENT_RETRY',3,false,false,:stale,true,false,
                :checksum,now(),'kyyow-observability','protected-review-required')
             ON CONFLICT (endpoint_id,configuration_version) DO NOTHING
-            """,
+            """),
             {
                 "version_id": endpoint_version_id,
                 "endpoint_id": endpoint_id,
@@ -98,14 +98,14 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
                 "checksum": checksum,
             },
         )
-        op.execute(
+        connection.execute(sa.text(
             """
             INSERT INTO integration_route_binding
               (binding_id,endpoint_version_id,environment,
                organization_scope,business_unit_scope,campaign_scope)
             VALUES (CAST(:binding_id AS uuid),CAST(:version_id AS uuid),:environment,'','','')
             ON CONFLICT DO NOTHING
-            """,
+            """),
             {
                 "binding_id": binding_id,
                 "version_id": endpoint_version_id,

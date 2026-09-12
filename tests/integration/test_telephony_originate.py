@@ -67,7 +67,11 @@ async def _scenario_default_deny(database_url: str, monkeypatch) -> None:
         # LIVE_PSTN_DIALING stays false.
         assert response["policy_decision"] != Decision.ALLOW.value
         assert response["dialing"] == "blocked"
-        assert response["lifecycle_state"] == "STARTED"
+        # A policy-denied call is a real terminal outcome, not an
+        # in-progress one -- it never reaches VICIdial, and this is recorded
+        # as such (ENDED/rejected), not left looking like it's still open.
+        assert response["lifecycle_state"] == "ENDED"
+        assert response["fine_state"] == "rejected"
         assert response["call_id"]
         assert response["correlation_id"]
 
@@ -82,6 +86,7 @@ async def _scenario_default_deny(database_url: str, monkeypatch) -> None:
             ).scalar_one()
             assert lifecycle.destination == "+15551234567"
             assert lifecycle.source_extension == "6101"
+            assert lifecycle.disposition == "REJECTED"
 
             audit = (
                 await session.execute(
@@ -150,12 +155,32 @@ async def _scenario_production_campaign_rejected(
     try:
         from fastapi import HTTPException
 
+        correlation_id = f"originate-prodcamp-{uuid4().hex}"
         async with factory() as session:
             with pytest.raises(HTTPException) as exc:
                 await telephony.originate_call(
-                    _request(campaign="PROD_CAMPAIGN"), session, None
+                    _request(campaign="PROD_CAMPAIGN"), session, correlation_id
                 )
         assert exc.value.status_code == 403
+
+        # A call rejected before ever reaching VICIdial must still leave
+        # persisted evidence that it was requested (and then rejected) --
+        # this is Middleware's own control-plane state, not fabricated.
+        async with factory() as session:
+            lifecycle = (
+                await session.execute(
+                    select(TelephonyCallLifecycle).where(
+                        TelephonyCallLifecycle.correlation_id == correlation_id
+                    )
+                )
+            ).scalar_one()
+            assert lifecycle.fine_state == "rejected"
+            assert lifecycle.lifecycle_state == "ENDED"
+            assert lifecycle.hangup_cause == "pre_dial_validation:403"
+            # Campaign gating happens before identity lookup -- the real
+            # extension was never known, so it must stay the placeholder,
+            # not silently default to something misleading.
+            assert lifecycle.source_extension == ""
     finally:
         await engine.dispose()
 
@@ -212,6 +237,7 @@ async def _scenario_invalid_destination(database_url: str, monkeypatch) -> None:
     try:
         from fastapi import HTTPException
 
+        correlation_id = f"originate-baddest-{uuid4().hex}"
         async with factory() as session:
             with pytest.raises(HTTPException) as exc:
                 await telephony.originate_call(
@@ -220,8 +246,81 @@ async def _scenario_invalid_destination(database_url: str, monkeypatch) -> None:
                         destination="not-a-phone-number",
                     ),
                     session,
-                    None,
+                    correlation_id,
                 )
         assert exc.value.status_code == 422
+
+        async with factory() as session:
+            lifecycle = (
+                await session.execute(
+                    select(TelephonyCallLifecycle).where(
+                        TelephonyCallLifecycle.correlation_id == correlation_id
+                    )
+                )
+            ).scalar_one()
+            assert lifecycle.fine_state == "rejected"
+            assert lifecycle.hangup_cause == "pre_dial_validation:422"
+            # Identity lookup succeeded before the destination check, so the
+            # real extension should have been filled in even though the call
+            # was ultimately rejected.
+            assert lifecycle.source_extension == "6101"
+    finally:
+        await engine.dispose()
+
+
+def test_originate_records_accepted_when_policy_allows(monkeypatch):
+    database_url = os.environ.get("TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("requires an explicitly provisioned disposable database")
+    assert "diag" in database_url or "rehearsal" in database_url
+    asyncio.run(_scenario_accepted_on_allow(database_url, monkeypatch))
+
+
+async def _scenario_accepted_on_allow(database_url: str, monkeypatch) -> None:
+    # requested/accepted are Middleware's own control-plane states, not
+    # AMI-sourced -- force the normally-default-deny policy to ALLOW so the
+    # accepted transition (recorded only once dispatch is actually attempted)
+    # can be exercised without needing a real VICIdial connection.
+    monkeypatch.setattr(telephony, "authorize_call", lambda *_a, **_k: Decision.ALLOW)
+    monkeypatch.setattr(
+        telephony,
+        "_lookup_agent_assignment",
+        AsyncMock(return_value=dict(AGENT_IDENTITY)),
+    )
+
+    class _FakeVicidialClient:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def originate(self, *_a, **_k):
+            return None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(telephony, "VicidialMtlsClient", _FakeVicidialClient)
+
+    engine = create_async_engine(database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        correlation_id = f"originate-accepted-{uuid4().hex}"
+        async with factory() as session:
+            response = await telephony.originate_call(
+                _request(), session, correlation_id
+            )
+        assert response["policy_decision"] == Decision.ALLOW.value
+        assert response["dialing"] == "attempting"
+        assert response["fine_state"] == "accepted"
+
+        async with factory() as session:
+            lifecycle = (
+                await session.execute(
+                    select(TelephonyCallLifecycle).where(
+                        TelephonyCallLifecycle.correlation_id == correlation_id
+                    )
+                )
+            ).scalar_one()
+            assert lifecycle.fine_state == "accepted"
+            assert lifecycle.source_extension == "6101"
     finally:
         await engine.dispose()

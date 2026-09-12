@@ -496,38 +496,82 @@ async def originate_call(
     if replay:
         return replay.response
 
-    _rate_limit_originate(payload.employee_id)
-
-    # Production campaigns remain hard-blocked at the application layer,
-    # matching the existing house convention (see /api/v1/transfers/requests
-    # in app/api/v1/control.py).
-    if payload.campaign != "TEST_SYN" and not settings.allow_non_test_campaigns:
-        raise HTTPException(403, "production campaigns are disabled")
-
-    # The request body's campaign/business_unit/caller_id are claims from
-    # Odoo; only the identity service's answer is trusted for authorization.
-    identity = await _lookup_agent_assignment(payload.employee_id, payload.campaign)
-    campaigns = identity.get("campaign_ids")
-    endpoint = identity.get("endpoint")
-    vicidial_username = identity.get("vicidial_username")
-    business_unit_id = identity.get("business_unit_id")
-    if (
-        not isinstance(campaigns, list)
-        or payload.campaign not in campaigns
-        or not isinstance(endpoint, str)
-        or not endpoint.isdigit()
-        or not isinstance(vicidial_username, str)
-        or not vicidial_username
-        or not business_unit_id
-        or str(business_unit_id) != payload.business_unit
-    ):
-        raise HTTPException(403, "agent is not authorized for this campaign")
-
-    if not E164.fullmatch(payload.destination):
-        raise HTTPException(422, "destination must be a valid E.164 number")
-
+    # Record "requested" the moment a de-duplicated request is accepted for
+    # processing -- before rate limiting, campaign gating, agent-identity
+    # lookup, or destination validation. This is Middleware's own
+    # control-plane transaction, not an AMI/VICIdial-sourced signal: a call
+    # that never reaches VICIdial must still leave evidence that it was
+    # requested. source_extension is unknown until identity lookup succeeds
+    # below, so it starts blank and is filled in once known.
     call_id = uuid4()
     now = datetime.now(UTC)
+    lifecycle = TelephonyCallLifecycle(
+        id=call_id,
+        correlation_id=correlation_id,
+        primary_unique_id=f"click-to-call:{call_id}",
+        lifecycle_state="STARTED",
+        fine_state="requested",
+        fine_state_at=now,
+        last_event_sequence=0,
+        started_at=now,
+        source_extension="",
+        destination=payload.destination,
+        dialplan_context="click-to-call",
+    )
+    session.add(lifecycle)
+    await session.commit()
+
+    async def _reject_before_dispatch(reason: str) -> None:
+        rejected_at = datetime.now(UTC)
+        lifecycle.lifecycle_state = "ENDED"
+        lifecycle.fine_state = "rejected"
+        lifecycle.fine_state_at = rejected_at
+        lifecycle.disposition = "REJECTED"
+        lifecycle.ended_at = rejected_at
+        lifecycle.hangup_cause = reason
+        await session.commit()
+
+    try:
+        _rate_limit_originate(payload.employee_id)
+
+        # Production campaigns remain hard-blocked at the application layer,
+        # matching the existing house convention (see
+        # /api/v1/transfers/requests in app/api/v1/control.py).
+        if payload.campaign != "TEST_SYN" and not settings.allow_non_test_campaigns:
+            raise HTTPException(403, "production campaigns are disabled")
+
+        # The request body's campaign/business_unit/caller_id are claims from
+        # Odoo; only the identity service's answer is trusted for
+        # authorization.
+        identity = await _lookup_agent_assignment(
+            payload.employee_id, payload.campaign
+        )
+        campaigns = identity.get("campaign_ids")
+        endpoint = identity.get("endpoint")
+        vicidial_username = identity.get("vicidial_username")
+        business_unit_id = identity.get("business_unit_id")
+        if (
+            not isinstance(campaigns, list)
+            or payload.campaign not in campaigns
+            or not isinstance(endpoint, str)
+            or not endpoint.isdigit()
+            or not isinstance(vicidial_username, str)
+            or not vicidial_username
+            or not business_unit_id
+            or str(business_unit_id) != payload.business_unit
+        ):
+            raise HTTPException(403, "agent is not authorized for this campaign")
+
+        # The real extension is known as soon as identity lookup succeeds --
+        # record it immediately so a later rejection (e.g. bad destination)
+        # still leaves an accurate row, not the placeholder.
+        lifecycle.source_extension = endpoint
+
+        if not E164.fullmatch(payload.destination):
+            raise HTTPException(422, "destination must be a valid E.164 number")
+    except HTTPException as exc:
+        await _reject_before_dispatch(f"pre_dial_validation:{exc.status_code}")
+        raise
 
     # Evaluate the default-deny production policy. While it stays
     # disabled/kill-switched (the checked-in default), this always returns
@@ -564,22 +608,10 @@ async def originate_call(
         ),
     )
 
-    # Record the attempt -- denied or not -- as an auditable call lifecycle
-    # row. This row's id is the call_id returned to Odoo.
-    lifecycle = TelephonyCallLifecycle(
-        id=call_id,
-        correlation_id=correlation_id,
-        primary_unique_id=f"click-to-call:{call_id}",
-        lifecycle_state="STARTED",
-        fine_state="requested",
-        fine_state_at=now,
-        last_event_sequence=0,
-        started_at=now,
-        source_extension=endpoint,
-        destination=payload.destination,
-        dialplan_context="click-to-call",
-    )
-    session.add(lifecycle)
+    # The lifecycle row (with fine_state="requested") was already created and
+    # committed above, before rate limiting/campaign/identity/E.164
+    # validation, so that a call rejected at any of those gates still leaves
+    # persisted evidence. Only the audit event is new here.
     session.add(
         AuditEvent(
             action="telephony.calls.originate",

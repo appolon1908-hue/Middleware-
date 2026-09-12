@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import IdempotencyRecord, IntegrationEvent, OdooResultDelivery
 from app.db.session import get_session
-from app.monitoring.auth import COLLECTOR, READ_ROLES, Principal, require
+from app.monitoring.auth import READ_ROLES, Principal, require
+from app.monitoring.routes import COLLECTOR
 from app.monitoring.models import Digest, Environment, Identifier
 from app.monitoring.store import Store, utc
 

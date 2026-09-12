@@ -113,6 +113,7 @@ async def client(monkeypatch):
         await connection.execute(text("DELETE FROM agent_call_state"))
         await connection.execute(text("DELETE FROM telephony_extension_reservation"))
         await connection.execute(text("DELETE FROM telephony_extension_pool"))
+        await connection.execute(text("DELETE FROM agent_provisioning_audit"))
         await connection.execute(text("DELETE FROM agent_provisioning_step"))
         await connection.execute(text("DELETE FROM agent_provisioning_request"))
         await connection.execute(

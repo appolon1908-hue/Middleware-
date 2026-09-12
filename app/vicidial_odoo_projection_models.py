@@ -12,6 +12,8 @@ from .vicidial_odoo_projection_errors import ProjectionError
 
 LIFECYCLE_EVENT_MAP = {
     "codestra.vicidial.call.lifecycle.created": "call.created",
+    "codestra.vicidial.call.lifecycle.offered": "call.offered",
+    "codestra.vicidial.call.lifecycle.queued": "call.queued",
     "codestra.vicidial.call.lifecycle.dialing": "call.dialing",
     "codestra.vicidial.call.lifecycle.ringing": "call.ringing",
     "codestra.vicidial.call.lifecycle.answered": "call.answered",
@@ -27,7 +29,6 @@ LIFECYCLE_EVENT_MAP = {
     "codestra.vicidial.call.lifecycle.no_answer": "call.no_answer",
     "codestra.vicidial.call.lifecycle.rejected": "call.rejected",
     "codestra.vicidial.call.lifecycle.canceled": "call.canceled",
-    "codestra.vicidial.call.lifecycle.timeout": "call.timeout",
 }
 CALL_EVENT_PATH = "/codestra/middleware/v1/call-events"
 CALL_EVENT_STATUS_PATH = "/codestra/middleware/v1/call-events/{event_id}/status"
@@ -62,6 +63,12 @@ class OdooCallEvent(BaseModel):
     transfer_type: str | None = Field(default=None, pattern=r"^(?:blind|attended)$")
     hangup_cause: str | None = Field(default=None, max_length=255)
     hangup_cause_code: int | None = Field(default=None, ge=0, le=999)
+    dial_status: str | None = Field(
+        default=None, max_length=32, pattern=r"^[A-Z_]+$"
+    )
+    hangup_leg: str | None = Field(
+        default=None, pattern=r"^(?:agent_leg|peer_leg)$"
+    )
 
     @field_validator("timestamp")
     @classmethod

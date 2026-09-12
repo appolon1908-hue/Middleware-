@@ -8432,6 +8432,9 @@ paths:
               schema: {}
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -8500,6 +8503,9 @@ paths:
               schema: {}
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -8550,6 +8556,9 @@ paths:
               schema: {}
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -8586,6 +8595,9 @@ paths:
               schema: {}
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':

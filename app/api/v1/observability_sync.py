@@ -167,8 +167,15 @@ def _projection_hash(document: dict[str, Any]) -> str:
 def _safe_payload(body: KpiSnapshot | IncidentState, principal: Principal, idempotency_key: str) -> dict[str, Any]:
     payload = body.model_dump(mode="json")
     for key in ("period_start", "period_end", "observed_at", "first_seen_at", "last_seen_at", "resolved_at"):
-        if isinstance(getattr(body, key, None), datetime):
-            payload[key] = _timestamp(getattr(body, key))
+        raw_value = payload.get(key)
+        if raw_value is None:
+            continue
+        if isinstance(raw_value, datetime):
+            payload[key] = _timestamp(raw_value)
+        elif isinstance(raw_value, str):
+            payload[key] = _timestamp(
+                datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+            )
     if payload["tenant_id"] != principal.tenant:
         raise HTTPException(403, "tenant scope denied")
     expected = _projection_hash(payload)

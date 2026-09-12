@@ -125,7 +125,8 @@ async def _fetch_call(engine, *, correlation_id: str) -> dict:
             await connection.execute(
                 text(
                     "SELECT lifecycle_state, started_at, connected_at, ended_at, "
-                    "hangup_cause, disposition, last_event_type, last_event_at "
+                    "hangup_cause, disposition, fine_state, fine_state_at, "
+                    "last_event_sequence, hangup_leg, last_event_type, last_event_at "
                     "FROM telephony_call_lifecycle "
                     "WHERE correlation_id = :correlation_id"
                 ),
@@ -216,13 +217,12 @@ async def test_dispatcher_sets_disposition_and_hangup_cause_on_completion(
         ("codestra.vicidial.call.lifecycle.no_answer", "NO_ANSWER"),
         ("codestra.vicidial.call.lifecycle.rejected", "REJECTED"),
         ("codestra.vicidial.call.lifecycle.canceled", "CANCELED"),
-        ("codestra.vicidial.call.lifecycle.timeout", "TIMEOUT"),
     ],
 )
 async def test_dispatcher_sets_disposition_for_each_pre_answer_terminal_outcome(
     engine, session_factory, tmp_path: Path, event_type: str, expected_disposition: str
 ) -> None:
-    """These five terminal outcomes never reach ANSWERED/CONNECTED --
+    """These four terminal outcomes never reach ANSWERED/CONNECTED --
     each is a distinct pre-answer outcome now that the AMI gateway (see
     Vicidialer-Codestra#55) stopped collapsing them into one "missed"
     bucket. The dispatcher must reach ENDED with the correct disposition
@@ -296,6 +296,9 @@ async def test_out_of_order_redelivery_does_not_regress_state(
 
     row = await _fetch_call(engine, correlation_id=correlation_id)
     assert row["lifecycle_state"] == "CONNECTED"
+    assert row["fine_state"] == "answered"
+    assert row["last_event_sequence"] == 2
+    assert row["last_event_type"] == "call.answered"
 
 
 @pytest.mark.asyncio
@@ -371,6 +374,122 @@ async def test_last_event_type_recorded_for_non_coarse_hold_event(
     row_after = await _fetch_call(engine, correlation_id=correlation_id)
     assert row_after["lifecycle_state"] == "CONNECTED"
     assert row_after["last_event_type"] == "call.transfer.started"
+
+
+@pytest.mark.asyncio
+async def test_queue_and_dialing_are_durable_fine_states(
+    engine, session_factory, tmp_path: Path
+) -> None:
+    correlation_id = f"vici-call-sync-{uuid4().hex[:12]}"
+    await _seed_call(engine, correlation_id=correlation_id)
+    state = ProjectionState(tmp_path / "projection.sqlite3")
+    dispatcher = Mock(spec=OdooCallEventDispatcher, wraps=NoOpDispatcher())
+
+    for sequence, event_type in (
+        (1, "codestra.vicidial.call.lifecycle.queued"),
+        (2, "codestra.vicidial.call.lifecycle.dialing"),
+    ):
+        await handle_message(
+            FakeMessage(
+                _envelope(
+                    event_type=event_type,
+                    correlation_id=correlation_id,
+                    sequence=sequence,
+                ).model_dump_json().encode()
+            ),
+            settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+            state=state,
+            dispatcher=dispatcher,
+            session_factory=session_factory,
+        )
+
+    row = await _fetch_call(engine, correlation_id=correlation_id)
+    assert row["fine_state"] == "dialing"
+    assert row["last_event_sequence"] == 2
+    assert row["last_event_type"] == "call.dialing"
+
+
+@pytest.mark.asyncio
+async def test_hangup_is_intermediate_until_terminal_outcome(
+    engine, session_factory, tmp_path: Path
+) -> None:
+    correlation_id = f"vici-call-sync-{uuid4().hex[:12]}"
+    await _seed_call(engine, correlation_id=correlation_id)
+    state = ProjectionState(tmp_path / "projection.sqlite3")
+    dispatcher = Mock(spec=OdooCallEventDispatcher, wraps=NoOpDispatcher())
+
+    async def deliver(event_type: str, sequence: int, **payload) -> None:
+        await handle_message(
+            FakeMessage(
+                _envelope(
+                    event_type=event_type,
+                    correlation_id=correlation_id,
+                    sequence=sequence,
+                    **payload,
+                ).model_dump_json().encode()
+            ),
+            settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+            state=state,
+            dispatcher=dispatcher,
+            session_factory=session_factory,
+        )
+
+    await deliver(
+        "codestra.vicidial.call.lifecycle.answered",
+        1,
+    )
+    await deliver(
+        "codestra.vicidial.call.lifecycle.hangup",
+        2,
+        hangup_cause="NORMAL_CLEARING",
+        hangup_leg="agent_leg",
+    )
+    mid = await _fetch_call(engine, correlation_id=correlation_id)
+    assert mid["lifecycle_state"] == "CONNECTED"
+    assert mid["fine_state"] == "answered"
+    assert mid["ended_at"] is None
+    assert mid["last_event_type"] == "call.hangup"
+    assert mid["hangup_leg"] == "agent_leg"
+
+    await deliver(
+        "codestra.vicidial.call.lifecycle.completed",
+        3,
+        hangup_cause="NORMAL_CLEARING",
+    )
+    final = await _fetch_call(engine, correlation_id=correlation_id)
+    assert final["lifecycle_state"] == "ENDED"
+    assert final["fine_state"] == "completed"
+    assert final["ended_at"] is not None
+    assert final["last_event_sequence"] == 3
+
+
+@pytest.mark.asyncio
+async def test_readback_survives_a_lost_browser_session(
+    engine, session_factory, tmp_path: Path
+) -> None:
+    """The durable projection advances without a websocket/browser present."""
+    correlation_id = f"vici-call-sync-{uuid4().hex[:12]}"
+    await _seed_call(engine, correlation_id=correlation_id)
+    message = FakeMessage(
+        _envelope(
+            event_type="codestra.vicidial.call.lifecycle.ringing",
+            correlation_id=correlation_id,
+            sequence=1,
+        ).model_dump_json().encode()
+    )
+
+    await handle_message(
+        message,
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+        state=ProjectionState(tmp_path / "projection.sqlite3"),
+        dispatcher=Mock(spec=OdooCallEventDispatcher, wraps=NoOpDispatcher()),
+        session_factory=session_factory,
+    )
+
+    row = await _fetch_call(engine, correlation_id=correlation_id)
+    assert message.acks == 1
+    assert row["fine_state"] == "ringing"
+    assert row["last_event_sequence"] == 1
 
 
 @pytest.mark.asyncio

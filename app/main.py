@@ -45,6 +45,7 @@ from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
+from app.api.v1.odoo_events import router as odoo_events_router
 from app.api.v1.agent_provisioning_reads import (
     router as agent_provisioning_reads_router,
 )
@@ -98,6 +99,7 @@ app.include_router(recordings_router)
 app.include_router(sales_router)
 app.include_router(social_router)
 app.include_router(provider_webhooks_router)
+app.include_router(odoo_events_router)
 app.include_router(agent_provisioning_router)
 app.include_router(agent_provisioning_reads_router)
 app.include_router(session_context_router)
@@ -138,6 +140,7 @@ SIGNED_WEBHOOK_PATHS = frozenset(
         "/webhooks/vicidial/call-result/",
         "/webhooks/sms/inbound/",
         "/api/v1/events/vicidial",
+        "/api/v1/odoo/events",
         "/api/v1/automation/events",
         "/api/v2/telephony/canary",
         "/api/v1/n8n/executions",

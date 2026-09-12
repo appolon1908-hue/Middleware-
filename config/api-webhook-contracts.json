@@ -57,6 +57,8 @@
       "path": "/api/v1/odoo/events",
       "eventTypes": [
         "codestra.odoo.activity.completed",
+        "codestra.odoo.agent.activation_email_requested",
+        "codestra.odoo.agent.provisioning_requested",
         "codestra.odoo.lead.created",
         "codestra.odoo.lead.updated"
       ],

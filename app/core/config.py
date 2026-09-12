@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     middleware_secret_file: str = ""
     webhook_shared_secret: str = ""
     webhook_shared_secret_file: str = ""
+    odoo_events_hmac_secret: str = ""
+    odoo_events_hmac_secret_file: str = ""
     vicidial_webhook_secret: str = ""
     telnexa_webhook_secret: str = ""
     vicidial_callback_hmac_secret_file: str = ""
@@ -793,6 +795,24 @@ class Settings(BaseSettings):
         value = path.read_text().strip()
         if not value:
             raise ValueError(f"{label} secret file is empty")
+        return value
+
+    @property
+    def odoo_events_hmac_key(self) -> bytes:
+        """Return the Odoo ingress HMAC key, failing closed when it is absent."""
+        if self.odoo_events_hmac_secret_file:
+            path = self._protected_secret_path(
+                self.odoo_events_hmac_secret_file,
+                "Odoo events HMAC",
+            )
+            value = path.read_bytes().strip()
+        else:
+            value = (
+                self.odoo_events_hmac_secret
+                or os.getenv("WEBHOOK_SECRET_ODOO_INTEGRATION", "")
+            ).encode("utf-8")
+        if len(value) < 32:
+            raise ValueError("Odoo events HMAC secret is too short")
         return value
 
     @property

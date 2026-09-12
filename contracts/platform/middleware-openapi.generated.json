@@ -1223,6 +1223,7 @@
             "type": "string"
           },
           "labels": {
+            "maxProperties": 32,
             "title": "Labels",
             "type": "object"
           },
@@ -1251,6 +1252,7 @@
                 "type": "null"
               }
             ],
+            "default": null,
             "title": "Resolved At"
           },
           "resource_version": {
@@ -1260,6 +1262,7 @@
           },
           "schema_version": {
             "const": "kyyow.observability.incident.v1",
+            "default": "kyyow.observability.incident.v1",
             "title": "Schema Version",
             "type": "string"
           },
@@ -1409,6 +1412,7 @@
             "type": "string"
           },
           "dimensions": {
+            "maxProperties": 32,
             "title": "Dimensions",
             "type": "object"
           },
@@ -1473,6 +1477,7 @@
           },
           "schema_version": {
             "const": "kyyow.observability.kpi.v1",
+            "default": "kyyow.observability.kpi.v1",
             "title": "Schema Version",
             "type": "string"
           },

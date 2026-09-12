@@ -305,6 +305,18 @@ async def submit_kpi(
     key = f"{body.environment}:{body.service_id}:{body.metric_code}:{body.period_reference}"
 
     async def action(_operation_id):
+        result = await _enqueue(
+            session,
+            principal=principal,
+            operation=KPI_OPERATION,
+            event_type=KPI_EVENT_TYPE,
+            payload=payload,
+            idempotency_key=idempotency_key,
+            correlation_id=x_correlation_id,
+            commit=False,
+        )
+        if result.get("duplicate"):
+            return result
         await store.put(
             principal.tenant,
             "kpi",
@@ -329,18 +341,6 @@ async def submit_kpi(
                 "source_revision": body.source_revision,
             },
         )
-        result = await _enqueue(
-            session,
-            principal=principal,
-            operation=KPI_OPERATION,
-            event_type=KPI_EVENT_TYPE,
-            payload=payload,
-            idempotency_key=idempotency_key,
-            correlation_id=x_correlation_id,
-            commit=False,
-        )
-        if result.get("duplicate"):
-            return result
         await session.commit()
         return result
 

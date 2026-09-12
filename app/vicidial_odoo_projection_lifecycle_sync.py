@@ -12,6 +12,14 @@ child table's integration_event_id column is a NOT NULL, UNIQUE foreign key
 into the integration_event table, which is populated by a different
 ingestion path (POST /api/v1/events/vicidial), not by this NATS-sourced
 envelope. Writing that table correctly is that other path's job.
+
+In addition to the coarse STARTED/CONNECTED/ENDED lifecycle_state, every
+event that reaches here also records its raw event_type/timestamp in
+last_event_type/last_event_at -- unconditionally, even for event types that
+don't move the coarse state (e.g. call.held, call.transfer.started) -- so
+GET /platform/v1/calls can surface the same finer-grained taxonomy Odoo's
+own call_event_projection.py already tracks, without restructuring the
+coarse enum every existing consumer of lifecycle_state depends on.
 """
 
 from __future__ import annotations
@@ -33,8 +41,16 @@ log = logging.getLogger("codestra.vicidial_odoo_projection.lifecycle_sync")
 _STATE_RANK = {"STARTED": 1, "CONNECTED": 2, "ENDED": 3}
 
 _STARTED_TYPES = frozenset({"call.created", "call.offered", "call.ringing"})
-_CONNECTED_TYPES = frozenset({"call.answered", "call.connected"})
+_CONNECTED_TYPES = frozenset(
+    {"call.answered", "call.connected", "call.held", "call.resumed"}
+)
 _ENDED_TYPES = frozenset({"call.hangup", "call.completed", "call.failed", "call.missed"})
+# Recognized by Odoo's call_event_projection.py taxonomy but not part of the
+# coarse STARTED/CONNECTED/ENDED progression -- still worth recording in
+# last_event_type/last_event_at for read-side visibility.
+_NON_COARSE_TYPES = frozenset(
+    {"call.transfer.started", "call.transfer.completed"}
+)
 _DISPOSITION_BY_TYPE = {
     "call.completed": "COMPLETED",
     "call.failed": "FAILED",
@@ -49,8 +65,8 @@ def _coarse_state(event_type: str) -> str | None:
         return "CONNECTED"
     if event_type in _ENDED_TYPES:
         return "ENDED"
-    # call.held / call.resumed / call.transfer.* don't move the coarse
-    # STARTED/CONNECTED/ENDED state this table tracks.
+    # call.transfer.* don't move the coarse STARTED/CONNECTED/ENDED state
+    # this table tracks (handled separately via _NON_COARSE_TYPES).
     return None
 
 
@@ -63,7 +79,7 @@ async def sync_call_lifecycle(session: AsyncSession, event: OdooCallEvent) -> No
     decisions in the caller's redelivery state machine.
     """
     new_state = _coarse_state(event.event_type)
-    if new_state is None:
+    if new_state is None and event.event_type not in _NON_COARSE_TYPES:
         return
 
     row = (
@@ -80,6 +96,14 @@ async def sync_call_lifecycle(session: AsyncSession, event: OdooCallEvent) -> No
             event.correlation_id,
             event.event_type,
         )
+        return
+
+    row.last_event_type = event.event_type
+    row.last_event_at = event.timestamp
+
+    if new_state is None:
+        # Non-coarse type (transfer.*): recorded above, no state transition.
+        await session.commit()
         return
 
     if new_state == "STARTED" and row.started_at is None:

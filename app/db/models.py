@@ -1422,6 +1422,8 @@ class TelephonyCallLifecycle(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     disposition: Mapped[str | None] = mapped_column(String(64))
     hangup_cause: Mapped[str | None] = mapped_column(String(64))
+    last_event_type: Mapped[str | None] = mapped_column(String(64))
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_extension: Mapped[str] = mapped_column(String(32), nullable=False)
     destination: Mapped[str] = mapped_column(String(64), nullable=False)
     dialplan_context: Mapped[str] = mapped_column(String(128), nullable=False)

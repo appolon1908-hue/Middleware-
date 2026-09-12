@@ -125,7 +125,8 @@ async def _fetch_call(engine, *, correlation_id: str) -> dict:
             await connection.execute(
                 text(
                     "SELECT lifecycle_state, started_at, connected_at, ended_at, "
-                    "hangup_cause, disposition FROM telephony_call_lifecycle "
+                    "hangup_cause, disposition, last_event_type, last_event_at "
+                    "FROM telephony_call_lifecycle "
                     "WHERE correlation_id = :correlation_id"
                 ),
                 {"correlation_id": correlation_id},
@@ -249,6 +250,81 @@ async def test_out_of_order_redelivery_does_not_regress_state(
 
     row = await _fetch_call(engine, correlation_id=correlation_id)
     assert row["lifecycle_state"] == "CONNECTED"
+
+
+@pytest.mark.asyncio
+async def test_last_event_type_recorded_on_coarse_transition(
+    engine, session_factory, tmp_path: Path
+) -> None:
+    """Every coarse-state-moving event also records its raw event_type/timestamp."""
+    correlation_id = f"vici-call-sync-{uuid4().hex[:12]}"
+    await _seed_call(engine, correlation_id=correlation_id)
+
+    await handle_message(
+        FakeMessage(
+            _envelope(
+                event_type="codestra.vicidial.call.lifecycle.ringing",
+                correlation_id=correlation_id,
+                sequence=1,
+            ).model_dump_json().encode()
+        ),
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+        state=ProjectionState(tmp_path / "projection.sqlite3"),
+        dispatcher=Mock(spec=OdooCallEventDispatcher, wraps=NoOpDispatcher()),
+        session_factory=session_factory,
+    )
+
+    row = await _fetch_call(engine, correlation_id=correlation_id)
+    assert row["lifecycle_state"] == "STARTED"
+    assert row["last_event_type"] == "call.ringing"
+    assert row["last_event_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_last_event_type_recorded_for_non_coarse_hold_event(
+    engine, session_factory, tmp_path: Path
+) -> None:
+    """call.held doesn't move STARTED/CONNECTED/ENDED but is still visible
+    via last_event_type -- the finer taxonomy Odoo already tracks."""
+    correlation_id = f"vici-call-sync-{uuid4().hex[:12]}"
+    await _seed_call(engine, correlation_id=correlation_id)
+    state = ProjectionState(tmp_path / "projection.sqlite3")
+    dispatcher = Mock(spec=OdooCallEventDispatcher, wraps=NoOpDispatcher())
+
+    await handle_message(
+        FakeMessage(
+            _envelope(
+                event_type="codestra.vicidial.call.lifecycle.answered",
+                correlation_id=correlation_id,
+                sequence=2,
+            ).model_dump_json().encode()
+        ),
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+        state=state,
+        dispatcher=dispatcher,
+        session_factory=session_factory,
+    )
+
+    row_before = await _fetch_call(engine, correlation_id=correlation_id)
+    assert row_before["lifecycle_state"] == "CONNECTED"
+
+    await handle_message(
+        FakeMessage(
+            _envelope(
+                event_type="codestra.vicidial.call.lifecycle.transfer.started",
+                correlation_id=correlation_id,
+                sequence=3,
+            ).model_dump_json().encode()
+        ),
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+        state=state,
+        dispatcher=dispatcher,
+        session_factory=session_factory,
+    )
+
+    row_after = await _fetch_call(engine, correlation_id=correlation_id)
+    assert row_after["lifecycle_state"] == "CONNECTED"
+    assert row_after["last_event_type"] == "call.transfer.started"
 
 
 @pytest.mark.asyncio

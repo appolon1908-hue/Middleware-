@@ -123,7 +123,7 @@ def validate_call_evidence(
         raise CallingContractError("calling_evidence_provider_identity_mismatch")
     if require_terminal and (
         not evidence.terminal or evidence.call_state not in TERMINAL_CALL_STATES
-        or not evidence.linkedid or not evidence.ended_at
+        or not evidence.call_id or not evidence.linkedid or not evidence.ended_at
         or evidence.duration_seconds is None or evidence.evidence is None
     ):
         raise CallingContractError("calling_terminal_evidence_incomplete")

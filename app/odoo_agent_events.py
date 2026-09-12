@@ -449,6 +449,9 @@ async def persist_odoo_agent_event(
     except OdooAgentEventConflict:
         await session.rollback()
         raise
+    except OdooAgentEventPersistenceError:
+        await session.rollback()
+        raise
     except SQLAlchemyError as exc:
         await session.rollback()
         raise OdooAgentEventPersistenceError(

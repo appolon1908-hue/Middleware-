@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Literal
+from uuid import uuid4
 
 import asyncpg
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from .api_inputs import authenticated_tenant, required_header
-from .commands import CommandCapabilityDisabled
 from .communications import (
     CommunicationsConflict,
     CommunicationsError,
@@ -21,11 +21,15 @@ from .communications import (
 )
 from .config import Settings
 from .security import AuthorizationError, RequestValidationError
+from .storage import ZERO_LEDGER_HASH, canonical_payload_sha256, event_ledger_hash
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_REGISTRY_PATH = ROOT / "config" / "postal-domain-registry.json"
 PRODUCTION_OPERATOR_CLIENT_ID = "production-operator"
+POLICY_EVENT = "codestra.email.production.policy.changed"
+QUOTA_RESERVED_EVENT = "codestra.email.production.quota.reserved"
+QUOTA_RELEASED_EVENT = "codestra.email.production.quota.released"
 
 ProductionMode = Literal[
     "SAFE",
@@ -71,9 +75,9 @@ class EmailProductionPolicy(BaseModel):
     mode: ProductionMode = "SAFE"
     authorizationState: AuthorizationState = "NOT_AUTHORIZED"
     approvedDomains: list[str] = Field(default_factory=list, max_length=100)
-    approvedSenders: list[EmailStr] = Field(default_factory=list, max_length=500)
+    approvedSenders: list[str] = Field(default_factory=list, max_length=500)
     recipientScope: RecipientScope = "DENY_ALL"
-    approvedRecipients: list[EmailStr] = Field(default_factory=list, max_length=500)
+    approvedRecipients: list[str] = Field(default_factory=list, max_length=500)
     perMinuteLimit: int = Field(default=0, ge=0, le=100_000)
     perHourLimit: int = Field(default=0, ge=0, le=1_000_000)
     perDayLimit: int = Field(default=0, ge=0, le=10_000_000)
@@ -103,6 +107,16 @@ class EmailProductionPolicy(BaseModel):
             normalized.append(domain)
         if len(set(normalized)) != len(normalized):
             raise ValueError("approved domains must be unique")
+        return normalized
+
+    @field_validator("approvedSenders", "approvedRecipients")
+    @classmethod
+    def normalize_addresses(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip().lower() for value in values]
+        if any(not value or value.count("@") != 1 for value in normalized):
+            raise ValueError("invalid email address")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("email addresses must be unique")
         return normalized
 
     @model_validator(mode="after")
@@ -150,6 +164,12 @@ class AuthorizeEmailProduction(BaseModel):
                 raise ValueError("transactional production requires transactional recipient scope")
         elif self.recipientScope != "CONSENTED_MARKETING":
             raise ValueError("campaign production requires consented marketing scope")
+        if self.validFrom and self.validFrom.tzinfo is None:
+            raise ValueError("validFrom must be timezone-aware")
+        if self.validUntil and self.validUntil.tzinfo is None:
+            raise ValueError("validUntil must be timezone-aware")
+        if self.validFrom and self.validUntil and self.validUntil <= self.validFrom:
+            raise ValueError("validUntil must be after validFrom")
         return self
 
 
@@ -166,6 +186,7 @@ class KillSwitchMutation(ControlMutation):
 @dataclass(frozen=True)
 class QuotaReservation:
     tenant_id: str
+    reservation_id: str
     units: int
     reserved_at: datetime
 
@@ -177,7 +198,8 @@ class MemoryEmailProductionPolicyStore:
         default_factory=dict
     )
     audits: list[dict[str, Any]] = field(default_factory=list)
-    quotas: dict[tuple[str, str, datetime], int] = field(default_factory=dict)
+    quota_reservations: dict[str, QuotaReservation] = field(default_factory=dict)
+    quota_releases: set[str] = field(default_factory=set)
 
     async def get(self, tenant_id: str) -> EmailProductionPolicy:
         policy = self.policies.get(tenant_id)
@@ -209,8 +231,10 @@ class MemoryEmailProductionPolicyStore:
         current = await self.get(tenant_id)
         if current.version != expected_version:
             raise CommunicationsConflict("expectedVersion is stale")
-        changed = transform(current).model_copy(
-            update={"version": current.version + 1, "updatedAt": datetime.now(UTC)}
+        changed = EmailProductionPolicy.model_validate(
+            transform(current).model_copy(
+                update={"version": current.version + 1, "updatedAt": datetime.now(UTC)}
+            ).model_dump(mode="json")
         )
         self.policies[tenant_id] = changed.model_copy(deep=True)
         response = changed.model_dump(mode="json")
@@ -233,32 +257,43 @@ class MemoryEmailProductionPolicyStore:
         self, tenant_id: str, units: int, policy: EmailProductionPolicy
     ) -> QuotaReservation:
         reserved_at = datetime.now(UTC)
-        buckets = _quota_buckets(reserved_at)
+        usage = self._usage(tenant_id, reserved_at)
         limits = {
             "minute": policy.perMinuteLimit,
             "hour": policy.perHourLimit,
             "day": policy.perDayLimit,
         }
-        for window, start in buckets.items():
-            used = self.quotas.get((tenant_id, window, start), 0)
+        for window, used in usage.items():
             if used + units > limits[window]:
                 raise EmailProductionRateLimited(f"{window} email quota is exhausted")
-        for window, start in buckets.items():
-            key = (tenant_id, window, start)
-            self.quotas[key] = self.quotas.get(key, 0) + units
-        return QuotaReservation(tenant_id=tenant_id, units=units, reserved_at=reserved_at)
+        reservation = QuotaReservation(
+            tenant_id=tenant_id,
+            reservation_id=str(uuid4()),
+            units=units,
+            reserved_at=reserved_at,
+        )
+        self.quota_reservations[reservation.reservation_id] = reservation
+        return reservation
 
     async def release_quota(self, reservation: QuotaReservation) -> None:
-        for window, start in _quota_buckets(reservation.reserved_at).items():
-            key = (reservation.tenant_id, window, start)
-            self.quotas[key] = max(0, self.quotas.get(key, 0) - reservation.units)
+        self.quota_releases.add(reservation.reservation_id)
+
+    def _usage(self, tenant_id: str, now: datetime) -> dict[str, int]:
+        cutoffs = _quota_cutoffs(now)
+        result = {"minute": 0, "hour": 0, "day": 0}
+        for reservation in self.quota_reservations.values():
+            if (
+                reservation.tenant_id != tenant_id
+                or reservation.reservation_id in self.quota_releases
+            ):
+                continue
+            for window, cutoff in cutoffs.items():
+                if reservation.reserved_at >= cutoff:
+                    result[window] += reservation.units
+        return result
 
     async def quota_status(self, tenant_id: str) -> dict[str, int]:
-        now = datetime.now(UTC)
-        return {
-            window: self.quotas.get((tenant_id, window, start), 0)
-            for window, start in _quota_buckets(now).items()
-        }
+        return self._usage(tenant_id, datetime.now(UTC))
 
     async def audit(self, tenant_id: str, limit: int) -> list[dict[str, Any]]:
         return [
@@ -268,18 +303,98 @@ class MemoryEmailProductionPolicyStore:
 
 @dataclass
 class PostgresEmailProductionPolicyStore:
+    """Event-sourced production control using the existing immutable ledger.
+
+    This deliberately reuses middleware_event_ledger rather than inserting a new
+    SQL migration behind the protected production migration-history authority.
+    Policy mutations, quota reservations, releases, and audit history are all
+    append-only hash-chained events. A per-tenant PostgreSQL advisory transaction
+    lock makes mutation versions and quota decisions atomic.
+    """
+
     pool: asyncpg.Pool
 
+    @staticmethod
+    def _decode_payload(value: Any) -> dict[str, Any]:
+        if isinstance(value, str):
+            value = json.loads(value)
+        if not isinstance(value, dict):
+            raise EmailProductionUnavailable("production-control ledger payload is invalid")
+        return dict(value)
+
+    async def _latest_policy(
+        self, conn: asyncpg.Connection, tenant_id: str
+    ) -> EmailProductionPolicy:
+        row = await conn.fetchrow(
+            """SELECT payload FROM middleware_event_ledger
+               WHERE tenant_id=$1 AND event_type=$2
+               ORDER BY tenant_sequence DESC LIMIT 1""",
+            tenant_id,
+            POLICY_EVENT,
+        )
+        if row is None:
+            return EmailProductionPolicy(tenantId=tenant_id)
+        document = self._decode_payload(row["payload"])
+        policy = document.get("policy")
+        if not isinstance(policy, dict):
+            raise EmailProductionUnavailable("production-control policy event is invalid")
+        return EmailProductionPolicy.model_validate(policy)
+
     async def get(self, tenant_id: str) -> EmailProductionPolicy:
-        raw = await self.pool.fetchval(
-            "SELECT payload FROM middleware_email_production_policy WHERE tenant_id=$1",
+        async with self.pool.acquire() as conn:
+            return await self._latest_policy(conn, tenant_id)
+
+    async def _append_event(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        tenant_id: str,
+        event_type: str,
+        correlation_id: str,
+        idempotency_key: str,
+        payload: dict[str, Any],
+    ) -> None:
+        previous = await conn.fetchrow(
+            """SELECT tenant_sequence,entry_hash FROM middleware_event_ledger
+               WHERE tenant_id=$1 ORDER BY tenant_sequence DESC LIMIT 1""",
             tenant_id,
         )
-        if raw is None:
-            return EmailProductionPolicy(tenantId=tenant_id)
-        return EmailProductionPolicy.model_validate(
-            json.loads(raw) if isinstance(raw, str) else raw
+        sequence = int(previous["tenant_sequence"]) + 1 if previous else 1
+        previous_hash = str(previous["entry_hash"]) if previous else ZERO_LEDGER_HASH
+        event_id = "email-production-" + uuid4().hex
+        semantic_sha256 = canonical_payload_sha256(payload)
+        entry_hash = event_ledger_hash(
+            tenant_id=tenant_id,
+            tenant_sequence=sequence,
+            event_id=event_id,
+            semantic_sha256=semantic_sha256,
+            previous_entry_hash=previous_hash,
         )
+        await conn.execute(
+            """INSERT INTO middleware_event_ledger(
+                 tenant_id,tenant_sequence,event_id,event_type,event_version,
+                 source_client_id,correlation_id,causation_id,idempotency_key,
+                 semantic_sha256,previous_entry_hash,entry_hash,payload
+               ) VALUES($1,$2,$3,$4,'1.0',$5,$6,$6,$7,$8,$9,$10,$11::jsonb)""",
+            tenant_id,
+            sequence,
+            event_id,
+            event_type,
+            PRODUCTION_OPERATOR_CLIENT_ID,
+            correlation_id,
+            idempotency_key,
+            semantic_sha256,
+            previous_hash,
+            entry_hash,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        )
+
+    @staticmethod
+    def _control_idempotency(action: str, actor: str, raw_key: str) -> str:
+        digest = hashlib.sha256(
+            f"{action}\0{actor}\0{raw_key}".encode("utf-8")
+        ).hexdigest()
+        return f"email-production-control:{digest}"
 
     async def mutate(
         self,
@@ -294,158 +409,193 @@ class PostgresEmailProductionPolicyStore:
         request_sha256: str,
         transform: Callable[[EmailProductionPolicy], EmailProductionPolicy],
     ) -> EmailProductionPolicy:
+        ledger_key = self._control_idempotency(action, actor, idempotency_key)
         async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", tenant_id
+            )
             replay = await conn.fetchrow(
-                """SELECT request_sha256,response_payload
-                   FROM middleware_email_production_mutations
-                   WHERE tenant_id=$1 AND action=$2 AND actor_id=$3 AND idempotency_key=$4""",
+                """SELECT payload FROM middleware_event_ledger
+                   WHERE tenant_id=$1 AND idempotency_key=$2 LIMIT 1""",
                 tenant_id,
-                action,
-                actor,
-                idempotency_key,
+                ledger_key,
             )
             if replay is not None:
-                if replay["request_sha256"] != request_sha256:
+                document = self._decode_payload(replay["payload"])
+                if document.get("request_sha256") != request_sha256:
                     raise CommunicationsConflict(
                         "Idempotency-Key was reused with different production-control content"
                     )
-                raw_response = replay["response_payload"]
-                return EmailProductionPolicy.model_validate(
-                    json.loads(raw_response)
-                    if isinstance(raw_response, str)
-                    else raw_response
-                )
-            row = await conn.fetchrow(
-                "SELECT version,payload FROM middleware_email_production_policy WHERE tenant_id=$1 FOR UPDATE",
-                tenant_id,
-            )
-            current = (
-                EmailProductionPolicy(tenantId=tenant_id)
-                if row is None
-                else EmailProductionPolicy.model_validate(
-                    json.loads(row["payload"])
-                    if isinstance(row["payload"], str)
-                    else row["payload"]
-                )
-            )
+                policy = document.get("policy")
+                if not isinstance(policy, dict):
+                    raise EmailProductionUnavailable(
+                        "production-control idempotency record is invalid"
+                    )
+                return EmailProductionPolicy.model_validate(policy)
+            current = await self._latest_policy(conn, tenant_id)
             if current.version != expected_version:
                 raise CommunicationsConflict("expectedVersion is stale")
-            changed = transform(current).model_copy(
-                update={"version": current.version + 1, "updatedAt": datetime.now(UTC)}
+            changed = EmailProductionPolicy.model_validate(
+                transform(current).model_copy(
+                    update={
+                        "version": current.version + 1,
+                        "updatedAt": datetime.now(UTC),
+                    }
+                ).model_dump(mode="json")
             )
-            previous_json = current.model_dump(mode="json")
-            response = changed.model_dump(mode="json")
-            await conn.execute(
-                """INSERT INTO middleware_email_production_policy(tenant_id,version,payload,updated_at)
-                   VALUES($1,$2,$3::jsonb,now())
-                   ON CONFLICT(tenant_id) DO UPDATE SET version=EXCLUDED.version,
-                     payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at""",
-                tenant_id,
-                changed.version,
-                json.dumps(response, separators=(",", ":")),
-            )
-            await conn.execute(
-                """INSERT INTO middleware_email_production_audit
-                   (tenant_id,action,actor_id,reason,correlation_id,previous_policy,new_policy)
-                   VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)""",
-                tenant_id,
-                action,
-                actor,
-                reason,
-                correlation_id,
-                json.dumps(previous_json, separators=(",", ":")),
-                json.dumps(response, separators=(",", ":")),
-            )
-            await conn.execute(
-                """INSERT INTO middleware_email_production_mutations
-                   (tenant_id,action,actor_id,idempotency_key,request_sha256,response_payload)
-                   VALUES($1,$2,$3,$4,$5,$6::jsonb)""",
-                tenant_id,
-                action,
-                actor,
-                idempotency_key,
-                request_sha256,
-                json.dumps(response, separators=(",", ":")),
+            payload = {
+                "kind": "email-production-control",
+                "action": action,
+                "actor_id": actor,
+                "reason": reason,
+                "request_sha256": request_sha256,
+                "previous_policy": current.model_dump(mode="json"),
+                "policy": changed.model_dump(mode="json"),
+            }
+            await self._append_event(
+                conn,
+                tenant_id=tenant_id,
+                event_type=POLICY_EVENT,
+                correlation_id=correlation_id,
+                idempotency_key=ledger_key,
+                payload=payload,
             )
             return changed
+
+    async def _quota_used(
+        self, conn: asyncpg.Connection, tenant_id: str, cutoff: datetime
+    ) -> int:
+        return int(
+            await conn.fetchval(
+                """SELECT COALESCE(SUM((r.payload->>'units')::bigint),0)
+                   FROM middleware_event_ledger r
+                   WHERE r.tenant_id=$1
+                     AND r.event_type=$2
+                     AND r.recorded_at >= $3
+                     AND NOT EXISTS(
+                       SELECT 1 FROM middleware_event_ledger x
+                       WHERE x.tenant_id=r.tenant_id
+                         AND x.event_type=$4
+                         AND x.payload->>'reservation_id'=r.payload->>'reservation_id'
+                     )""",
+                tenant_id,
+                QUOTA_RESERVED_EVENT,
+                cutoff,
+                QUOTA_RELEASED_EVENT,
+            )
+            or 0
+        )
 
     async def reserve_quota(
         self, tenant_id: str, units: int, policy: EmailProductionPolicy
     ) -> QuotaReservation:
         reserved_at = datetime.now(UTC)
-        buckets = _quota_buckets(reserved_at)
         limits = {
             "minute": policy.perMinuteLimit,
             "hour": policy.perHourLimit,
             "day": policy.perDayLimit,
         }
+        reservation = QuotaReservation(
+            tenant_id=tenant_id,
+            reservation_id=str(uuid4()),
+            units=units,
+            reserved_at=reserved_at,
+        )
         async with self.pool.acquire() as conn, conn.transaction():
-            for window, start in buckets.items():
-                used = await conn.fetchval(
-                    """INSERT INTO middleware_email_quota_buckets
-                       (tenant_id,window_kind,bucket_start,used,updated_at)
-                       VALUES($1,$2,$3,$4,now())
-                       ON CONFLICT(tenant_id,window_kind,bucket_start)
-                       DO UPDATE SET used=middleware_email_quota_buckets.used + EXCLUDED.used,
-                         updated_at=now()
-                       WHERE middleware_email_quota_buckets.used + EXCLUDED.used <= $5
-                       RETURNING used""",
-                    tenant_id,
-                    window,
-                    start,
-                    units,
-                    limits[window],
-                )
-                if used is None or used > limits[window]:
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", tenant_id
+            )
+            for window, cutoff in _quota_cutoffs(reserved_at).items():
+                used = await self._quota_used(conn, tenant_id, cutoff)
+                if used + units > limits[window]:
                     raise EmailProductionRateLimited(
                         f"{window} email quota is exhausted"
                     )
-        return QuotaReservation(tenant_id=tenant_id, units=units, reserved_at=reserved_at)
+            await self._append_event(
+                conn,
+                tenant_id=tenant_id,
+                event_type=QUOTA_RESERVED_EVENT,
+                correlation_id=reservation.reservation_id,
+                idempotency_key="email-quota-reserve:" + reservation.reservation_id,
+                payload={
+                    "kind": "email-production-quota-reservation",
+                    "reservation_id": reservation.reservation_id,
+                    "units": reservation.units,
+                    "policy_version": policy.version,
+                    "reserved_at": reservation.reserved_at.isoformat(),
+                },
+            )
+        return reservation
 
     async def release_quota(self, reservation: QuotaReservation) -> None:
+        ledger_key = "email-quota-release:" + reservation.reservation_id
         async with self.pool.acquire() as conn, conn.transaction():
-            for window, start in _quota_buckets(reservation.reserved_at).items():
-                await conn.execute(
-                    """UPDATE middleware_email_quota_buckets
-                       SET used=GREATEST(0,used-$4),updated_at=now()
-                       WHERE tenant_id=$1 AND window_kind=$2 AND bucket_start=$3""",
-                    reservation.tenant_id,
-                    window,
-                    start,
-                    reservation.units,
-                )
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+                reservation.tenant_id,
+            )
+            existing = await conn.fetchval(
+                """SELECT 1 FROM middleware_event_ledger
+                   WHERE tenant_id=$1 AND idempotency_key=$2 LIMIT 1""",
+                reservation.tenant_id,
+                ledger_key,
+            )
+            if existing:
+                return
+            await self._append_event(
+                conn,
+                tenant_id=reservation.tenant_id,
+                event_type=QUOTA_RELEASED_EVENT,
+                correlation_id=reservation.reservation_id,
+                idempotency_key=ledger_key,
+                payload={
+                    "kind": "email-production-quota-release",
+                    "reservation_id": reservation.reservation_id,
+                    "units": reservation.units,
+                    "released_at": datetime.now(UTC).isoformat(),
+                },
+            )
 
     async def quota_status(self, tenant_id: str) -> dict[str, int]:
-        buckets = _quota_buckets(datetime.now(UTC))
-        result: dict[str, int] = {}
-        for window, start in buckets.items():
-            result[window] = int(
-                await self.pool.fetchval(
-                    """SELECT COALESCE(used,0) FROM middleware_email_quota_buckets
-                       WHERE tenant_id=$1 AND window_kind=$2 AND bucket_start=$3""",
-                    tenant_id,
-                    window,
-                    start,
-                )
-                or 0
-            )
-        return result
+        now = datetime.now(UTC)
+        async with self.pool.acquire() as conn:
+            return {
+                window: await self._quota_used(conn, tenant_id, cutoff)
+                for window, cutoff in _quota_cutoffs(now).items()
+            }
 
     async def audit(self, tenant_id: str, limit: int) -> list[dict[str, Any]]:
         rows = await self.pool.fetch(
-            """SELECT id,action,actor_id,reason,correlation_id,previous_policy,new_policy,created_at
-               FROM middleware_email_production_audit
-               WHERE tenant_id=$1 ORDER BY id DESC LIMIT $2""",
+            """SELECT payload,recorded_at,correlation_id
+               FROM middleware_event_ledger
+               WHERE tenant_id=$1 AND event_type=$2
+               ORDER BY tenant_sequence DESC LIMIT $3""",
             tenant_id,
+            POLICY_EVENT,
             limit,
         )
-        return [dict(row) for row in rows]
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            payload = self._decode_payload(row["payload"])
+            result.append(
+                {
+                    "tenant_id": tenant_id,
+                    "action": payload.get("action"),
+                    "actor_id": payload.get("actor_id"),
+                    "reason": payload.get("reason"),
+                    "correlation_id": row["correlation_id"],
+                    "previous_policy": payload.get("previous_policy"),
+                    "new_policy": payload.get("policy"),
+                    "created_at": row["recorded_at"],
+                }
+            )
+        return result
 
 
 EmailPolicyStore = MemoryEmailProductionPolicyStore | PostgresEmailProductionPolicyStore
 
 
-def _quota_buckets(moment: datetime) -> dict[str, datetime]:
+def _quota_cutoffs(moment: datetime) -> dict[str, datetime]:
     value = moment.astimezone(UTC)
     return {
         "minute": value.replace(second=0, microsecond=0),
@@ -583,6 +733,8 @@ class EmailProductionControlService:
         body: ControlMutation,
     ) -> EmailProductionPolicy:
         current = await self.store.get(tenant_id)
+        if current.version != body.expectedVersion:
+            raise CommunicationsConflict("expectedVersion is stale")
         blockers = self.activation_blockers(current)
         if blockers:
             raise EmailProductionBlocked(
@@ -673,9 +825,7 @@ class EmailProductionControlService:
         policy = await self.store.get(tenant_id)
         now = datetime.now(UTC)
         if not self.settings.email_delivery_enabled:
-            raise EmailProductionUnavailable(
-                "email delivery runtime gate is closed"
-            )
+            raise EmailProductionUnavailable("email delivery runtime gate is closed")
         if policy.authorizationState != "ACTIVE":
             raise EmailProductionBlocked("email production is not active")
         if not policy.killSwitchOpen:
@@ -688,13 +838,11 @@ class EmailProductionControlService:
         sender_domain = sender_value.rsplit("@", 1)[-1]
         if sender_domain not in policy.approvedDomains:
             raise EmailProductionBlocked("sender domain is outside production authorization")
-        if sender_value not in {str(value).lower() for value in policy.approvedSenders}:
+        if sender_value not in policy.approvedSenders:
             raise EmailProductionBlocked("sender identity is outside production authorization")
         category = str(request.metadata.get("category") or "transactional").lower()
         recipients = [value.lower() for value in request.to]
-        approved_recipients = {
-            str(value).lower() for value in policy.approvedRecipients
-        }
+        approved_recipients = set(policy.approvedRecipients)
         if category == "marketing":
             if policy.mode != "CAMPAIGN_PRODUCTION":
                 raise EmailProductionBlocked("campaign email is not authorized")

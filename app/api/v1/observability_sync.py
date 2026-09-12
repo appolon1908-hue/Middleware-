@@ -192,6 +192,7 @@ async def _enqueue(
     payload: dict[str, Any],
     idempotency_key: str,
     correlation_id: str,
+    commit: bool = True,
 ) -> dict[str, Any]:
     request_hash = _digest(payload)
     key_hash = _digest({"tenant": principal.tenant, "key": idempotency_key})
@@ -254,7 +255,6 @@ async def _enqueue(
             "operation": operation,
             "idempotency_key": idempotency_key,
         },
-        result_public_id=None,
         originating_outbox_public_id=payload["event_id"],
         request_hash=request_hash,
         status="PENDING",
@@ -280,11 +280,12 @@ async def _enqueue(
             event_id=event.id,
         )
     )
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(409, "observability event identity already exists") from None
+    if commit:
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(409, "observability event identity already exists") from None
     return result
 
 
@@ -328,7 +329,7 @@ async def submit_kpi(
                 "source_revision": body.source_revision,
             },
         )
-        return await _enqueue(
+        result = await _enqueue(
             session,
             principal=principal,
             operation=KPI_OPERATION,
@@ -336,7 +337,12 @@ async def submit_kpi(
             payload=payload,
             idempotency_key=idempotency_key,
             correlation_id=x_correlation_id,
+            commit=False,
         )
+        if result.get("duplicate"):
+            return result
+        await session.commit()
+        return result
 
     return await action("")
 
@@ -439,7 +445,10 @@ async def odoo_sync_status(
         await session.execute(
             select(OdooResultDelivery.status, func.count())
             .join(IntegrationEvent, IntegrationEvent.id == OdooResultDelivery.integration_event_id)
-            .where(IntegrationEvent.source_system == "kyyow-observability")
+            .where(
+                IntegrationEvent.source_system == "kyyow-observability",
+                IntegrationEvent.payload_json["tenant_id"].as_string() == principal.tenant,
+            )
             .group_by(OdooResultDelivery.status)
         )
     ).all()

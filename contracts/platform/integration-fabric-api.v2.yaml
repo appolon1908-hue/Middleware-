@@ -7170,6 +7170,252 @@ paths:
       - *id001
       - *id003
       - *id004
+  /v1/observability/kpis:
+    post:
+      tags:
+      - kyyow-observability-sync
+      summary: Submit Kpi
+      operationId: submit_kpi_v1_observability_kpis_post
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiSnapshot'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: List Kpis
+      operationId: list_kpis_v1_observability_kpis_get
+      parameters:
+      - name: service_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            enum:
+            - development
+            - test
+            - staging
+            - production
+          - type: 'null'
+          title: Environment
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/incidents:
+    post:
+      tags:
+      - kyyow-observability-sync
+      summary: Submit Incident
+      operationId: submit_incident_v1_observability_incidents_post
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentState'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/kpis/{event_id}:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: Get Kpi
+      operationId: get_kpi_v1_observability_kpis__event_id__get
+      parameters:
+      - name: event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Event Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/odoo-sync:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: Odoo Sync Status
+      operationId: odoo_sync_status_v1_observability_odoo_sync_get
+      parameters:
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /health:
     get:
       summary: Health
@@ -8396,252 +8642,6 @@ paths:
       - *id001
       - *id003
       - *id004
-  /v1/observability/kpis:
-    post:
-      tags:
-      - kyyow-observability-sync
-      summary: Submit Kpi
-      operationId: submit_kpi_v1_observability_kpis_post
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          minLength: 8
-          maxLength: 180
-      - name: X-Correlation-ID
-        in: header
-        required: true
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 180
-      - *id001
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KpiSnapshot'
-      responses:
-        '202':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '400':
-          description: Invalid canonical request
-          content:
-            application/json:
-              schema: *id002
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
-    get:
-      tags:
-      - kyyow-observability-sync
-      summary: List Kpis
-      operationId: list_kpis_v1_observability_kpis_get
-      parameters:
-      - name: service_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            maxLength: 128
-          - type: 'null'
-          title: Service Id
-      - name: environment
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            enum:
-            - development
-            - test
-            - staging
-            - production
-          - type: 'null'
-          title: Environment
-      - name: cursor
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 512
-          default: ''
-          title: Cursor
-      - name: limit
-        in: query
-        required: false
-        schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 100
-          title: Limit
-      - *id001
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '400':
-          description: Invalid canonical request
-          content:
-            application/json:
-              schema: *id002
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
-  /v1/observability/incidents:
-    post:
-      tags:
-      - kyyow-observability-sync
-      summary: Submit Incident
-      operationId: submit_incident_v1_observability_incidents_post
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          minLength: 8
-          maxLength: 180
-      - name: X-Correlation-ID
-        in: header
-        required: true
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 180
-      - *id001
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/IncidentState'
-      responses:
-        '202':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '400':
-          description: Invalid canonical request
-          content:
-            application/json:
-              schema: *id002
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
-  /v1/observability/kpis/{event_id}:
-    get:
-      tags:
-      - kyyow-observability-sync
-      summary: Get Kpi
-      operationId: get_kpi_v1_observability_kpis__event_id__get
-      parameters:
-      - name: event_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Event Id
-      - *id001
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '400':
-          description: Invalid canonical request
-          content:
-            application/json:
-              schema: *id002
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
-  /v1/observability/odoo-sync:
-    get:
-      tags:
-      - kyyow-observability-sync
-      summary: Odoo Sync Status
-      operationId: odoo_sync_status_v1_observability_odoo_sync_get
-      parameters:
-      - *id001
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '400':
-          description: Invalid canonical request
-        '401':
-          description: Authentication failed
-        '403':
-          description: Scope or tenant denied
-        '404':
-          description: Resource not found
-        '409':
-          description: Version, state, or idempotency conflict
-        '429':
-          description: Rate limited
-        '503':
-          description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
 components:
   schemas:
     ApprovalRequest:

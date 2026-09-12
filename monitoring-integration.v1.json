@@ -45,5 +45,14 @@
     "private_authentication",
     "alert_delivery",
     "restore_and_rollback"
-  ]
+  ],
+  "observability_sync_contract": "contracts/observability/odoo-sync.v1.json",
+  "observability_sync_operation_count": 5,
+  "odoo_projection": {
+    "owner": "Middleware",
+    "business_system_of_record": "Odoo",
+    "queue": "odoo_result_delivery",
+    "write_path": "Middleware Odoo result worker only",
+    "direct_collector_odoo_write": false
+  }
 }

@@ -381,6 +381,7 @@ def create_app(
                     source_deployment=deployment,
                     request_idempotency_key=supplied_idempotency,
                 )
+                await project_incident(request, result.incident)
             except (IncidentConflict, CommandError, StorageError) as exc:
                 if not native or len(webhook.alerts) == 1:
                     raise

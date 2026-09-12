@@ -485,3 +485,16 @@ async def odoo_sync_status(
         "latest_event_created_at": utc(latest.created_at).isoformat() if latest else None,
         "correlation_id": request.headers.get("X-Correlation-ID"),
     }
+
+
+
+def is_observability_sync_route(request: Request) -> bool:
+    """Return true only for routes authenticated by this router."""
+    from fastapi.routing import APIRoute
+
+    return any(
+        isinstance(route, APIRoute)
+        and request.method in (route.methods or set())
+        and route.path_regex.fullmatch(request.url.path)
+        for route in router.routes
+    )

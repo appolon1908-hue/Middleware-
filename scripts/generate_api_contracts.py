@@ -132,11 +132,17 @@ def _normalize_schema_defaults(value: Any) -> None:
         # locked Python environments used by this repository.
         if value.get("additionalProperties") is True:
             del value["additionalProperties"]
-        for child in value.values():
-            _normalize_schema_defaults(child)
+        for key, child in list(value.items()):
+            if isinstance(child, float) and child.is_integer():
+                value[key] = int(child)
+            else:
+                _normalize_schema_defaults(child)
     elif isinstance(value, list):
-        for child in value:
-            _normalize_schema_defaults(child)
+        for index, child in enumerate(value):
+            if isinstance(child, float) and child.is_integer():
+                value[index] = int(child)
+            else:
+                _normalize_schema_defaults(child)
 
 
 def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:

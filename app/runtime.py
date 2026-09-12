@@ -24,6 +24,12 @@ from .communications import (
     PostgresCommunicationsStore,
 )
 from .config import Settings
+from .email_production_control import (
+    EmailProductionControlService,
+    MemoryEmailProductionPolicyStore,
+    PostgresEmailProductionPolicyStore,
+    ProductionGatedCommunicationsService,
+)
 from .realtime import MemoryRealtimeStore, PostgresRealtimeStore, RealtimeStore
 from .replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
 from .security import KeycloakJwtVerifier, TokenVerifier
@@ -134,16 +140,22 @@ async def build_runtime(settings: Settings) -> Runtime:
             commands=commands,
             umbrella_controls=settings.umbrella_controls,
         )
+        policy_store = MemoryEmailProductionPolicyStore()
         return Runtime(
             settings=settings,
             inbox=MemoryInboxStore(),
             replay=MemoryReplayGuard(),
             tokens=tokens,
             commands=commands,
-            communications=CommunicationsService(
+            communications=ProductionGatedCommunicationsService(
                 store=MemoryCommunicationsStore(),
                 commands=commands,
                 umbrella_controls=settings.umbrella_controls,
+                production_control=EmailProductionControlService(
+                    store=policy_store,
+                    settings=settings,
+                ),
+                enforce_production_policy=settings.app_env == "production",
             ),
             automation=automation,
             realtime=MemoryRealtimeStore(),
@@ -200,12 +212,20 @@ async def build_runtime(settings: Settings) -> Runtime:
         realtime=realtime,
     )
     try:
-        runtime.communications = CommunicationsService(
-            store=await PostgresCommunicationsStore.connect(
-                settings.database_url
-            ),
+        communications_store = await PostgresCommunicationsStore.connect(
+            settings.database_url
+        )
+        runtime.communications = ProductionGatedCommunicationsService(
+            store=communications_store,
             commands=commands,
             umbrella_controls=settings.umbrella_controls,
+            production_control=EmailProductionControlService(
+                store=PostgresEmailProductionPolicyStore(
+                    communications_store.pool
+                ),
+                settings=settings,
+            ),
+            enforce_production_policy=settings.app_env == "production",
         )
     except Exception:
         await runtime.close()

@@ -503,7 +503,11 @@ def create_app(
         message = await communications_service(request).store.message_by_idempotency(
             tenant_id, key,
         )
-        if caller.client_id == "odoo-sms" and message.channel != "sms":
+        expected_channel = {
+            "odoo-sms": "sms",
+            "odoo-email": "email",
+        }.get(caller.client_id)
+        if expected_channel is not None and message.channel != expected_channel:
             raise CommunicationsNotFound("message was not found")
         return message
 

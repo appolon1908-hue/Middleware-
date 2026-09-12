@@ -124,6 +124,8 @@ def test_delivery_event_schema_and_authentication(
     _authenticate(request, body, event)
     with pytest.raises(Exception):
         KlyrowDeliveryEvent.model_validate({**payload, "event_version": "2.0"})
+    with pytest.raises(Exception):
+        KlyrowDeliveryEvent.model_validate({**payload, "occurred_at": "2026-08-23T03:00:00"})
 
     for event_type in KLYROW_DELIVERY_EVENT_TYPES:
         value = KlyrowDeliveryEvent.model_validate({**payload, "event_type": event_type})

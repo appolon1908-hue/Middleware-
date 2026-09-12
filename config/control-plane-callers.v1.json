@@ -15,6 +15,14 @@
       "compatibility_only": false,
       "staging_auth_matrix": true
     },
+    "odoo-email": {
+      "command_scope": "odoo.email.command.write",
+      "status_scope": "odoo.email.status.read",
+      "allowed_command_prefixes": ["email."],
+      "allowed_targets": ["klyrow-email"],
+      "compatibility_only": false,
+      "staging_auth_matrix": true
+    },
     "kong-gateway": {
       "command_scope": "middleware.request.forward",
       "status_scope": "middleware.status.read",
@@ -94,6 +102,15 @@
     "observability-operator": {
       "command_scope": "observability.incidents.write",
       "status_scope": "observability.incidents.read",
+      "connector_commands_allowed": false,
+      "allowed_command_prefixes": [],
+      "allowed_targets": [],
+      "compatibility_only": false,
+      "staging_auth_matrix": true
+    },
+    "production-operator": {
+      "command_scope": "email.production.write",
+      "status_scope": "email.production.read",
       "connector_commands_allowed": false,
       "allowed_command_prefixes": [],
       "allowed_targets": [],

@@ -11,6 +11,7 @@ from .commands import (
     OperationMutationRequest,
 )
 from .control_plane_auth import authorize_command
+from .email_production_control import router as email_production_router
 from .operations import (
     OperationApiState,
     OperationResponse,
@@ -26,6 +27,7 @@ from .telephony_api import router as calling_router
 router = APIRouter(tags=["domain-control"])
 router.include_router(calling_router)
 router.include_router(calling_compat_router)
+router.include_router(email_production_router)
 
 _PREFIXES = {
     "odoo": "crm.",

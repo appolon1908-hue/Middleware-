@@ -58,6 +58,194 @@
         "title": "ApprovalRequest",
         "type": "object"
       },
+      "AuthorizeEmailProduction": {
+        "additionalProperties": false,
+        "properties": {
+          "approvedCategories": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Approvedcategories",
+            "type": "array"
+          },
+          "approvedDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Approveddomains",
+            "type": "array"
+          },
+          "approvedRecipientDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approvedrecipientdomains",
+            "type": "array"
+          },
+          "approvedRecipients": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Approvedrecipients",
+            "type": "array"
+          },
+          "approvedReleaseSha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "title": "Approvedreleasesha",
+            "type": "string"
+          },
+          "approvedSenders": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Approvedsenders",
+            "type": "array"
+          },
+          "changeId": {
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Changeid",
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "escalationOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Escalationowner",
+            "type": "string"
+          },
+          "expectedVersion": {
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "killSwitchProcedure": {
+            "maxLength": 4000,
+            "minLength": 10,
+            "title": "Killswitchprocedure",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "TRANSACTIONAL_CANARY",
+              "TRANSACTIONAL_PRODUCTION",
+              "CAMPAIGN_PRODUCTION"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "monitoringOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Monitoringowner",
+            "type": "string"
+          },
+          "perDayLimit": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Perdaylimit",
+            "type": "integer"
+          },
+          "perHourLimit": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Perhourlimit",
+            "type": "integer"
+          },
+          "perMinuteLimit": {
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Perminutelimit",
+            "type": "integer"
+          },
+          "productionOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Productionowner",
+            "type": "string"
+          },
+          "provider": {
+            "const": "klyrow-postal",
+            "title": "Provider",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipientScope": {
+            "enum": [
+              "DENY_ALL",
+              "ALLOWLIST",
+              "DOMAIN_ALLOWLIST",
+              "TRANSACTIONAL_ANY",
+              "CONSENTED_MARKETING"
+            ],
+            "title": "Recipientscope",
+            "type": "string"
+          },
+          "rollbackOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Rollbackowner",
+            "type": "string"
+          },
+          "validFrom": {
+            "format": "date-time",
+            "title": "Validfrom",
+            "type": "string"
+          },
+          "validUntil": {
+            "format": "date-time",
+            "title": "Validuntil",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "mode",
+          "approvedDomains",
+          "approvedSenders",
+          "recipientScope",
+          "approvedCategories",
+          "perMinuteLimit",
+          "perHourLimit",
+          "perDayLimit",
+          "validFrom",
+          "validUntil",
+          "changeId",
+          "productionOwner",
+          "monitoringOwner",
+          "escalationOwner",
+          "rollbackOwner",
+          "killSwitchProcedure",
+          "provider",
+          "environment",
+          "approvedReleaseSha",
+          "reason"
+        ],
+        "title": "AuthorizeEmailProduction",
+        "type": "object"
+      },
       "AutomationCommandRequest": {
         "additionalProperties": false,
         "properties": {
@@ -749,29 +937,6 @@
         "title": "ContractRefresh",
         "type": "object"
       },
-      "ControlMutation": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_version": {
-            "minimum": 1.0,
-            "title": "Expected Version",
-            "type": "integer"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.: -]*$",
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_version",
-          "reason"
-        ],
-        "title": "ControlMutation",
-        "type": "object"
-      },
       "CreateMessageRequest": {
         "additionalProperties": false,
         "properties": {
@@ -916,6 +1081,316 @@
           "replay_reason"
         ],
         "title": "DeadLetterReplayRequest",
+        "type": "object"
+      },
+      "EmailProductionPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "activatedBy": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activatedby"
+          },
+          "activationTimestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activationtimestamp"
+          },
+          "approvedBy": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvedby"
+          },
+          "approvedCategories": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approvedcategories",
+            "type": "array"
+          },
+          "approvedDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approveddomains",
+            "type": "array"
+          },
+          "approvedRecipientDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approvedrecipientdomains",
+            "type": "array"
+          },
+          "approvedRecipients": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Approvedrecipients",
+            "type": "array"
+          },
+          "approvedReleaseSha": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvedreleasesha"
+          },
+          "approvedSenders": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Approvedsenders",
+            "type": "array"
+          },
+          "authorizationState": {
+            "default": "NOT_AUTHORIZED",
+            "enum": [
+              "NOT_AUTHORIZED",
+              "AUTHORIZED_NOT_ACTIVE",
+              "ACTIVE",
+              "REVOKED"
+            ],
+            "title": "Authorizationstate",
+            "type": "string"
+          },
+          "authorizationTimestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorizationtimestamp"
+          },
+          "changeId": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changeid"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "escalationOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalationowner"
+          },
+          "killSwitchOpen": {
+            "default": false,
+            "title": "Killswitchopen",
+            "type": "boolean"
+          },
+          "killSwitchProcedure": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Killswitchprocedure"
+          },
+          "mode": {
+            "default": "SAFE",
+            "enum": [
+              "SAFE",
+              "TRANSACTIONAL_CANARY",
+              "TRANSACTIONAL_PRODUCTION",
+              "CAMPAIGN_PRODUCTION"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "monitoringOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitoringowner"
+          },
+          "perDayLimit": {
+            "default": 0,
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Perdaylimit",
+            "type": "integer"
+          },
+          "perHourLimit": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Perhourlimit",
+            "type": "integer"
+          },
+          "perMinuteLimit": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Perminutelimit",
+            "type": "integer"
+          },
+          "productionOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productionowner"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "recipientScope": {
+            "default": "DENY_ALL",
+            "enum": [
+              "DENY_ALL",
+              "ALLOWLIST",
+              "DOMAIN_ALLOWLIST",
+              "TRANSACTIONAL_ANY",
+              "CONSENTED_MARKETING"
+            ],
+            "title": "Recipientscope",
+            "type": "string"
+          },
+          "rollbackOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollbackowner"
+          },
+          "tenantId": {
+            "title": "Tenantid",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenantId"
+        ],
+        "title": "EmailProductionPolicy",
         "type": "object"
       },
       "Envelope": {
@@ -1224,6 +1699,33 @@
           "execution_id"
         ],
         "title": "JobClaimRequest",
+        "type": "object"
+      },
+      "KillSwitchMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason",
+          "open"
+        ],
+        "title": "KillSwitchMutation",
         "type": "object"
       },
       "MessageContent": {
@@ -3030,6 +3532,51 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "app__control_api__ControlMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.: -]*$",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "reason"
+        ],
+        "title": "ControlMutation",
+        "type": "object"
+      },
+      "app__email_production_control__ControlMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "title": "ControlMutation",
         "type": "object"
       }
     },
@@ -5958,7 +6505,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -6093,7 +6640,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -6933,6 +7480,642 @@
           }
         ],
         "summary": "Metrics"
+      }
+    },
+    "/platform/v1/email/production/activate": {
+      "post": {
+        "operationId": "activate_platform_v1_email_production_activate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__email_production_control__ControlMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Activate",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/audit": {
+      "get": {
+        "operationId": "audit_platform_v1_email_production_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Audit Platform V1 Email Production Audit Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Audit",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/authorize": {
+      "post": {
+        "operationId": "authorize_platform_v1_email_production_authorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeEmailProduction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Authorize",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/kill-switch": {
+      "post": {
+        "operationId": "kill_switch_platform_v1_email_production_kill_switch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Kill Switch",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/quotas": {
+      "get": {
+        "operationId": "quotas_platform_v1_email_production_quotas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Quotas Platform V1 Email Production Quotas Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Quotas",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/readiness": {
+      "get": {
+        "operationId": "readiness_platform_v1_email_production_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Readiness Platform V1 Email Production Readiness Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Readiness",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/revoke": {
+      "post": {
+        "operationId": "revoke_platform_v1_email_production_revoke_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__email_production_control__ControlMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/status": {
+      "get": {
+        "operationId": "status_platform_v1_email_production_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Status",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
       }
     },
     "/platform/v1/hosts": {
@@ -12088,7 +13271,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -12328,7 +13511,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -12463,7 +13646,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -12598,7 +13781,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -18828,7 +20011,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -18963,7 +20146,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -19098,7 +20281,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -19581,7 +20764,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },

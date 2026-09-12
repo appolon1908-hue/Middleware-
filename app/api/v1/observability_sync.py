@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import hashlib
 import json
+import math
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status

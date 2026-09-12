@@ -251,13 +251,22 @@ async def deliver_result(
     result.reserved_at = None
     result.next_attempt_at = None
     result.last_error_class = None
-    result.odoo_result_inbox_id = str(
+    receipt_id = (
         accepted.get("message_id")
         if provider_activity_delivery
         else accepted.get("receipt_id")
-        if standard_delivery
-        else accepted.get("result_inbox_id", accepted["result_public_id"])
+        if standard_delivery or observability_delivery
+        else accepted.get("result_inbox_id") or accepted.get("result_public_id")
     )
+    if not receipt_id:
+        await _record_delivery_failure(
+            session,
+            result_delivery_id,
+            error_class="RESPONSE_RECEIPT_MISSING",
+            retryable=False,
+        )
+        raise OdooResultError("Odoo response receipt is missing")
+    result.odoo_result_inbox_id = str(receipt_id)
     result.response_hash = canonical_hash(accepted)
     await session.commit()
     return accepted
@@ -361,7 +370,10 @@ def _observability_body(
     }:
         raise OdooResultError("unsupported observability operation")
     payload = dict(event.payload_json)
-    payload["idempotency_key"] = result.get("idempotency_key", event.original_event_id)
+    # The transport idempotency key is the durable delivery identity supplied
+    # in the signed header. Keep the source key in the queue metadata, not in
+    # the Odoo binding field, so retries bind to the same delivery.
+    payload["idempotency_key"] = str(delivery.result_public_id)
     payload["operation"] = operation
     payload["causation_id"] = event.original_event_id
     return payload

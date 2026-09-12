@@ -5,6 +5,7 @@ Revises: 0060_agent_provisioning
 """
 
 from alembic import op
+import sqlalchemy as sa
 
 
 revision = "0061_kyyow_observability_odoo"
@@ -23,19 +24,20 @@ ROUTES = (
 
 
 def _insert_routes(environment, base_url, credential, audience, tls_profile, version_prefix, configuration_version):
+    connection = op.get_bind()
     for index, (endpoint_id, endpoint_key, _short_name, method, path, scope, stale_read_safe) in enumerate(ROUTES, start=1):
         endpoint_version_id = f"61000000-0000-4000-{version_prefix:04d}-{index:012d}"
         binding_id = f"61000000-0000-5000-{version_prefix:04d}-{index:012d}"
         schema_id = f"61000000-0000-6000-0000-{index:012d}"
         checksum = f"sha256:{version_prefix:02x}" + "0" * 62
-        op.execute(
+        connection.execute(sa.text(
             """
             INSERT INTO integration_endpoint(endpoint_id,service_id,endpoint_key,api_version)
-            SELECT %(endpoint_id)s::uuid, service_id, %(endpoint_key)s, 'v1'
+            SELECT CAST(:endpoint_id AS uuid), service_id, :endpoint_key, 'v1'
               FROM integration_service
              WHERE service_key='odoo'
             ON CONFLICT (service_id,endpoint_key,api_version) DO NOTHING
-            """,
+            """),
             {
                 "endpoint_id": endpoint_id,
                 "endpoint_key": endpoint_key,
@@ -47,8 +49,8 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
               (schema_version_id,service_key,endpoint_key,api_version,
                schema_reference,checksum,enabled)
             VALUES
-              (%(schema_id)s::uuid,'odoo',%(endpoint_key)s,'v1',
-               %(schema_reference)s,%(checksum)s,true)
+              (CAST(:schema_id AS uuid),'odoo',:endpoint_key,'v1',
+               :schema_reference,:checksum,true)
             ON CONFLICT (service_key,endpoint_key,api_version)
             DO UPDATE SET enabled=true, schema_reference=EXCLUDED.schema_reference,
                           checksum=EXCLUDED.checksum
@@ -71,13 +73,13 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
                redirects_allowed,target_attestation_required,stale_read_safe,enabled,
                kill_switch,configuration_checksum,effective_at,created_by,approved_by)
             VALUES
-              (%(version_id)s::uuid,
-               %(endpoint_id)s::uuid,%(configuration_version)s,%(base_url)s,%(path)s,%(method)s,
-               'application/json','oauth2_client_secret',%(audience)s,
-               jsonb_build_array(%(scope)s),%(credential)s,%(tls_profile)s,
-               10000,3000,60,4,%(idempotency)s,
-               'BOUNDED_TRANSIENT_RETRY',3,false,false,%(stale)s,true,false,
-               %(checksum)s,now(),'kyyow-observability','protected-review-required')
+              (CAST(:version_id AS uuid),
+               CAST(:endpoint_id AS uuid),:configuration_version,:base_url,:path,:method,
+               'application/json','oauth2_client_secret',:audience,
+               jsonb_build_array(:scope),:credential,:tls_profile,
+               10000,3000,60,4,:idempotency,
+               'BOUNDED_TRANSIENT_RETRY',3,false,false,:stale,true,false,
+               :checksum,now(),'kyyow-observability','protected-review-required')
             ON CONFLICT (endpoint_id,configuration_version) DO NOTHING
             """,
             {
@@ -101,7 +103,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
             INSERT INTO integration_route_binding
               (binding_id,endpoint_version_id,environment,
                organization_scope,business_unit_scope,campaign_scope)
-            VALUES (%(binding_id)s::uuid,%(version_id)s::uuid,%(environment)s,'','','')
+            VALUES (CAST(:binding_id AS uuid),CAST(:version_id AS uuid),:environment,'','','')
             ON CONFLICT DO NOTHING
             """,
             {

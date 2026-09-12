@@ -8731,8 +8731,8 @@ components:
           title: Workflow Key
         workflow_version:
           type: integer
-          maximum: 2147483647.0
-          minimum: 1.0
+          maximum: 2147483647
+          minimum: 1
           title: Workflow Version
         step_key:
           type: string
@@ -8827,8 +8827,8 @@ components:
           title: Metric
         value:
           type: number
-          maximum: 1000000.0
-          minimum: 0.0
+          maximum: 1000000
+          minimum: 0
           title: Value
         occurred_at:
           type: string
@@ -9157,7 +9157,7 @@ components:
           title: Environment
         expected_revision:
           type: integer
-          minimum: 0.0
+          minimum: 0
           title: Expected Revision
         artifact_id:
           type: string
@@ -9179,7 +9179,7 @@ components:
       properties:
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         reason:
           type: string
@@ -9269,7 +9269,7 @@ components:
           title: Approval Id
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         original_effect_fingerprint:
           type: string
@@ -9416,7 +9416,7 @@ components:
           title: Source Deployment
         sequence:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Sequence
         observed_at:
           type: string
@@ -9510,8 +9510,8 @@ components:
           title: Workflow Key
         workflow_version:
           type: integer
-          maximum: 2147483647.0
-          minimum: 1.0
+          maximum: 2147483647
+          minimum: 1
           title: Workflow Version
         execution_id:
           type: string
@@ -9558,7 +9558,7 @@ components:
         templateVersion:
           anyOf:
           - type: integer
-            minimum: 1.0
+            minimum: 1
           - type: 'null'
           title: Templateversion
         variables:
@@ -9638,7 +9638,7 @@ components:
           title: Idempotency Key
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         reason:
           type: string
@@ -9694,7 +9694,7 @@ components:
           title: Source Deployment
         sequence:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Sequence
         observed_at:
           type: string
@@ -9890,7 +9890,7 @@ components:
       properties:
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         reason:
           type: string
@@ -10073,7 +10073,7 @@ components:
           title: Lead Model
         lead_id:
           type: integer
-          exclusiveMinimum: 0.0
+          exclusiveMinimum: 0
           title: Lead Id
         recording_requested:
           type: boolean
@@ -10175,7 +10175,7 @@ components:
           title: Environment
         expected_revision:
           type: integer
-          minimum: 0.0
+          minimum: 0
           title: Expected Revision
         config_digest:
           type: string
@@ -10438,14 +10438,14 @@ components:
           title: End
         step_seconds:
           type: integer
-          maximum: 86400.0
-          minimum: 1.0
+          maximum: 86400
+          minimum: 1
           title: Step Seconds
           default: 60
         limit:
           type: integer
-          maximum: 1000.0
-          minimum: 1.0
+          maximum: 1000
+          minimum: 1
           title: Limit
           default: 100
       additionalProperties: false
@@ -10521,7 +10521,7 @@ components:
       properties:
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         action:
           type: string
@@ -10899,7 +10899,7 @@ components:
           title: Source
         source_revision:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Source Revision
         source_payload_hash:
           type: string
@@ -11048,7 +11048,7 @@ components:
           title: Source Deployment
         resource_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Resource Version
         source_payload_hash:
           type: string

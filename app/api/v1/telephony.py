@@ -571,6 +571,9 @@ async def originate_call(
         correlation_id=correlation_id,
         primary_unique_id=f"click-to-call:{call_id}",
         lifecycle_state="STARTED",
+        fine_state="requested",
+        fine_state_at=now,
+        last_event_sequence=0,
         started_at=now,
         source_extension=endpoint,
         destination=payload.destination,
@@ -598,6 +601,12 @@ async def originate_call(
 
     dialing_status = "blocked"
     dial_reason = f"policy_decision:{decision.value}"
+    if decision != Decision.ALLOW:
+        lifecycle.lifecycle_state = "ENDED"
+        lifecycle.fine_state = "rejected"
+        lifecycle.fine_state_at = datetime.now(UTC)
+        lifecycle.disposition = "REJECTED"
+        lifecycle.ended_at = lifecycle.fine_state_at
     if decision == Decision.ALLOW:
         adapter = VicidialMtlsClient(settings)
         try:
@@ -616,12 +625,17 @@ async def originate_call(
             )
             dialing_status = "attempting"
             dial_reason = "accepted"
+            lifecycle.fine_state = "accepted"
+            lifecycle.fine_state_at = datetime.now(UTC)
         except VicidialMtlsError:
             dialing_status = "blocked"
             # Adapter details can include internal transport information.
             dial_reason = "adapter_error"
             lifecycle.lifecycle_state = "ENDED"
-            lifecycle.ended_at = datetime.now(UTC)
+            lifecycle.fine_state = "failed"
+            lifecycle.fine_state_at = datetime.now(UTC)
+            lifecycle.ended_at = lifecycle.fine_state_at
+            lifecycle.disposition = "FAILED"
             lifecycle.hangup_cause = "adapter_error"
         finally:
             adapter.close()
@@ -637,6 +651,8 @@ async def originate_call(
                 "business_unit": payload.business_unit,
                 "campaign": payload.campaign,
                 "state": lifecycle.lifecycle_state,
+                "fine_state": lifecycle.fine_state,
+                "last_event_sequence": lifecycle.last_event_sequence,
                 "dialing": dialing_status,
             },
             correlation_id=correlation_id,
@@ -647,6 +663,8 @@ async def originate_call(
         "call_id": str(call_id),
         "correlation_id": correlation_id,
         "lifecycle_state": lifecycle.lifecycle_state,
+        "fine_state": lifecycle.fine_state,
+        "last_event_sequence": lifecycle.last_event_sequence,
         "dialing": dialing_status,
         "reason": dial_reason,
         "policy_decision": decision.value,

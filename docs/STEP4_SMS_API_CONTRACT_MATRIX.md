@@ -11,7 +11,7 @@ Date: 2026-08-30
 | `POST /v1/communications/messages/{messageId}/cancel` | Implemented | Idempotently dead-letters a persisted/queued command before provider dispatch; refuses an in-flight command. |
 | `GET /v1/communications/usage` | Implemented | Provider-neutral accepted/delivered/failed/suppressed counts split by email and SMS. |
 | `GET /v1/communications/providers/health` | Prepared | Returns both Klyrow and Telnexa as disabled until provider bindings are reviewed and activated. |
-| `POST /api/v1/telnexa/events` | Implemented | OIDC, HMAC, freshness, durable inbox replay control, then canonical DLR/MO/STOP/HELP normalization. |
+| `POST /api/v1/events/telnexa` | Implemented | OIDC, HMAC, freshness, durable inbox replay control, then canonical DLR/MO/STOP/HELP normalization. |
 
 ## Durable command mapping
 

@@ -100,7 +100,7 @@ Require the public discovery and local gateway checks to remain healthy.
 /api/v1/odoo/events
 /api/v1/n8n/results
 /api/v1/vicidial/events
-/api/v1/telnexa/events
+/api/v1/events/telnexa
 /api/v1/klyrow/events
 /api/v1/kyqra/results
 /api/v1/kyqra/progress

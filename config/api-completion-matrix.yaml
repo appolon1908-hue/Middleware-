@@ -39,6 +39,12 @@ operations:
   canonical_operation_id: provider_control_social_publish_request_api_v1_control_social_publications_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: events
+  method: POST
+  path: /api/v1/events/telnexa
+  canonical_operation_id: ingress_telnexa_gateway_telnexa_api_v1_events_telnexa_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: inbox
   method: GET
   path: /api/v1/inbox
@@ -169,12 +175,6 @@ operations:
   method: POST
   path: /api/v1/reconciliation/operations/{record_id}/resolve
   canonical_operation_id: reconciliation_resolve_api_v1_reconciliation_operations__record_id__resolve_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
-- domain: telnexa
-  method: POST
-  path: /api/v1/telnexa/events
-  canonical_operation_id: ingress_telnexa_gateway_events_api_v1_telnexa_events_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: vicidial

@@ -85,7 +85,7 @@ def test_accepts_sdk_call_disposition_event_on_vicidial_route(test_settings, run
 
 
 def test_accepts_sdk_sms_received_event_on_telnexa_route(test_settings, runtime) -> None:
-    path = "/api/v1/telnexa/events"
+    path = "/api/v1/events/telnexa"
     route = ROUTE_BY_PATH[path]
     event = make_event(
         producer=route.producer_client_id,
@@ -206,7 +206,7 @@ def test_invalid_signature_is_rejected_with_canonical_error(test_settings, runti
 
 
 def test_body_and_header_tenant_must_match(test_settings, runtime) -> None:
-    path = "/api/v1/telnexa/events"
+    path = "/api/v1/events/telnexa"
     route = ROUTE_BY_PATH[path]
     event = make_event(
         producer=route.producer_client_id,

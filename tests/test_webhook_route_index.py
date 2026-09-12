@@ -51,3 +51,4 @@ def test_single_endpoint_connectors_remain_addressable() -> None:
 
     assert odoo.producer_client_id == "odoo-integration"
     assert telnexa.producer_client_id == "telnexa-gateway"
+    assert telnexa.path == "/api/v1/events/telnexa"

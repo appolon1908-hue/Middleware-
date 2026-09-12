@@ -17,37 +17,12 @@
   "runtime": {
     "enabled_by_default": false,
     "external_effects_enabled": false,
-    "status": "runtime_unconfirmed",
-    "notes": "Odoo result delivery is the only activation path for observability projections; live deployment and registry approval remain runtime evidence."
+    "status": "runtime_unconfirmed"
   },
   "deployment_evidence": {
     "deployed": false,
     "verified_commit": null,
     "verified_at": null,
     "notes": "Configuration contract only; no live deployment performed."
-  },
-  "observability_projection": {
-    "contract": "contracts/observability/odoo-sync.v1.json",
-    "middleware_api_owner": "appolon1908-hue/Middleware-",
-    "odoo_record_owner": "appolon1908-hue/Odoo",
-    "enabled_by_default": false,
-    "queue": "odoo_result_delivery",
-    "operations": [
-      "observability.kpis.create",
-      "observability.incidents.upsert",
-      "observability.kpis.read",
-      "observability.incidents.read",
-      "observability.sync.read"
-    ],
-    "controls": [
-      "OIDC client credentials",
-      "private endpoint registry route",
-      "tenant allowlist",
-      "Idempotency-Key",
-      "X-Codestra-Correlation-ID",
-      "bounded payload",
-      "bounded retries",
-      "Odoo ORM only"
-    ]
   }
 }

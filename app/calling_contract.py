@@ -27,11 +27,13 @@ HANGUP = INTERNAL_PREFIX + "calls.hangup"
 CAPABILITY = "INTERNAL_TELEPHONY_CALLS"
 TARGET = "vicidial-restricted"
 TERMINAL_CALL_STATES = frozenset({
-    "completed", "failed", "missed", "rejected", "cancelled", "transferred",
+    "completed", "failed", "busy", "no_answer", "canceled", "rejected",
+    "missed", "cancelled", "transferred",
 })
 NONTERMINAL_CALL_STATES = frozenset({
-    "new", "initiating", "ringing", "offered", "answering", "connected",
-    "held", "transferring", "ending",
+    "requested", "accepted", "new", "initiating", "queued", "dialing",
+    "ringing", "offered", "answering", "connected", "held", "transferring",
+    "ending",
 })
 Identity = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:@-]*$")]
 IdempotencyKey = Annotated[str, Field(min_length=8, max_length=180, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
@@ -58,6 +60,10 @@ class CallLifecycleEvidence(StrictModel):
     ended_at: AwareDatetime | None
     terminal: StrictBool
     evidence: dict[str, Any] | None
+    fine_state: str | None = None
+    fine_state_at: AwareDatetime | None = None
+    last_event_sequence: StrictInt = Field(default=0, ge=0)
+    hangup_leg: Literal["agent_leg", "peer_leg"] | None = None
     tenant_id: str
     subject: str
     employee_id: str

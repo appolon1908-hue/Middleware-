@@ -32,6 +32,7 @@ from app.api.v1.provider_webhooks import router as provider_webhooks_router
 from app.api.v1.telephony import router as telephony_router
 from app.api.internal.ai_jobs import router as internal_ai_jobs_router
 from app.api.internal.klyrow_mail import router as klyrow_mail_router
+from app.api.internal.telnexa_events import router as telnexa_events_router
 from app.api.v1.ai_console import router as ai_console_router
 from app.api.v1.tts import router as tts_router
 from app.api.v1.tts import validate_readiness as validate_tts_readiness
@@ -81,6 +82,7 @@ app.include_router(n8n_target_router)
 app.include_router(telephony_router)
 app.include_router(internal_ai_jobs_router)
 app.include_router(klyrow_mail_router)
+app.include_router(telnexa_events_router)
 app.include_router(ai_console_router)
 app.include_router(tts_router)
 app.include_router(ai_commands_router)
@@ -138,6 +140,7 @@ SIGNED_WEBHOOK_PATHS = frozenset(
         "/webhooks/vicidial/call-result/",
         "/webhooks/sms/inbound/",
         "/api/v1/events/vicidial",
+        "/api/v1/events/telnexa",
         "/api/v1/automation/events",
         "/api/v2/telephony/canary",
         "/api/v1/n8n/executions",

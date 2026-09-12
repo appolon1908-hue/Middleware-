@@ -707,6 +707,7 @@ async def _advance_saga(
 
 def _public_view(request: AgentProvisioningRequest, steps: list[AgentProvisioningStep]) -> dict:
     return {
+        "middleware_request_id": str(request.id),
         "request_id": request.request_id,
         "tenant_id": request.tenant_id,
         "employee_id": request.employee_id,

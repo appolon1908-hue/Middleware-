@@ -21,6 +21,7 @@ MUTATION_METHODS = frozenset({"post", "put", "patch", "delete"})
 PUBLIC_PATHS = frozenset(
     {"/health", "/ready", "/readiness", "/dependencies", "/version", "/capabilities"}
 )
+SPECIALIZED_INGRESS_PATHS = frozenset({"/api/v1/events/telnexa"})
 INVENTORY_BASE_SHA = "8e3534e0271371e0fee057331a9a24f391356e5e"
 
 DESCRIPTION = (
@@ -36,6 +37,15 @@ BEARER_SECURITY_SCHEME = {
     "description": (
         "Keycloak machine token; issuer auth.codestra.co realm codestra; "
         "audience middleware-api"
+    ),
+}
+TELNEXA_BEARER_SECURITY_SCHEME = {
+    "type": "http",
+    "scheme": "bearer",
+    "bearerFormat": "shared API key",
+    "description": (
+        "Telnexa shared API key; request authenticity also requires the "
+        "X-Signature HMAC over the exact raw body."
     ),
 }
 REQUIRED_HEADERS: dict[str, dict[str, Any]] = {
@@ -77,6 +87,7 @@ OUTPUT_PATHS = {
 def _governed_api_path(path: str) -> bool:
     return (
         path.startswith(("/v1/", "/api/v1/"))
+        and path not in SPECIALIZED_INGRESS_PATHS
         and path != "/v1/runtime/safety"
         and "webhook" not in path
     )
@@ -159,13 +170,18 @@ def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
     components = schema.setdefault("components", {})
     security_schemes = components.setdefault("securitySchemes", {})
     security_schemes["bearerAuth"] = deepcopy(BEARER_SECURITY_SCHEME)
+    security_schemes["telnexaBearerApiKey"] = deepcopy(
+        TELNEXA_BEARER_SECURITY_SCHEME
+    )
 
     operations: list[dict[str, Any]] = []
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in HTTP_METHODS:
                 continue
-            if path not in PUBLIC_PATHS:
+            if path in SPECIALIZED_INGRESS_PATHS:
+                operation.setdefault("security", [{"telnexaBearerApiKey": []}])
+            elif path not in PUBLIC_PATHS:
                 operation["security"] = [{"bearerAuth": []}]
             if _governed_api_path(path):
                 parameters = operation.setdefault("parameters", [])

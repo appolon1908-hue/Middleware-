@@ -15,6 +15,15 @@
       "compatibility_only": false,
       "staging_auth_matrix": true
     },
+    "telnexa-gateway": {
+      "command_scope": "sms.events.publish",
+      "status_scope": "sms.events.read",
+      "connector_commands_allowed": false,
+      "allowed_command_prefixes": [],
+      "allowed_targets": [],
+      "compatibility_only": false,
+      "staging_auth_matrix": true
+    },
     "kong-gateway": {
       "command_scope": "middleware.request.forward",
       "status_scope": "middleware.status.read",

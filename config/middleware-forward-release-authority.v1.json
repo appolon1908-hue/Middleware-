@@ -84,7 +84,7 @@
       "vulnerabilityGate": "PASS",
       "verification": "PASS"
     },
-    "requiredMigrationHistorySha256": "sha256:1b458e363db3adf015563cd833055482bce25dccf130e6ca423d513647b7f2bc"
+    "requiredMigrationHistorySha256": "sha256:8c3c032c20fa72d683f7205811e7aad83a0c2334a8f83364fde508e951c0aaba"
   },
   "runtimeAuthority": {
     "runtimeState": "must_be_proven_at_execution",

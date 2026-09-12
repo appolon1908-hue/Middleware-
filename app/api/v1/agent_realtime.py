@@ -24,7 +24,7 @@ router = APIRouter(tags=["agent-realtime"])
 
 EventType = Literal[
     "call.created",
-    "call.offered",
+    "call.dialing",
     "call.ringing",
     "call.answered",
     "call.connected",
@@ -36,7 +36,11 @@ EventType = Literal[
     "call.hangup",
     "call.completed",
     "call.failed",
-    "call.missed",
+    "call.busy",
+    "call.no_answer",
+    "call.rejected",
+    "call.canceled",
+    "call.timeout",
     "call.disposition.updated",
     "call.recording.started",
     "call.recording.completed",
@@ -44,11 +48,20 @@ EventType = Literal[
 ]
 
 TERMINAL_EVENTS = frozenset(
-    {"call.hangup", "call.completed", "call.failed", "call.missed"}
+    {
+        "call.hangup",
+        "call.completed",
+        "call.failed",
+        "call.busy",
+        "call.no_answer",
+        "call.rejected",
+        "call.canceled",
+        "call.timeout",
+    }
 )
 STATE_RANK = {
     "call.created": 10,
-    "call.offered": 20,
+    "call.dialing": 20,
     "call.ringing": 30,
     "call.answered": 40,
     "call.connected": 50,
@@ -60,7 +73,11 @@ STATE_RANK = {
     "call.hangup": 100,
     "call.completed": 100,
     "call.failed": 100,
-    "call.missed": 100,
+    "call.busy": 100,
+    "call.no_answer": 100,
+    "call.rejected": 100,
+    "call.canceled": 100,
+    "call.timeout": 100,
     "call.disposition.updated": 110,
     "call.recording.started": 55,
     "call.recording.completed": 105,

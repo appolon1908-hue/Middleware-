@@ -12,7 +12,7 @@ from .vicidial_odoo_projection_errors import ProjectionError
 
 LIFECYCLE_EVENT_MAP = {
     "codestra.vicidial.call.lifecycle.created": "call.created",
-    "codestra.vicidial.call.lifecycle.offered": "call.offered",
+    "codestra.vicidial.call.lifecycle.dialing": "call.dialing",
     "codestra.vicidial.call.lifecycle.ringing": "call.ringing",
     "codestra.vicidial.call.lifecycle.answered": "call.answered",
     "codestra.vicidial.call.lifecycle.connected": "call.connected",
@@ -23,7 +23,11 @@ LIFECYCLE_EVENT_MAP = {
     "codestra.vicidial.call.lifecycle.hangup": "call.hangup",
     "codestra.vicidial.call.lifecycle.completed": "call.completed",
     "codestra.vicidial.call.lifecycle.failed": "call.failed",
-    "codestra.vicidial.call.lifecycle.missed": "call.missed",
+    "codestra.vicidial.call.lifecycle.busy": "call.busy",
+    "codestra.vicidial.call.lifecycle.no_answer": "call.no_answer",
+    "codestra.vicidial.call.lifecycle.rejected": "call.rejected",
+    "codestra.vicidial.call.lifecycle.canceled": "call.canceled",
+    "codestra.vicidial.call.lifecycle.timeout": "call.timeout",
 }
 CALL_EVENT_PATH = "/codestra/middleware/v1/call-events"
 CALL_EVENT_STATUS_PATH = "/codestra/middleware/v1/call-events/{event_id}/status"

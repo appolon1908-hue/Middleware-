@@ -40,11 +40,22 @@ log = logging.getLogger("codestra.vicidial_odoo_projection.lifecycle_sync")
 # for lifecycle_state (idempotent under JetStream at-least-once redelivery).
 _STATE_RANK = {"STARTED": 1, "CONNECTED": 2, "ENDED": 3}
 
-_STARTED_TYPES = frozenset({"call.created", "call.offered", "call.ringing"})
+_STARTED_TYPES = frozenset({"call.created", "call.dialing", "call.ringing"})
 _CONNECTED_TYPES = frozenset(
     {"call.answered", "call.connected", "call.held", "call.resumed"}
 )
-_ENDED_TYPES = frozenset({"call.hangup", "call.completed", "call.failed", "call.missed"})
+_ENDED_TYPES = frozenset(
+    {
+        "call.hangup",
+        "call.completed",
+        "call.failed",
+        "call.busy",
+        "call.no_answer",
+        "call.rejected",
+        "call.canceled",
+        "call.timeout",
+    }
+)
 # Recognized by Odoo's call_event_projection.py taxonomy but not part of the
 # coarse STARTED/CONNECTED/ENDED progression -- still worth recording in
 # last_event_type/last_event_at for read-side visibility.
@@ -54,7 +65,11 @@ _NON_COARSE_TYPES = frozenset(
 _DISPOSITION_BY_TYPE = {
     "call.completed": "COMPLETED",
     "call.failed": "FAILED",
-    "call.missed": "MISSED",
+    "call.busy": "BUSY",
+    "call.no_answer": "NO_ANSWER",
+    "call.rejected": "REJECTED",
+    "call.canceled": "CANCELED",
+    "call.timeout": "TIMEOUT",
 }
 
 

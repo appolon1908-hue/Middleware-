@@ -209,6 +209,52 @@ async def test_dispatcher_sets_disposition_and_hangup_cause_on_completion(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event_type,expected_disposition",
+    [
+        ("codestra.vicidial.call.lifecycle.busy", "BUSY"),
+        ("codestra.vicidial.call.lifecycle.no_answer", "NO_ANSWER"),
+        ("codestra.vicidial.call.lifecycle.rejected", "REJECTED"),
+        ("codestra.vicidial.call.lifecycle.canceled", "CANCELED"),
+        ("codestra.vicidial.call.lifecycle.timeout", "TIMEOUT"),
+    ],
+)
+async def test_dispatcher_sets_disposition_for_each_pre_answer_terminal_outcome(
+    engine, session_factory, tmp_path: Path, event_type: str, expected_disposition: str
+) -> None:
+    """These five terminal outcomes never reach ANSWERED/CONNECTED --
+    each is a distinct pre-answer outcome now that the AMI gateway (see
+    Vicidialer-Codestra#55) stopped collapsing them into one "missed"
+    bucket. The dispatcher must reach ENDED with the correct disposition
+    directly from STARTED, without ever having seen a CONNECTED event."""
+    correlation_id = f"vici-call-sync-{uuid4().hex[:12]}"
+    await _seed_call(engine, correlation_id=correlation_id)
+    state = ProjectionState(tmp_path / "projection.sqlite3")
+    dispatcher = Mock(spec=OdooCallEventDispatcher, wraps=NoOpDispatcher())
+
+    await handle_message(
+        FakeMessage(
+            _envelope(
+                event_type=event_type,
+                correlation_id=correlation_id,
+                sequence=2,
+                hangup_cause=expected_disposition,
+            ).model_dump_json().encode()
+        ),
+        settings=Mock(spec=ProjectionSettings, synthetic_only=True),
+        state=state,
+        dispatcher=dispatcher,
+        session_factory=session_factory,
+    )
+
+    row = await _fetch_call(engine, correlation_id=correlation_id)
+    assert row["lifecycle_state"] == "ENDED"
+    assert row["connected_at"] is None
+    assert row["ended_at"] is not None
+    assert row["disposition"] == expected_disposition
+
+
+@pytest.mark.asyncio
 async def test_out_of_order_redelivery_does_not_regress_state(
     engine, session_factory, tmp_path: Path
 ) -> None:

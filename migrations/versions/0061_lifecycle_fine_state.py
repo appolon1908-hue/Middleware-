@@ -3,8 +3,9 @@
 telephony_call_lifecycle only tracks a coarse STARTED/CONNECTED/ENDED
 state (see 0014_telephony_call_lifecycle.py), which is much coarser than
 the VICIdial-sourced event taxonomy already flowing through the NATS
-projection pipeline (call.offered/ringing/answered/connected/held/
-transferring/hangup/completed/failed/missed -- see
+projection pipeline (call.dialing/ringing/answered/connected/held/
+transferring/hangup/completed/failed/busy/no_answer/rejected/canceled/
+timeout -- see
 app/vicidial_odoo_projection_lifecycle_sync.py and Odoo's matching
 CALL_EVENTS taxonomy in call_event_projection.py). This is purely
 additive: the existing coarse columns and their consumers are untouched.

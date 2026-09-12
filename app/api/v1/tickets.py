@@ -17,7 +17,12 @@ from app.adapters.odoo.crm_bridge_client import (
     OdooCrmBridgeClient,
     get_crm_bridge_client,
 )
-from app.api.v1.crm_common import call_bridge, correlation_id, idempotency_key
+from app.api.v1.crm_common import (
+    call_bridge,
+    correlation_id,
+    ensure_bridge_tenant,
+    idempotency_key,
+)
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
     require_provisioning_scope,
@@ -37,6 +42,7 @@ async def list_tickets(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(client.list_tickets(correlation_id=cid, limit=limit, offset=offset))
 
@@ -50,6 +56,7 @@ async def create_ticket(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.create_ticket(payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid))
@@ -65,6 +72,7 @@ async def get_ticket(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(client.get_ticket(ticket_id, correlation_id=cid))
 
@@ -79,6 +87,7 @@ async def update_ticket(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.update_ticket(

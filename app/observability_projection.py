@@ -163,7 +163,7 @@ class ObservabilityOdooProjection:
                     """,
                     event_id,
                     "kyyow.observability.incident.state.v1",
-                    "kyyow.observability.incident.v1",
+                    "1.0",
                     event_id,
                     f"{incident.tenant_id}:{incident.incident_id}",
                     "kyyow-observability-alerts",

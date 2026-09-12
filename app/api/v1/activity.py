@@ -188,7 +188,7 @@ async def get_activity(
     source, _, raw_id = activity_id.partition(":")
 
     if source == "agent_provisioning_audit":
-        stmt = (
+        provisioning_stmt = (
             select(AgentProvisioningAudit, AgentProvisioningRequest.employee_id)
             .join(
                 AgentProvisioningRequest,
@@ -199,17 +199,17 @@ async def get_activity(
                 AgentProvisioningRequest.tenant_id == tenant_id,
             )
         )
-        row = (await session.execute(stmt)).first()
+        row = (await session.execute(provisioning_stmt)).first()
         if row is None:
             raise HTTPException(404, "activity not found for this tenant")
         audit, employee_id = row
         out = _provisioning_audit_out(audit, tenant_id, employee_id)
     elif source == "audit_event":
-        stmt = select(AuditEvent).where(
+        audit_stmt = select(AuditEvent).where(
             AuditEvent.id == UUID(raw_id),
             AuditEvent.redacted_payload["business_unit"].astext == tenant_id,
         )
-        row = (await session.execute(stmt)).scalar_one_or_none()
+        row = (await session.execute(audit_stmt)).scalar_one_or_none()
         if row is None:
             raise HTTPException(404, "activity not found for this tenant")
         out = _audit_event_out(row)

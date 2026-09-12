@@ -105,6 +105,9 @@ def _ensure_header(parameters: list[dict[str, Any]], name: str) -> None:
             )
         ):
             raise ValueError(f"operation declares a non-canonical {name} contract")
+        # Header titles vary with the installed Pydantic/FastAPI patch level;
+        # they are presentation metadata, not part of this canonical contract.
+        actual_schema.pop("title", None)
     else:
         # Header contracts are immutable module constants. Reusing each object
         # also keeps the YAML artifact compact through safe-dumper anchors.

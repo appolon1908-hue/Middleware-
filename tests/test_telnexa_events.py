@@ -6,6 +6,7 @@ import hmac
 import json
 import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -15,11 +16,12 @@ from starlette.requests import Request
 from app.api.internal.telnexa_events import (
     PATH,
     TelnexaDeliveryEvent,
+    _effective_status,
     _project_message,
     receive_telnexa_event,
     router,
 )
-from app.communications import CommunicationMessage
+from app.communications import CommunicationMessage, MemoryCommunicationsStore
 from app.core.config import settings
 
 
@@ -269,6 +271,48 @@ def test_missing_communication_message_is_retryable_not_acknowledged(
     assert database.commit_count == 1
 
 
+def test_nonterminal_callbacks_are_monotonic() -> None:
+    assert _effective_status("dispatched", "queued") == ("dispatched", True)
+    assert _effective_status("queued", "accepted") == ("queued", True)
+    assert _effective_status("accepted", "dispatched") == ("dispatched", False)
+
+
+def test_projection_refreshes_the_active_communications_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure(monkeypatch)
+    message = _message()
+    body = _event(message)
+    store = MemoryCommunicationsStore()
+    request = _request(body, _headers(body))
+    request.scope["app"] = SimpleNamespace(
+        state=SimpleNamespace(
+            runtime=SimpleNamespace(
+                communications=SimpleNamespace(store=store),
+            ),
+        ),
+    )
+
+    asyncio.run(receive_telnexa_event(request, Response(), _Session(message)))
+
+    assert store.messages[(message.tenantId, message.messageId)].status == "delivered"
+    assert len(store.events[(message.tenantId, message.messageId)]) == 1
+
+
+def test_chunked_body_limit_is_enforced_before_json_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure(monkeypatch)
+    monkeypatch.setattr(settings, "telnexa_event_request_max_bytes", 16)
+    message = _message()
+    body = _event(message)
+    with pytest.raises(Exception) as error:
+        asyncio.run(
+            receive_telnexa_event(_request(body, _headers(body)), Response(), _Session(message))
+        )
+    assert error.value.status_code == 413
+
+
 def test_message_projection_rejects_cross_tenant_or_non_sms_records() -> None:
     message = _message()
     event = TelnexaDeliveryEvent.model_validate(
@@ -277,4 +321,3 @@ def test_message_projection_rejects_cross_tenant_or_non_sms_records() -> None:
     with pytest.raises(Exception) as error:
         _project_message(event, {**message.model_dump(mode="json"), "tenantId": "other"})
     assert error.value.status_code == 409
-

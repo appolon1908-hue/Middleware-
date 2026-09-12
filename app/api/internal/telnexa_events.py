@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -100,6 +101,7 @@ TELNEXA_REQUIRED_HEADERS = (
 )
 
 router = APIRouter(tags=["telnexa-events"])
+LOGGER = logging.getLogger(__name__)
 
 
 class TelnexaDeliveryEvent(BaseModel):
@@ -282,17 +284,49 @@ def _event_message_uuid(tenant_id: str, event_id: str) -> UUID:
 _TERMINAL_STATUSES = frozenset(
     {"delivered", "failed", "cancelled", "suppressed", "expired"}
 )
+_NONTERMINAL_STATUS_RANK = {
+    "accepted": 0,
+    "queued": 1,
+    "dispatched": 2,
+}
 
 
 def _effective_status(
     current: MessageStatus, incoming: TelnexaStatus
 ) -> tuple[MessageStatus, bool]:
     # Provider callbacks are allowed to arrive late or out of order.  A
-    # terminal projection is sticky; the callback is still retained as
+    # terminal projection is sticky, and the accepted -> queued -> dispatched
+    # progression cannot move backwards. The callback is still retained as
     # evidence in the immutable timeline and analytics table.
     if current in _TERMINAL_STATUSES and incoming != current:
         return current, True
+    if (
+        current in _NONTERMINAL_STATUS_RANK
+        and incoming in _NONTERMINAL_STATUS_RANK
+        and _NONTERMINAL_STATUS_RANK[incoming]
+        < _NONTERMINAL_STATUS_RANK[current]
+    ):
+        return current, True
     return incoming, False
+
+
+async def _read_limited_body(request: Request, maximum: int) -> bytes:
+    """Read a request incrementally so chunked bodies cannot bypass the cap."""
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > maximum:
+                raise HTTPException(413, "telnexa_event_too_large")
+        except ValueError as exc:
+            raise HTTPException(400, "invalid_content_length") from exc
+
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > maximum:
+            raise HTTPException(413, "telnexa_event_too_large")
+    return bytes(body)
 
 
 def _payload_value(value: object) -> dict[str, object]:
@@ -431,14 +465,12 @@ async def receive_telnexa_event(
         raise HTTPException(503, "telnexa_event_ingress_disabled")
     if not _runtime_setting(request, "sms_delivery", False):
         raise HTTPException(503, "sms_delivery_disabled")
-    body = await request.body()
     request_max = int(
         _runtime_setting(request, "telnexa_event_request_max_bytes", 1_048_576)
     )
     if request_max <= 0:
         raise HTTPException(503, "telnexa_request_configuration_invalid")
-    if len(body) > request_max:
-        raise HTTPException(413, "telnexa_event_too_large")
+    body = await _read_limited_body(request, request_max)
     content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
     if content_type != "application/json":
         raise HTTPException(415, "application_json_required")
@@ -596,6 +628,36 @@ async def receive_telnexa_event(
             {"event_id": event.event_id},
         )
         await db.commit()
+        app = request.scope.get("app")
+        runtime = getattr(getattr(app, "state", None), "runtime", None)
+        communications = getattr(runtime, "communications", None)
+        store = getattr(communications, "store", None)
+        if store is not None:
+            try:
+                store.messages[(event.tenant_id, event.message_id)] = updated.model_copy(
+                    deep=True
+                )
+                store.add_event(
+                    event.tenant_id,
+                    event.message_id,
+                    event_type=event.event_type,
+                    status=effective_status,
+                    provider=SOURCE,
+                    provider_reference=event.provider_reference,
+                    metadata={
+                        "providerStatus": event.provider_status,
+                        "providerEventId": event.event_id,
+                        "ignoredTransition": ignored,
+                    },
+                    event_id=timeline_event_id,
+                    occurred_at=event.occurred_at,
+                )
+            except Exception:
+                # The database transaction is already committed.  A cache
+                # refresh failure must not make Telnexa retry a durable event.
+                LOGGER.exception(
+                    "failed to refresh communications cache after Telnexa event"
+                )
     except HTTPException:
         await db.rollback()
         raise
@@ -612,4 +674,3 @@ async def receive_telnexa_event(
         "message_id": str(event.message_id),
         "communication_status": effective_status,
     }
-

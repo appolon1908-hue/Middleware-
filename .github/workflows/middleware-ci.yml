@@ -188,6 +188,36 @@ jobs:
             .
           docker run --rm "codestra-middleware-test-ci:$SOURCE_SHA"
 
+      - name: Capture generated API contracts for parity repair
+        if: always()
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          container="codestra-middleware-contracts-${SOURCE_SHA}"
+          workdir="${RUNNER_TEMP}/generated-contracts"
+          mkdir -p "${workdir}"
+          docker create --name "${container}" --entrypoint python \
+            "codestra-middleware-test-ci:${SOURCE_SHA}" \
+            scripts/generate_api_contracts.py >/dev/null
+          set +e
+          docker start --attach "${container}" >"${workdir}/generator.log" 2>&1
+          status=$?
+          set -e
+          cat "${workdir}/generator.log"
+          for file in \
+            contracts/platform/middleware-openapi.generated.json \
+            contracts/platform/integration-fabric-api.v2.yaml \
+            config/api-completion-matrix.yaml; do
+            name="$(basename "${file}")"
+            docker cp "${container}:/app/${file}" "${workdir}/${name}"
+            printf 'BEGIN_GENERATED_CONTRACT_%s\n' "${name}"
+            base64 -w0 "${workdir}/${name}"
+            printf '\nEND_GENERATED_CONTRACT_%s\n' "${name}"
+          done
+          docker rm "${container}" >/dev/null
+          test "${status}" -eq 0
+
       - name: Rebuild test target and enforce OpenSSL policy
         env:
           SOURCE_SHA: ${{ github.sha }}

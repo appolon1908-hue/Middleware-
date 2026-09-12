@@ -75,10 +75,10 @@ def _nested_keys(value: object) -> list[str]:
             keys.extend(_nested_keys(nested))
         return keys
     if isinstance(value, list):
-        keys: list[str] = []
+        collected: list[str] = []
         for nested in value:
-            keys.extend(_nested_keys(nested))
-        return keys
+            collected.extend(_nested_keys(nested))
+        return collected
     return []
 
 

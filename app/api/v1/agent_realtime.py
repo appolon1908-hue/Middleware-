@@ -17,7 +17,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.webphone import BrowserIdentity, browser_identity
 from app.core.config import settings
-from app.db.models import AgentCallEvent, AgentCallState
+from app.core.provisioning_auth import (
+    ProvisioningPrincipal,
+    require_provisioning_scope,
+    require_tenant_match,
+)
+from app.db.models import (
+    AgentCallEvent,
+    AgentCallState,
+    AgentProvisioningRequest,
+    TelephonyExtensionReservation,
+)
 from app.db.session import SessionFactory, get_session
 
 router = APIRouter(tags=["agent-realtime"])
@@ -124,16 +134,83 @@ async def _publish(event: AgentEventEnvelope, applied: bool) -> None:
         await redis.aclose()
 
 
+async def _authorize_agent_event(
+    db: AsyncSession, principal: ProvisioningPrincipal, event: AgentEventEnvelope,
+) -> None:
+    """Reject an event whose campaign/extension the caller cannot prove.
+
+    Two paths:
+
+    1. The staging fixture (``campaign_id``/``extension`` exactly matching
+       the single hardcoded ``webphone_staging_campaign``/
+       ``webphone_staging_endpoint`` pair) - preserved as-is so the existing
+       staging flow this module was built for keeps working unchanged.
+    2. Every other campaign/extension: a real, per-caller check. The
+       caller's own token must cover ``event.tenant_id`` (the same
+       ``require_tenant_match`` every other provisioning-scoped endpoint in
+       this codebase already uses), ``event.agent_id`` must have a
+       desired-state campaign membership entry for ``event.campaign_id`` in
+       its most recent ``AgentProvisioningRequest`` (the same durable
+       source ``app.api.v1.agent_provisioning_reads.get_user_campaigns``
+       already reads - not a second, parallel campaign-membership store),
+       and ``event.extension`` must be an active
+       ``TelephonyExtensionReservation`` row for that same employee_id.
+
+    ASSUMPTION FLAGGED FOR REVIEW: this treats the envelope's ``agent_id``
+    as the same identifier space as ``AgentProvisioningRequest``/
+    ``TelephonyExtensionReservation``'s ``employee_id`` - both are
+    documented elsewhere in this codebase as VICIdial/Odoo-originated agent
+    identifiers, but no single source in this file's own history confirms
+    they are always identical strings. Confirm against the actual
+    VICIdial/Odoo agent-identity mapping before relying on this in
+    production; until then this check is strictly more real than the two
+    hardcoded constants it replaces, not a claim of a fully verified join.
+    """
+    if (
+        event.campaign_id == settings.webphone_staging_campaign
+        and event.extension == settings.webphone_staging_endpoint
+    ):
+        return
+    require_tenant_match(principal, event.tenant_id)
+    stmt = (
+        select(AgentProvisioningRequest)
+        .where(
+            AgentProvisioningRequest.tenant_id == event.tenant_id,
+            AgentProvisioningRequest.employee_id == event.agent_id,
+        )
+        .order_by(AgentProvisioningRequest.created_at.desc(), AgentProvisioningRequest.id.desc())
+        .limit(1)
+    )
+    request = await db.scalar(stmt)
+    campaign_ids = {
+        entry.get("campaign_id")
+        for entry in (request.campaigns_json or [])
+        if isinstance(entry, dict)
+    } if request else set()
+    if event.campaign_id not in campaign_ids:
+        raise HTTPException(403, "campaign denied")
+    reservation = await db.scalar(
+        select(TelephonyExtensionReservation).where(
+            TelephonyExtensionReservation.employee_id == event.agent_id,
+            TelephonyExtensionReservation.extension == int(event.extension),
+            TelephonyExtensionReservation.state.in_(("RESERVED", "DISABLED_READY", "ACTIVE")),
+        )
+    )
+    if reservation is None:
+        raise HTTPException(403, "extension denied")
+
+
 @router.post("/api/v1/agent/events", status_code=202)
 async def ingest_agent_event(
-    event: AgentEventEnvelope, db: AsyncSession = Depends(get_session)
+    event: AgentEventEnvelope,
+    db: AsyncSession = Depends(get_session),
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
 ) -> dict[str, Any]:
     if not settings.agent_websocket_enabled:
         raise HTTPException(503, "agent realtime disabled")
-    if event.extension != settings.webphone_staging_endpoint:
-        raise HTTPException(403, "extension denied")
-    if event.campaign_id != settings.webphone_staging_campaign:
-        raise HTTPException(403, "campaign denied")
+    await _authorize_agent_event(db, principal, event)
     duplicate = await db.scalar(
         select(AgentCallEvent).where(
             (AgentCallEvent.event_id == event.event_id)

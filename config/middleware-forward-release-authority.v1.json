@@ -12,7 +12,7 @@
     "imageRepository": "ghcr.io/appolon1908-hue/codestra-middleware",
     "releaseWorkflow": ".github/workflows/release.yml",
     "releaseManifestSchema": "contracts/release-manifest.v1.schema.json",
-    "requiredSchemaHead": "0060_agent_provisioning",
+    "requiredSchemaHead": "0061_telnexa_delivery_events",
     "candidateStatus": "PENDING_EXACT_PROTECTED_MERGE_BUILD",
     "currentSignedCandidate": null,
     "latestVerifiedSignedEvidence": {
@@ -84,7 +84,7 @@
       "vulnerabilityGate": "PASS",
       "verification": "PASS"
     },
-    "requiredMigrationHistorySha256": "sha256:c3bdba94be253068fce801b9b828cd2a03548a8a21f0229aa85829eb7a93c18b"
+    "requiredMigrationHistorySha256": "sha256:c98324049172dda7effaba3d34273f2a4891593264ce8ca8c6dcfbff86b2232a"
   },
   "runtimeAuthority": {
     "runtimeState": "must_be_proven_at_execution",
@@ -93,7 +93,7 @@
     "requiredEvidence": [
       "signed release manifest bound to exact protected-main source",
       "immutable image digest and verified provenance",
-      "schema head 0060_agent_provisioning",
+      "schema head 0061_telnexa_delivery_events",
       "effective source, digest, schema, profile, and capability read-back",
       "backup and isolated restore evidence",
       "rollback rehearsal and data-integrity evidence",

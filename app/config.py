@@ -180,6 +180,14 @@ class Settings:
     odoo_timeout_seconds: int = 20
     release_id: str = "unknown"
     configuration_checksum: str = "unknown"
+    sms_delivery: bool = False
+    telnexa_event_ingress_enabled: bool = False
+    telnexa_event_api_key: str = ""
+    telnexa_event_api_key_file: str = ""
+    telnexa_event_hmac_secret: str = ""
+    telnexa_event_hmac_secret_file: str = ""
+    telnexa_event_signature_ttl_seconds: int = 300
+    telnexa_event_request_max_bytes: int = 1_048_576
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -257,7 +265,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0060_agent_provisioning",
+                "0061_telnexa_delivery_events",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -385,6 +393,34 @@ class Settings:
                 minimum=1,
                 maximum=120,
             ),
+            sms_delivery=_bool(source, "SMS_DELIVERY", False),
+            telnexa_event_ingress_enabled=_bool(
+                source, "TELNEXA_EVENT_INGRESS_ENABLED", False
+            ),
+            telnexa_event_api_key=source.get("TELNEXA_EVENT_API_KEY", "").strip(),
+            telnexa_event_api_key_file=source.get(
+                "TELNEXA_EVENT_API_KEY_FILE", ""
+            ).strip(),
+            telnexa_event_hmac_secret=source.get(
+                "TELNEXA_EVENT_HMAC_SECRET", ""
+            ).strip(),
+            telnexa_event_hmac_secret_file=source.get(
+                "TELNEXA_EVENT_HMAC_SECRET_FILE", ""
+            ).strip(),
+            telnexa_event_signature_ttl_seconds=_int(
+                source,
+                "TELNEXA_EVENT_SIGNATURE_TTL_SECONDS",
+                300,
+                minimum=1,
+                maximum=900,
+            ),
+            telnexa_event_request_max_bytes=_int(
+                source,
+                "TELNEXA_EVENT_REQUEST_MAX_BYTES",
+                1_048_576,
+                minimum=1_024,
+                maximum=10_485_760,
+            ),
         )
         settings.validate()
         return settings
@@ -405,6 +441,25 @@ class Settings:
             raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
         if self.audience != "middleware-api":
             raise ConfigurationError("MIDDLEWARE_AUDIENCE must be middleware-api")
+        if self.telnexa_event_ingress_enabled:
+            if not self.sms_delivery:
+                raise ConfigurationError(
+                    "SMS_DELIVERY must be true before enabling Telnexa event ingress"
+                )
+            if not (
+                self.telnexa_event_api_key
+                or self.telnexa_event_api_key_file
+            ):
+                raise ConfigurationError(
+                    "TELNEXA_EVENT_API_KEY or TELNEXA_EVENT_API_KEY_FILE is required"
+                )
+            if not (
+                self.telnexa_event_hmac_secret
+                or self.telnexa_event_hmac_secret_file
+            ):
+                raise ConfigurationError(
+                    "TELNEXA_EVENT_HMAC_SECRET or TELNEXA_EVENT_HMAC_SECRET_FILE is required"
+                )
         self._validate_environment_profile()
         enabled = {
             name for name, value in self.external_effects.items() if value
@@ -604,9 +659,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0060_agent_provisioning":
+        if self.schema_head != "0061_telnexa_delivery_events":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0060_agent_provisioning"
+                "SCHEMA_HEAD must be 0061_telnexa_delivery_events"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):

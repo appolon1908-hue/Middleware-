@@ -63,6 +63,7 @@ EXPECTED_INCLUDED_ROUTERS = {
     "compatibility_api_router": "compatibility_api",
     "domain_api_router": "domain_api",
     "webhook_api_router": "webhook_api",
+    "telnexa_events_router": "api.internal.telnexa_events",
     "monitoring_router": "monitoring.routes",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}

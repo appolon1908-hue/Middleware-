@@ -39,6 +39,12 @@ operations:
   canonical_operation_id: provider_control_social_publish_request_api_v1_control_social_publications_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: events
+  method: POST
+  path: /api/v1/events/telnexa
+  canonical_operation_id: receive_telnexa_event_api_v1_events_telnexa_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: inbox
   method: GET
   path: /api/v1/inbox

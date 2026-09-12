@@ -8396,6 +8396,203 @@ paths:
       - *id001
       - *id003
       - *id004
+  /v1/observability/kpis:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: List Kpis
+      operationId: list_kpis_v1_observability_kpis_get
+      parameters:
+      - name: service_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            enum:
+            - development
+            - test
+            - staging
+            - production
+          - type: 'null'
+          title: Environment
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/incidents:
+    post:
+      tags:
+      - kyyow-observability-sync
+      summary: Submit Incident
+      operationId: submit_incident_v1_observability_incidents_post
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentState'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/kpis/{event_id}:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: Get Kpi
+      operationId: get_kpi_v1_observability_kpis__event_id__get
+      parameters:
+      - name: event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Event Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /v1/observability/odoo-sync:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: Odoo Sync Status
+      operationId: odoo_sync_status_v1_observability_odoo_sync_get
+      parameters:
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
 components:
   schemas:
     ApprovalRequest:
@@ -10582,6 +10779,259 @@ components:
       - msg
       - type
       title: ValidationError
+    KpiSnapshot:
+      properties:
+        event_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Event Id
+        schema_version:
+          type: string
+          const: kyyow.observability.kpi.v1
+          title: Schema Version
+        tenant_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Tenant Id
+        metric_code:
+          type: string
+          maxLength: 96
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_.:-]*$
+          title: Metric Code
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        period_reference:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:/-]*$
+          title: Period Reference
+        period_start:
+          type: string
+          format: date-time
+          title: Period Start
+        period_end:
+          type: string
+          format: date-time
+          title: Period End
+        value:
+          type: number
+          title: Value
+        unit:
+          type: string
+          maxLength: 32
+          minLength: 1
+          pattern: ^[A-Za-z][A-Za-z0-9_.%/-]{0,31}$
+          title: Unit
+        dimensions:
+          type: object
+          title: Dimensions
+        source:
+          type: string
+          maxLength: 96
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:/-]*$
+          title: Source
+        source_revision:
+          type: integer
+          minimum: 1.0
+          title: Source Revision
+        source_payload_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Source Payload Hash
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        reconciliation_state:
+          type: string
+          enum:
+          - accepted
+          - reconciled
+          - drifted
+          - pending
+          title: Reconciliation State
+        correlation_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Correlation Id
+        projection_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Projection Hash
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - tenant_id
+      - metric_code
+      - service_id
+      - environment
+      - period_reference
+      - period_start
+      - period_end
+      - value
+      - unit
+      - source
+      - source_revision
+      - source_payload_hash
+      - observed_at
+      - reconciliation_state
+      - correlation_id
+      - projection_hash
+      title: KpiSnapshot
+    IncidentState:
+      properties:
+        event_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Event Id
+        schema_version:
+          type: string
+          const: kyyow.observability.incident.v1
+          title: Schema Version
+        tenant_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Tenant Id
+        incident_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Incident Id
+        fingerprint:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:/-]+$
+          title: Fingerprint
+        alertname:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          title: Alertname
+        group_key:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Group Key
+        severity:
+          type: string
+          enum:
+          - critical
+          - high
+          - warning
+          - info
+          title: Severity
+        state:
+          type: string
+          enum:
+          - firing
+          - acknowledged
+          - resolved
+          - inhibited
+          - silenced
+          title: State
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        host:
+          type: string
+          maxLength: 128
+          default: ''
+          title: Host
+        summary:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Summary
+        labels:
+          type: object
+          title: Labels
+        first_seen_at:
+          type: string
+          format: date-time
+          title: First Seen At
+        last_seen_at:
+          type: string
+          format: date-time
+          title: Last Seen At
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+        source_deployment:
+          type: string
+          maxLength: 128
+          minLength: 3
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:/-]+$
+          title: Source Deployment
+        resource_version:
+          type: integer
+          minimum: 1.0
+          title: Resource Version
+        source_payload_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Source Payload Hash
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        correlation_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Correlation Id
+        projection_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Projection Hash
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - tenant_id
+      - incident_id
+      - fingerprint
+      - alertname
+      - group_key
+      - severity
+      - state
+      - service_id
+      - environment
+      - summary
+      - first_seen_at
+      - last_seen_at
+      - source_deployment
+      - resource_version
+      - source_payload_hash
+      - observed_at
+      - correlation_id
+      - projection_hash
+      title: IncidentState
   securitySchemes:
     HTTPBearer:
       type: http

@@ -20,7 +20,12 @@ from app.adapters.odoo.crm_bridge_client import (
     OdooCrmBridgeClient,
     get_crm_bridge_client,
 )
-from app.api.v1.crm_common import call_bridge, correlation_id, idempotency_key
+from app.api.v1.crm_common import (
+    call_bridge,
+    correlation_id,
+    ensure_bridge_tenant,
+    idempotency_key,
+)
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
     require_provisioning_scope,
@@ -40,6 +45,7 @@ async def list_contacts(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(client.list_contacts(correlation_id=cid, limit=limit, offset=offset))
 
@@ -53,6 +59,7 @@ async def get_contact(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(client.get_contact(contact_id, correlation_id=cid))
 
@@ -66,6 +73,7 @@ async def create_contact(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.create_contact(payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid))
@@ -82,6 +90,7 @@ async def update_contact(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.update_contact(
@@ -99,6 +108,7 @@ async def list_notes(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(client.list_notes(contact_id, correlation_id=cid))
 
@@ -113,6 +123,7 @@ async def create_note(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.create_note(
@@ -135,6 +146,7 @@ async def update_note(
     # directive) for URL symmetry with the read side; the bridge scopes notes
     # by note_id alone, same as codestra_middleware_bridge's own routing.
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.update_note(
@@ -152,6 +164,7 @@ async def list_tasks(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(client.list_tasks(contact_id, correlation_id=cid))
 
@@ -166,6 +179,7 @@ async def create_task(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.create_task(
@@ -184,6 +198,7 @@ async def update_task(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.update_task(
@@ -201,6 +216,7 @@ async def complete_task(
     client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     require_tenant_match(principal, tenant_id)
+    ensure_bridge_tenant(client, tenant_id)
     cid = correlation_id(request)
     return await call_bridge(
         client.complete_task(task_id, {}, correlation_id=cid, idempotency_key=idempotency_key(request, cid))

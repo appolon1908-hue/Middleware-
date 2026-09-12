@@ -31,6 +31,7 @@ from .observability_alert_contract import (
     load_policy,
     require_alert_operation,
 )
+from .observability_projection import ObservabilityOdooProjection
 from .observability_incidents import (
     AlertmanagerStatusSnapshot,
     IncidentConflict,
@@ -185,6 +186,9 @@ def create_app(
             policy=active_policy,
             delivery_enabled=delivery_enabled,
         )
+        app.state.odoo_projection = ObservabilityOdooProjection(
+            getattr(incident_store, "pool", None)
+        )
         app.state.runtime = active
         try:
             yield
@@ -200,6 +204,18 @@ def create_app(
         redoc_url=None,
     )
     app.state.metrics = {"ingested": 0, "duplicates": 0, "status_sync": 0}
+
+    async def project_incident(request: Request, incident) -> None:
+        projection = request.app.state.odoo_projection
+        # Memory-only alert runtimes deliberately have no Odoo queue. Keep
+        # local incident behavior usable while production Postgres runtimes
+        # fail closed if their durable projection queue is unavailable.
+        if not projection.enabled:
+            return
+        try:
+            await projection.enqueue_incident(incident)
+        except Exception as exc:
+            raise StorageError("observability Odoo projection queue unavailable") from exc
 
     @app.exception_handler(SecurityError)
     async def security_error(request: Request, exc: SecurityError) -> JSONResponse:
@@ -365,6 +381,7 @@ def create_app(
                     source_deployment=deployment,
                     request_idempotency_key=supplied_idempotency,
                 )
+                await project_incident(request, result.incident)
             except (IncidentConflict, CommandError, StorageError) as exc:
                 if not native or len(webhook.alerts) == 1:
                     raise
@@ -514,6 +531,7 @@ def create_app(
                     }
                 )
                 continue
+            await project_incident(request, incident)
             value = incident.model_dump(mode="json")
             value["result_status"] = "duplicate" if incident.duplicate else "applied"
             items.append(value)
@@ -664,6 +682,7 @@ def create_app(
             expected_version=mutation.expected_version,
             reason=mutation.reason,
         )
+        await project_incident(request, incident)
         return JSONResponse(
             content=incident.model_dump(mode="json"),
             headers={"X-Correlation-ID": correlation_id},

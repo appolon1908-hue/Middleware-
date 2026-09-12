@@ -16,3 +16,16 @@ The release controller mounts reviewed configuration and artifacts in Middleware
 Keep native backends private. Send UI reads through authenticated Middleware/BFF routes, never browser-held backend credentials. Use release-mounted secrets, approved targets/query templates, tenant and campaign scopes, and structured redacted telemetry. Service registration, green CI and successful ingestion are distinct from verified production coverage.
 
 Acceptance requires the exact source CI result, approved immutable release, registered service/endpoint contracts, fresh telemetry, private authentication, a synthetic alert and recovery evidence. Production activation remains separate. This commit adds the repository's design/onboarding record; it does not instrument or deploy its application.
+
+
+## Kyyow observability → Odoo projection
+
+The canonical cross-repository contract is [contracts/observability/odoo-sync.v1.json](contracts/observability/odoo-sync.v1.json). Middleware owns the authenticated API boundary and the durable `odoo_result_delivery` queue; Odoo owns the business records.
+
+- `POST /v1/observability/kpis` accepts a bounded, hashed KPI snapshot and queues Odoo delivery.
+- `POST /v1/observability/incidents` accepts versioned Alertmanager incident state and queues the Odoo incident projection.
+- `GET /v1/observability/kpis`, `/kpis/{event_id}`, and `/odoo-sync` expose tenant-scoped projection and delivery status.
+- Alertmanager status changes use the same incident identity and queue; acknowledgements, resolutions, and reopens do not create a second business incident.
+- Prometheus, Alertmanager, Grafana, exporters, Loki, Tempo, Superset, and OpenBao do not write Odoo directly.
+
+Activation stays fail-closed until OIDC credentials, tenant allowlists, endpoint-registry approval, Odoo ORM routes, and release evidence are present.

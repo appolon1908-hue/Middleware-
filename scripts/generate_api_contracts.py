@@ -105,6 +105,9 @@ def _ensure_header(parameters: list[dict[str, Any]], name: str) -> None:
             )
         ):
             raise ValueError(f"operation declares a non-canonical {name} contract")
+        # Header titles vary with the installed Pydantic/FastAPI patch level;
+        # they are presentation metadata, not part of this canonical contract.
+        actual_schema.pop("title", None)
     else:
         # Header contracts are immutable module constants. Reusing each object
         # also keeps the YAML artifact compact through safe-dumper anchors.
@@ -132,11 +135,19 @@ def _normalize_schema_defaults(value: Any) -> None:
         # locked Python environments used by this repository.
         if value.get("additionalProperties") is True:
             del value["additionalProperties"]
-        for child in value.values():
-            _normalize_schema_defaults(child)
+        if "default" in value and value["default"] is None:
+            del value["default"]
+        for key, child in list(value.items()):
+            if isinstance(child, float) and child.is_integer():
+                value[key] = int(child)
+            else:
+                _normalize_schema_defaults(child)
     elif isinstance(value, list):
-        for child in value:
-            _normalize_schema_defaults(child)
+        for index, child in enumerate(value):
+            if isinstance(child, float) and child.is_integer():
+                value[index] = int(child)
+            else:
+                _normalize_schema_defaults(child)
 
 
 def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:

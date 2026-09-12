@@ -101,17 +101,24 @@ async def deliver_result(
     )
     standard_delivery = False
     provider_activity_delivery = False
+    observability_delivery = False
     if standard_event is not None and result.standard_result_json is not None:
         standard_delivery = True
-        provider_activity_delivery = result.standard_result_json.get("operation") in {
+        operation = result.standard_result_json.get("operation")
+        provider_activity_delivery = operation in {
             "log_call_result",
             "log_inbound_sms",
         }
-        body = (
-            _provider_activity_body(result, standard_event)
-            if provider_activity_delivery
-            else _campaign_action_body(result, standard_event)
-        )
+        observability_delivery = operation in {
+            "observability.kpis.create",
+            "observability.incidents.upsert",
+        }
+        if observability_delivery:
+            body = _observability_body(result, standard_event)
+        elif provider_activity_delivery:
+            body = _provider_activity_body(result, standard_event)
+        else:
+            body = _campaign_action_body(result, standard_event)
         correlation_id = standard_event.correlation_id
         causation_id = standard_event.original_event_id
     elif runtime_result is not None and runtime_execution is not None:
@@ -144,6 +151,8 @@ async def deliver_result(
             response = await service_client.request(
                 "provider_activities.create"
                 if provider_activity_delivery
+                else result.standard_result_json["operation"]
+                if observability_delivery and result.standard_result_json is not None
                 else "campaign_actions.apply"
                 if standard_delivery
                 else "results.create",
@@ -205,6 +214,15 @@ async def deliver_result(
             "operation": result.standard_result_json["operation"],
             "correlation_id": correlation_id,
         }
+    elif observability_delivery:
+        assert standard_event is not None
+        assert result.standard_result_json is not None
+        required = {
+            "status": "APPLIED",
+            "event_id": standard_event.original_event_id,
+            "operation": result.standard_result_json["operation"],
+            "correlation_id": correlation_id,
+        }
     elif standard_delivery:
         assert standard_event is not None
         assert result.standard_result_json is not None
@@ -233,13 +251,22 @@ async def deliver_result(
     result.reserved_at = None
     result.next_attempt_at = None
     result.last_error_class = None
-    result.odoo_result_inbox_id = str(
+    receipt_id = (
         accepted.get("message_id")
         if provider_activity_delivery
         else accepted.get("receipt_id")
-        if standard_delivery
-        else accepted.get("result_inbox_id", accepted["result_public_id"])
+        if standard_delivery or observability_delivery
+        else accepted.get("result_inbox_id") or accepted.get("result_public_id")
     )
+    if not receipt_id:
+        await _record_delivery_failure(
+            session,
+            result_delivery_id,
+            error_class="RESPONSE_RECEIPT_MISSING",
+            retryable=False,
+        )
+        raise OdooResultError("Odoo response receipt is missing")
+    result.odoo_result_inbox_id = str(receipt_id)
     result.response_hash = canonical_hash(accepted)
     await session.commit()
     return accepted
@@ -329,6 +356,27 @@ def _acknowledgement_result_body(
         "reconciliation_status": "RECONCILED",
         "payload": {"summary": "internal reconciliation completed"},
     }
+
+
+def _observability_body(
+    delivery: OdooResultDelivery,
+    event: IntegrationEvent,
+) -> dict[str, Any]:
+    result = delivery.standard_result_json or {}
+    operation = result.get("operation")
+    if operation not in {
+        "observability.kpis.create",
+        "observability.incidents.upsert",
+    }:
+        raise OdooResultError("unsupported observability operation")
+    payload = dict(event.payload_json)
+    # The transport idempotency key is the durable delivery identity supplied
+    # in the signed header. Keep the source key in the queue metadata, not in
+    # the Odoo binding field, so retries bind to the same delivery.
+    payload["idempotency_key"] = str(delivery.result_public_id)
+    payload["operation"] = operation
+    payload["causation_id"] = event.original_event_id
+    return payload
 
 
 def _campaign_action_body(
@@ -534,9 +582,9 @@ def _build_odoo_client(
             verify=str(ca_path),
         ),
         environment=settings.environment,
-        organization_public_id=str(payload["organization_public_id"]),
-        business_unit_public_id=str(payload["business_unit_public_id"]),
-        campaign_public_id=str(payload["campaign_public_id"]),
+        organization_public_id=str(payload.get("organization_public_id", "")),
+        business_unit_public_id=str(payload.get("business_unit_public_id", "")),
+        campaign_public_id=str(payload.get("campaign_public_id", "")),
     )
 
 

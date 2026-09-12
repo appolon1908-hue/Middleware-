@@ -210,6 +210,19 @@ class AuthorizeEmailProduction(BaseModel):
             raise ValueError("approved categories are invalid or duplicated")
         if "marketing" in categories:
             raise ValueError("marketing category requires its separate compliance gate")
+        # Transactional production is intentionally a closed vocabulary.  A
+        # free-form category could accidentally authorize campaign-like mail
+        # under a non-marketing label and bypass the separate compliance gate.
+        allowed_transactional = {
+            "transactional", "account", "security", "trading", "funds",
+            "statements", "support", "system", "service",
+        }
+        if self.mode in {"TRANSACTIONAL_CANARY", "TRANSACTIONAL_PRODUCTION"}:
+            unknown = sorted(set(categories) - allowed_transactional)
+            if unknown:
+                raise ValueError(
+                    "unsupported transactional categories: " + ",".join(unknown)
+                )
         recipient_domains = [
             value.strip().lower().rstrip(".") for value in self.approvedRecipientDomains
         ]
@@ -1083,13 +1096,13 @@ class ProductionGatedCommunicationsService(CommunicationsService):
                 ),
             }
         }
-        try:
-            message, duplicate = await super()._submit_message_unlocked(
-                request, _governed_metadata=governed_metadata, **kwargs
-            )
-        except Exception:
-            await self.production_control.store.release_quota(reservation)
-            raise
+        # Once submission is attempted, the command may already be durably
+        # queued even if a later projection/persist step fails.  Never release
+        # that reservation on an exception: doing so could permit a retry to
+        # create a second live send beyond the authorized quota.
+        message, duplicate = await super()._submit_message_unlocked(
+            request, _governed_metadata=governed_metadata, **kwargs
+        )
         if duplicate or message.status == "suppressed":
             await self.production_control.store.release_quota(reservation)
         return message, duplicate

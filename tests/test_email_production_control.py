@@ -5,6 +5,7 @@ import pytest
 
 from app.communications import CreateMessageRequest, MessageContent
 from app.email_production_control import (
+    AuthorizeEmailProduction,
     EmailProductionBlocked,
     EmailProductionControlService,
     EmailProductionPolicy,
@@ -69,6 +70,27 @@ def _active_policy(**updates):
         killSwitchOpen=True,
     )
     return base.model_copy(update=updates)
+
+
+def test_transactional_authorization_rejects_unknown_category() -> None:
+    with pytest.raises(ValueError, match="unsupported transactional categories"):
+        AuthorizeEmailProduction.model_validate({
+            "expectedVersion": 1,
+            "mode": "TRANSACTIONAL_PRODUCTION",
+            "approvedDomains": ["example.com"],
+            "approvedSenders": ["sender@example.com"],
+            "recipientScope": "ALLOWLIST",
+            "approvedRecipients": ["owner@example.net"],
+            "approvedCategories": ["internal-news"],
+            "perMinuteLimit": 1, "perHourLimit": 2, "perDayLimit": 3,
+            "validFrom": datetime.now(UTC),
+            "validUntil": datetime.now(UTC) + timedelta(hours=1),
+            "changeId": "change-prod-20260912", "productionOwner": "op",
+            "monitoringOwner": "op", "escalationOwner": "op", "rollbackOwner": "op",
+            "killSwitchProcedure": "Close the kill switch and preserve callback ingestion.",
+            "provider": "klyrow-postal", "environment": "production",
+            "approvedReleaseSha": "a" * 40, "reason": "test category closure",
+        })
 
 
 def test_production_control_routes_are_mounted() -> None:

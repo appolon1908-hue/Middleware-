@@ -162,6 +162,9 @@ def create_app(
         try:
             yield
         finally:
+            crm_bridge_client = getattr(app.state, "crm_bridge_client", None)
+            if crm_bridge_client is not None:
+                await crm_bridge_client.aclose()
             if runtime is None:
                 await active.close()
 

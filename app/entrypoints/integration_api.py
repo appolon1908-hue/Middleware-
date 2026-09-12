@@ -21,6 +21,8 @@ from app.api.v1.telephony import router as telephony_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.booking import router as booking_router
 from app.api.v1.platform import router as platform_router
+from app.api.v1.agent_provisioning import router as agent_provisioning_router
+from app.monitoring.routes import router as monitoring_router
 from app.api.v1.webphone import router as webphone_router
 from app.api.v1.callbacks import router as callbacks_router
 from app.entrypoints.runtime import add_api_runtime, run_api
@@ -48,6 +50,7 @@ routers = (
     sales_router,
     booking_router,
     platform_router,
+    agent_provisioning_router,
 )
 app = FastAPI(
     title="Codestra Integration API",
@@ -59,6 +62,7 @@ app = FastAPI(
         if not (getattr(route, "path", "") or "").startswith("/api/v1/events/")
     ],
 )
+app.include_router(monitoring_router)
 add_api_runtime(app, SERVICE)
 
 

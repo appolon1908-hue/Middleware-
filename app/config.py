@@ -257,7 +257,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0057_platform_service_catalog",
+                "0060_agent_provisioning",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -604,9 +604,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0057_platform_service_catalog":
+        if self.schema_head != "0060_agent_provisioning":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0057_platform_service_catalog"
+                "SCHEMA_HEAD must be 0060_agent_provisioning"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):

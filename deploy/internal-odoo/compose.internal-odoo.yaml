@@ -3,6 +3,10 @@ services:
     image: codestra/caddy:2.11.4-hardened-20260723
     container_name: codestra-odoo-internal-proxy
     restart: unless-stopped
+    init: true
+    environment:
+      KLYROW_MAIL_RPC_CLIENT_IP: ${KLYROW_MAIL_RPC_CLIENT_IP:-127.0.0.1}
+    pids_limit: 256
     read_only: true
     cap_drop:
       - ALL

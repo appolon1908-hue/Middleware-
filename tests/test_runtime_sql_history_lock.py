@@ -1,4 +1,5 @@
 """SQL receipts must never substitute for immutable migration-source authority."""
+
 from __future__ import annotations
 
 import json
@@ -37,16 +38,17 @@ def repository(tmp_path: Path) -> Path:
 
 
 def test_current_protected_pin_covers_alembic_and_all_sql_bundles() -> None:
-    assert len(SQL_PATHS) == 11
+    assert len(SQL_PATHS) == 12
     expected, graph, digest = validate_authority(ROOT)
-    assert expected == "0057_platform_service_catalog"
-    assert len(graph) == 70
+    assert expected == "0060_agent_provisioning"
+    assert len(graph) == 73
     assert digest == migration_history(ROOT)[1]
 
 
 @pytest.mark.parametrize("relative", SQL_PATHS)
 def test_rewriting_numbered_sql_without_renaming_is_rejected(
-    repository: Path, relative: str,
+    repository: Path,
+    relative: str,
 ) -> None:
     path = repository / relative
     path.write_bytes(path.read_bytes() + b"\nSELECT 'rewritten migration';\n")
@@ -64,17 +66,22 @@ def test_removing_a_sql_source_is_rejected(repository: Path, relative: str) -> N
 
 
 @pytest.mark.parametrize("relative", ["migrations", "migrations/automation"])
-def test_contiguous_new_sql_requires_new_reviewed_pin(repository: Path, relative: str) -> None:
+def test_contiguous_new_sql_requires_new_reviewed_pin(
+    repository: Path, relative: str
+) -> None:
     directory = repository / relative
     version = max(int(path.name[:4]) for path in directory.glob(SQL_PATTERN)) + 1
-    (directory / f"{version:04d}_unapproved.sql").write_text("SELECT 1;\n", encoding="utf-8")
+    (directory / f"{version:04d}_unapproved.sql").write_text(
+        "SELECT 1;\n", encoding="utf-8"
+    )
     with pytest.raises(AuthorityError, match="history drift"):
         validate_authority(repository)
 
 
 @pytest.mark.parametrize("relative", ["migrations", "migrations/automation"])
 def test_same_number_and_bytes_with_different_name_are_rejected(
-    repository: Path, relative: str,
+    repository: Path,
+    relative: str,
 ) -> None:
     path = sorted((repository / relative).glob(SQL_PATTERN))[0]
     path.rename(path.with_name(path.name[:4] + "_renamed.sql"))
@@ -90,7 +97,9 @@ def test_moving_identical_sql_between_bundles_is_rejected(repository: Path) -> N
 
 
 @pytest.mark.parametrize("relative", ["migrations", "migrations/automation"])
-def test_removing_a_whole_sql_bundle_is_rejected(repository: Path, relative: str) -> None:
+def test_removing_a_whole_sql_bundle_is_rejected(
+    repository: Path, relative: str
+) -> None:
     for path in (repository / relative).glob(SQL_PATTERN):
         path.unlink()
     with pytest.raises(AuthorityError, match="history drift"):
@@ -120,7 +129,11 @@ def test_history_is_independent_of_absolute_checkout_path(repository: Path) -> N
     assert migration_history(repository) == migration_history(ROOT)
 
 
-def test_unexecuted_notes_are_not_part_of_sql_migration_authority(repository: Path) -> None:
+def test_unexecuted_notes_are_not_part_of_sql_migration_authority(
+    repository: Path,
+) -> None:
     before = migration_history(repository)
-    (repository / "migrations/notes.sql").write_text("-- not a numbered migration\n", encoding="utf-8")
+    (repository / "migrations/notes.sql").write_text(
+        "-- not a numbered migration\n", encoding="utf-8"
+    )
     assert migration_history(repository) == before

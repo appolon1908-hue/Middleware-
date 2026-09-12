@@ -44,6 +44,16 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
 from app.api.v1.platform import router as platform_router
+from app.api.v1.agent_provisioning import router as agent_provisioning_router
+from app.api.v1.agent_provisioning_reads import (
+    router as agent_provisioning_reads_router,
+)
+from app.api.v1.session_context import router as session_context_router
+from app.api.v1.calls import router as calls_router
+from app.api.v1.activity import router as activity_router
+from app.api.v1.presence import router as presence_router
+from app.api.v1.queues import router as queues_router
+from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
@@ -78,6 +88,7 @@ app.include_router(orders_router)
 app.include_router(ai_router)
 app.include_router(provider_commands_router)
 app.include_router(platform_router)
+app.include_router(monitoring_router)
 app.include_router(integrations_router)
 app.include_router(postiz_router)
 app.include_router(campaign_search_router)
@@ -87,6 +98,13 @@ app.include_router(recordings_router)
 app.include_router(sales_router)
 app.include_router(social_router)
 app.include_router(provider_webhooks_router)
+app.include_router(agent_provisioning_router)
+app.include_router(agent_provisioning_reads_router)
+app.include_router(session_context_router)
+app.include_router(calls_router)
+app.include_router(activity_router)
+app.include_router(presence_router)
+app.include_router(queues_router)
 app.mount("/metrics", make_asgi_app())
 
 
@@ -225,6 +243,7 @@ async def control_request_guard(request: Request, call_next):
         and not _is_ai_console_jwt_route(request)
         and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
         and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
+        and not is_monitoring_route(request)
     ):
         try:
             verify_bearer(

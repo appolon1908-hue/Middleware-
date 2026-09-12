@@ -135,16 +135,16 @@ class VicidialInternalCallAdapter:
         try:
             response = await client.send(request, stream=True)
             if int(response.headers.get("content-length", "0") or 0) > 65_536:
-                raise VicidialInternalCallError("Server B response exceeded the bounded size")
+                raise VicidialInternalCallUnknown("Server B response exceeded the bounded size")
             chunks = bytearray()
             async for chunk in response.aiter_bytes():
                 chunks.extend(chunk)
                 if len(chunks) > 65_536:
-                    raise VicidialInternalCallError(
+                    raise VicidialInternalCallUnknown(
                         "Server B response exceeded the bounded size"
                     )
             raw = bytes(chunks)
-        except (httpx.TimeoutException, httpx.TransportError):
+        except (httpx.HTTPError, ValueError):
             raise VicidialInternalCallUnknown(
                 "Server B mutation/readback outcome is unknown"
             ) from None
@@ -152,7 +152,9 @@ class VicidialInternalCallAdapter:
             if 'response' in locals():
                 await response.aclose()
         if len(raw) > 65_536:
-            raise VicidialInternalCallError("Server B response exceeded the bounded size")
+            raise VicidialInternalCallUnknown("Server B response exceeded the bounded size")
+        if 300 <= response.status_code < 400:
+            raise VicidialInternalCallUnknown("Server B redirected the bounded request")
         if response.status_code >= 500:
             raise VicidialInternalCallUnknown("Server B did not return a conclusive outcome")
         if response.status_code >= 400:
@@ -165,7 +167,7 @@ class VicidialInternalCallAdapter:
             except (ValueError, UnicodeError):
                 rejection = None
             detail = rejection.get("detail") if isinstance(rejection, dict) else None
-            if response.status_code == 403 and detail in conclusive_denials:
+            if response.status_code == 403 and isinstance(detail, str) and detail in conclusive_denials:
                 raise VicidialInternalCallPreDispatchRejected(
                     "Server B conclusively rejected originate before AMI dispatch"
                 )
@@ -229,7 +231,11 @@ class VicidialInternalCallAdapter:
                                         conclusive_denials=frozenset({
                                             "internal call authorization expired",
                                         }))
-            if value.get("operation_id") != request.command_id or value.get("status") not in {"accepted", "dispatch_unknown"}:
+            uniqueid = value.get("asterisk_uniqueid")
+            if (value.get("operation_id") != request.command_id
+                    or not isinstance(value.get("status"), str)
+                    or value.get("status") not in {"accepted", "dispatch_unknown"}
+                    or not isinstance(uniqueid, str) or not uniqueid.strip()):
                 raise VicidialInternalCallUnknown("Server B originate acknowledgement was invalid")
             return ActivityResult(value["status"], "bounded originate submitted",
                                   value.get("asterisk_uniqueid"))
@@ -263,8 +269,24 @@ class VicidialInternalCallAdapter:
             value = await self._request("POST", f"/v1/calls/internal/{original}/hangup",
                                         document={}, scope="telephony:internal-call-hangup",
                                         idempotency_key=original + ":hangup")
-            return ActivityResult("accepted", "bounded same-call hangup submitted",
-                                  str(value.get("asterisk_uniqueid") or request.payload["call_id"]))
+            if (value.get("operation_id") != original
+                    or value.get("correlation_id") != request.correlation_id
+                    or value.get("asterisk_uniqueid") != request.payload["call_id"]
+                    or value.get("tenant_id") != request.tenant_id
+                    or value.get("subject") != actor.subject
+                    or value.get("employee_id") != actor.employee_id
+                    or value.get("extension") != actor.extension
+                    or value.get("campaign") != actor.campaign_id
+                    or value.get("internal_only") is not True
+                    or value.get("external_dialing") is not False
+                    or value.get("authorization_reference") != request.payload["authorization_reference"]
+                    or not isinstance(value.get("hangup"), str)
+                    or value.get("hangup") not in {"requested", "dispatch_unknown", "already_terminal"}):
+                raise VicidialInternalCallUnknown("Server B hangup acknowledgement was invalid")
+            return ActivityResult(
+                "dispatch_unknown" if value["hangup"] == "dispatch_unknown" else "accepted",
+                "bounded same-call hangup submitted", value["asterisk_uniqueid"],
+            )
         raise VicidialInternalCallError("unsupported bounded calling command")
 
     async def readback(self, request: CommandExecutionRequest) -> ActivityResult:
@@ -281,7 +303,10 @@ class VicidialInternalCallAdapter:
                 or evidence.tenant_id != request.tenant_id or evidence.subject != actor.subject
                 or evidence.employee_id != actor.employee_id or evidence.extension != actor.extension
                 or evidence.campaign != actor.campaign_id or evidence.internal_only is not True
-                or evidence.external_dialing is not False):
+                or evidence.external_dialing is not False
+                or evidence.authorization_reference != request.payload.get("authorization_reference")
+                or (request.command_type == HANGUP
+                    and evidence.asterisk_uniqueid != request.payload.get("call_id"))):
             raise VicidialInternalCallError("Server B evidence binding mismatch")
         terminal = evidence.terminal and evidence.call_state in {
             "completed", "failed", "missed", "rejected", "cancelled", "transferred",

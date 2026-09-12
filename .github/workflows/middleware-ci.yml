@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   source-head-validation:
+    # RUNTIME_MUTATION_DISABLED=true
     if: github.event_name == 'pull_request'
     name: Validate middleware source head
     runs-on: ubuntu-24.04

@@ -24,13 +24,15 @@ _BASE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_BASE)
 
 ROOT = _BASE.ROOT
+# Forward schema requirement; preserve the reviewed historical base verbatim.
+setattr(_BASE, "CURRENT_SCHEMA_HEAD", "0060_agent_provisioning")
 SOURCE_RESOLUTION = (
     "resolve the exact protected-main GitHub event SHA at workflow execution"
 )
 REQUIRED_RUNTIME_EVIDENCE = (
     "signed release manifest bound to exact protected-main source",
     "immutable image digest and verified provenance",
-    "schema head 0057_platform_service_catalog",
+    "schema head 0060_agent_provisioning",
     "effective source, digest, schema, profile, and capability read-back",
     "backup and isolated restore evidence",
     "rollback rehearsal and data-integrity evidence",

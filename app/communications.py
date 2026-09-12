@@ -22,7 +22,11 @@ from pydantic import (
 
 from .canonical_contracts import validate_specialized_contract
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandService
-from .control_plane_auth import authorize_command, caller_for_authorization
+from .control_plane_auth import (
+    ControlPlaneCaller,
+    authorize_command,
+    caller_for_authorization,
+)
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .sms import compliance_keyword, normalize_e164, normalize_sms_sender, sms_segments
 
@@ -299,6 +303,16 @@ class MemoryCommunicationsStore:
     async def close(self) -> None:
         return None
 
+    async def message_by_idempotency(
+        self, tenant_id: str, idempotency_key: str,
+    ) -> CommunicationMessage:
+        entry = self.idempotency.get(
+            (tenant_id, "POST /v1/communications/messages", idempotency_key)
+        )
+        if entry is None:
+            raise CommunicationsNotFound("message was not found")
+        return self.messages[(tenant_id, entry[1])].model_copy(deep=True)
+
     def add_event(
         self,
         tenant_id: str,
@@ -335,6 +349,26 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__()
         self.pool = pool
+
+    async def message_by_idempotency(
+        self, tenant_id: str, idempotency_key: str,
+    ) -> CommunicationMessage:
+        # Read the durable projection for every reconciliation. A different API
+        # process or event worker may have accepted or updated this message.
+        async with self.pool.acquire() as conn:
+            raw = await conn.fetchval(
+                "SELECT m.payload FROM middleware_communication_idempotency i "
+                "JOIN middleware_communication_messages m "
+                "ON m.tenant_id=i.tenant_id AND m.message_id=i.message_id "
+                "WHERE i.tenant_id=$1 AND i.route=$2 AND i.idempotency_key=$3",
+                tenant_id, "POST /v1/communications/messages", idempotency_key,
+            )
+        if raw is None:
+            raise CommunicationsNotFound("message was not found")
+        return (
+            CommunicationMessage.model_validate_json(raw)
+            if isinstance(raw, str) else CommunicationMessage.model_validate(raw)
+        )
 
     @classmethod
     async def connect(cls, database_url: str) -> "PostgresCommunicationsStore":
@@ -692,6 +726,28 @@ class CommunicationsService:
         except KeyError as exc:
             raise CommunicationsNotFound("message was not found") from exc
 
+    def get_cancellable_message_for_caller(
+        self,
+        tenant_id: str,
+        message_id: uuid.UUID,
+        *,
+        caller: ControlPlaneCaller,
+    ) -> CommunicationMessage:
+        message = self.get_message(tenant_id, message_id)
+        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
+        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
+        try:
+            authorize_command(
+                caller,
+                command_type=cancel_command_type,
+                target=target,
+            )
+        except AuthorizationError:
+            # A caller without authority for this channel must observe the same
+            # result as it would for an unknown message identifier.
+            raise CommunicationsNotFound("message was not found") from None
+        return message
+
     def message_events(self, tenant_id: str, message_id: uuid.UUID) -> list[MessageEvent]:
         self.get_message(tenant_id, message_id)
         return sorted(self.store.events.get((tenant_id, message_id), []), key=lambda item: item.occurredAt)
@@ -765,28 +821,25 @@ class CommunicationsService:
         authorization: str,
         token_verifier: Any,
     ) -> tuple[CommunicationMessage, bool]:
-        message = self.get_message(tenant_id, message_id)
-        replay_key = (tenant_id, message_id, idempotency_key)
-        if replay_key in self.store.cancellations:
-            return message.model_copy(), True
-        if message.status not in {"accepted", "queued"}:
-            raise CommunicationsConflict("message cannot be cancelled in its current state")
-        command_type, target, _, _ = CHANNEL_COMMAND[message.channel]
-        cancel_command_type = command_type.rsplit(".", 2)[0] + ".cancel.v1"
         caller = caller_for_authorization(authorization)
         claims = await token_verifier.verify(
             authorization,
             expected_client_id=caller.client_id,
             required_scope=caller.command_scope,
         )
-        authorize_command(
-            caller,
-            command_type=cancel_command_type,
-            target=target,
-        )
         authorize_tenant(claims, tenant_id)
         if claims.get("sub") != actor:
             raise AuthorizationError("requested actor must equal token subject")
+        message = self.get_cancellable_message_for_caller(
+            tenant_id,
+            message_id,
+            caller=caller,
+        )
+        replay_key = (tenant_id, message_id, idempotency_key)
+        if replay_key in self.store.cancellations:
+            return message.model_copy(), True
+        if message.status not in {"accepted", "queued"}:
+            raise CommunicationsConflict("message cannot be cancelled in its current state")
         if message.operationId is None:
             raise CommunicationsConflict("message does not own a cancellable command")
         operation = await self.commands.get(tenant_id, message.operationId)

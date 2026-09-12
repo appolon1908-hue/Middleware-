@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -21,6 +22,19 @@ WORKFLOW_DIR = ROOT / ".github" / "workflows"
 RUN_CI_PATH = ROOT / "scripts" / "run_ci.sh"
 RULESET_NAME = "middleware-main-production-authority"
 REQUIRED_CHECK_APP_ID = 15368
+INDEPENDENT_REVIEWER_ID = 77101516
+TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS = {
+    "production-orchestrator-contract.yml": frozenset(
+        {
+            "5e968a824d9738ac8237dfd677bae1091aaecfe73f3f98d0c6c63f07a503968f",
+        }
+    ),
+    "trusted-production-orchestrator-gate.yml": frozenset(
+        {
+            "24b766af40ad1deb6c47fe1f667ed93b29e556abdacce88d6c3daf527f4f902e",
+        }
+    ),
+}
 
 EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
     {
@@ -35,7 +49,21 @@ EXPECTED_REQUIRED_STATUS_CHECKS = frozenset(
         "Disposable NATS JetStream integration",
         "Temporal critical workflow integration",
         "Synthetic no-effect acceptance E2E",
-        "orchestrator-contract",
+    }
+)
+EXPECTED_SECURITY_CODEOWNER_PATHS = frozenset(
+    {
+        "/.github/CODEOWNERS",
+        "/.github/workflows/manual-release-intent.yml",
+        "/.github/workflows/production-orchestrator-contract.yml",
+        "/.github/workflows/trusted-production-orchestrator-gate.yml",
+        "/.codestra/production-orchestrator-contract.v1.json",
+        "/.codestra/run-trusted-production-orchestrator.py",
+        "/.codestra/validate-production-orchestrator-contract.py",
+        "/.codestra/validate-release-intent.py",
+        "/config/repository-governance.v1.json",
+        "/scripts/apply_repository_governance.py",
+        "/scripts/validate_repository_governance.py",
     }
 )
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -62,6 +90,17 @@ def load_json(path: Path) -> dict[str, Any]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise GovernanceError(message)
+
+
+def validate_pull_request_target_workflow(workflow: Path, text: str) -> None:
+    if "pull_request_target:" not in text:
+        return
+    trusted_digests = TRUSTED_PULL_REQUEST_TARGET_WORKFLOWS.get(workflow.name)
+    require(
+        trusted_digests is not None
+        and hashlib.sha256(text.encode()).hexdigest() in trusted_digests,
+        f"{workflow.name}: pull_request_target is forbidden",
+    )
 
 
 def require_mapping(value: Any, message: str) -> dict[str, Any]:
@@ -105,6 +144,101 @@ def require_exact_strings(
     )
 
 
+def validate_codeowners(text: str) -> None:
+    assignments: dict[str, tuple[str, ...]] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        require(len(parts) >= 2, "CODEOWNERS entry has no owner")
+        pattern, *owners = parts
+        require(pattern not in assignments, f"duplicate CODEOWNERS pattern: {pattern}")
+        require(
+            all(owner.startswith("@") and len(owner) > 1 for owner in owners),
+            f"CODEOWNERS entry has an invalid owner: {pattern}",
+        )
+        assignments[pattern] = tuple(owners)
+
+    require(
+        assignments.get("*") == ("@appolon1908-hue", "@kazan555"),
+        "CODEOWNERS does not identify both repository reviewers",
+    )
+    for pattern in EXPECTED_SECURITY_CODEOWNER_PATHS:
+        require(
+            assignments.get(pattern) == ("@kazan555",),
+            f"independent security CODEOWNER drift: {pattern}",
+        )
+
+
+def validate_environment_release_policy(policy: dict[str, Any]) -> None:
+    environments = require_mapping(
+        policy.get("environments"),
+        "environments policy is missing",
+    )
+    require(
+        set(environments) == {"staging", "production"},
+        "staging and production environments are required",
+    )
+    expected_reviewers = [{"type": "User", "id": INDEPENDENT_REVIEWER_ID}]
+    expected_branch_policy = {
+        "protected_branches": True,
+        "custom_branch_policies": False,
+    }
+    for name in ("staging", "production"):
+        environment = require_mapping(
+            environments.get(name),
+            f"{name}: environment policy is missing",
+        )
+        wait_timer = environment.get("wait_timer")
+        require(
+            isinstance(wait_timer, int)
+            and not isinstance(wait_timer, bool)
+            and wait_timer == 0,
+            f"{name}: wait timer drift",
+        )
+        require(
+            environment.get("prevent_self_review") is True,
+            f"{name}: self-review must be prevented",
+        )
+        require(
+            environment.get("can_admins_bypass") is False,
+            f"{name}: administrator bypass must be disabled",
+        )
+        require(
+            environment.get("reviewers") == expected_reviewers,
+            f"{name}: independent reviewer drift",
+        )
+        require(
+            environment.get("deployment_branch_policy") == expected_branch_policy,
+            f"{name}: deployments must use protected branches",
+        )
+        require(
+            environment.get("allowed_branches") == [],
+            f"{name}: custom deployment branches are forbidden",
+        )
+        require(
+            environment.get("live_write_secrets_allowed") is False,
+            f"{name}: live-write secrets must remain forbidden",
+        )
+
+    release_policy = require_mapping(
+        policy.get("release_policy"),
+        "release policy is missing",
+    )
+    require(
+        release_policy
+        == {
+            "live_writes_default": False,
+            "odoo_write_default": False,
+            "live_apply_authorized_default": False,
+            "production_release_requires_independent_human_approval": True,
+            "production_release_environment": "production",
+        },
+        "release policy drift",
+    )
+
+
 def validate_source_policy() -> dict[str, Any]:
     policy = load_json(POLICY_PATH)
     require(policy.get("schema_version") == "1.0", "unsupported governance schema")
@@ -143,6 +277,7 @@ def validate_source_policy() -> dict[str, Any]:
     require(rules.get("enforcement") == "active", "ruleset must be active")
     for key in (
         "require_pull_request",
+        "require_code_owner_review",
         "require_review_thread_resolution",
         "require_linear_history",
         "require_status_checks_to_pass",
@@ -162,19 +297,13 @@ def validate_source_policy() -> dict[str, Any]:
         EXPECTED_REQUIRED_STATUS_CHECKS,
         label="required status checks",
     )
+    validate_environment_release_policy(policy)
 
-    codeowners = CODEOWNERS_PATH.read_text(encoding="utf-8")
-    require(
-        "@appolon1908-hue" in codeowners,
-        "CODEOWNERS does not identify the repository owner",
-    )
+    validate_codeowners(CODEOWNERS_PATH.read_text(encoding="utf-8"))
 
     for workflow in sorted(WORKFLOW_DIR.glob("*.y*ml")):
         text = workflow.read_text(encoding="utf-8")
-        require(
-            "pull_request_target:" not in text,
-            f"{workflow.name}: pull_request_target is forbidden",
-        )
+        validate_pull_request_target_workflow(workflow, text)
         require("write-all" not in text, f"{workflow.name}: write-all permission is forbidden")
         for action, ref in USES.findall(text):
             if action.startswith("./"):
@@ -372,6 +501,11 @@ def validate_live_ruleset(
         pull_request_parameters.get("dismiss_stale_reviews_on_push")
         is encoded.get("dismiss_stale_reviews"),
         "live stale-review dismissal drift",
+    )
+    require(
+        pull_request_parameters.get("require_code_owner_review")
+        is encoded.get("require_code_owner_review"),
+        "live code-owner review requirement drift",
     )
     require(
         pull_request_parameters.get("required_review_thread_resolution")

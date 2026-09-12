@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -32,14 +33,14 @@ EXPECTED_LOCKS = {
 }
 
 
-def _document() -> dict[str, object]:
+def _document() -> dict[str, Any]:
     value = json.loads(AUTHORITY.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
 
 
 def _write_authority(
-    document: dict[str, object],
+    document: dict[str, Any],
     path: Path,
 ) -> Path:
     path.write_text(json.dumps(document), encoding="utf-8")

@@ -13,7 +13,7 @@ import httpx
 from pydantic import TypeAdapter, ValidationError
 from pydantic.networks import EmailStr
 
-from .config import ConfigurationError, Settings
+from .config import ConfigurationError
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 EMAIL_ADDRESS = TypeAdapter(EmailStr)
@@ -77,7 +77,7 @@ class KlyrowEmailAdapter:
 
     def __init__(
         self,
-        settings: Settings,
+        settings: Any,
         env: Mapping[str, str] | None = None,
     ) -> None:
         self.settings = settings

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import argparse
 import datetime as dt
 import json
@@ -12,8 +14,14 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Mapping
 
-from portfolio_ruleset.common import RolloutError
-from portfolio_ruleset.github_api import GitHubApi
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.common import RolloutError
+else:
+    from portfolio_ruleset.common import RolloutError
+if TYPE_CHECKING:
+    from scripts.portfolio_ruleset.github_api import GitHubApi
+else:
+    from portfolio_ruleset.github_api import GitHubApi
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "portfolio-main-release-authorities.v1.json"
@@ -61,11 +69,13 @@ def validate_config(config: Mapping[str, Any]) -> list[dict[str, Any]]:
         "authority ID drift",
     )
     reviewer = config.get("reviewer")
-    require(isinstance(reviewer, Mapping), "reviewer authority missing")
+    if not isinstance(reviewer, Mapping):
+        raise ReviewerAccessError("reviewer authority missing")
     require(dict(reviewer) == EXPECTED_REVIEWER, "reviewer authority drift")
     require(config.get("required_approvals") == 1, "exactly one approval is required")
     repositories = config.get("repositories")
-    require(isinstance(repositories, list), "repositories must be a list")
+    if not isinstance(repositories, list):
+        raise ReviewerAccessError("repositories must be a list")
     require(len(repositories) == len(EXPECTED_REPOSITORIES), "repository count drift")
     normalized: list[dict[str, Any]] = []
     observed: set[str] = set()

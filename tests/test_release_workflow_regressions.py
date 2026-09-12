@@ -42,11 +42,12 @@ class ReleaseWorkflowRegressions(unittest.TestCase):
         self.assertIn(f"image-ref: {prefix}:${{{{ github.sha }}}}", text)
         self.assertIn(f"IMAGE: {prefix}@${{{{ steps.build.outputs.digest }}}}", text)
 
-    def test_candidate_publish_is_canonical_main_only(self) -> None:
+    def test_candidate_publish_is_disabled_on_the_canonical_main_trigger(self) -> None:
         text = CANDIDATE.read_text(encoding="utf-8")
         condition = text.split("  build:\n", 1)[1].split("    runs-on:", 1)[0]
-        self.assertIn("github.repository == 'appolon1908-hue/Middleware-'", condition)
-        self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", condition)
+        self.assertIn("RUNTIME_MUTATION_DISABLED=true", condition)
+        self.assertIn("if: ${{ false }}", condition)
+        self.assertIn("push:\n    branches: [main]", text)
         self.assertIn("push: ${{ github.event_name == 'push' }}", text)
         self.assertIn("load: ${{ github.event_name == 'pull_request' }}", text)
 
@@ -108,6 +109,7 @@ class ReleaseWorkflowRegressions(unittest.TestCase):
         apply = text.split("\n  apply:\n", 1)[1]
         condition = apply.split("\n    permissions:\n", 1)[0]
         for expected in (
+            "CONTROL_PLANE_MUTATION=repository-administration",
             "github.event_name == 'issue_comment'",
             "github.event.issue.number == 130",
             "github.event.repository.id == 1347559071",
@@ -117,6 +119,7 @@ class ReleaseWorkflowRegressions(unittest.TestCase):
         ):
             self.assertIn(expected, condition)
         self.assertNotIn("github.event_name == 'push'", condition)
+        self.assertNotIn("if: ${{ false }}", condition)
         self.assertIn("name: repository-administration", apply)
         self.assertIn('test "$current_main" = "$GITHUB_SHA"', apply)
         self.assertIn("if: steps.rollout.outcome != 'success'", apply)

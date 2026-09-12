@@ -7,19 +7,28 @@ from datetime import UTC, datetime
 from typing import AsyncIterator
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError as FastApiValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
+from .api_inputs import (
+    authenticated_tenant,
+    restrict_sms_identity,
+    authorization_header,
+    optional_header,
+    required_header,
+)
 from .commands import CommandCapabilityDisabled, CommandEnvelope, CommandError
 from .config import ConfigurationError, Settings
 from .communications import (
+    CHANNEL_COMMAND,
     CommunicationEventPage,
     CommunicationMessage,
     CommunicationMessagePage,
     CommunicationUsageReport,
     CommunicationsError,
+    CommunicationsNotFound,
     CommunicationsService,
     CreateMessageRequest,
     MemoryCommunicationsStore,
@@ -46,11 +55,12 @@ from .observability import (
     safe_traceparent,
 )
 from .operations_dashboard import router as operations_dashboard_router
+from .monitoring.routes import router as monitoring_router
 from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
 from .realtime import MemoryRealtimeStore, stream_events
-from .security import SecurityError
+from .security import AuthorizationError, SecurityError
 from .service import (
     CANONICAL_ERROR_SCHEMA,
     EVENT_TYPE_422_RESPONSE,
@@ -109,18 +119,22 @@ def _error_response(
 
 
 async def _read_limited_body(request: Request, maximum: int) -> bytes:
-    raw_length = request.headers.get("Content-Length")
-    if raw_length is not None:
-        try:
-            length = int(raw_length)
-        except ValueError as exc:
+    raw_lengths = request.headers.getlist("Content-Length")
+    if len(raw_lengths) > 1:
+        from .security import RequestValidationError
+
+        raise RequestValidationError("Content-Length must be provided at most once")
+    if raw_lengths:
+        raw_length = raw_lengths[0]
+        if not raw_length.isascii() or not raw_length.isdecimal():
             from .security import RequestValidationError
 
-            raise RequestValidationError("Content-Length must be an integer") from exc
-        if length < 0:
+            raise RequestValidationError("Content-Length must contain only digits")
+        if len(raw_length) > 20:
             from .security import RequestValidationError
 
-            raise RequestValidationError("Content-Length must not be negative")
+            raise RequestValidationError("Content-Length is outside the supported range")
+        length = int(raw_length)
         if length > maximum:
             raise PayloadTooLargeError(f"request body exceeds {maximum} bytes")
     body = bytearray()
@@ -151,6 +165,7 @@ def create_app(
     app = FastAPI(
         title="Codestra Middleware API",
         version=resolved.app_version,
+        dependencies=[Depends(restrict_sms_identity)],
         docs_url=None if resolved.app_env in {"staging", "production"} else "/docs",
         redoc_url=None,
         lifespan=lifespan,
@@ -164,6 +179,7 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(monitoring_router)
 
     def realtime_store(request: Request):
         active = request.app.state.runtime
@@ -425,25 +441,9 @@ def create_app(
             )
         return active.communications
 
-    def _tenant_from_header(request: Request) -> str:
-        tenant_id = request.headers.get("X-Tenant-ID", "")
-        if not tenant_id:
-            from .security import RequestValidationError
-
-            raise RequestValidationError("X-Tenant-ID is required")
+    async def _authorize_communication_read(request: Request) -> str:
+        _, _, tenant_id = await authenticated_tenant(request)
         return tenant_id
-
-    async def _authorize_read(request: Request, tenant_id: str) -> None:
-        authorization = request.headers.get("Authorization", "")
-        caller = caller_for_authorization(authorization)
-        claims = await request.app.state.runtime.tokens.verify(
-            authorization,
-            expected_client_id=caller.client_id,
-            required_scope=caller.status_scope,
-        )
-        from .security import authorize_tenant
-
-        authorize_tenant(claims, tenant_id)
 
     @app.post("/v1/communication/messages", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
     @app.post("/v1/communications/messages", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
@@ -451,38 +451,43 @@ def create_app(
         body: CreateMessageRequest,
         request: Request,
     ) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        correlation_id = request.headers.get("X-Correlation-ID", "")
-        idempotency_key = request.headers.get("Idempotency-Key", "")
-        if not correlation_id or not idempotency_key:
-            from .security import RequestValidationError
-
-            raise RequestValidationError(
-                "X-Correlation-ID and Idempotency-Key are required"
-            )
-        if len(correlation_id) > 180 or not 8 <= len(idempotency_key) <= 180:
-            from .security import RequestValidationError
-
-            raise RequestValidationError(
-                "X-Correlation-ID or Idempotency-Key is outside contract bounds"
-            )
-        actor = request.headers.get("X-Codestra-Actor", "")
-        if not actor:
-            authorization = request.headers.get("Authorization", "")
-            caller = caller_for_authorization(authorization)
-            claims = await request.app.state.runtime.tokens.verify(
-                authorization,
-                expected_client_id=caller.client_id,
-                required_scope=caller.command_scope,
-            )
-            actor = str(claims.get("sub") or "")
+        caller, claims, tenant_id = await authenticated_tenant(
+            request,
+            mutation=True,
+        )
+        command_type, target, _, _ = CHANNEL_COMMAND[body.channel]
+        authorize_command(caller, command_type=command_type, target=target)
+        authorization = authorization_header(request)
+        correlation_id = required_header(
+            request,
+            "X-Correlation-ID",
+            minimum=1,
+            maximum=180,
+        )
+        idempotency_key = required_header(
+            request,
+            "Idempotency-Key",
+            minimum=8,
+            maximum=180,
+        )
+        subject = claims.get("sub")
+        if not isinstance(subject, str) or not subject:
+            raise AuthorizationError("authenticated token subject is required")
+        actor = optional_header(
+            request,
+            "X-Codestra-Actor",
+            minimum=1,
+            maximum=300,
+        ) or subject
+        if actor != subject:
+            raise AuthorizationError("requested actor must equal token subject")
         message, duplicate = await communications_service(request).submit_message(
             body,
             tenant_id=tenant_id,
             correlation_id=correlation_id,
             idempotency_key=idempotency_key,
             actor=actor,
-            authorization=request.headers.get("Authorization", ""),
+            authorization=authorization,
             token_verifier=request.app.state.runtime.tokens,
         )
         return JSONResponse(
@@ -491,10 +496,20 @@ def create_app(
             headers={"X-Correlation-ID": message.correlationId},
         )
 
+    @app.get("/v1/communications/messages/by-idempotency", response_model=CommunicationMessage)
+    async def get_communication_by_idempotency(request: Request) -> CommunicationMessage:
+        caller, _, tenant_id = await authenticated_tenant(request)
+        key = required_header(request, "Idempotency-Key", minimum=8, maximum=180)
+        message = await communications_service(request).store.message_by_idempotency(
+            tenant_id, key,
+        )
+        if caller.client_id == "odoo-sms" and message.channel != "sms":
+            raise CommunicationsNotFound("message was not found")
+        return message
+
     @app.get("/v1/communications/messages", response_model=CommunicationMessagePage)
     async def list_communication_messages(request: Request) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
         return JSONResponse(
             status_code=200,
@@ -513,8 +528,7 @@ def create_app(
     @app.get("/v1/communication/messages/{messageId}", response_model=CommunicationMessage)
     @app.get("/v1/communications/messages/{messageId}", response_model=CommunicationMessage)
     async def get_communication_message(messageId: UUID, request: Request) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
         message = await service.refresh_command_status(tenant_id, messageId)
         return JSONResponse(
@@ -527,8 +541,7 @@ def create_app(
         messageId: UUID,
         request: Request,
     ) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
         await service.refresh_command_status(tenant_id, messageId)
         return JSONResponse(
@@ -543,24 +556,31 @@ def create_app(
 
     @app.post("/v1/communications/messages/{messageId}/cancel", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
     async def cancel_communication_message(messageId: UUID, request: Request) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        idempotency_key = request.headers.get("Idempotency-Key", "")
-        if not 8 <= len(idempotency_key) <= 180:
-            from .security import RequestValidationError
-
-            raise RequestValidationError(
-                "Idempotency-Key must contain 8-180 characters"
-            )
-        authorization = request.headers.get("Authorization", "")
-        caller = caller_for_authorization(authorization)
-        claims = await request.app.state.runtime.tokens.verify(
-            authorization,
-            expected_client_id=caller.client_id,
-            required_scope=caller.command_scope,
+        _, claims, tenant_id = await authenticated_tenant(request, mutation=True)
+        authorization = authorization_header(request)
+        required_header(
+            request,
+            "X-Correlation-ID",
+            minimum=1,
+            maximum=180,
         )
-        actor = request.headers.get("X-Codestra-Actor", "") or str(
-            claims.get("sub") or ""
+        idempotency_key = required_header(
+            request,
+            "Idempotency-Key",
+            minimum=8,
+            maximum=180,
         )
+        subject = claims.get("sub")
+        if not isinstance(subject, str) or not subject:
+            raise AuthorizationError("authenticated token subject is required")
+        actor = optional_header(
+            request,
+            "X-Codestra-Actor",
+            minimum=1,
+            maximum=300,
+        ) or subject
+        if actor != subject:
+            raise AuthorizationError("requested actor must equal token subject")
         message, duplicate = await communications_service(request).cancel(
             tenant_id,
             messageId,
@@ -577,15 +597,13 @@ def create_app(
     @app.get("/v1/communications/provider-health", response_model=ProviderHealthReport)
     @app.get("/v1/communications/providers/health", response_model=ProviderHealthReport)
     async def get_communication_provider_health(request: Request) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
         return JSONResponse(status_code=200, content=await service.adapter.health(tenant_id))
 
     @app.get("/v1/communications/reputation", response_model=ProviderReputationReport)
     async def get_communication_reputation(request: Request) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
         return JSONResponse(status_code=200, content=await service.adapter.reputation(tenant_id))
 
@@ -595,8 +613,7 @@ def create_app(
         from_: AwareDatetime | None = Query(None, alias="from"),
         to: AwareDatetime | None = Query(None),
     ) -> JSONResponse:
-        tenant_id = _tenant_from_header(request)
-        await _authorize_read(request, tenant_id)
+        tenant_id = await _authorize_communication_read(request)
         messages = [
             item
             for item in communications_service(request).list_messages(tenant_id)
@@ -646,24 +663,26 @@ def create_app(
         from .security import RequestValidationError, authorize_tenant
 
         active = request.app.state.runtime
-        content_type = request.headers.get("Content-Type", "")
+        authorization = authorization_header(request)
+        claims = await active.tokens.verify(
+            authorization,
+            expected_client_id=INTAKE_PRODUCER_CLIENT_ID,
+            required_scope="leads.write",
+        )
+        content_type = required_header(
+            request, "Content-Type", minimum=16, maximum=128,
+        )
         if content_type.split(";", 1)[0].strip().lower() != "application/json":
             raise RequestValidationError("Content-Type must be application/json")
 
-        tenant_id = request.headers.get("X-Tenant-ID", "")
-        correlation_id = request.headers.get("X-Correlation-ID", "")
-        idempotency_key = request.headers.get("Idempotency-Key", "")
-        if not tenant_id:
-            raise RequestValidationError("X-Tenant-ID is required")
-        if not correlation_id or len(correlation_id) > 180:
-            raise RequestValidationError("X-Correlation-ID must contain 1 to 180 characters")
-        if not idempotency_key or not 8 <= len(idempotency_key) <= 180:
-            raise RequestValidationError("Idempotency-Key must contain 8 to 180 characters")
-
-        claims = await active.tokens.verify(
-            request.headers.get("Authorization", ""),
-            expected_client_id=INTAKE_PRODUCER_CLIENT_ID,
-            required_scope="leads.write",
+        tenant_id = required_header(
+            request, "X-Tenant-ID", minimum=1, maximum=128,
+        )
+        correlation_id = required_header(
+            request, "X-Correlation-ID", minimum=1, maximum=180,
+        )
+        idempotency_key = required_header(
+            request, "Idempotency-Key", minimum=8, maximum=180,
         )
         authorize_tenant(claims, tenant_id)
 
@@ -709,9 +728,7 @@ def create_app(
         request: Request,
     ) -> JSONResponse:
         active = request.app.state.runtime
-        if active.commands is None:
-            raise StorageError("command ledger is unavailable")
-        authorization = request.headers.get("Authorization", "")
+        authorization = authorization_header(request)
         caller = caller_for_authorization(authorization)
         claims = await active.tokens.verify(
             authorization,
@@ -726,17 +743,26 @@ def create_app(
         from .security import authorize_tenant
 
         authorize_tenant(claims, command.tenant_id)
-        if request.headers.get("X-Tenant-ID") != command.tenant_id:
+        tenant_id = required_header(
+            request, "X-Tenant-ID", minimum=1, maximum=128,
+        )
+        if tenant_id != command.tenant_id:
             from .security import RequestValidationError
 
             raise RequestValidationError("X-Tenant-ID does not match command tenant")
-        if request.headers.get("X-Correlation-ID") != command.correlation_id:
+        correlation_id = required_header(
+            request, "X-Correlation-ID", minimum=1, maximum=180,
+        )
+        if correlation_id != command.correlation_id:
             from .security import RequestValidationError
 
             raise RequestValidationError(
                 "X-Correlation-ID does not match command correlation_id"
             )
-        if request.headers.get("Idempotency-Key") != command.idempotency_key:
+        idempotency_key = required_header(
+            request, "Idempotency-Key", minimum=8, maximum=180,
+        )
+        if idempotency_key != command.idempotency_key:
             from .security import RequestValidationError
 
             raise RequestValidationError(
@@ -757,6 +783,8 @@ def create_app(
             raise CommandCapabilityDisabled(
                 "N8N_EXTERNAL_PROVIDER_WRITES is disabled"
             )
+        if active.commands is None:
+            raise StorageError("command ledger is unavailable")
         operation = await active.commands.submit(
             command,
             authenticated_subject=subject,

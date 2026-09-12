@@ -10,6 +10,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   calling-contract:
+    # RUNTIME_MUTATION_DISABLED=true: calling-contract is disabled until its external fixture is approved.
+    if: ${{ false }}
     name: Calling contract (${{ matrix.source }})
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -69,8 +71,11 @@ jobs:
             tests/test_reconciliation_activity.py
           TEMPORAL_INTEGRATION_TESTS=1 python -m pytest -q \
             tests/integration/test_temporal_workflows.py
-          sudo --preserve-env=CODESTRA_SELECTED_SERVER_B_ROOT,CODESTRA_SELECTED_SERVER_B_SHA \
-            "$(command -v python)" -m pytest -q \
+          sudo -n env \
+            "PATH=$PATH" \
+            "CODESTRA_SELECTED_SERVER_B_ROOT=$CODESTRA_SELECTED_SERVER_B_ROOT" \
+            "CODESTRA_SELECTED_SERVER_B_SHA=$CODESTRA_SELECTED_SERVER_B_SHA" \
+            python -m pytest -q \
             tests/pairing/test_selected_server_b.py
           python scripts/generate_connector_artifacts.py --check
           python scripts/validate_integration_fabric.py

@@ -17,7 +17,7 @@ from app.calling_contract import CAPABILITY, CLIENT_ID, HANGUP, TARGET
 from app.calling_ledger import operation_response
 from app.commands import CommandEnvelope, CommandError, CommandOperation, CommandPolicyRegistry, CommandService, MemoryCommandStore
 from app.security import AuthenticationError, SecurityError, validate_claims
-from app.telephony_api import router
+from app.telephony_api import compat_router, router
 from tests.test_calling_contract import SOURCE_SHA, grant, originate, principal
 
 
@@ -62,7 +62,7 @@ def test_completed_hangup_response_uses_bound_originate_evidence_identity():
     assert response["reason"] == "terminal call outcome reconciled; see call_state"
 
 
-async def asgi_request(app, method, path, body=None, headers=None):
+async def asgi_request(app, method, path, body=None, headers=None, extra_headers=None):
     raw = json.dumps(body).encode() if body is not None else b""
     incoming = {"Authorization": "Bearer synthetic-test-token", "Content-Type": "application/json",
                 "X-Correlation-ID": "test-correlation-0001"}
@@ -73,7 +73,8 @@ async def asgi_request(app, method, path, body=None, headers=None):
              "method": method, "scheme": "https", "path": path, "raw_path": path.encode(),
              "root_path": "", "query_string": b"", "server": ("testserver", 443),
              "client": ("127.0.0.1", 1),
-             "headers": [(k.lower().encode(), v.encode()) for k, v in incoming.items()]}
+             "headers": [(k.lower().encode(), v.encode()) for k, v in incoming.items()] +
+                        [(k.lower().encode(), v.encode()) for k, v in (extra_headers or [])]}
     messages = []
     delivered = False
 
@@ -97,6 +98,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.app = FastAPI()
         self.app.include_router(router)
+        self.app.include_router(compat_router)
         self.store = MemoryCommandStore()
         self.tokens = FakeCallingTokens()
         self.runtime = SimpleNamespace(commands=CommandService(self.store, CommandPolicyRegistry.load()),
@@ -115,6 +117,38 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         return await asgi_request(self.app, "POST", "/v1/telephony/calls/originate",
                                   body or originate().model_dump(), **kwargs)
 
+    async def test_compatibility_originate_route_reuses_internal_only_handler(self):
+        body = originate().model_dump()
+        status, response, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate", body,
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(response["dialing"], "unknown")
+        self.assertEqual(response["external_dialing"], False)
+        self.assertEqual(len(self.store._commands), 1)
+
+    async def test_compatibility_route_never_accepts_external_destination(self):
+        status, response, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate",
+            originate(destination_class="mobile", destination="+12025550124").model_dump(),
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(response["dialing"], "blocked")
+        self.assertFalse(self.store._commands)
+
+    async def test_compatibility_route_replays_same_operation_without_duplicate(self):
+        body = originate().model_dump()
+        first_status, first, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate", body,
+        )
+        second_status, second, _ = await asgi_request(
+            self.app, "POST", "/v1/calls/originate", body,
+        )
+        self.assertEqual((first_status, second_status), (202, 200))
+        self.assertEqual(first["operation_id"], second["operation_id"])
+        self.assertTrue(second["duplicate"])
+        self.assertEqual(len(self.store._commands), 1)
+
     async def accept_call(self):
         _, data, _ = await self.call()
         identity = UUID(data["operation_id"])
@@ -127,7 +161,8 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         from app.config import Settings
         from app.main import create_app
         paths = create_app(settings=Settings.from_env({"APP_ENV": "test", "ALLOW_IN_MEMORY_STORAGE": "true"})).openapi()["paths"]
-        for path in ["/v1/telephony/calls/originate", "/v1/telephony/calls/requests/{operation_id}",
+        for path in ["/v1/telephony/calls/originate", "/v1/calls/originate",
+                     "/v1/telephony/calls/requests/{operation_id}",
                      "/v1/telephony/calls/requests/{operation_id}/reconcile", "/v1/telephony/calls/requests/{operation_id}/hangup"]:
             self.assertIn(path, paths)
 
@@ -231,6 +266,26 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(status, expected)
         self.assertFalse(self.store._commands)
 
+    async def test_duplicate_security_headers_are_rejected(self):
+        for name, values in [
+            ("Authorization", ["Bearer duplicate-token"]),
+            ("Idempotency-Key", ["test-originate-duplicate"]),
+            ("X-Correlation-ID", ["test-correlation-duplicate"]),
+            ("X-Tenant-ID", ["tenant-test", "tenant-other"]),
+        ]:
+            status, _, _ = await self.call(
+                extra_headers=[(name, value) for value in values]
+            )
+            self.assertEqual(status, 400, name)
+        self.assertFalse(self.store._commands)
+
+    async def test_authentication_precedes_optional_tenant_validation(self):
+        status, _, _ = await self.call(
+            headers={"Authorization": "Bearer invalid", "X-Tenant-ID": "x" * 129}
+        )
+        self.assertEqual(status, 401)
+        self.assertFalse(self.store._commands)
+
     async def test_request_validation_does_not_persist(self):
         body = originate().model_dump() | {"trunk": "untrusted"}
         status, _, _ = await self.call(body)
@@ -289,7 +344,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observed["operation_id"], hangup_id)
         status, reconciled, _ = await asgi_request(
             self.app, "POST", f"/v1/telephony/calls/requests/{hangup_id}/reconcile",
-            dict(idempotency_key="test-hangup-reconcile-0001", expected_version=1,
+            dict(idempotency_key="test-hangup-reconcile-0001", expected_version=1,  # gitleaks:allow test fixture
                  reason="Reconcile uncertain hangup"),
         )
         self.assertEqual(status, 202)
@@ -304,7 +359,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_hangup_relationship_tampering_and_hangup_of_hangup_are_denied(self):
         identity = await self.accept_call()
         mutation = dict(
-            idempotency_key="test-hangup-relation-0001", expected_version=1,
+            idempotency_key="test-hangup-relation-0001", expected_version=1,  # gitleaks:allow test fixture
             reason="Agent hangup",
         )
         status, created, _ = await asgi_request(

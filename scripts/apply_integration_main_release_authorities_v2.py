@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -77,17 +79,34 @@ EXPECTED_REPOSITORIES = {
 }
 
 
+def _reject_duplicate_pairs(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON field: {key}")
+        value[key] = item
+    return value
+
+
 def configure_base() -> None:
     """Make the preserved engine use the current seven-repository authority."""
 
-    BASE.EXPECTED_REPOSITORIES = EXPECTED_REPOSITORIES
+    setattr(BASE, "EXPECTED_REPOSITORIES", EXPECTED_REPOSITORIES)
+
+
+def require_mapping(value: object, message: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        BASE.require(False, message)
+        raise AssertionError(message)
+    return value
 
 
 def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
     BASE.require(event.get("action") == "created", "issue command action drift")
-    repository = event.get("repository")
-    BASE.require(
-        isinstance(repository, Mapping),
+    repository = require_mapping(
+        event.get("repository"),
         "issue command repository missing",
     )
     BASE.require(
@@ -102,8 +121,10 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
         repository.get("default_branch") == "main",
         "issue command default branch drift",
     )
-    owner = repository.get("owner")
-    BASE.require(isinstance(owner, Mapping), "issue command owner missing")
+    owner = require_mapping(
+        repository.get("owner"),
+        "issue command owner missing",
+    )
     BASE.require(
         owner.get("login") == EXPECTED_OWNER,
         "issue command owner login drift",
@@ -113,8 +134,10 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
         "issue command owner ID drift",
     )
 
-    issue = event.get("issue")
-    BASE.require(isinstance(issue, Mapping), "issue command issue missing")
+    issue = require_mapping(
+        event.get("issue"),
+        "issue command issue missing",
+    )
     BASE.require(
         issue.get("number") == EXPECTED_ISSUE_NUMBER,
         "issue command number drift",
@@ -124,13 +147,16 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
         "issue command cannot originate from a pull request",
     )
 
-    sender = event.get("sender")
-    comment = event.get("comment")
-    BASE.require(isinstance(sender, Mapping), "issue command sender missing")
-    BASE.require(isinstance(comment, Mapping), "issue command comment missing")
-    comment_user = comment.get("user")
-    BASE.require(
-        isinstance(comment_user, Mapping),
+    sender = require_mapping(
+        event.get("sender"),
+        "issue command sender missing",
+    )
+    comment = require_mapping(
+        event.get("comment"),
+        "issue command comment missing",
+    )
+    comment_user = require_mapping(
+        comment.get("user"),
         "issue command comment user missing",
     )
     for actor, label in ((sender, "sender"), (comment_user, "comment user")):
@@ -148,12 +174,33 @@ def validate_issue_comment_event(event: Mapping[str, Any]) -> None:
     )
 
 
+def validate_runner_issue_comment_event() -> None:
+    """Validate the runner-owned event file without an inline Python loader."""
+
+    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+    BASE.require(bool(event_path), "issue command event path missing")
+    try:
+        value = json.loads(
+            Path(event_path).read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise BASE.PolicyError("cannot load issue command event") from exc
+    validate_issue_comment_event(
+        require_mapping(value, "issue command event must be an object")
+    )
+
+
 configure_base()
 
 
 def main(argv: list[str] | None = None) -> int:
     configure_base()
-    return BASE.main(list(sys.argv[1:] if argv is None else argv))
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments == ["--validate-issue-comment-event"]:
+        validate_runner_issue_comment_event()
+        return 0
+    return BASE.main(arguments)
 
 
 if __name__ == "__main__":

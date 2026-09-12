@@ -77,7 +77,7 @@ jobs:
             tests/test_production_reviewer_access.py
           python3 -m unittest -v tests.test_production_reviewer_access
           python3 -m unittest -v tests.test_release_workflow_regressions
-          python3 scripts/apply_production_reviewer_access.py --mode validate
+          python3 -I scripts/apply_production_reviewer_access.py --mode validate
           python3 -m json.tool config/production-reviewer-access.v1.json >/dev/null
           git diff --check
       - name: Upload secret-free policy evidence
@@ -91,6 +91,9 @@ jobs:
   apply:
     name: apply-and-verify-production-reviewer-access
     needs: [policy]
+    # CONTROL_PLANE_MUTATION=repository-administration. This is not runtime
+    # authority: it is bound to one owner command, immutable main, and the
+    # independently reviewed repository-administration environment.
     if: >-
       needs.policy.result == 'success' &&
       github.event_name == 'issue_comment' &&
@@ -137,7 +140,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -n "$CODESTRA_REPOSITORY_ADMIN_TOKEN"
-          python3 scripts/apply_production_reviewer_access.py \
+          python3 -I scripts/apply_production_reviewer_access.py \
             --mode apply \
             --confirm APPLY_PRODUCTION_REVIEWER_ACCESS_V1
       - name: Upload bounded rollout evidence

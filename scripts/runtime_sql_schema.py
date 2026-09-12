@@ -4,8 +4,10 @@ The checked-in baseline comes from a disposable, fully migrated database. It
 must never be learned from the database being admitted. Receipts alone are not
 proof of tables, columns, constraints, indexes or evidence-immutability triggers.
 """
+
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -13,8 +15,14 @@ from pathlib import Path
 from typing import Any
 
 CONTRACT_PATH = "config/runtime-sql-schema.v1.json"
+ALEMBIC_CATALOG_MIGRATIONS = {
+    "campaign": "0058_campaign_design.py",
+    "monitoring": "0059_integrated_monitoring.py",
+}
 SQL_GLOB = "[0-9][0-9][0-9][0-9]_*.sql"
-TABLE_RE = re.compile(r"\bCREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(middleware_[a-z0-9_]+)\s*\(", re.I)
+TABLE_RE = re.compile(
+    r"\bCREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(middleware_[a-z0-9_]+)\s*\(", re.I
+)
 
 # Exclude physical OIDs, owners, row data, statistics and sequence *values*.
 # Include logical definitions and validity/enforcement flags. pg_catalog-only
@@ -117,8 +125,49 @@ class SchemaDriftError(RuntimeError):
     """A sanitized mismatch; no credentials or business records are included."""
 
 
+def alembic_tables(root: Path, namespace: str) -> tuple[str, ...]:
+    """Derive each table from its declared, source-locked Alembic namespace."""
+    names: set[str] = set()
+    filename = ALEMBIC_CATALOG_MIGRATIONS[namespace]
+    path = root / "migrations" / "versions" / filename
+    if not path.is_file() or path.is_symlink():
+        raise SchemaDriftError(f"{namespace} schema source migration is missing")
+    for call in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "op"
+            and call.func.attr == "create_table"
+        ):
+            continue
+        if not call.args or not isinstance(call.args[0], ast.Constant):
+            raise SchemaDriftError(f"{namespace} schema table name must be literal")
+        name = call.args[0].value
+        if not isinstance(name, str) or not re.fullmatch(
+            re.escape(namespace) + r"_[a-z0-9_]+", name
+        ):
+            raise SchemaDriftError(f"{namespace} schema table name is invalid")
+        if name in names:
+            raise SchemaDriftError(f"{namespace} schema table is declared twice")
+        names.add(name)
+    if not names:
+        raise SchemaDriftError(f"{namespace} schema has no managed tables")
+    return tuple(sorted(names))
+
+
+def campaign_tables(root: Path) -> tuple[str, ...]:
+    """Return only the six campaign tables, preserving existing callers."""
+    return alembic_tables(root, "campaign")
+
+
+def monitoring_tables(root: Path) -> tuple[str, ...]:
+    """Return the durable monitoring tables required for runtime admission."""
+    return alembic_tables(root, "monitoring")
+
+
 def managed_tables(root: Path) -> tuple[str, ...]:
-    """Discover names only from the source-locked numbered SQL bundles."""
+    """Discover names from numbered SQL and the declared Alembic catalog surface."""
     names: set[str] = set()
     for relative in ("migrations", "migrations/automation"):
         paths = sorted((root / relative).glob(SQL_GLOB))
@@ -129,11 +178,15 @@ def managed_tables(root: Path) -> tuple[str, ...]:
             names.update(name.lower() for name in TABLE_RE.findall(text))
     if not names:
         raise SchemaDriftError("SQL schema has no managed tables")
+    names.update(campaign_tables(root))
+    names.update(monitoring_tables(root))
     return tuple(sorted(names))
 
 
 def structure_digest(structure: dict[str, Any]) -> str:
-    payload = json.dumps(structure, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    payload = json.dumps(structure, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
@@ -142,17 +195,25 @@ def load_contract(root: Path, history_digest: str) -> dict[str, str]:
     if not isinstance(document, dict) or document.get("schema_version") != 1:
         raise SchemaDriftError("SQL schema contract version is invalid")
     if document.get("migration_history_sha256") != history_digest:
-        raise SchemaDriftError("SQL schema contract is not bound to the accepted migration history")
+        raise SchemaDriftError(
+            "SQL schema contract is not bound to the accepted migration history"
+        )
     tables = document.get("tables")
     if not isinstance(tables, dict) or set(tables) != set(managed_tables(root)):
-        raise SchemaDriftError("SQL schema contract table coverage is incomplete or unexpected")
-    if any(not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
-           for value in tables.values()):
+        raise SchemaDriftError(
+            "SQL schema contract table coverage is incomplete or unexpected"
+        )
+    if any(
+        not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+        for value in tables.values()
+    ):
         raise SchemaDriftError("SQL schema contract contains an invalid signature")
     return tables
 
 
-async def inspect_schema(conn: Any, names: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+async def inspect_schema(
+    conn: Any, names: tuple[str, ...]
+) -> dict[str, dict[str, Any]]:
     """Catalog reads only, in one read-only repeatable-read transaction."""
     async with conn.transaction(isolation="repeatable_read", readonly=True):
         await conn.execute("SET LOCAL search_path = pg_catalog")
@@ -178,4 +239,6 @@ async def verify_sql_schema(conn: Any, root: Path) -> None:
     actual = await inspect_schema(conn, tuple(sorted(required)))
     for name, expected in required.items():
         if structure_digest(actual[name]) != expected:
-            raise SchemaDriftError("SQL-managed schema structure mismatch: public." + name)
+            raise SchemaDriftError(
+                "SQL-managed schema structure mismatch: public." + name
+            )

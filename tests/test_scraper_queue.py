@@ -1,4 +1,6 @@
 from uuid import uuid4
+from unittest.mock import Mock
+from redis.asyncio import Redis
 
 import pytest
 
@@ -37,7 +39,7 @@ async def test_scraper_signal_is_namespaced_deduplicated_and_recoverable(
 ) -> None:
     monkeypatch.setattr(settings, "environment", "staging")
     redis = _Redis()
-    queue = ScraperRedisQueue(redis)
+    queue = ScraperRedisQueue(Mock(spec=Redis, wraps=redis))
     item_id = uuid4()
     assert await queue.enqueue(item_id, "correlation") is True
     assert await queue.enqueue(item_id, "correlation") is False

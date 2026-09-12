@@ -7,7 +7,8 @@ import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable
+from types import TracebackType
+from typing import Callable, Protocol
 
 EXPECTED_CONTAINER = "compose-middleware-event-gateway-1"
 EXPECTED_PROJECT = "compose"
@@ -41,6 +42,29 @@ class IdentityError(RuntimeError):
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_args, **_kwargs):
         return None
+
+
+class ResponseHeaders(Protocol):
+    def get_content_type(self) -> str: ...
+
+
+class HttpResponse(Protocol):
+    status: int
+    headers: ResponseHeaders
+
+    def read(self, amount: int) -> bytes: ...
+
+    def __enter__(self) -> HttpResponse: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
+
+
+HttpOpener = Callable[..., HttpResponse]
 
 
 @dataclass(frozen=True)
@@ -165,7 +189,7 @@ def discover(run: Callable[[list[str]], str] = docker) -> Target:
 def _strict_get(
     url: str,
     expected: dict[str, str],
-    opener: Callable[..., object] | None = None,
+    opener: HttpOpener | None = None,
 ) -> None:
     client = opener or urllib.request.build_opener(NoRedirect()).open
     request = urllib.request.Request(url, method="GET")
@@ -191,7 +215,7 @@ def _strict_get(
         raise IdentityError("identity response schema mismatch")
 
 
-def verify_health(target: Target, opener: Callable[..., object] | None = None) -> None:
+def verify_health(target: Target, opener: HttpOpener | None = None) -> None:
     origin = f"http://{target.address}:{EXPECTED_PORT}"
     _strict_get(f"{origin}/healthz", HEALTH_BODY, opener)
     _strict_get(f"{origin}/readyz", READY_BODY, opener)

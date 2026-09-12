@@ -37,6 +37,21 @@ odoo.internal.codestra.agency:443 {
 		}
 	}
 
+	# Disabled by default: loopback is outside the integration CIDR above.
+	# Enable only for the exact reserved Middleware mail-worker address.
+	@klyrow_mail_rpc {
+		method POST
+		path /jsonrpc
+		remote_ip {$KLYROW_MAIL_RPC_CLIENT_IP:127.0.0.1}
+	}
+	handle @klyrow_mail_rpc {
+		reverse_proxy http://codestra-odoo-1:8069 {
+			header_up Host odoo
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {http.request.host}
+		}
+	}
+
 	handle {
 		respond "not found" 404
 	}

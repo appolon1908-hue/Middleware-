@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 import httpx
 from jsonschema import Draft202012Validator, FormatChecker
 
-from .config import ConfigurationError, Settings
+from .config import ConfigurationError
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 
@@ -68,7 +68,7 @@ class TelnexaSmsAdapter:
     )
 
     def __init__(
-        self, settings: Settings, env: Mapping[str, str] | None = None
+        self, settings: Any, env: Mapping[str, str] | None = None
     ) -> None:
         self.settings = settings
         self.env = os.environ if env is None else env
@@ -94,7 +94,8 @@ class TelnexaSmsAdapter:
             raise ConfigurationError(
                 "TELNEXA_SMS_BASE_URL must be a credential-free origin"
             )
-        if self.settings.app_env == "production" and parsed.scheme != "https":
+        app_env = self.env.get("APP_ENV", getattr(self.settings, "app_env", "development")).strip().lower()
+        if app_env == "production" and parsed.scheme != "https":
             raise ConfigurationError("production Telnexa delivery requires HTTPS")
         return value
 

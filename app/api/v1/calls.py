@@ -27,7 +27,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.provisioning_auth import (
@@ -68,11 +68,11 @@ def _encode_cursor(created_at, call_id: UUID) -> str:
     return base64.urlsafe_b64encode(f"{created_at.isoformat()}|{call_id}".encode()).decode()
 
 
-def _decode_cursor(cursor: str) -> tuple[str, str]:
+def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
     try:
         raw = base64.urlsafe_b64decode(cursor.encode()).decode()
         created_at, call_id = raw.split("|", 1)
-        return created_at, call_id
+        return datetime.fromisoformat(created_at), UUID(call_id)
     except Exception as exc:  # noqa: BLE001 - any malformed cursor is a 422
         raise HTTPException(422, "invalid cursor") from exc
 
@@ -108,8 +108,8 @@ async def list_calls(
     if cursor is not None:
         created_at, call_id = _decode_cursor(cursor)
         stmt = stmt.where(
-            (TelephonyCallLifecycle.created_at, TelephonyCallLifecycle.id)
-            < (created_at, call_id)
+            tuple_(TelephonyCallLifecycle.created_at, TelephonyCallLifecycle.id)
+            < tuple_(created_at, call_id)
         )
     stmt = stmt.order_by(
         TelephonyCallLifecycle.created_at.desc(), TelephonyCallLifecycle.id.desc()

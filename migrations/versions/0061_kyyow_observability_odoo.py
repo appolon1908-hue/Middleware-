@@ -22,7 +22,7 @@ ROUTES = (
 )
 
 
-def _insert_routes(environment, base_url, credential, audience, tls_profile, version_prefix):
+def _insert_routes(environment, base_url, credential, audience, tls_profile, version_prefix, configuration_version):
     for index, (endpoint_id, endpoint_key, _short_name, method, path, scope, stale_read_safe) in enumerate(ROUTES, start=1):
         endpoint_version_id = f"61000000-0000-4000-{version_prefix:04d}-{index:012d}"
         binding_id = f"61000000-0000-5000-{version_prefix:04d}-{index:012d}"
@@ -72,7 +72,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
                kill_switch,configuration_checksum,effective_at,created_by,approved_by)
             VALUES
               (%(version_id)s::uuid,
-               %(endpoint_id)s::uuid,1,%(base_url)s,%(path)s,%(method)s,
+               %(endpoint_id)s::uuid,%(configuration_version)s,%(base_url)s,%(path)s,%(method)s,
                'application/json','oauth2_client_secret',%(audience)s,
                jsonb_build_array(%(scope)s),%(credential)s,%(tls_profile)s,
                10000,3000,60,4,%(idempotency)s,
@@ -83,6 +83,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
             {
                 "version_id": endpoint_version_id,
                 "endpoint_id": endpoint_id,
+                "configuration_version": configuration_version,
                 "base_url": base_url,
                 "path": path,
                 "method": method,
@@ -138,6 +139,7 @@ def upgrade() -> None:
         "codestra-odoo-integration",
         "staging-internal",
         61,
+        1,
     )
     _insert_routes(
         "production",
@@ -146,6 +148,7 @@ def upgrade() -> None:
         "codestra-odoo",
         "production-internal-ca",
         62,
+        2,
     )
 
 

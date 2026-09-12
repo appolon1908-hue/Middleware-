@@ -200,6 +200,45 @@ async def test_kill_switch_closed_lands_in_partial_with_honest_step_records(clie
     assert "provision_sms" not in steps_by_operation
     assert "provision_email" not in steps_by_operation
 
+@pytest.mark.asyncio
+async def test_optional_entitlements_are_echoed_and_unsupported_capabilities_are_gated(
+    client, authority,
+):
+    """Approved optional intent must survive the canonical command boundary.
+
+    Middleware has no voicemail/recording/monitoring adapters yet, so those
+    requested capabilities are durable blocked steps rather than an implicit
+    success.  A disabled agent desktop must also suppress Keycloak role
+    assignment even when the request contains a campaign.
+    """
+    token = authority()
+    entitlements = {
+        "agent_desktop": False,
+        "voicemail": True,
+        "recording_access": True,
+        "monitoring_access": True,
+    }
+    body = _body(
+        channels={"odoo": True, "phone": False, "webrtc": False, "sms": False, "email": False},
+        entitlements=entitlements,
+    )
+    response = await client.post(
+        "/platform/v1/agent-provisioning/requests", json=body,
+        headers=_headers(token),
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["entitlements"] == entitlements
+    assert payload["state"] == "PARTIAL"
+
+    steps_by_operation = {step["operation"]: step for step in payload["steps"]}
+    assert steps_by_operation["assign_approved_roles"]["state"] == "skipped"
+    assert steps_by_operation["assign_approved_roles"]["error_code"] == "ENTITLEMENT_DISABLED"
+    for operation in ("provision_voicemail", "grant_recording_access", "grant_monitoring_access"):
+        assert steps_by_operation[operation]["system"] == "odoo"
+        assert steps_by_operation[operation]["state"] == "blocked"
+        assert steps_by_operation[operation]["error_code"] == "CAPABILITY_ADAPTER_NOT_CONFIGURED"
+
 
 async def _internal_id_for(request_id: str) -> str:
     engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)

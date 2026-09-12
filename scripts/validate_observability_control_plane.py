@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts" / "observability-control-plane.v1.json"
@@ -20,7 +21,7 @@ MAIN_API = ROOT / "app" / "appolon_factory.py"
 ALERTS_API = ROOT / "app" / "observability_alerts.py"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"OBSERVABILITY_CONTROL_PLANE=FAIL {message}")
 
 

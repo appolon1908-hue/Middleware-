@@ -25,7 +25,7 @@ class TelnexaSenderProfileAdapter(TelnexaSmsAdapter):
 
     SENDERS_PATH = "/api/v1/senders"
 
-    def _headers(self, tenant_id: str) -> dict[str, str]:
+    def _sender_headers(self, tenant_id: str) -> dict[str, str]:
         return {
             "X-API-Key": self._api_key(),
             "X-Tenant-ID": tenant_id,
@@ -48,7 +48,7 @@ class TelnexaSenderProfileAdapter(TelnexaSmsAdapter):
                 timeout=httpx.Timeout(10.0, connect=5.0),
                 follow_redirects=False,
             ) as client:
-                response = await client.get(url, headers=self._headers(tenant_id))
+                response = await client.get(url, headers=self._sender_headers(tenant_id))
                 response.raise_for_status()
                 value = response.json()
         except (httpx.HTTPError, ValueError) as exc:
@@ -90,7 +90,7 @@ class TelnexaSenderProfileAdapter(TelnexaSmsAdapter):
                 follow_redirects=False,
             ) as client:
                 response = await client.post(
-                    url, json=body, headers=self._headers(tenant_id)
+                    url, json=body, headers=self._sender_headers(tenant_id)
                 )
                 response.raise_for_status()
                 value = response.json()

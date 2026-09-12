@@ -40,7 +40,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.agent_provisioning import (
@@ -178,8 +178,13 @@ async def _list_by_channel(
     if cursor:
         cursor_created_at, cursor_id = _decode_cursor(cursor)
         stmt = stmt.where(
-            tuple_(AgentProvisioningRequest.created_at, AgentProvisioningRequest.id)
-            < tuple_(cursor_created_at, cursor_id)
+            or_(
+                AgentProvisioningRequest.created_at < cursor_created_at,
+                and_(
+                    AgentProvisioningRequest.created_at == cursor_created_at,
+                    AgentProvisioningRequest.id < cursor_id,
+                ),
+            )
         )
     stmt = stmt.order_by(
         AgentProvisioningRequest.created_at.desc(), AgentProvisioningRequest.id.desc(),

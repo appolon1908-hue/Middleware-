@@ -144,7 +144,9 @@
       "requiredScope": "crawler.results.publish",
       "path": "/api/v1/kyqra/results",
       "eventTypes": [
-        "codestra.crawler.result.available"
+        "codestra.crawler.job.completed",
+        "codestra.crawler.result.available",
+        "codestra.crawler.result.review_required"
       ],
       "delivery": "at_least_once"
     },

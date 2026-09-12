@@ -7228,6 +7228,8 @@ paths:
       - kyyow-observability-sync
       summary: List Kpis
       operationId: list_kpis_v1_observability_kpis_get
+      security:
+      - bearerAuth: []
       parameters:
       - name: service_id
         in: query
@@ -7292,8 +7294,6 @@ paths:
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
   /v1/observability/incidents:
     post:
       tags:
@@ -7392,10 +7392,6 @@ paths:
       - kyyow-observability-sync
       summary: Odoo Sync Status
       operationId: odoo_sync_status_v1_observability_odoo_sync_get
-      security:
-      - bearerAuth: []
-      parameters:
-      - *id001
       responses:
         '200':
           description: Successful Response
@@ -7416,6 +7412,10 @@ paths:
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
   /health:
     get:
       summary: Health

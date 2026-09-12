@@ -46,6 +46,18 @@ The Middleware Klyrow adapter retains command identity `email.message.send.v1`, 
 
 Accepted email lifecycle events include accepted, queued, submitted, sent, delivered, deferred, bounced, complained, rejected, failed, cancelled, unknown outcome, opened, clicked, and unsubscribed. Exact replay is deduplicated; changed content under an existing event identity is rejected.
 
+The dedicated mTLS Klyrow callback route projects each durable delivery event
+into the same canonical communication message used for submission and read-back.
+It resolves Klyrow's provider message ID through the original command
+`operation_id`, including after a different Middleware process accepted the
+send. The raw callback remains pending and Klyrow receives a retryable failure
+until that canonical message exists; a replay after a partial commit is safe.
+
+Odoo uses the dedicated `odoo-email` caller with `odoo.email.command.write` and
+`odoo.email.status.read`. Its idempotency read-back is channel-scoped to email,
+as `odoo-sms` is scoped to SMS. Odoo can therefore retain one local projection
+while Middleware remains the lifecycle authority.
+
 ## New production-control surface
 
 Prefix: `/platform/v1/email/production`

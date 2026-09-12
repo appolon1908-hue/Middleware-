@@ -313,6 +313,18 @@ class MemoryCommunicationsStore:
     ) -> None:
         return None
 
+    async def message_by_operation(
+        self, tenant_id: str, operation_id: uuid.UUID
+    ) -> CommunicationMessage | None:
+        return next(
+            (
+                message
+                for (tenant, _), message in self.messages.items()
+                if tenant == tenant_id and message.operationId == operation_id
+            ),
+            None,
+        )
+
     async def ready(self) -> bool:
         return True
 
@@ -409,6 +421,29 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
             row["request_sha256"],
             row["message_id"],
         )
+
+    async def message_by_operation(
+        self, tenant_id: str, operation_id: uuid.UUID
+    ) -> CommunicationMessage | None:
+        existing = await super().message_by_operation(tenant_id, operation_id)
+        if existing is not None:
+            return existing
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT payload FROM middleware_communication_messages "
+                "WHERE tenant_id=$1 AND payload->>'operationId'=$2 LIMIT 1",
+                tenant_id,
+                str(operation_id),
+            )
+        if row is None:
+            return None
+        message = (
+            CommunicationMessage.model_validate_json(row["payload"])
+            if isinstance(row["payload"], str)
+            else CommunicationMessage.model_validate(row["payload"])
+        )
+        self.messages[(tenant_id, message.messageId)] = message
+        return message
 
     async def message_by_idempotency(
         self, tenant_id: str, idempotency_key: str,
@@ -1119,10 +1154,29 @@ class CommunicationsService:
         try:
             message_id = uuid.UUID(str(raw_message_id))
         except ValueError:
-            return False
-        message = self.store.messages.get((tenant_id, message_id))
+            message_id = None
+        message = (
+            self.store.messages.get((tenant_id, message_id))
+            if message_id is not None
+            else None
+        )
+        if message is None:
+            raw_operation_id = (
+                payload.get("operationId")
+                or payload.get("operation_id")
+                or payload.get("command_id")
+            )
+            try:
+                operation_id = uuid.UUID(str(raw_operation_id))
+            except ValueError:
+                operation_id = None
+            if operation_id is not None:
+                message = await self.store.message_by_operation(
+                    tenant_id, operation_id
+                )
         if message is None:
             return False
+        message_id = message.messageId
         event_channel = (
             "sms"
             if envelope.source == "telnexa-gateway"
@@ -1140,9 +1194,10 @@ class CommunicationsService:
             or envelope.event_type.rsplit(".", 1)[-1]
         )
         status = _provider_status_to_canonical(raw_status)
-        is_email_unsubscribe = (
-            envelope.event_type == "codestra.email.message.unsubscribed"
-        )
+        is_email_unsubscribe = envelope.event_type in {
+            "codestra.email.message.unsubscribed",
+            "klyrow.email.unsubscribed",
+        }
         if is_email_unsubscribe:
             raw_recipient = (
                 payload.get("recipient")

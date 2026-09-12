@@ -76,7 +76,7 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
               (CAST(:version_id AS uuid),
                CAST(:endpoint_id AS uuid),:configuration_version,:base_url,:path,:method,
                'application/json','oauth2_client_secret',:audience,
-               jsonb_build_array(:scope),:credential,:tls_profile,
+               jsonb_build_array(CAST(:scope AS text)),:credential,:tls_profile,
                10000,3000,60,4,:idempotency,
                'BOUNDED_TRANSIENT_RETRY',3,false,false,:stale,true,false,
                :checksum,now(),'kyyow-observability','protected-review-required')

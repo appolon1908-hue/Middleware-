@@ -38,7 +38,7 @@ def test_authority_implementation_assets_are_fail_closed() -> None:
     assert validator.validate_assets(ROOT) == []
 
 
-def test_current_authority_must_require_schema_0010(tmp_path: Path) -> None:
+def test_current_authority_must_require_schema_0062(tmp_path: Path) -> None:
     _copy_assets(tmp_path)
     path = tmp_path / validator.CURRENT_AUTHORITY_PATH
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -47,7 +47,7 @@ def test_current_authority_must_require_schema_0010(tmp_path: Path) -> None:
     )
     path.write_text(json.dumps(value), encoding="utf-8")
     errors = validator.validate_assets(tmp_path)
-    assert any("must require schema 0060_agent_provisioning" in error for error in errors)
+    assert any("must require schema 0062_lifecycle_outcome_state" in error for error in errors)
 
 
 def test_current_candidate_must_remain_pending_and_null(tmp_path: Path) -> None:

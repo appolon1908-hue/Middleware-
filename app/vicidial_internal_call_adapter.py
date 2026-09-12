@@ -299,7 +299,7 @@ class VicidialInternalCallAdapter:
             actor = CallPrincipal.model_validate(request.payload["actor"])
         except (KeyError, TypeError, ValueError):
             raise VicidialInternalCallError("Server B evidence contract is invalid") from None
-        if (evidence.operation_id != original or evidence.call_id != original
+        if (evidence.operation_id != original
                 or evidence.correlation_id != request.correlation_id
                 or evidence.tenant_id != request.tenant_id or evidence.subject != actor.subject
                 or evidence.employee_id != actor.employee_id or evidence.extension != actor.extension

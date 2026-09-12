@@ -43,7 +43,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,6 +120,24 @@ class ChannelSelection(BaseModel):
     email: bool = False
 
 
+class ProvisioningEntitlements(BaseModel):
+    """Approved optional capabilities for this agent.
+
+    These are deliberately separate from transport channels.  A request may
+    need an Odoo identity without an agent desktop, and voicemail/recording/
+    monitoring are capability grants rather than delivery channels.  Keeping
+    them explicit prevents the Odoo approval from being silently discarded at
+    the Middleware boundary.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent_desktop: bool = True
+    voicemail: bool = False
+    recording_access: bool = False
+    monitoring_access: bool = False
+
+
 class TelephonySelection(BaseModel):
     existing_extension: str | None = Field(default=None, max_length=16)
     incoming_allowed: bool = True
@@ -147,6 +165,7 @@ class ProvisioningCreate(BaseModel):
     identity: IdentitySelection
     campaigns: list[CampaignAssignment] = Field(default_factory=list, max_length=32)
     channels: ChannelSelection
+    entitlements: ProvisioningEntitlements = Field(default_factory=ProvisioningEntitlements)
     telephony: TelephonySelection = Field(default_factory=TelephonySelection)
 
 
@@ -284,32 +303,78 @@ async def _run_identity_step(
 async def _run_entitlements_step(
     session: AsyncSession, request: AgentProvisioningRequest,
 ) -> StepOutcome:
-    """ENTITLEMENTS: assign the approved realm role(s) for the requested campaigns."""
-    if not request.campaigns_json:
-        return "ok"
-    if not settings.live_identity_provisioning_enabled or not request.keycloak_subject:
-        await _add_step(
-            session, request, system="keycloak", operation="assign_approved_roles",
-            state="skipped", error_code="KILL_SWITCH_CLOSED",
-            error_summary="live_identity_provisioning_enabled is false or no keycloak_subject",
-        )
-        return "gated"
-    adapter = KeycloakLifecycleAdapter(settings)
-    role_names = sorted({entry["role"] for entry in request.campaigns_json})
-    try:
-        await adapter.assign_approved_roles(request.keycloak_subject, role_names)
-        await _add_step(
-            session, request, system="keycloak", operation="assign_approved_roles",
-            state="succeeded", external_reference=",".join(role_names),
-        )
-        return "ok"
-    except KeycloakLifecycleError as exc:
-        await _add_step(
-            session, request, system="keycloak", operation="assign_approved_roles",
-            state="failed", error_code="KEYCLOAK_ADAPTER_ERROR", error_summary=str(exc),
-        )
-        return "failed"
+    """ENTITLEMENTS: apply the approved desktop and optional capabilities.
 
+    Keycloak role assignment is the only implemented external entitlement
+    adapter in this saga.  Voicemail, recording access, and monitoring access
+    are still represented as explicit, durable Odoo-owned gates until their
+    adapters are introduced; they must never be treated as provisioned merely
+    because Odoo requested them.
+    """
+    entitlements = request.channels_json.get("_entitlements", {})
+    outcomes: list[StepOutcome] = []
+    agent_desktop = bool(entitlements.get("agent_desktop", True))
+
+    if request.campaigns_json:
+        if not agent_desktop:
+            await _add_step(
+                session, request, system="keycloak", operation="assign_approved_roles",
+                state="skipped", error_code="ENTITLEMENT_DISABLED",
+                error_summary="agent_desktop entitlement is disabled by the approved request",
+            )
+        elif not settings.live_identity_provisioning_enabled or not request.keycloak_subject:
+            await _add_step(
+                session, request, system="keycloak", operation="assign_approved_roles",
+                state="skipped", error_code="KILL_SWITCH_CLOSED",
+                error_summary=(
+                    "live_identity_provisioning_enabled is false or no keycloak_subject"
+                ),
+            )
+            outcomes.append("gated")
+        else:
+            adapter = KeycloakLifecycleAdapter(settings)
+            role_names = sorted({entry["role"] for entry in request.campaigns_json})
+            try:
+                await adapter.assign_approved_roles(request.keycloak_subject, role_names)
+                await _add_step(
+                    session, request, system="keycloak", operation="assign_approved_roles",
+                    state="succeeded", external_reference=",".join(role_names),
+                )
+            except KeycloakLifecycleError as exc:
+                await _add_step(
+                    session, request, system="keycloak", operation="assign_approved_roles",
+                    state="failed", error_code="KEYCLOAK_ADAPTER_ERROR", error_summary=str(exc),
+                )
+                outcomes.append("failed")
+
+    # The AgentProvisioningStep system constraint intentionally permits
+    # "odoo" as the durable control-plane record for capabilities whose
+    # provider adapter has not been implemented yet.  This makes the gap
+    # visible to Odoo's existing mandatory-step/readback machinery and keeps
+    # the saga PARTIAL without inventing a false success.
+    unavailable = (
+        ("voicemail", "provision_voicemail", "Voicemail adapter is not configured."),
+        (
+            "recording_access", "grant_recording_access",
+            "Recording-access adapter is not configured.",
+        ),
+        (
+            "monitoring_access", "grant_monitoring_access",
+            "Monitoring-access adapter is not configured.",
+        ),
+    )
+    for capability, operation, summary in unavailable:
+        if not entitlements.get(capability):
+            continue
+        await _add_step(
+            session, request, system="odoo", operation=operation, state="blocked",
+            error_code="CAPABILITY_ADAPTER_NOT_CONFIGURED", error_summary=summary,
+        )
+        outcomes.append("gated")
+
+    if "failed" in outcomes:
+        return "failed"
+    return "gated" if outcomes else "ok"
 
 async def _prior_succeeded_step(
     session: AsyncSession, request: AgentProvisioningRequest, operations: tuple[str, ...],
@@ -716,6 +781,7 @@ def _public_view(request: AgentProvisioningRequest, steps: list[AgentProvisionin
         "keycloak_subject": request.keycloak_subject,
         "last_error_code": request.last_error_code,
         "last_error_summary": request.last_error_summary,
+        "entitlements": request.channels_json.get("_entitlements", {}),
         "version": request.version,
         "steps": [
             {
@@ -778,6 +844,7 @@ async def create_provisioning_request(
         channels_json={
             **body.channels.model_dump(),
             "_identity": body.identity.model_dump(),
+            "_entitlements": body.entitlements.model_dump(),
             "_telephony": body.telephony.model_dump(),
         },
         telephony_json=body.telephony.model_dump(),

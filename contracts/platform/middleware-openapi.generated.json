@@ -140,8 +140,8 @@
             "type": "string"
           },
           "workflow_version": {
-            "maximum": 2147483647,
-            "minimum": 1,
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
             "title": "Workflow Version",
             "type": "integer"
           }
@@ -224,8 +224,8 @@
             "type": "string"
           },
           "value": {
-            "maximum": 1000000,
-            "minimum": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
             "title": "Value",
             "type": "number"
           }
@@ -391,7 +391,7 @@
             "type": "string"
           },
           "design_revision": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Design Revision",
             "type": "integer"
           },
@@ -463,14 +463,14 @@
             "title": "Callback Rule"
           },
           "calling_hour_end": {
-            "exclusiveMinimum": 0,
-            "maximum": 24,
+            "exclusiveMinimum": 0.0,
+            "maximum": 24.0,
             "title": "Calling Hour End",
             "type": "number"
           },
           "calling_hour_start": {
-            "exclusiveMaximum": 24,
-            "minimum": 0,
+            "exclusiveMaximum": 24.0,
+            "minimum": 0.0,
             "title": "Calling Hour Start",
             "type": "number"
           },
@@ -535,15 +535,15 @@
           },
           "max_call_attempts": {
             "default": 1,
-            "maximum": 1000,
-            "minimum": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
             "title": "Max Call Attempts",
             "type": "integer"
           },
           "max_retries": {
             "default": 0,
-            "maximum": 1000,
-            "minimum": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
             "title": "Max Retries",
             "type": "integer"
           },
@@ -615,7 +615,7 @@
           },
           "design_request_revision": {
             "default": 1,
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Design Request Revision",
             "type": "integer"
           },
@@ -659,12 +659,12 @@
             "type": "string"
           },
           "odoo_campaign_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Odoo Campaign Id",
             "type": "integer"
           },
           "owner_user_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Owner User Id",
             "type": "integer"
           },
@@ -1075,7 +1075,7 @@
             "type": "string"
           },
           "expected_revision": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Expected Revision",
             "type": "integer"
           },
@@ -1098,7 +1098,7 @@
         "additionalProperties": false,
         "properties": {
           "expected_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -1218,7 +1218,7 @@
             "type": "string"
           },
           "expected_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -1450,7 +1450,7 @@
             "type": "string"
           },
           "sequence": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Sequence",
             "type": "integer"
           },
@@ -1576,8 +1576,8 @@
             "type": "string"
           },
           "workflow_version": {
-            "maximum": 2147483647,
-            "minimum": 1,
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
             "title": "Workflow Version",
             "type": "integer"
           }
@@ -1652,7 +1652,7 @@
           "templateVersion": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -1765,7 +1765,7 @@
         "additionalProperties": false,
         "properties": {
           "expected_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -1851,7 +1851,7 @@
             "type": "string"
           },
           "sequence": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Sequence",
             "type": "integer"
           },
@@ -2126,7 +2126,7 @@
         "additionalProperties": false,
         "properties": {
           "expected_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -2392,7 +2392,7 @@
             "type": "string"
           },
           "lead_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Lead Id",
             "type": "integer"
           },
@@ -2529,7 +2529,7 @@
             "type": "string"
           },
           "expected_revision": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Expected Revision",
             "type": "integer"
           },
@@ -2875,8 +2875,8 @@
           },
           "limit": {
             "default": 100,
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Limit",
             "type": "integer"
           },
@@ -2904,8 +2904,8 @@
           },
           "step_seconds": {
             "default": 60,
-            "maximum": 86400,
-            "minimum": 1,
+            "maximum": 86400.0,
+            "minimum": 1.0,
             "title": "Step Seconds",
             "type": "integer"
           }
@@ -3010,7 +3010,7 @@
             "type": "string"
           },
           "expected_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Expected Version",
             "type": "integer"
           },

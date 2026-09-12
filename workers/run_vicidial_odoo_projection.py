@@ -5,11 +5,13 @@ import asyncio
 import logging
 import os
 import signal
+from collections.abc import Callable
 from contextlib import suppress
 from typing import Any
 
 import httpx
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import EventEnvelope
 from app.vicidial_odoo_projection import (
@@ -27,6 +29,7 @@ from app.vicidial_odoo_projection import (
 from app.vicidial_odoo_projection_authority import (
     validate_projection_source_locks,
 )
+from app.vicidial_odoo_projection_lifecycle_sync import sync_call_lifecycle
 
 log = logging.getLogger("codestra.vicidial_odoo_projection")
 
@@ -48,6 +51,7 @@ async def handle_message(
     settings: ProjectionSettings,
     state: ProjectionState,
     dispatcher: OdooCallEventDispatcher,
+    session_factory: Callable[[], AsyncSession] | None = None,
 ) -> None:
     heartbeat = asyncio.create_task(progress_heartbeat(message))
     try:
@@ -73,6 +77,15 @@ async def handle_message(
         if current == "failed":
             await message.term()
             return
+        if session_factory is not None:
+            try:
+                async with session_factory() as lifecycle_session:
+                    await sync_call_lifecycle(lifecycle_session, event)
+            except Exception:  # best-effort side effect, never blocks Odoo delivery
+                log.exception(
+                    "telephony_call_lifecycle sync failed for correlation_id=%s",
+                    event.correlation_id,
+                )
         try:
             if current == "reconciliation_required":
                 await dispatcher.reconcile(event, reason="durable prior write attempt")
@@ -113,6 +126,7 @@ async def process_batch(
     settings: ProjectionSettings,
     state: ProjectionState,
     dispatcher: OdooCallEventDispatcher,
+    session_factory: Callable[[], AsyncSession] | None = None,
 ) -> None:
     """Start every fetched message immediately so none expires behind the batch."""
     results = await asyncio.gather(
@@ -122,6 +136,7 @@ async def process_batch(
                 settings=settings,
                 state=state,
                 dispatcher=dispatcher,
+                session_factory=session_factory,
             )
             for message in messages
         ),
@@ -149,6 +164,12 @@ async def run() -> None:
     )
     import nats
     from nats.errors import TimeoutError as NatsTimeoutError
+
+    # Imported here, not at module scope, so this process's single asyncio.run()
+    # loop is the only loop that ever touches this engine's connection pool --
+    # unlike a test process, which may run many short-lived event loops across
+    # test functions and must never share a loop-bound pool between them.
+    from app.db.session import SessionFactory as session_factory
 
     nats_url = settings.nats_url
     if nats_url is None:
@@ -201,6 +222,7 @@ async def run() -> None:
                     settings=settings,
                     state=state,
                     dispatcher=dispatcher,
+                    session_factory=session_factory,
                 )
         finally:
             await client.drain()

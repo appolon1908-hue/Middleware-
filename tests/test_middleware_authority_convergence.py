@@ -42,7 +42,7 @@ def test_reviewed_authority_convergence_record_is_fail_closed() -> None:
 def test_current_authority_requires_schema_0010_and_new_exact_main_build() -> None:
     value = _current_authority()
     artifacts = value["artifactAuthority"]
-    assert artifacts["requiredSchemaHead"] == "0059_integrated_monitoring"
+    assert artifacts["requiredSchemaHead"] == "0060_agent_provisioning"
     assert (
         artifacts["candidateStatus"]
         == "PENDING_EXACT_PROTECTED_MERGE_BUILD"

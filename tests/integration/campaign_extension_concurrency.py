@@ -43,43 +43,125 @@ async def insert(pool, name, number, start, end, delay=0):
             return "OVERLAP"
 
 
+
+
+async def find_test_bases(pool):
+    """Choose a free extension band and unique campaign numbers for this run."""
+    async with pool.acquire() as connection:
+        extension_base = None
+        for candidate in range(6100, 9201, 100):
+            occupied = await connection.fetchval(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM campaign_extension_allocation
+                    WHERE extension_range && int4range($1, $2, '[]')
+                )
+                """,
+                candidate,
+                candidate + 799,
+            )
+            if not occupied:
+                extension_base = candidate
+                break
+        if extension_base is None:
+            raise RuntimeError("no free extension range available for concurrency test")
+        max_number = await connection.fetchval(
+            "SELECT COALESCE(MAX(campaign_number), 0) "
+            "FROM campaign_extension_allocation"
+        )
+    number_base = ((int(max_number) // 100) + 1) * 100
+    return extension_base, number_base
+
 async def main():
     database_url = os.environ["TEST_DATABASE_URL"]
     assert "diag" in database_url or "rehearsal" in database_url
     pool = await asyncpg.create_pool(database_url)
+    extension_base, number_base = await find_test_bases(pool)
+
     exact = await asyncio.gather(
-        insert(pool, "EXACT1", 9000, 9000, 9099, 0.1),
-        insert(pool, "EXACT2", 9100, 9000, 9099),
+        insert(pool, "EXACT1", number_base, extension_base, extension_base + 99, 0.1),
+        insert(
+            pool,
+            "EXACT2",
+            number_base + 100,
+            extension_base,
+            extension_base + 99,
+        ),
     )
     assert sorted(exact) == ["OVERLAP", "PASS"]
+
     partial = await asyncio.gather(
-        insert(pool, "PART1", 9200, 9100, 9199, 0.1),
-        insert(pool, "PART2", 9300, 9199, 9298),
+        insert(
+            pool,
+            "PART1",
+            number_base + 200,
+            extension_base + 100,
+            extension_base + 199,
+            0.1,
+        ),
+        insert(
+            pool,
+            "PART2",
+            number_base + 300,
+            extension_base + 199,
+            extension_base + 298,
+        ),
     )
     assert sorted(partial) == ["OVERLAP", "PASS"]
+
     contained = await asyncio.gather(
-        insert(pool, "OUTER", 9400, 9300, 9399, 0.1),
-        insert(pool, "INNER", 9500, 9320, 9330),
+        insert(
+            pool,
+            "OUTER",
+            number_base + 400,
+            extension_base + 300,
+            extension_base + 399,
+            0.1,
+        ),
+        insert(
+            pool,
+            "INNER",
+            number_base + 500,
+            extension_base + 320,
+            extension_base + 330,
+        ),
     )
     assert sorted(contained) == ["OVERLAP", "PASS"]
+
     adjacent = await asyncio.gather(
-        insert(pool, "ADJ1", 9600, 9400, 9499, 0.1),
-        insert(pool, "ADJ2", 9700, 9500, 9599),
+        insert(
+            pool,
+            "ADJ1",
+            number_base + 600,
+            extension_base + 400,
+            extension_base + 499,
+            0.1,
+        ),
+        insert(
+            pool,
+            "ADJ2",
+            number_base + 700,
+            extension_base + 500,
+            extension_base + 599,
+        ),
     )
     assert adjacent == ["PASS", "PASS"]
+
     many = await asyncio.gather(
         *[
             insert(
                 pool,
                 f"BLOCK{offset}",
-                9800 + (offset * 100),
-                9600 + (offset * 10),
-                9609 + (offset * 10),
+                number_base + 800 + (offset * 100),
+                extension_base + 600 + (offset * 10),
+                extension_base + 609 + (offset * 10),
             )
             for offset in range(5)
         ]
     )
     assert many == ["PASS"] * 5
+
     async with pool.acquire() as connection:
         transaction = connection.transaction()
         await transaction.start()
@@ -87,22 +169,41 @@ async def main():
             INSERT,
             uuid.uuid4(),
             f"{RUN_ID}-ROLLBACK",
-            10300,
+            number_base + 1300,
             f"ALLOC-{RUN_ID}-ROLLBACK",
-            9700,
-            9799,
+            extension_base + 700,
+            extension_base + 799,
             "c" * 64,
             RUN_ID,
         )
         await transaction.rollback()
-    assert await insert(pool, "AFTERROLLBACK", 10400, 9700, 9799) == "PASS"
+
+    assert (
+        await insert(
+            pool,
+            "AFTERROLLBACK",
+            number_base + 1400,
+            extension_base + 700,
+            extension_base + 799,
+        )
+        == "PASS"
+    )
     async with pool.acquire() as connection:
         await connection.execute(
             "UPDATE campaign_extension_allocation"
             " SET allocation_status='RETIRED' WHERE campaign_id=$1",
             f"{RUN_ID}-AFTERROLLBACK",
         )
-    assert await insert(pool, "REUSE", 10500, 9700, 9799) == "OVERLAP"
+    assert (
+        await insert(
+            pool,
+            "REUSE",
+            number_base + 1500,
+            extension_base + 700,
+            extension_base + 799,
+        )
+        == "OVERLAP"
+    )
     async with pool.acquire() as connection:
         assert (
             await connection.fetchval(

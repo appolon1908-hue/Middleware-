@@ -652,6 +652,12 @@ operations:
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: observability
+  method: POST
+  path: /v1/observability/incidents
+  canonical_operation_id: submit_incident_v1_observability_incidents_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: observability
   method: GET
   path: /v1/observability/integrations
   canonical_operation_id: integrations_v1_observability_integrations_get
@@ -661,6 +667,24 @@ operations:
   method: GET
   path: /v1/observability/integrations/{integration_id}
   canonical_operation_id: integration_v1_observability_integrations__integration_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: observability
+  method: GET
+  path: /v1/observability/kpis
+  canonical_operation_id: list_kpis_v1_observability_kpis_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: observability
+  method: POST
+  path: /v1/observability/kpis
+  canonical_operation_id: submit_kpi_v1_observability_kpis_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: observability
+  method: GET
+  path: /v1/observability/kpis/{event_id}
+  canonical_operation_id: get_kpi_v1_observability_kpis__event_id__get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: observability
@@ -679,6 +703,12 @@ operations:
   method: POST
   path: /v1/observability/metrics/query-range
   canonical_operation_id: query_metrics_range_v1_observability_metrics_query_range_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: observability
+  method: GET
+  path: /v1/observability/odoo-sync
+  canonical_operation_id: odoo_sync_status_v1_observability_odoo_sync_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: observability
@@ -1166,35 +1196,4 @@ operations:
   path: /webhooks/vicidial/call-result/{webhook_id}
   canonical_operation_id: vicidial_call_result_webhooks_vicidial_call_result__webhook_id__post
   implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
-
-- domain: observability
-  method: POST
-  path: /v1/observability/kpis
-  canonical_operation_id: submit_kyyow_kpi_v1_observability_kpis_post
-  implementation_file: app/api/v1/observability_sync.py
-  runtime_state: IMPLEMENTED
-- domain: observability
-  method: GET
-  path: /v1/observability/kpis
-  canonical_operation_id: list_kyyow_kpis_v1_observability_kpis_get
-  implementation_file: app/api/v1/observability_sync.py
-  runtime_state: IMPLEMENTED
-- domain: observability
-  method: GET
-  path: /v1/observability/kpis/{event_id}
-  canonical_operation_id: get_kyyow_kpi_v1_observability_kpis__event_id__get
-  implementation_file: app/api/v1/observability_sync.py
-  runtime_state: IMPLEMENTED
-- domain: observability
-  method: POST
-  path: /v1/observability/incidents
-  canonical_operation_id: submit_kyyow_incident_v1_observability_incidents_post
-  implementation_file: app/api/v1/observability_sync.py
-  runtime_state: IMPLEMENTED
-- domain: observability
-  method: GET
-  path: /v1/observability/odoo-sync
-  canonical_operation_id: get_kyyow_odoo_sync_v1_observability_odoo_sync_get
-  implementation_file: app/api/v1/observability_sync.py
   runtime_state: IMPLEMENTED

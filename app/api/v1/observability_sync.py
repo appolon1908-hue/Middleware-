@@ -254,7 +254,7 @@ async def _enqueue(
         event_type=event_type,
         schema_version=payload["schema_version"],
         original_event_id=payload["event_id"],
-        entity_key=f"{payload['tenant_id']}:{payload.get('incident_id', payload.get('metric_code'))}",
+        entity_key=_entity_key(payload),
         source_system="kyyow-observability",
         correlation_id=correlation_id,
         payload_json=payload,

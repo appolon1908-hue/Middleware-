@@ -65,7 +65,7 @@ class IdentityWebhookContractValidationTests(unittest.TestCase):
             validator.validate(ROOT)
         )
         self.assertEqual(
-            (service_count, grant_count, webhook_count, event_count), (18, 32, 8, 39)
+            (service_count, grant_count, webhook_count, event_count), (18, 32, 8, 40)
         )
         self.assertEqual(sum(states.values()), 18)
 

@@ -646,4 +646,3 @@ def test_new_telephony_methods_valid_request_hits_approved_route(
     assert request.url.path == path
     assert request.headers["X-Correlation-ID"]
     assert request.headers["X-Request-ID"]
-

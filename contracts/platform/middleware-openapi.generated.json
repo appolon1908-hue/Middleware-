@@ -6935,6 +6935,1003 @@
         "summary": "Metrics"
       }
     },
+    "/platform/v1/contacts": {
+      "get": {
+        "operationId": "list_contacts_platform_v1_contacts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Contacts",
+        "tags": [
+          "contacts"
+        ]
+      },
+      "post": {
+        "operationId": "create_contact_platform_v1_contacts_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Contact",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
+    "/platform/v1/contacts/{contact_id}": {
+      "get": {
+        "operationId": "get_contact_platform_v1_contacts__contact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Contact",
+        "tags": [
+          "contacts"
+        ]
+      },
+      "patch": {
+        "operationId": "update_contact_platform_v1_contacts__contact_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update Contact",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
+    "/platform/v1/contacts/{contact_id}/notes": {
+      "get": {
+        "operationId": "list_notes_platform_v1_contacts__contact_id__notes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Notes",
+        "tags": [
+          "contacts"
+        ]
+      },
+      "post": {
+        "operationId": "create_note_platform_v1_contacts__contact_id__notes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Note",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
+    "/platform/v1/contacts/{contact_id}/notes/{note_id}": {
+      "patch": {
+        "operationId": "update_note_platform_v1_contacts__contact_id__notes__note_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update Note",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
+    "/platform/v1/contacts/{contact_id}/tasks": {
+      "get": {
+        "operationId": "list_tasks_platform_v1_contacts__contact_id__tasks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Tasks",
+        "tags": [
+          "contacts"
+        ]
+      },
+      "post": {
+        "operationId": "create_task_platform_v1_contacts__contact_id__tasks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Task",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
     "/platform/v1/hosts": {
       "get": {
         "operationId": "hosts_platform_v1_hosts_get",
@@ -7210,6 +8207,445 @@
         "summary": "Github Event",
         "tags": [
           "integrated-monitoring"
+        ]
+      }
+    },
+    "/platform/v1/opportunities": {
+      "get": {
+        "operationId": "list_opportunities_platform_v1_opportunities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Opportunities",
+        "tags": [
+          "opportunities"
+        ]
+      },
+      "post": {
+        "operationId": "create_opportunity_platform_v1_opportunities_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Opportunity",
+        "tags": [
+          "opportunities"
+        ]
+      }
+    },
+    "/platform/v1/opportunities/{opportunity_id}": {
+      "get": {
+        "operationId": "get_opportunity_platform_v1_opportunities__opportunity_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opportunity_id",
+            "required": true,
+            "schema": {
+              "title": "Opportunity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Opportunity",
+        "tags": [
+          "opportunities"
+        ]
+      },
+      "patch": {
+        "operationId": "update_opportunity_platform_v1_opportunities__opportunity_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opportunity_id",
+            "required": true,
+            "schema": {
+              "title": "Opportunity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update Opportunity",
+        "tags": [
+          "opportunities"
         ]
       }
     },
@@ -8279,6 +9715,225 @@
         ]
       }
     },
+    "/platform/v1/tasks/{task_id}": {
+      "patch": {
+        "operationId": "update_task_platform_v1_tasks__task_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update Task",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
+    "/platform/v1/tasks/{task_id}/complete": {
+      "post": {
+        "operationId": "complete_task_platform_v1_tasks__task_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Complete Task",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
     "/platform/v1/telemetry/heartbeats": {
       "post": {
         "operationId": "heartbeat_platform_v1_telemetry_heartbeats_post",
@@ -8372,6 +10027,445 @@
         "summary": "Heartbeat",
         "tags": [
           "integrated-monitoring"
+        ]
+      }
+    },
+    "/platform/v1/tickets": {
+      "get": {
+        "operationId": "list_tickets_platform_v1_tickets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Tickets",
+        "tags": [
+          "tickets"
+        ]
+      },
+      "post": {
+        "operationId": "create_ticket_platform_v1_tickets_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Ticket",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/platform/v1/tickets/{ticket_id}": {
+      "get": {
+        "operationId": "get_ticket_platform_v1_tickets__ticket_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Ticket",
+        "tags": [
+          "tickets"
+        ]
+      },
+      "patch": {
+        "operationId": "update_ticket_platform_v1_tickets__ticket_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update Ticket",
+        "tags": [
+          "tickets"
         ]
       }
     },

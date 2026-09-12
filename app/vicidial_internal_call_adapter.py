@@ -309,7 +309,8 @@ class VicidialInternalCallAdapter:
                     and evidence.asterisk_uniqueid != request.payload.get("call_id"))):
             raise VicidialInternalCallError("Server B evidence binding mismatch")
         terminal = evidence.terminal and evidence.call_state in {
-            "completed", "failed", "missed", "rejected", "cancelled", "transferred",
+            "completed", "failed", "busy", "no_answer", "canceled", "rejected",
+            "missed", "cancelled", "transferred",
         }
         if terminal and (not evidence.ended_at or not evidence.linkedid
                          or evidence.duration_seconds is None or not evidence.evidence):

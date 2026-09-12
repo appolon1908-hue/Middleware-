@@ -81,7 +81,14 @@ async def list_tenants(
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    codes = await _distinct_campaign_codes(session)
+    # A provisioning token is tenant-scoped. Do not turn this discovery
+    # endpoint into an all-tenant enumeration primitive when the database has
+    # rows for several customers.
+    codes = [
+        code
+        for code in await _distinct_campaign_codes(session)
+        if code in principal.tenant_ids
+    ]
     foundation = FoundationClient(settings)
     items: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=5.0) as http:

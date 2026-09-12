@@ -1851,3 +1851,108 @@ class CallbackDelivery(Base):
         UniqueConstraint("callback_id", "callback_version", "channel", "stage", name="uq_callback_delivery_stage"),
         Index("ix_callback_delivery_retry", "status", "next_attempt_at"),
     )
+
+
+AGENT_PROVISIONING_STATES = (
+    "REQUESTED", "VALIDATING", "IDENTITY", "ENTITLEMENTS", "CHANNEL_PROVISIONING",
+    "READBACK", "EFFECTIVE", "PARTIAL", "FAILED", "RECONCILING", "SUSPENDED", "REVOKED",
+)
+
+
+class AgentProvisioningRequest(Base):
+    """One durable saga per Odoo "Provision" click (Mission 3).
+
+    Odoo sends exactly one command here and polls/observes this row (and its
+    AgentProvisioningStep children) for progress; Middleware alone decides
+    how to reach EFFECTIVE across Keycloak, VICIdial, Klyrow, and Telnexa.
+    No provider secret or raw credential is ever stored in this table or in
+    AgentProvisioningStep - see keycloak_subject below, which is an opaque
+    identifier, never a token.
+    """
+
+    __tablename__ = "agent_provisioning_request"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    employee_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    primary_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    campaigns_json: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    channels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    telephony_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    state: Mapped[str] = mapped_column(String(24), nullable=False, default="REQUESTED")
+    keycloak_subject: Mapped[str | None] = mapped_column(String(64))
+    policy_revision: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    requested_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    last_error_code: Mapped[str | None] = mapped_column(String(64))
+    last_error_summary: Mapped[str | None] = mapped_column(String(500))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('" + "','".join(AGENT_PROVISIONING_STATES) + "')",
+            name="ck_agent_provisioning_state",
+        ),
+        CheckConstraint("version >= 1", name="ck_agent_provisioning_version"),
+        Index("ix_agent_provisioning_tenant_state", "tenant_id", "state"),
+    )
+
+
+class AgentProvisioningStep(Base):
+    """Per-external-operation saga log, one row per attempt.
+
+    Deliberately mirrors codestra.provisioning.step's field shape on the
+    Odoo side (appolon1908-hue/Odoo, codestra_identity_provisioning) so the
+    two systems describe the same saga in the same vocabulary:
+    system/operation/attempt/state/external_reference/started_at/
+    completed_at/readback_state/error_code/error_summary. Never stores
+    provider secrets or raw tokens.
+    """
+
+    __tablename__ = "agent_provisioning_step"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    request_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("agent_provisioning_request.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    system: Mapped[str] = mapped_column(String(32), nullable=False)
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    external_reference: Mapped[str | None] = mapped_column(String(255))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    readback_state: Mapped[str | None] = mapped_column(String(32))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_summary: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (
+        CheckConstraint(
+            "system IN ('keycloak','vicidial','klyrow','telnexa','odoo')",
+            name="ck_agent_provisioning_step_system",
+        ),
+        Index("ix_agent_provisioning_step_request", "request_id", "system", "attempt"),
+    )
+
+
+class AgentProvisioningAudit(Base):
+    """Append-only state-transition ledger. No update/delete path exists."""
+
+    __tablename__ = "agent_provisioning_audit"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    request_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("agent_provisioning_request.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    from_state: Mapped[str] = mapped_column(String(24), nullable=False)
+    to_state: Mapped[str] = mapped_column(String(24), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    record_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

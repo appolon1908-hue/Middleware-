@@ -296,6 +296,18 @@ class Settings(BaseSettings):
     provisioning_service_ca_file: str = ""
     odoo_identity_lookup_url: str = ""
     odoo_identity_lookup_hmac_file: str = ""
+    agent_provisioning_authorized_parties: str = "provisioning-service"
+    agent_provisioning_policy_revision: str = "1"
+    live_identity_provisioning_enabled: bool = False
+    keycloak_lifecycle_admin_base_url: str = ""
+    keycloak_lifecycle_realm: str = "codestra"
+    keycloak_lifecycle_client_id: str = ""
+    keycloak_lifecycle_client_secret_file: str = ""
+    keycloak_lifecycle_ca_file: str = ""
+    keycloak_lifecycle_approved_attributes: str = (
+        "firstName,lastName,phone,employeeId,tenantId"
+    )
+    keycloak_lifecycle_approved_roles: str = ""
     webrtc_production_policy_path: str = (
         "config/webrtc-production-policy.default-deny.json"
     )
@@ -501,6 +513,7 @@ class Settings(BaseSettings):
             self.postly_lead_delivery_enabled,
             self.odoo_production_writes_enabled,
             self.social_odoo_write_enabled,
+            self.live_identity_provisioning_enabled,
         )
         if any(production_switches):
             raise ValueError("live writes and non-TEST_SYN campaigns are disabled")
@@ -683,6 +696,13 @@ class Settings(BaseSettings):
         if not value:
             raise ValueError(f"{label} secret file is empty")
         return value
+
+    @property
+    def keycloak_lifecycle_client_secret(self) -> str:
+        return self._optional_secret(
+            self.keycloak_lifecycle_client_secret_file,
+            "Keycloak lifecycle adapter client secret",
+        )
 
     @property
     def qwen_base_url(self) -> str:

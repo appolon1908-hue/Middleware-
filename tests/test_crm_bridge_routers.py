@@ -14,7 +14,8 @@ import jwt
 import pytest
 import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from app.adapters.odoo.crm_bridge_client import (
@@ -24,6 +25,7 @@ from app.adapters.odoo.crm_bridge_client import (
     CrmBridgeUnavailable,
     get_crm_bridge_client,
 )
+from app.adapters.odoo import crm_bridge_client as crm_bridge_module
 from app.api.v1 import contacts as contacts_module
 from app.api.v1 import opportunities as opportunities_module
 from app.api.v1 import tickets as tickets_module
@@ -113,6 +115,27 @@ async def client(bridge_client):
 
 def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_crm_bridge_dependency_uses_active_runtime_settings(monkeypatch):
+    configured = object()
+    created_with = []
+
+    class FakeClient:
+        def __init__(self, value):
+            created_with.append(value)
+
+    monkeypatch.setattr(crm_bridge_module, "OdooCrmBridgeClient", FakeClient)
+    app = FastAPI()
+    app.state.runtime = SimpleNamespace(settings=configured)
+
+    @app.get("/dependency-check")
+    async def dependency_check(client=Depends(get_crm_bridge_client)):
+        return {"created": client is not None}
+
+    with TestClient(app) as test_client:
+        assert test_client.get("/dependency-check").json() == {"created": True}
+    assert created_with == [configured]
 
 
 @pytest.mark.asyncio

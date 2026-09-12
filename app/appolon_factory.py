@@ -49,6 +49,9 @@ from .lead_intake import (
     accept_lead_submission,
 )
 from .n8n_control_plane import router as n8n_control_plane_router
+from .api.v1.contacts import router as contacts_router
+from .api.v1.opportunities import router as opportunities_router
+from .api.v1.tickets import router as tickets_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -179,6 +182,9 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(contacts_router)
+    app.include_router(opportunities_router)
+    app.include_router(tickets_router)
     app.include_router(monitoring_router)
 
     def realtime_store(request: Request):

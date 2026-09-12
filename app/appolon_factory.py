@@ -181,6 +181,7 @@ def create_app(
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
     app.include_router(monitoring_router)
+    app.include_router(observability_sync_router)
 
     def realtime_store(request: Request):
         active = request.app.state.runtime

@@ -310,8 +310,8 @@ async def _enqueue(
 async def submit_kpi(
     request: Request,
     body: KpiSnapshot,
-    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
-    x_correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=128),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=180),
+    x_correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=180),
     principal: Principal = Depends(require("observability.kpis.write", READ_ROLES | COLLECTOR)),
     session: AsyncSession = Depends(get_session),
 ):

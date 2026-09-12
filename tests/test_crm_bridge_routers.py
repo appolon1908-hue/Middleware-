@@ -132,6 +132,17 @@ async def test_list_contacts_rejects_tenant_mismatch(client, authority):
 
 
 @pytest.mark.asyncio
+async def test_bridge_tenant_binding_fails_closed(client, authority, bridge_client):
+    bridge_client.configured_tenant_id = "OTHER"
+    response = await client.get(
+        "/platform/v1/contacts",
+        params={"tenant_id": "COD"},
+        headers=_headers(authority(tenant_ids=("COD",))),
+    )
+    assert response.status_code == 503
+
+
+@pytest.mark.asyncio
 async def test_list_contacts_forwards_bridge_response(client, authority, bridge_client):
     bridge_client.next_response = BridgeResponse(200, {"items": [{"profile_id": 1}]})
     response = await client.get(

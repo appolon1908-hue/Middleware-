@@ -12,11 +12,15 @@ app/api/v1/integrations.py).
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 
+import jwt
 import pytest
 import pytest_asyncio
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -24,14 +28,52 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api.v1 import integrations as integrations_module
+from app.core.config import settings
+
+ISSUER = "https://identity.example.invalid/realms/odoo-sync-test"
+AUDIENCE = "middleware-api-test"
 
 pytestmark = pytest.mark.skipif(
     "DATABASE_URL" not in os.environ, reason="disposable PostgreSQL required"
 )
 
 
+@pytest.fixture
+def authority(monkeypatch):
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    class Keys:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def get_signing_key_from_jwt(self, _token):
+            return SimpleNamespace(key=private.public_key())
+
+    monkeypatch.setattr(jwt, "PyJWKClient", Keys)
+    for key, value in {
+        "keycloak_issuer": ISSUER,
+        "keycloak_audience": AUDIENCE,
+        "keycloak_jwks_url": ISSUER + "/certs",
+        "agent_provisioning_authorized_parties": "provisioning-service",
+    }.items():
+        monkeypatch.setattr(settings, key, value)
+
+    def token(tenant_ids=("MOY",), **overrides):
+        current = int(time.time())
+        claims = {
+            "iss": ISSUER, "aud": AUDIENCE, "azp": "provisioning-service",
+            "sub": "provisioning-service-subject",
+            "iat": current, "exp": current + 300, "jti": str(uuid4()),
+            "scope": "identity.request", "tenant_ids": list(tenant_ids),
+            **overrides,
+        }
+        return jwt.encode(claims, private, algorithm="RS256")
+
+    return token
+
+
 @pytest_asyncio.fixture
-async def client():
+async def client(authority):
     engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -82,7 +124,7 @@ async def _seed_mapping(session_factory, *, unit: str, code: str, drift_status: 
 
 
 @pytest.mark.asyncio
-async def test_sync_status_groups_by_drift_status(client):
+async def test_sync_status_groups_by_drift_status(client, authority):
     session_factory = async_sessionmaker(
         create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool),
         expire_on_commit=False,
@@ -94,7 +136,9 @@ async def test_sync_status_groups_by_drift_status(client):
     await _seed_mapping(session_factory, unit=unit, code=code_b, drift_status="drifted")
 
     response = await client.get(
-        "/api/v1/integrations/odoo/sync-status", params={"business_unit": unit}
+        "/api/v1/integrations/odoo/sync-status",
+        params={"business_unit": unit},
+        headers={"Authorization": f"Bearer {authority((unit,))}"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -109,7 +153,7 @@ async def test_sync_status_groups_by_drift_status(client):
 
 
 @pytest.mark.asyncio
-async def test_sync_errors_excludes_reconciled_and_not_observed(client):
+async def test_sync_errors_excludes_reconciled_and_not_observed(client, authority):
     session_factory = async_sessionmaker(
         create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool),
         expire_on_commit=False,
@@ -122,7 +166,9 @@ async def test_sync_errors_excludes_reconciled_and_not_observed(client):
     await _seed_mapping(session_factory, unit=unit, code=code_bad, drift_status="drifted")
 
     response = await client.get(
-        "/api/v1/integrations/odoo/sync-errors", params={"business_unit": unit}
+        "/api/v1/integrations/odoo/sync-errors",
+        params={"business_unit": unit},
+        headers={"Authorization": f"Bearer {authority((unit,))}"},
     )
     assert response.status_code == 200
     # business_unit_code is not unique per row (unlike campaign_registry's
@@ -133,6 +179,15 @@ async def test_sync_errors_excludes_reconciled_and_not_observed(client):
     assert code_bad in codes
     assert code_ok not in codes
     assert code_new not in codes
+
+
+@pytest.mark.asyncio
+async def test_sync_status_requires_authentication(client):
+    response = await client.get(
+        "/api/v1/integrations/odoo/sync-status",
+        params={"business_unit": "MOY"},
+    )
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio

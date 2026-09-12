@@ -27,6 +27,11 @@
       "required_job": "Disposable PostgreSQL Redis integration"
     },
     {
+      "path": "tests/test_presence_and_queues.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
       "path": "tests/integration/test_postgres_redis.py",
       "gate": "RUNTIME_INTEGRATION_TESTS",
       "required_job": "Disposable PostgreSQL Redis integration"

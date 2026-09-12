@@ -32,6 +32,16 @@
       "required_job": "Disposable PostgreSQL Redis integration"
     },
     {
+      "path": "tests/test_tenants_and_campaigns.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_odoo_integration_sync_status.py",
+      "gate": "DATABASE_URL",
+      "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
       "path": "tests/test_vicidial_odoo_projection_lifecycle_sync.py",
       "gate": "DATABASE_URL",
       "required_job": "Disposable PostgreSQL Redis integration"

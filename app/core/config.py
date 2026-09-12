@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     live_writes_enabled: bool = False
     odoo_write_enabled: bool = False
     allow_non_test_campaigns: bool = False
+    campaign_design_enabled: bool = False
+    campaign_design_environments: str = "test,staging"
+    campaign_design_client_id: str = "odoo-campaign-design"
     odoo_delivery_enabled: bool = False
     n8n_delivery_enabled: bool = False
     n8n_event_delivery_enabled: bool = False

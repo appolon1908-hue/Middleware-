@@ -382,6 +382,351 @@
         "title": "CallingResponse",
         "type": "object"
       },
+      "CampaignApprovalInput": {
+        "additionalProperties": false,
+        "properties": {
+          "business_unit": {
+            "pattern": "^(MOY|COD|SCP|MBL|RLP|FTP|TRX|CAL|TEST|STAGING)$",
+            "title": "Business Unit",
+            "type": "string"
+          },
+          "design_revision": {
+            "minimum": 1.0,
+            "title": "Design Revision",
+            "type": "integer"
+          },
+          "environment": {
+            "enum": [
+              "test",
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "integration_uuid": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "title": "Integration Uuid",
+            "type": "string"
+          },
+          "manifest_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifest Hash",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 512,
+            "minLength": 8,
+            "title": "Reason",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "integration_uuid",
+          "business_unit",
+          "environment",
+          "design_revision",
+          "manifest_hash",
+          "reason"
+        ],
+        "title": "CampaignApprovalInput",
+        "type": "object"
+      },
+      "CampaignDesignConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "callback_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Rule"
+          },
+          "calling_hour_end": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 24.0,
+            "title": "Calling Hour End",
+            "type": "number"
+          },
+          "calling_hour_start": {
+            "exclusiveMaximum": 24.0,
+            "minimum": 0.0,
+            "title": "Calling Hour Start",
+            "type": "number"
+          },
+          "campaign_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign Type"
+          },
+          "consent_required": {
+            "title": "Consent Required",
+            "type": "boolean"
+          },
+          "dialer_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialer Mode"
+          },
+          "dnc_enforced": {
+            "title": "Dnc Enforced",
+            "type": "boolean"
+          },
+          "escalation_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Rule"
+          },
+          "inputs": {
+            "title": "Inputs",
+            "type": "object"
+          },
+          "lead_source_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Source Id"
+          },
+          "max_call_attempts": {
+            "default": 1,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Max Call Attempts",
+            "type": "integer"
+          },
+          "max_retries": {
+            "default": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Max Retries",
+            "type": "integer"
+          },
+          "routing_strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routing Strategy"
+          },
+          "supervisor_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "title": "Supervisor Ids",
+            "type": "array"
+          },
+          "team_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "title": "Team Ids",
+            "type": "array"
+          },
+          "time_zone": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time_zone",
+          "calling_hour_start",
+          "calling_hour_end",
+          "consent_required",
+          "dnc_enforced",
+          "team_ids",
+          "supervisor_ids"
+        ],
+        "title": "CampaignDesignConfiguration",
+        "type": "object"
+      },
+      "CampaignDesignInput": {
+        "additionalProperties": false,
+        "properties": {
+          "business_unit": {
+            "title": "Business Unit",
+            "type": "string"
+          },
+          "campaign_code": {
+            "title": "Campaign Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "design_configuration": {
+            "$ref": "#/components/schemas/CampaignDesignConfiguration"
+          },
+          "design_request_revision": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Design Request Revision",
+            "type": "integer"
+          },
+          "direction": {
+            "enum": [
+              "inbound",
+              "outbound",
+              "blended"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "test",
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "event_id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "expected_campaign_code": {
+            "title": "Expected Campaign Code",
+            "type": "string"
+          },
+          "feature_flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Feature Flags",
+            "type": "object"
+          },
+          "integration_uuid": {
+            "title": "Integration Uuid",
+            "type": "string"
+          },
+          "odoo_campaign_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Odoo Campaign Id",
+            "type": "integer"
+          },
+          "owner_user_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Owner User Id",
+            "type": "integer"
+          },
+          "purpose": {
+            "pattern": "^[A-Z0-9]{2,16}$",
+            "title": "Purpose",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "campaign-provisioning.v1",
+            "default": "campaign-provisioning.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "supervisor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor User Id"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/DesignValidation"
+          }
+        },
+        "required": [
+          "event_id",
+          "integration_uuid",
+          "odoo_campaign_id",
+          "environment",
+          "business_unit",
+          "purpose",
+          "direction",
+          "campaign_code",
+          "expected_campaign_code",
+          "owner_user_id",
+          "supervisor_user_id",
+          "correlation_id",
+          "validation",
+          "design_configuration",
+          "feature_flags"
+        ],
+        "title": "CampaignDesignInput",
+        "type": "object"
+      },
       "CommandEnvelope": {
         "additionalProperties": false,
         "properties": {
@@ -916,6 +1261,30 @@
           "replay_reason"
         ],
         "title": "DeadLetterReplayRequest",
+        "type": "object"
+      },
+      "DesignValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Errors",
+            "type": "array"
+          },
+          "status": {
+            "default": "READY",
+            "enum": [
+              "READY",
+              "BLOCKED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "DesignValidation",
         "type": "object"
       },
       "Envelope": {
@@ -3053,6 +3422,300 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/campaign-designs/approvals": {
+      "post": {
+        "operationId": "approve_api_v1_campaign_designs_approvals_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Business-Unit",
+            "required": true,
+            "schema": {
+              "title": "X-Business-Unit",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 1,
+              "title": "X-Correlation-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignApprovalInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Approve",
+        "tags": [
+          "campaign-design"
+        ]
+      }
+    },
+    "/api/v1/campaign-designs/preview": {
+      "post": {
+        "operationId": "preview_api_v1_campaign_designs_preview_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Business-Unit",
+            "required": true,
+            "schema": {
+              "title": "X-Business-Unit",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 1,
+              "title": "X-Correlation-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignDesignInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Preview",
+        "tags": [
+          "campaign-design"
+        ]
+      }
+    },
     "/api/v1/control/ai/inference-requests": {
       "post": {
         "operationId": "provider_control_ai_inference_request_api_v1_control_ai_inference_requests_post",

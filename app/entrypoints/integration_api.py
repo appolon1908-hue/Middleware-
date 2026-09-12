@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.v1.automation import router as automation_router
+from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.commands import router as commands_router
 from app.api.v1.control import router as control_router
 from app.api.v1.lead_reconciliation import router as lead_reconciliation_router
@@ -33,6 +34,7 @@ routers = (
     callbacks_router,
     control_router,
     automation_router,
+    campaign_design_router,
     reports_router,
     operations_router,
     lead_reconciliation_router,

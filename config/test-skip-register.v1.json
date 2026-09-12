@@ -170,6 +170,11 @@
       "path": "tests/integration/test_runtime_migration_certification.py",
       "gate": "RUNTIME_INTEGRATION_TESTS",
       "required_job": "Disposable PostgreSQL Redis integration"
+    },
+    {
+      "path": "tests/test_campaign_design.py",
+      "gate": "CAMPAIGN_DESIGN_TEST_DATABASE_URL",
+      "required_job": "campaign-design-postgres"
     }
   ],
   "policy": {

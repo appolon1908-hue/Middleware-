@@ -49,6 +49,7 @@ from .lead_intake import (
     accept_lead_submission,
 )
 from .n8n_control_plane import router as n8n_control_plane_router
+from .campaign_design_api import router as campaign_design_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -173,6 +174,7 @@ def create_app(
     telemetry = MiddlewareObservability(resolved)
     app.state.observability = telemetry
     app.include_router(n8n_control_plane_router)
+    app.include_router(campaign_design_router)
     app.include_router(operations_dashboard_router)
     app.include_router(operations_router)
     app.include_router(control_api_router)

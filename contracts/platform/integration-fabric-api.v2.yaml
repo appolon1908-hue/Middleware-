@@ -686,6 +686,154 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /api/v1/campaign-designs/preview:
+    post:
+      tags:
+      - campaign-design
+      summary: Preview
+      operationId: preview_api_v1_campaign_designs_preview_post
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Authorization
+      - name: X-Business-Unit
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Business-Unit
+      - name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+          title: Idempotency-Key
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+          title: X-Correlation-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignDesignInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/campaign-designs/approvals:
+    post:
+      tags:
+      - campaign-design
+      summary: Approve
+      operationId: approve_api_v1_campaign_designs_approvals_post
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Authorization
+      - name: X-Business-Unit
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Business-Unit
+      - name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+          title: Idempotency-Key
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+          title: X-Correlation-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignApprovalInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v1/operations-dashboard/overview:
     get:
       tags:
@@ -8673,6 +8821,246 @@ components:
       - dialing
       - reason
       title: CallingResponse
+    CampaignApprovalInput:
+      properties:
+        tenant_id:
+          anyOf:
+          - type: string
+            maxLength: 128
+            minLength: 1
+          - type: 'null'
+          title: Tenant Id
+        integration_uuid:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          title: Integration Uuid
+        business_unit:
+          type: string
+          pattern: ^(MOY|COD|SCP|MBL|RLP|FTP|TRX|CAL|TEST|STAGING)$
+          title: Business Unit
+        environment:
+          type: string
+          enum:
+          - test
+          - staging
+          - production
+          title: Environment
+        design_revision:
+          type: integer
+          minimum: 1.0
+          title: Design Revision
+        manifest_hash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Manifest Hash
+        reason:
+          type: string
+          maxLength: 512
+          minLength: 8
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - integration_uuid
+      - business_unit
+      - environment
+      - design_revision
+      - manifest_hash
+      - reason
+      title: CampaignApprovalInput
+    CampaignDesignConfiguration:
+      properties:
+        time_zone:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Time Zone
+        calling_hour_start:
+          type: number
+          exclusiveMaximum: 24.0
+          minimum: 0.0
+          title: Calling Hour Start
+        calling_hour_end:
+          type: number
+          maximum: 24.0
+          exclusiveMinimum: 0.0
+          title: Calling Hour End
+        consent_required:
+          type: boolean
+          title: Consent Required
+        dnc_enforced:
+          type: boolean
+          title: Dnc Enforced
+        team_ids:
+          items:
+            type: integer
+          type: array
+          maxItems: 1000
+          title: Team Ids
+        supervisor_ids:
+          items:
+            type: integer
+          type: array
+          maxItems: 1000
+          title: Supervisor Ids
+        campaign_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Campaign Type
+        lead_source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Lead Source Id
+        dialer_mode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dialer Mode
+        routing_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Routing Strategy
+        max_call_attempts:
+          type: integer
+          maximum: 1000.0
+          minimum: 0.0
+          title: Max Call Attempts
+          default: 1
+        max_retries:
+          type: integer
+          maximum: 1000.0
+          minimum: 0.0
+          title: Max Retries
+          default: 0
+        callback_rule:
+          anyOf:
+          - type: string
+          - type: boolean
+          - type: 'null'
+          title: Callback Rule
+        escalation_rule:
+          anyOf:
+          - type: string
+          - type: boolean
+          - type: 'null'
+          title: Escalation Rule
+        inputs:
+          type: object
+          title: Inputs
+      additionalProperties: false
+      type: object
+      required:
+      - time_zone
+      - calling_hour_start
+      - calling_hour_end
+      - consent_required
+      - dnc_enforced
+      - team_ids
+      - supervisor_ids
+      title: CampaignDesignConfiguration
+    CampaignDesignInput:
+      properties:
+        schema_version:
+          type: string
+          const: campaign-provisioning.v1
+          title: Schema Version
+          default: campaign-provisioning.v1
+        event_id:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Event Id
+        integration_uuid:
+          type: string
+          title: Integration Uuid
+        tenant_id:
+          anyOf:
+          - type: string
+            maxLength: 128
+            minLength: 1
+          - type: 'null'
+          title: Tenant Id
+        design_request_revision:
+          type: integer
+          minimum: 1.0
+          title: Design Request Revision
+          default: 1
+        odoo_campaign_id:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Odoo Campaign Id
+        environment:
+          type: string
+          enum:
+          - test
+          - staging
+          - production
+          title: Environment
+        business_unit:
+          type: string
+          title: Business Unit
+        purpose:
+          type: string
+          pattern: ^[A-Z0-9]{2,16}$
+          title: Purpose
+        direction:
+          type: string
+          enum:
+          - inbound
+          - outbound
+          - blended
+          title: Direction
+        campaign_code:
+          type: string
+          title: Campaign Code
+        expected_campaign_code:
+          type: string
+          title: Expected Campaign Code
+        owner_user_id:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Owner User Id
+        supervisor_user_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Supervisor User Id
+        correlation_id:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Correlation Id
+        validation:
+          $ref: '#/components/schemas/DesignValidation'
+        design_configuration:
+          $ref: '#/components/schemas/CampaignDesignConfiguration'
+        feature_flags:
+          additionalProperties:
+            type: boolean
+          type: object
+          title: Feature Flags
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - integration_uuid
+      - odoo_campaign_id
+      - environment
+      - business_unit
+      - purpose
+      - direction
+      - campaign_code
+      - expected_campaign_code
+      - owner_user_id
+      - supervisor_user_id
+      - correlation_id
+      - validation
+      - design_configuration
+      - feature_flags
+      title: CampaignDesignInput
     CommandEnvelope:
       properties:
         command_id:
@@ -9046,6 +9434,24 @@ components:
       - safe_replay_classification
       - replay_reason
       title: DeadLetterReplayRequest
+    DesignValidation:
+      properties:
+        status:
+          type: string
+          enum:
+          - READY
+          - BLOCKED
+          title: Status
+          default: READY
+        errors:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Errors
+      additionalProperties: false
+      type: object
+      title: DesignValidation
     Envelope:
       properties:
         data:

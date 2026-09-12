@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -15,36 +16,56 @@ from app.config import Settings
 
 def _settings(*, enabled: bool = True):
     return SimpleNamespace(
+        app_env="production",
+        source_sha="a" * 40,
         email_delivery_enabled=enabled,
         production_activation_id="change-prod-20260912",
     )
 
 
 def _request(*, recipient: str = "owner@example.net", category: str = "transactional"):
-    return CreateMessageRequest(
-        channel="email",
-        **{"from": "sender@example.com"},
-        to=[recipient],
-        content=MessageContent(subject="test", text="production control test"),
-        metadata={"category": category, "consent": "granted"},
+    return CreateMessageRequest.model_validate(
+        {
+            "channel": "email",
+            "from": "sender@example.com",
+            "to": [recipient],
+            "content": MessageContent(
+                subject="test", text="production control test"
+            ),
+            "metadata": {"category": category, "consent": "granted"},
+        }
     )
 
 
 def _active_policy(**updates):
     base = EmailProductionPolicy(
         tenantId="tenant-1",
+        enabled=True,
         mode="TRANSACTIONAL_CANARY",
         authorizationState="ACTIVE",
         approvedDomains=["example.com"],
         approvedSenders=["sender@example.com"],
         recipientScope="ALLOWLIST",
         approvedRecipients=["owner@example.net"],
+        approvedCategories=["transactional"],
         perMinuteLimit=1,
         perHourLimit=2,
         perDayLimit=3,
         changeId="change-prod-20260912",
         approvedBy="operator-1",
+        activatedBy="operator-2",
+        productionOwner="operator-1",
         monitoringOwner="operator-1",
+        escalationOwner="operator-1",
+        rollbackOwner="operator-1",
+        killSwitchProcedure="Close the kill switch and preserve callback ingestion.",
+        provider="klyrow-postal",
+        environment="production",
+        approvedReleaseSha="a" * 40,
+        authorizationTimestamp=datetime.now(UTC),
+        activationTimestamp=datetime.now(UTC),
+        validFrom=datetime.now(UTC) - timedelta(minutes=5),
+        validUntil=datetime.now(UTC) + timedelta(hours=1),
         killSwitchOpen=True,
     )
     return base.model_copy(update=updates)
@@ -121,7 +142,7 @@ async def test_marketing_stays_closed_in_transactional_mode() -> None:
         policies={
             "tenant-1": _active_policy(
                 mode="TRANSACTIONAL_PRODUCTION",
-                recipientScope="TRANSACTIONAL_ANY",
+                recipientScope="ALLOWLIST",
             )
         }
     )
@@ -140,17 +161,30 @@ def test_current_domain_registry_blocks_activation_until_dkim_closeout() -> None
     )
     policy = EmailProductionPolicy(
         tenantId="tenant-1",
+        enabled=True,
         mode="TRANSACTIONAL_PRODUCTION",
         authorizationState="AUTHORIZED_NOT_ACTIVE",
         approvedDomains=["codestra.co"],
         approvedSenders=["alerts@codestra.co"],
-        recipientScope="TRANSACTIONAL_ANY",
+        recipientScope="ALLOWLIST",
+        approvedRecipients=["owner@example.net"],
+        approvedCategories=["transactional"],
         perMinuteLimit=1,
         perHourLimit=10,
         perDayLimit=100,
         changeId="change-prod-20260912",
         approvedBy="operator-1",
+        productionOwner="operator-1",
         monitoringOwner="operator-1",
+        escalationOwner="operator-1",
+        rollbackOwner="operator-1",
+        killSwitchProcedure="Close the kill switch and preserve callback ingestion.",
+        provider="klyrow-postal",
+        environment="production",
+        approvedReleaseSha="a" * 40,
+        authorizationTimestamp=datetime.now(UTC),
+        validFrom=datetime.now(UTC) - timedelta(minutes=5),
+        validUntil=datetime.now(UTC) + timedelta(hours=1),
     )
     blockers = service.activation_blockers(policy)
     assert "dkim_rotation_incomplete:codestra.co" in blockers

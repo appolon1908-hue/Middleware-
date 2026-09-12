@@ -20,7 +20,11 @@ from app.commands import (
     CommandState,
     MemoryCommandStore,
 )
-from app.communications import CommunicationsService, MemoryCommunicationsStore
+from app.communications import (
+    CommunicationsService,
+    CreateMessageRequest,
+    MemoryCommunicationsStore,
+)
 from app.main import create_app
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
@@ -202,6 +206,40 @@ def test_email_message_lifecycle_idempotency_and_timeline(test_settings) -> None
         assert runtime.commands is not None
         assert isinstance(runtime.commands.store, MemoryCommandStore)
         assert len(runtime.commands.store._commands) == 1
+
+
+@pytest.mark.asyncio
+async def test_simultaneous_duplicate_email_requests_create_one_command(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    service = runtime.communications
+    assert service is not None
+    request = CreateMessageRequest(**_message())
+    authorization = "Bearer " + _token(
+        "klyrow", ["klyrow.middleware.command.write"]
+    )
+
+    results = await asyncio.gather(
+        *(
+            service.submit_message(
+                request,
+                tenant_id="tenant-1",
+                correlation_id="email-correlation-1",
+                idempotency_key="simultaneous-email-key-1",
+                actor="user-123",
+                authorization=authorization,
+                token_verifier=runtime.tokens,
+            )
+            for _ in range(8)
+        )
+    )
+
+    assert len({str(message.messageId) for message, _ in results}) == 1
+    assert sum(not duplicate for _, duplicate in results) == 1
+    assert runtime.commands is not None
+    assert isinstance(runtime.commands.store, MemoryCommandStore)
+    assert len(runtime.commands.store._commands) == 1
 
 
 def test_email_contract_validation_sender_policy_and_kill_switch(test_settings) -> None:

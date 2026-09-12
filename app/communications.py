@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Mapping, Protocol
@@ -293,6 +295,23 @@ class MemoryCommunicationsStore:
     verified_domains: set[tuple[str, str]] = field(default_factory=set)
     sender_identities: dict[tuple[str, uuid.UUID], str] = field(default_factory=dict)
     cancellations: set[tuple[str, uuid.UUID, str]] = field(default_factory=set)
+    submission_locks: dict[tuple[str, str, str], asyncio.Lock] = field(
+        default_factory=dict, repr=False
+    )
+
+    @asynccontextmanager
+    async def submission_lock(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ):
+        key = (tenant_id, route, idempotency_key)
+        lock = self.submission_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            yield
+
+    async def refresh_idempotency(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ) -> None:
+        return None
 
     async def ready(self) -> bool:
         return True
@@ -349,6 +368,47 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__()
         self.pool = pool
+
+    @asynccontextmanager
+    async def submission_lock(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ):
+        identity = f"{tenant_id}\0{route}\0{idempotency_key}"
+        async with self.pool.acquire() as conn:
+            await conn.execute("SELECT pg_advisory_lock(hashtextextended($1,0))", identity)
+            try:
+                yield
+            finally:
+                await conn.execute(
+                    "SELECT pg_advisory_unlock(hashtextextended($1,0))", identity
+                )
+
+    async def refresh_idempotency(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ) -> None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT i.request_sha256,i.message_id,m.payload "
+                "FROM middleware_communication_idempotency i "
+                "JOIN middleware_communication_messages m "
+                "ON m.tenant_id=i.tenant_id AND m.message_id=i.message_id "
+                "WHERE i.tenant_id=$1 AND i.route=$2 AND i.idempotency_key=$3",
+                tenant_id,
+                route,
+                idempotency_key,
+            )
+        if row is None:
+            return
+        message = (
+            CommunicationMessage.model_validate_json(row["payload"])
+            if isinstance(row["payload"], str)
+            else CommunicationMessage.model_validate(row["payload"])
+        )
+        self.messages[(tenant_id, message.messageId)] = message
+        self.idempotency[(tenant_id, route, idempotency_key)] = (
+            row["request_sha256"],
+            row["message_id"],
+        )
 
     async def message_by_idempotency(
         self, tenant_id: str, idempotency_key: str,
@@ -490,6 +550,33 @@ class CommunicationsService:
         actor: str,
         authorization: str,
         token_verifier: Any,
+        _governed_metadata: Mapping[str, Any] | None = None,
+    ) -> tuple[CommunicationMessage, bool]:
+        route = "POST /v1/communications/messages"
+        async with self.store.submission_lock(tenant_id, route, idempotency_key):
+            await self.store.refresh_idempotency(tenant_id, route, idempotency_key)
+            return await self._submit_message_unlocked(
+                request,
+                tenant_id=tenant_id,
+                correlation_id=correlation_id,
+                idempotency_key=idempotency_key,
+                actor=actor,
+                authorization=authorization,
+                token_verifier=token_verifier,
+                _governed_metadata=_governed_metadata,
+            )
+
+    async def _submit_message_unlocked(
+        self,
+        request: CreateMessageRequest,
+        *,
+        tenant_id: str,
+        correlation_id: str,
+        idempotency_key: str,
+        actor: str,
+        authorization: str,
+        token_verifier: Any,
+        _governed_metadata: Mapping[str, Any] | None = None,
     ) -> tuple[CommunicationMessage, bool]:
         command_type, target, capability, provider = CHANNEL_COMMAND[request.channel]
         caller = caller_for_authorization(authorization)
@@ -587,8 +674,12 @@ class CommunicationsService:
         now = datetime.now(UTC)
         message_id = uuid.uuid4()
         command_id = uuid.uuid4()
-        message_metadata = {
+        effective_metadata = {
             **request.metadata,
+            **(_governed_metadata or {}),
+        }
+        message_metadata = {
+            **effective_metadata,
             "recipientCount": len(recipients),
         }
         command_payload: dict[str, Any]
@@ -632,7 +723,7 @@ class CommunicationsService:
                 "scheduled_at": (
                     request.scheduledAt.isoformat() if request.scheduledAt else None
                 ),
-                "metadata": request.metadata,
+                "metadata": effective_metadata,
             }
         message = CommunicationMessage(
             messageId=message_id,

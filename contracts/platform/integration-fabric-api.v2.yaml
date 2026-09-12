@@ -1605,7 +1605,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1652,7 +1652,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1699,7 +1699,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1746,7 +1746,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1793,7 +1793,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1840,7 +1840,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1887,7 +1887,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1934,7 +1934,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -3185,7 +3185,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -3232,7 +3232,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -3510,6 +3510,298 @@ paths:
       - *id001
       - *id003
       - *id004
+  /platform/v1/email/production/status:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Status
+      operationId: status_platform_v1_email_production_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/readiness:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Readiness
+      operationId: readiness_platform_v1_email_production_readiness_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Readiness Platform V1 Email Production Readiness Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/quotas:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Quotas
+      operationId: quotas_platform_v1_email_production_quotas_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Quotas Platform V1 Email Production Quotas Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/audit:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Audit
+      operationId: audit_platform_v1_email_production_audit_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Audit Platform V1 Email Production Audit Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/authorize:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Authorize
+      operationId: authorize_platform_v1_email_production_authorize_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizeEmailProduction'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/activate:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Activate
+      operationId: activate_platform_v1_email_production_activate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__email_production_control__ControlMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/revoke:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Revoke
+      operationId: revoke_platform_v1_email_production_revoke_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__email_production_control__ControlMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/kill-switch:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Kill Switch
+      operationId: kill_switch_platform_v1_email_production_kill_switch_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KillSwitchMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v1/odoo/commands:
     post:
       tags:
@@ -8445,6 +8737,160 @@ components:
       - summary
       - expires_at
       title: ApprovalRequest
+    AuthorizeEmailProduction:
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1.0
+          title: Expectedversion
+        mode:
+          type: string
+          enum:
+          - TRANSACTIONAL_CANARY
+          - TRANSACTIONAL_PRODUCTION
+          - CAMPAIGN_PRODUCTION
+          title: Mode
+        approvedDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Approveddomains
+        approvedSenders:
+          items:
+            type: string
+            format: email
+          type: array
+          maxItems: 500
+          minItems: 1
+          title: Approvedsenders
+        recipientScope:
+          type: string
+          enum:
+          - DENY_ALL
+          - ALLOWLIST
+          - DOMAIN_ALLOWLIST
+          - TRANSACTIONAL_ANY
+          - CONSENTED_MARKETING
+          title: Recipientscope
+        approvedRecipients:
+          items:
+            type: string
+            format: email
+          type: array
+          maxItems: 500
+          title: Approvedrecipients
+        approvedRecipientDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approvedrecipientdomains
+        approvedCategories:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Approvedcategories
+        perMinuteLimit:
+          type: integer
+          maximum: 100000.0
+          minimum: 1.0
+          title: Perminutelimit
+        perHourLimit:
+          type: integer
+          maximum: 1000000.0
+          minimum: 1.0
+          title: Perhourlimit
+        perDayLimit:
+          type: integer
+          maximum: 10000000.0
+          minimum: 1.0
+          title: Perdaylimit
+        validFrom:
+          type: string
+          format: date-time
+          title: Validfrom
+        validUntil:
+          type: string
+          format: date-time
+          title: Validuntil
+        changeId:
+          type: string
+          maxLength: 200
+          minLength: 3
+          title: Changeid
+        productionOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Productionowner
+        monitoringOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Monitoringowner
+        escalationOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Escalationowner
+        rollbackOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Rollbackowner
+        killSwitchProcedure:
+          type: string
+          maxLength: 4000
+          minLength: 10
+          title: Killswitchprocedure
+        provider:
+          type: string
+          const: klyrow-postal
+          title: Provider
+        environment:
+          type: string
+          enum:
+          - staging
+          - production
+          title: Environment
+        approvedReleaseSha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Approvedreleasesha
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expectedVersion
+      - mode
+      - approvedDomains
+      - approvedSenders
+      - recipientScope
+      - approvedCategories
+      - perMinuteLimit
+      - perHourLimit
+      - perDayLimit
+      - validFrom
+      - validUntil
+      - changeId
+      - productionOwner
+      - monitoringOwner
+      - escalationOwner
+      - rollbackOwner
+      - killSwitchProcedure
+      - provider
+      - environment
+      - approvedReleaseSha
+      - reason
+      title: AuthorizeEmailProduction
     AutomationCommandRequest:
       properties:
         tenant_id:
@@ -8926,24 +9372,6 @@ components:
       - artifact_id
       - sha256
       title: ContractRefresh
-    ControlMutation:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 1.0
-          title: Expected Version
-        reason:
-          type: string
-          maxLength: 500
-          minLength: 1
-          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
-          title: Reason
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      - reason
-      title: ControlMutation
     CreateMessageRequest:
       properties:
         channel:
@@ -9046,6 +9474,199 @@ components:
       - safe_replay_classification
       - replay_reason
       title: DeadLetterReplayRequest
+    EmailProductionPolicy:
+      properties:
+        tenantId:
+          type: string
+          title: Tenantid
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        mode:
+          type: string
+          enum:
+          - SAFE
+          - TRANSACTIONAL_CANARY
+          - TRANSACTIONAL_PRODUCTION
+          - CAMPAIGN_PRODUCTION
+          title: Mode
+          default: SAFE
+        authorizationState:
+          type: string
+          enum:
+          - NOT_AUTHORIZED
+          - AUTHORIZED_NOT_ACTIVE
+          - ACTIVE
+          - REVOKED
+          title: Authorizationstate
+          default: NOT_AUTHORIZED
+        approvedDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approveddomains
+        approvedSenders:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Approvedsenders
+        recipientScope:
+          type: string
+          enum:
+          - DENY_ALL
+          - ALLOWLIST
+          - DOMAIN_ALLOWLIST
+          - TRANSACTIONAL_ANY
+          - CONSENTED_MARKETING
+          title: Recipientscope
+          default: DENY_ALL
+        approvedRecipients:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Approvedrecipients
+        approvedRecipientDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approvedrecipientdomains
+        approvedCategories:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approvedcategories
+        perMinuteLimit:
+          type: integer
+          maximum: 100000.0
+          minimum: 0.0
+          title: Perminutelimit
+          default: 0
+        perHourLimit:
+          type: integer
+          maximum: 1000000.0
+          minimum: 0.0
+          title: Perhourlimit
+          default: 0
+        perDayLimit:
+          type: integer
+          maximum: 10000000.0
+          minimum: 0.0
+          title: Perdaylimit
+          default: 0
+        validFrom:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Validfrom
+        validUntil:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Validuntil
+        changeId:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Changeid
+        approvedBy:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Approvedby
+        activatedBy:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Activatedby
+        productionOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Productionowner
+        monitoringOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Monitoringowner
+        escalationOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Escalationowner
+        rollbackOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Rollbackowner
+        killSwitchProcedure:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Killswitchprocedure
+        provider:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Provider
+        environment:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Environment
+        approvedReleaseSha:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Approvedreleasesha
+        authorizationTimestamp:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Authorizationtimestamp
+        activationTimestamp:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Activationtimestamp
+        killSwitchOpen:
+          type: boolean
+          title: Killswitchopen
+          default: false
+        version:
+          type: integer
+          minimum: 1.0
+          title: Version
+          default: 1
+        updatedAt:
+          type: string
+          format: date-time
+          title: Updatedat
+      additionalProperties: false
+      type: object
+      required:
+      - tenantId
+      title: EmailProductionPolicy
     Envelope:
       properties:
         data:
@@ -9280,6 +9901,27 @@ components:
       - workflow_version
       - execution_id
       title: JobClaimRequest
+    KillSwitchMutation:
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1.0
+          title: Expectedversion
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+        open:
+          type: boolean
+          title: Open
+      additionalProperties: false
+      type: object
+      required:
+      - expectedVersion
+      - reason
+      - open
+      title: KillSwitchMutation
     MessageContent:
       properties:
         subject:
@@ -10582,6 +11224,41 @@ components:
       - msg
       - type
       title: ValidationError
+    app__control_api__ControlMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1.0
+          title: Expected Version
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - reason
+      title: ControlMutation
+    app__email_production_control__ControlMutation:
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1.0
+          title: Expectedversion
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expectedVersion
+      - reason
+      title: ControlMutation
   securitySchemes:
     HTTPBearer:
       type: http

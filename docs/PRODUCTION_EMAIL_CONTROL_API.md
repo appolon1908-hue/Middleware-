@@ -67,14 +67,16 @@ These endpoints require a Keycloak machine identity with `azp=production-operato
 
 - `SAFE`: no production email is authorized.
 - `TRANSACTIONAL_CANARY`: explicit recipient allowlist; tight quota; transactional only.
-- `TRANSACTIONAL_PRODUCTION`: transactional recipients within approved policy.
-- `CAMPAIGN_PRODUCTION`: separate marketing authorization; consent/suppression still required.
+- `TRANSACTIONAL_PRODUCTION`: transactional recipients within an explicit address or recipient-domain allowlist.
+- `CAMPAIGN_PRODUCTION`: represented for forward compatibility but rejected by this API until the separate campaign compliance gate is implemented and certified.
 
 Campaign mode is never inferred from transactional activation.
 
 ## Authorization model
 
-An authorization records at minimum tenant, approved domains/senders, recipient scope, optional allowlist, minute/hour/day quotas, validity window, change ID, approving actor, monitoring owner, and requested mode.
+An authorization records tenant, approved domains/senders, bounded recipient scope, recipient or recipient-domain allowlist, approved transaction categories, minute/hour/day quotas, validity window, change ID, approving and activating actors, production/monitoring/escalation/rollback owners, kill-switch procedure, provider, environment, exact release SHA, authorization/activation timestamps, and requested mode.
+
+The legacy `TRANSACTIONAL_ANY` enum value can still decode historical ledger records, but new authorization rejects it and readiness reports it as unbounded. The active transactional modes never authorize marketing.
 
 `authorize` moves the policy to `AUTHORIZED_NOT_ACTIVE`. It does not open the send path.
 
@@ -92,6 +94,10 @@ Activation fails closed when any required condition is missing, including:
 - effective Middleware email-delivery runtime gate;
 - valid authorization time window;
 - approved domains/senders;
+- approved transaction categories and a bounded recipient scope;
+- complete production owner/escalation/rollback/kill-switch record;
+- `provider=klyrow-postal` and matching deployment environment;
+- exact authorized Middleware release SHA matching the running source;
 - positive quota limits;
 - registered Postal domain;
 - Postal DNS check pass;
@@ -114,15 +120,19 @@ For production email, Middleware applies the gates in this order:
 6. approved sender;
 7. mode/category rule;
 8. recipient scope / canary allowlist;
-9. atomic minute/hour/day quota reservation;
-10. existing verified sender/domain check;
-11. existing suppression and consent pre-check;
-12. existing command-policy authorization;
-13. durable `email.message.send.v1` command handoff;
-14. Klyrow adapter runtime gate;
-15. Klyrow/Postal provider policy.
+9. database-backed idempotency serialization across API processes;
+10. atomic minute/hour/day quota reservation;
+11. existing verified sender/domain check;
+12. existing suppression and consent pre-check;
+13. existing command-policy authorization;
+14. durable `email.message.send.v1` command handoff;
+15. Klyrow adapter runtime gate and exact Middleware release binding;
+16. command-bound production attestation over authenticated private transport;
+17. Klyrow sender/domain/suppression/provider policy.
 
-If existing suppression/consent logic suppresses before provider submission, the quota reservation is released. Exact idempotent replay returns the prior logical message and does not consume another reservation.
+If existing suppression/consent logic suppresses before provider submission, the quota reservation is released. Exact idempotent replay returns the prior logical message and does not consume another reservation. A PostgreSQL advisory lock serializes the same tenant/route/idempotency identity across Middleware processes before any command is created; the durable projection is refreshed while that lock is held.
+
+Each Klyrow command carries one recipient so one platform message has one durable provider lifecycle and one metered send. Middleware injects the production attestation after the caller request digest is calculated, so a caller cannot spoof it and idempotent replay continues to use the caller's original semantic request. The Klyrow adapter adds a binding for command ID, correlation ID, idempotency-key digest, sender, and recipient-list digest before submission.
 
 ## Durable persistence without migration-history bypass
 

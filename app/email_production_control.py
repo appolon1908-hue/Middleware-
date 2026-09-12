@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,6 +47,7 @@ AuthorizationState = Literal[
 RecipientScope = Literal[
     "DENY_ALL",
     "ALLOWLIST",
+    "DOMAIN_ALLOWLIST",
     "TRANSACTIONAL_ANY",
     "CONSENTED_MARKETING",
 ]
@@ -72,12 +74,15 @@ class EmailProductionPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     tenantId: str
+    enabled: bool = False
     mode: ProductionMode = "SAFE"
     authorizationState: AuthorizationState = "NOT_AUTHORIZED"
     approvedDomains: list[str] = Field(default_factory=list, max_length=100)
     approvedSenders: list[str] = Field(default_factory=list, max_length=500)
     recipientScope: RecipientScope = "DENY_ALL"
     approvedRecipients: list[str] = Field(default_factory=list, max_length=500)
+    approvedRecipientDomains: list[str] = Field(default_factory=list, max_length=100)
+    approvedCategories: list[str] = Field(default_factory=list, max_length=100)
     perMinuteLimit: int = Field(default=0, ge=0, le=100_000)
     perHourLimit: int = Field(default=0, ge=0, le=1_000_000)
     perDayLimit: int = Field(default=0, ge=0, le=10_000_000)
@@ -85,12 +90,22 @@ class EmailProductionPolicy(BaseModel):
     validUntil: datetime | None = None
     changeId: str | None = Field(default=None, max_length=200)
     approvedBy: str | None = Field(default=None, max_length=300)
+    activatedBy: str | None = Field(default=None, max_length=300)
+    productionOwner: str | None = Field(default=None, max_length=300)
     monitoringOwner: str | None = Field(default=None, max_length=300)
+    escalationOwner: str | None = Field(default=None, max_length=300)
+    rollbackOwner: str | None = Field(default=None, max_length=300)
+    killSwitchProcedure: str | None = Field(default=None, max_length=4000)
+    provider: str | None = Field(default=None, max_length=100)
+    environment: str | None = Field(default=None, max_length=32)
+    approvedReleaseSha: str | None = Field(default=None, max_length=64)
+    authorizationTimestamp: datetime | None = None
+    activationTimestamp: datetime | None = None
     killSwitchOpen: bool = False
     version: int = Field(default=1, ge=1)
     updatedAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
-    @field_validator("approvedDomains")
+    @field_validator("approvedDomains", "approvedRecipientDomains")
     @classmethod
     def normalize_domains(cls, values: list[str]) -> list[str]:
         normalized: list[str] = []
@@ -127,6 +142,10 @@ class EmailProductionPolicy(BaseModel):
             raise ValueError("validUntil must be timezone-aware")
         if self.validFrom and self.validUntil and self.validUntil <= self.validFrom:
             raise ValueError("validUntil must be after validFrom")
+        if self.approvedReleaseSha and not re.fullmatch(
+            r"[0-9a-f]{40}", self.approvedReleaseSha
+        ):
+            raise ValueError("approvedReleaseSha must be an exact SHA-1")
         return self
 
 
@@ -143,13 +162,22 @@ class AuthorizeEmailProduction(BaseModel):
     approvedSenders: list[EmailStr] = Field(min_length=1, max_length=500)
     recipientScope: RecipientScope
     approvedRecipients: list[EmailStr] = Field(default_factory=list, max_length=500)
+    approvedRecipientDomains: list[str] = Field(default_factory=list, max_length=100)
+    approvedCategories: list[str] = Field(min_length=1, max_length=100)
     perMinuteLimit: int = Field(ge=1, le=100_000)
     perHourLimit: int = Field(ge=1, le=1_000_000)
     perDayLimit: int = Field(ge=1, le=10_000_000)
-    validFrom: datetime | None = None
-    validUntil: datetime | None = None
+    validFrom: datetime
+    validUntil: datetime
     changeId: str = Field(min_length=3, max_length=200)
+    productionOwner: str = Field(min_length=1, max_length=300)
     monitoringOwner: str = Field(min_length=1, max_length=300)
+    escalationOwner: str = Field(min_length=1, max_length=300)
+    rollbackOwner: str = Field(min_length=1, max_length=300)
+    killSwitchProcedure: str = Field(min_length=10, max_length=4000)
+    provider: Literal["klyrow-postal"]
+    environment: Literal["staging", "production"]
+    approvedReleaseSha: str = Field(pattern=r"^[0-9a-f]{40}$")
     reason: str = Field(min_length=3, max_length=500)
 
     @model_validator(mode="after")
@@ -157,18 +185,46 @@ class AuthorizeEmailProduction(BaseModel):
         if self.perMinuteLimit > self.perHourLimit or self.perHourLimit > self.perDayLimit:
             raise ValueError("quota limits must be monotonic")
         if self.mode == "TRANSACTIONAL_CANARY":
-            if self.recipientScope != "ALLOWLIST" or not self.approvedRecipients:
+            if (
+                self.recipientScope != "ALLOWLIST"
+                or not self.approvedRecipients
+                or self.approvedRecipientDomains
+            ):
                 raise ValueError("canary mode requires an explicit recipient allowlist")
         elif self.mode == "TRANSACTIONAL_PRODUCTION":
-            if self.recipientScope not in {"ALLOWLIST", "TRANSACTIONAL_ANY"}:
-                raise ValueError("transactional production requires transactional recipient scope")
-        elif self.recipientScope != "CONSENTED_MARKETING":
-            raise ValueError("campaign production requires consented marketing scope")
-        if self.validFrom and self.validFrom.tzinfo is None:
+            if self.recipientScope == "ALLOWLIST":
+                if not self.approvedRecipients or self.approvedRecipientDomains:
+                    raise ValueError("transactional allowlist requires approved recipients")
+            elif self.recipientScope == "DOMAIN_ALLOWLIST":
+                if not self.approvedRecipientDomains or self.approvedRecipients:
+                    raise ValueError("transactional domain scope requires approved recipient domains")
+            else:
+                raise ValueError("transactional production requires a bounded recipient scope")
+        else:
+            raise ValueError("campaign production requires its separate compliance gate")
+        categories = [value.strip().lower() for value in self.approvedCategories]
+        if len(set(categories)) != len(categories) or any(
+            not re.fullmatch(r"[a-z0-9][a-z0-9_.:-]{0,119}", value)
+            for value in categories
+        ):
+            raise ValueError("approved categories are invalid or duplicated")
+        if "marketing" in categories:
+            raise ValueError("marketing category requires its separate compliance gate")
+        recipient_domains = [
+            value.strip().lower().rstrip(".") for value in self.approvedRecipientDomains
+        ]
+        if len(set(recipient_domains)) != len(recipient_domains) or any(
+            not value or "@" in value or len(value) > 253
+            for value in recipient_domains
+        ):
+            raise ValueError("approved recipient domains are invalid or duplicated")
+        self.approvedCategories = categories
+        self.approvedRecipientDomains = recipient_domains
+        if self.validFrom.tzinfo is None:
             raise ValueError("validFrom must be timezone-aware")
-        if self.validUntil and self.validUntil.tzinfo is None:
+        if self.validUntil.tzinfo is None:
             raise ValueError("validUntil must be timezone-aware")
-        if self.validFrom and self.validUntil and self.validUntil <= self.validFrom:
+        if self.validUntil <= self.validFrom:
             raise ValueError("validUntil must be after validFrom")
         return self
 
@@ -640,10 +696,16 @@ class EmailProductionControlService:
         now = datetime.now(UTC)
         if policy.authorizationState not in {"AUTHORIZED_NOT_ACTIVE", "ACTIVE"}:
             blockers.append("production_authorization_missing")
+        if not policy.enabled:
+            blockers.append("production_policy_disabled")
         if policy.mode == "SAFE":
             blockers.append("production_mode_safe")
+        if policy.mode == "CAMPAIGN_PRODUCTION":
+            blockers.append("campaign_compliance_gate_not_certified")
         if not self.settings.production_activation_id:
             blockers.append("production_activation_id_missing")
+        elif policy.changeId != self.settings.production_activation_id:
+            blockers.append("production_activation_id_mismatch")
         if not self.settings.email_delivery_enabled:
             blockers.append("email_delivery_runtime_gate_closed")
         if policy.validFrom and now < policy.validFrom.astimezone(UTC):
@@ -654,6 +716,41 @@ class EmailProductionControlService:
             blockers.append("approved_domains_empty")
         if not policy.approvedSenders:
             blockers.append("approved_senders_empty")
+        if not policy.approvedCategories:
+            blockers.append("approved_categories_empty")
+        if "marketing" in policy.approvedCategories:
+            blockers.append("campaign_category_not_certified")
+        if policy.mode in {"TRANSACTIONAL_CANARY", "TRANSACTIONAL_PRODUCTION"} and (
+            policy.recipientScope not in {"ALLOWLIST", "DOMAIN_ALLOWLIST"}
+        ):
+            blockers.append("recipient_scope_unbounded")
+        if policy.recipientScope == "ALLOWLIST" and not policy.approvedRecipients:
+            blockers.append("approved_recipients_empty")
+        if (
+            policy.recipientScope == "DOMAIN_ALLOWLIST"
+            and not policy.approvedRecipientDomains
+        ):
+            blockers.append("approved_recipient_domains_empty")
+        if policy.provider != "klyrow-postal":
+            blockers.append("provider_authority_mismatch")
+        if policy.environment != self.settings.app_env:
+            blockers.append("policy_environment_mismatch")
+        if policy.approvedReleaseSha != self.settings.source_sha:
+            blockers.append("release_source_mismatch")
+        if not all(
+            (
+                policy.productionOwner,
+                policy.monitoringOwner,
+                policy.escalationOwner,
+                policy.rollbackOwner,
+                policy.killSwitchProcedure,
+                policy.approvedBy,
+                policy.authorizationTimestamp,
+                policy.validFrom,
+                policy.validUntil,
+            )
+        ):
+            blockers.append("authorization_record_incomplete")
         if min(policy.perMinuteLimit, policy.perHourLimit, policy.perDayLimit) <= 0:
             blockers.append("quota_not_configured")
         registry = _domain_registry()
@@ -684,6 +781,7 @@ class EmailProductionControlService:
     ) -> EmailProductionPolicy:
         senders = [str(value).lower() for value in body.approvedSenders]
         recipients = [str(value).lower() for value in body.approvedRecipients]
+        recipient_domains = list(body.approvedRecipientDomains)
         domains = [value.strip().lower().rstrip(".") for value in body.approvedDomains]
         for sender in senders:
             if sender.rsplit("@", 1)[-1] not in domains:
@@ -694,12 +792,15 @@ class EmailProductionControlService:
         def transform(current: EmailProductionPolicy) -> EmailProductionPolicy:
             return current.model_copy(
                 update={
+                    "enabled": True,
                     "mode": body.mode,
                     "authorizationState": "AUTHORIZED_NOT_ACTIVE",
                     "approvedDomains": domains,
                     "approvedSenders": senders,
                     "recipientScope": body.recipientScope,
                     "approvedRecipients": recipients,
+                    "approvedRecipientDomains": recipient_domains,
+                    "approvedCategories": list(body.approvedCategories),
                     "perMinuteLimit": body.perMinuteLimit,
                     "perHourLimit": body.perHourLimit,
                     "perDayLimit": body.perDayLimit,
@@ -707,7 +808,17 @@ class EmailProductionControlService:
                     "validUntil": body.validUntil,
                     "changeId": body.changeId,
                     "approvedBy": actor,
+                    "activatedBy": None,
+                    "productionOwner": body.productionOwner,
                     "monitoringOwner": body.monitoringOwner,
+                    "escalationOwner": body.escalationOwner,
+                    "rollbackOwner": body.rollbackOwner,
+                    "killSwitchProcedure": body.killSwitchProcedure,
+                    "provider": body.provider,
+                    "environment": body.environment,
+                    "approvedReleaseSha": body.approvedReleaseSha,
+                    "authorizationTimestamp": datetime.now(UTC),
+                    "activationTimestamp": None,
                     "killSwitchOpen": False,
                 }
             )
@@ -735,6 +846,10 @@ class EmailProductionControlService:
         current = await self.store.get(tenant_id)
         if current.version != body.expectedVersion:
             raise CommunicationsConflict("expectedVersion is stale")
+        if current.authorizationState != "AUTHORIZED_NOT_ACTIVE":
+            raise EmailProductionBlocked(
+                "production authorization is not awaiting activation"
+            )
         blockers = self.activation_blockers(current)
         if blockers:
             raise EmailProductionBlocked(
@@ -743,7 +858,12 @@ class EmailProductionControlService:
 
         def transform(policy: EmailProductionPolicy) -> EmailProductionPolicy:
             return policy.model_copy(
-                update={"authorizationState": "ACTIVE", "killSwitchOpen": True}
+                update={
+                    "authorizationState": "ACTIVE",
+                    "activatedBy": actor,
+                    "activationTimestamp": datetime.now(UTC),
+                    "killSwitchOpen": True,
+                }
             )
 
         return await self.store.mutate(
@@ -769,6 +889,7 @@ class EmailProductionControlService:
         def transform(policy: EmailProductionPolicy) -> EmailProductionPolicy:
             return policy.model_copy(
                 update={
+                    "enabled": False,
                     "authorizationState": "REVOKED",
                     "mode": "SAFE",
                     "killSwitchOpen": False,
@@ -800,6 +921,12 @@ class EmailProductionControlService:
             raise EmailProductionBlocked(
                 "kill switch cannot be opened without active authorization"
             )
+        if body.open:
+            blockers = self.activation_blockers(current)
+            if blockers:
+                raise EmailProductionBlocked(
+                    "kill switch cannot be opened: " + ",".join(blockers)
+                )
 
         def transform(policy: EmailProductionPolicy) -> EmailProductionPolicy:
             return policy.model_copy(update={"killSwitchOpen": body.open})
@@ -828,6 +955,8 @@ class EmailProductionControlService:
             raise EmailProductionUnavailable("email delivery runtime gate is closed")
         if policy.authorizationState != "ACTIVE":
             raise EmailProductionBlocked("email production is not active")
+        if not policy.enabled:
+            raise EmailProductionBlocked("email production policy is disabled")
         if not policy.killSwitchOpen:
             raise EmailProductionBlocked("email production kill switch is closed")
         if policy.validFrom and now < policy.validFrom.astimezone(UTC):
@@ -849,16 +978,26 @@ class EmailProductionControlService:
             if policy.recipientScope != "CONSENTED_MARKETING":
                 raise EmailProductionBlocked("campaign recipient scope is not authorized")
         else:
+            if category not in policy.approvedCategories:
+                raise EmailProductionBlocked("message category is outside production authorization")
             if policy.mode not in {
                 "TRANSACTIONAL_CANARY",
                 "TRANSACTIONAL_PRODUCTION",
-                "CAMPAIGN_PRODUCTION",
             }:
                 raise EmailProductionBlocked("transactional email is not authorized")
-            if policy.recipientScope == "ALLOWLIST" and any(
-                recipient not in approved_recipients for recipient in recipients
-            ):
-                raise EmailProductionBlocked("recipient is outside production allowlist")
+            if policy.recipientScope == "ALLOWLIST":
+                if any(recipient not in approved_recipients for recipient in recipients):
+                    raise EmailProductionBlocked("recipient is outside production allowlist")
+            elif policy.recipientScope == "DOMAIN_ALLOWLIST":
+                approved_domains = set(policy.approvedRecipientDomains)
+                if any(
+                    "@" not in recipient
+                    or recipient.rsplit("@", 1)[1] not in approved_domains
+                    for recipient in recipients
+                ):
+                    raise EmailProductionBlocked("recipient domain is outside production authorization")
+            else:
+                raise EmailProductionBlocked("recipient scope is not bounded")
             if policy.mode == "TRANSACTIONAL_CANARY" and policy.recipientScope != "ALLOWLIST":
                 raise EmailProductionBlocked("canary mode requires recipient allowlist")
             if policy.recipientScope == "DENY_ALL":
@@ -878,11 +1017,25 @@ class ProductionGatedCommunicationsService(CommunicationsService):
             return await super().submit_message(request, **kwargs)
         tenant_id = kwargs["tenant_id"]
         idempotency_key = kwargs["idempotency_key"]
+        route = "POST /v1/communications/messages"
+        async with self.store.submission_lock(tenant_id, route, idempotency_key):
+            await self.store.refresh_idempotency(tenant_id, route, idempotency_key)
+            return await self._submit_production_email_unlocked(request, **kwargs)
+
+    async def _submit_production_email_unlocked(
+        self, request: CreateMessageRequest, **kwargs
+    ):
+        tenant_id = kwargs["tenant_id"]
+        idempotency_key = kwargs["idempotency_key"]
         existing = self.store.idempotency.get(
             (tenant_id, "POST /v1/communications/messages", idempotency_key)
         )
         if existing is not None:
-            return await super().submit_message(request, **kwargs)
+            return await super()._submit_message_unlocked(request, **kwargs)
+        if "productionAuthorization" in request.metadata:
+            raise RequestValidationError(
+                "productionAuthorization metadata is reserved for Middleware"
+            )
         if self.production_control is None:
             raise EmailProductionUnavailable(
                 "email production control service is unavailable"
@@ -900,17 +1053,45 @@ class ProductionGatedCommunicationsService(CommunicationsService):
         policy, reservation = await self.production_control.guard_request(
             tenant_id, request, sender
         )
+        category = str(request.metadata.get("category") or "transactional").lower()
+        governed_metadata = {
+            "productionAuthorization": {
+                "schemaVersion": "1.0",
+                "tenantId": tenant_id,
+                "policyVersion": policy.version,
+                "mode": policy.mode,
+                "authorizationState": policy.authorizationState,
+                "killSwitchOpen": policy.killSwitchOpen,
+                "changeId": policy.changeId,
+                "category": category,
+                "validFrom": (
+                    policy.validFrom.isoformat() if policy.validFrom else None
+                ),
+                "validUntil": (
+                    policy.validUntil.isoformat() if policy.validUntil else None
+                ),
+                "provider": policy.provider,
+                "environment": policy.environment,
+                "approvedReleaseSha": policy.approvedReleaseSha,
+                "authorizationTimestamp": (
+                    policy.authorizationTimestamp.isoformat()
+                    if policy.authorizationTimestamp else None
+                ),
+                "activationTimestamp": (
+                    policy.activationTimestamp.isoformat()
+                    if policy.activationTimestamp else None
+                ),
+            }
+        }
         try:
-            message, duplicate = await super().submit_message(request, **kwargs)
+            message, duplicate = await super()._submit_message_unlocked(
+                request, _governed_metadata=governed_metadata, **kwargs
+            )
         except Exception:
             await self.production_control.store.release_quota(reservation)
             raise
         if duplicate or message.status == "suppressed":
             await self.production_control.store.release_quota(reservation)
-        message.metadata.setdefault("productionPolicyVersion", policy.version)
-        message.metadata.setdefault("productionMode", policy.mode)
-        message.metadata.setdefault("productionChangeId", policy.changeId)
-        await self.store.persist()
         return message, duplicate
 
 

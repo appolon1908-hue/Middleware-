@@ -15,7 +15,7 @@ import logging
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -245,7 +245,12 @@ def _authenticate(request: Request, body: bytes) -> tuple[str, str, str, str]:
     if not timestamp.isascii() or not timestamp.isdecimal() or len(timestamp) > 12:
         raise HTTPException(401, "invalid_telnexa_timestamp")
     try:
-        ttl = int(_runtime_setting(request, "telnexa_event_signature_ttl_seconds", 300))
+        ttl = int(
+            cast(
+                int | str,
+                _runtime_setting(request, "telnexa_event_signature_ttl_seconds", 300),
+            )
+        )
         if ttl <= 0:
             raise HTTPException(503, "telnexa_signature_configuration_invalid")
         if abs(time.time() - int(timestamp)) > ttl:
@@ -466,7 +471,10 @@ async def receive_telnexa_event(
     if not _runtime_setting(request, "sms_delivery", False):
         raise HTTPException(503, "sms_delivery_disabled")
     request_max = int(
-        _runtime_setting(request, "telnexa_event_request_max_bytes", 1_048_576)
+        cast(
+            int | str,
+            _runtime_setting(request, "telnexa_event_request_max_bytes", 1_048_576),
+        )
     )
     if request_max <= 0:
         raise HTTPException(503, "telnexa_request_configuration_invalid")

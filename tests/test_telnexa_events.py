@@ -7,11 +7,14 @@ import json
 import time
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.routing import APIRoute
 from starlette.requests import Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.internal.telnexa_events import (
     PATH,
@@ -173,10 +176,17 @@ def _configure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "telnexa_event_request_max_bytes", 1_048_576)
 
 
+def _receive(request: Request, database: _Session) -> dict[str, object]:
+    return asyncio.run(
+        receive_telnexa_event(request, Response(), cast(AsyncSession, database))
+    )
+
+
 def test_exact_route_is_registered_with_closed_event_schema() -> None:
     app = FastAPI()
     app.include_router(router)
     route = next(item for item in router.routes if getattr(item, "path", None) == PATH)
+    assert isinstance(route, APIRoute)
     assert "POST" in route.methods
     schema = TelnexaDeliveryEvent.model_json_schema()
     assert schema["additionalProperties"] is False
@@ -196,12 +206,8 @@ def test_hmac_delivery_is_durable_and_exact_replay_is_idempotent(
     body = _event(message)
     database = _Session(message)
 
-    first = asyncio.run(
-        receive_telnexa_event(_request(body, _headers(body)), Response(), database)
-    )
-    second = asyncio.run(
-        receive_telnexa_event(_request(body, _headers(body)), Response(), database)
-    )
+    first = _receive(_request(body, _headers(body)), database)
+    second = _receive(_request(body, _headers(body)), database)
 
     assert first["accepted"] is True
     assert first["duplicate"] is False
@@ -221,21 +227,17 @@ def test_signature_tamper_and_mismatched_replay_fail_closed(
     body = _event(message)
     tampered = _request(body, _headers(body))
     tampered.scope["headers"][-1] = (b"x-signature", b"sha256=" + b"0" * 64)
-    with pytest.raises(Exception) as error:
-        asyncio.run(receive_telnexa_event(tampered, Response(), _Session(message)))
+    with pytest.raises(HTTPException) as error:
+        _receive(tampered, _Session(message))
     assert error.value.status_code == 401
 
     database = _Session(message)
-    asyncio.run(receive_telnexa_event(_request(body, _headers(body)), Response(), database))
+    _receive(_request(body, _headers(body)), database)
     changed = body.replace(b"DELIVRD", b"FAILED")
     changed_headers = _headers(changed)
     changed_headers["X-Event-Id"] = "delivery-1"
-    with pytest.raises(Exception) as replay_error:
-        asyncio.run(
-            receive_telnexa_event(
-                _request(changed, changed_headers), Response(), database
-            )
-        )
+    with pytest.raises(HTTPException) as replay_error:
+        _receive(_request(changed, changed_headers), database)
     assert replay_error.value.status_code == 409
 
 
@@ -247,8 +249,8 @@ def test_ingress_requires_both_fail_closed_controls(
     database = _Session(None)
     message = _message()
     body = _event(message)
-    with pytest.raises(Exception) as error:
-        asyncio.run(receive_telnexa_event(_request(body, _headers(body)), Response(), database))
+    with pytest.raises(HTTPException) as error:
+        _receive(_request(body, _headers(body)), database)
     assert error.value.status_code == 503
     assert error.value.detail == "sms_delivery_disabled"
     assert database.commit_count == 0
@@ -261,10 +263,8 @@ def test_missing_communication_message_is_retryable_not_acknowledged(
     message = _message()
     database = _Session(None)
     body = _event(message)
-    with pytest.raises(Exception) as error:
-        asyncio.run(
-            receive_telnexa_event(_request(body, _headers(body)), Response(), database)
-        )
+    with pytest.raises(HTTPException) as error:
+        _receive(_request(body, _headers(body)), database)
     assert error.value.status_code == 503
     assert error.value.detail == "communication_message_unavailable"
     assert database.inbox["processing_status"] == "retry"
@@ -293,7 +293,7 @@ def test_projection_refreshes_the_active_communications_cache(
         ),
     )
 
-    asyncio.run(receive_telnexa_event(request, Response(), _Session(message)))
+    _receive(request, _Session(message))
 
     assert store.messages[(message.tenantId, message.messageId)].status == "delivered"
     assert len(store.events[(message.tenantId, message.messageId)]) == 1
@@ -306,10 +306,8 @@ def test_chunked_body_limit_is_enforced_before_json_parsing(
     monkeypatch.setattr(settings, "telnexa_event_request_max_bytes", 16)
     message = _message()
     body = _event(message)
-    with pytest.raises(Exception) as error:
-        asyncio.run(
-            receive_telnexa_event(_request(body, _headers(body)), Response(), _Session(message))
-        )
+    with pytest.raises(HTTPException) as error:
+        _receive(_request(body, _headers(body)), _Session(message))
     assert error.value.status_code == 413
 
 
@@ -318,6 +316,6 @@ def test_message_projection_rejects_cross_tenant_or_non_sms_records() -> None:
     event = TelnexaDeliveryEvent.model_validate(
         json.loads(_event(message))
     )
-    with pytest.raises(Exception) as error:
+    with pytest.raises(HTTPException) as error:
         _project_message(event, {**message.model_dump(mode="json"), "tenantId": "other"})
     assert error.value.status_code == 409

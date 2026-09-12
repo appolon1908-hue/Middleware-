@@ -4,7 +4,7 @@ Date: 2026-09-12
 
 ## Purpose
 
-This contract adds the missing fail-closed production authorization layer around the existing email transport. It does **not** create a second email-send API and it does not move provider authority out of Klyrow.
+This contract adds the missing fail-closed production authorization layer around the existing email transport. It does **not** create a second email-send API, does not alter protected migration history, and does not move provider authority out of Klyrow.
 
 Canonical path remains:
 
@@ -74,19 +74,7 @@ Campaign mode is never inferred from transactional activation.
 
 ## Authorization model
 
-An authorization records at minimum:
-
-- tenant;
-- approved domains;
-- approved senders;
-- recipient scope;
-- optional explicit recipient allowlist;
-- minute/hour/day quotas;
-- valid-from / valid-until;
-- change ID;
-- approving actor;
-- monitoring owner;
-- requested mode.
+An authorization records at minimum tenant, approved domains/senders, recipient scope, optional allowlist, minute/hour/day quotas, validity window, change ID, approving actor, monitoring owner, and requested mode.
 
 `authorize` moves the policy to `AUTHORIZED_NOT_ACTIVE`. It does not open the send path.
 
@@ -124,7 +112,7 @@ For production email, Middleware applies the gates in this order:
 4. authorization validity window;
 5. approved domain;
 6. approved sender;
-7. mode/category rule (transactional vs marketing);
+7. mode/category rule;
 8. recipient scope / canary allowlist;
 9. atomic minute/hour/day quota reservation;
 10. existing verified sender/domain check;
@@ -134,30 +122,29 @@ For production email, Middleware applies the gates in this order:
 14. Klyrow adapter runtime gate;
 15. Klyrow/Postal provider policy.
 
-If existing suppression/consent logic suppresses before provider submission, the production quota reservation is released.
+If existing suppression/consent logic suppresses before provider submission, the quota reservation is released. Exact idempotent replay returns the prior logical message and does not consume another reservation.
 
-An exact idempotent replay returns the prior logical message and does not consume another quota reservation.
+## Durable persistence without migration-history bypass
 
-## Quota semantics
+Production-control state reuses the already-certified immutable `middleware_event_ledger`; no existing migration is modified and no unapproved numbered SQL file is inserted.
 
-Quota buckets are tenant-scoped and durable for minute, hour, and day windows. Reservation occurs before a new provider command can be created. A failed or locally suppressed submission releases the reservation.
+The ledger records three event families:
 
-The quota layer is an application safety ceiling, not a substitute for Klyrow/provider rate or reputation controls.
+- `codestra.email.production.policy.changed`
+- `codestra.email.production.quota.reserved`
+- `codestra.email.production.quota.released`
+
+Policy state is event-sourced from the latest tenant policy event. Control mutations are idempotent through ledger idempotency identity. Every policy event includes previous policy, new policy, actor, reason, request hash, and correlation identity.
+
+Quota reservations and releases are also append-only ledger events. A tenant advisory transaction lock serializes quota decisions with policy mutations. Current minute/hour/day usage is calculated as reservations in the active window minus released reservations. This preserves durable quota evidence without changing the protected production schema head.
+
+The existing event-ledger hash chain remains authoritative for integrity verification.
 
 ## Audit and mutation idempotency
 
-Every control mutation stores:
-
-- tenant;
-- action;
-- actor;
-- reason;
-- correlation ID;
-- previous policy;
-- new policy;
-- timestamp.
-
 Control mutations are idempotent by tenant + action + actor + `Idempotency-Key`. Reusing the same key with different content returns conflict.
+
+Audit read-back is derived from immutable production policy events and exposes actor, reason, correlation ID, previous policy, new policy, and recorded timestamp.
 
 ## Ownership boundaries
 
@@ -183,6 +170,6 @@ Provider transport; applications must not submit directly to Postal.
 
 ## Deployment requirement
 
-The new control tables are created by `migrations/0012_email_production_control.sql`. The rollback is `migrations/rollback/0012_email_production_control.down.sql`.
+No new database migration is introduced by this production-control change. The implementation depends on the existing certified event ledger and communications schema already required by Middleware readiness.
 
 The source change does **not** authorize live sending. Production remains blocked until the deployment has a real `production-operator` Keycloak identity/scopes and the domain registry has documented DKIM rotation/post-rotation certification and send eligibility.

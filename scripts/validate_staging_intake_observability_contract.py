@@ -63,6 +63,9 @@ EXPECTED_INCLUDED_ROUTERS = {
     "compatibility_api_router": "compatibility_api",
     "domain_api_router": "domain_api",
     "webhook_api_router": "webhook_api",
+    "contacts_router": "api.v1.contacts",
+    "opportunities_router": "api.v1.opportunities",
+    "tickets_router": "api.v1.tickets",
     "monitoring_router": "monitoring.routes",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}

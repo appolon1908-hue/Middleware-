@@ -36,7 +36,7 @@ def valid_response() -> dict[str, str]:
             "RELEASE_ID": RELEASE_ID,
             "VERSION_SOURCE_SHA": SOURCE_SHA,
             "VERSION_IMAGE_DIGEST": IMAGE_DIGEST,
-            "VERSION_SCHEMA_HEAD": "0060_agent_provisioning",
+            "VERSION_SCHEMA_HEAD": "0061_kyyow_observability_odoo",
             "BACKUP_SHA256": "sha256:" + "c" * 64,
             "CONFIGURATION_CHECKSUM": "d" * 64,
             "ROLLBACK_RTO_SECONDS": "4",

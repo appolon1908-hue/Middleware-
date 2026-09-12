@@ -132,6 +132,8 @@ def _normalize_schema_defaults(value: Any) -> None:
         # locked Python environments used by this repository.
         if value.get("additionalProperties") is True:
             del value["additionalProperties"]
+        if "default" in value and value["default"] is None:
+            del value["default"]
         for key, child in list(value.items()):
             if isinstance(child, float) and child.is_integer():
                 value[key] = int(child)

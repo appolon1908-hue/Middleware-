@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.automation import canonical_hash, redact
 from app.core.config import settings
 from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.provisioning_auth import (
+    ProvisioningPrincipal,
+    require_provisioning_scope,
+    require_tenant_match,
+)
 from app.db.models import (
     AuditEvent,
     IdempotencyRecord,
@@ -227,8 +232,13 @@ async def odoo_integration_status() -> dict[str, Any]:
 async def odoo_sync_status(
     business_unit: str,
     environment: str = "staging",
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
+    authorized_unit = business_unit.strip().upper()
+    require_tenant_match(principal, authorized_unit)
     rows = (
         (
             await db.execute(
@@ -237,7 +247,7 @@ async def odoo_sync_status(
                     "WHERE environment=:environment AND business_unit_code=:unit "
                     "GROUP BY drift_status"
                 ),
-                {"environment": environment, "unit": business_unit.upper()},
+                {"environment": environment, "unit": authorized_unit},
             )
         )
         .mappings()
@@ -245,7 +255,7 @@ async def odoo_sync_status(
     )
     by_status = {row["drift_status"]: row["count"] for row in rows}
     return {
-        "business_unit": business_unit.upper(),
+        "business_unit": authorized_unit,
         "environment": environment,
         "mapping_count_by_drift_status": by_status,
         "total_mappings": sum(by_status.values()),
@@ -256,11 +266,16 @@ async def odoo_sync_status(
 async def odoo_sync_errors(
     business_unit: str,
     environment: str = "staging",
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     # "not_observed" is this column's server_default (never yet reconciled),
     # not itself an error - only rows that were checked and found drifted
     # are reported here.
+    authorized_unit = business_unit.strip().upper()
+    require_tenant_match(principal, authorized_unit)
     rows = (
         (
             await db.execute(
@@ -271,14 +286,14 @@ async def odoo_sync_errors(
                     "AND drift_status NOT IN ('reconciled', 'not_observed') "
                     "ORDER BY canonical_campaign_code"
                 ),
-                {"environment": environment, "unit": business_unit.upper()},
+                {"environment": environment, "unit": authorized_unit},
             )
         )
         .mappings()
         .all()
     )
     return {
-        "business_unit": business_unit.upper(),
+        "business_unit": authorized_unit,
         "environment": environment,
         "items": [
             {

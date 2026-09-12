@@ -99,6 +99,8 @@ x-runtime: &runtime
     TELEPHONY_RECONCILIATION_ENABLED: "false"
     TELEPHONY_NOTIFICATIONS_ENABLED: "false"
     TELEPHONY_EVIDENCE_ENABLED: "false"
+    VICIDIAL_ODOO_PROJECTION_ENABLED: "false"
+    VICIDIAL_ODOO_SYNTHETIC_ONLY: "true"
     SOCIAL_INTEGRATION_ENABLED: "false"
     SOCIAL_PUBLISH_ENABLED: "false"
     SOCIAL_N8N_EVENTS_ENABLED: "false"
@@ -479,6 +481,35 @@ services:
     networks:
       - middleware_backend
       - identity_service
+
+  middleware-vicidial-odoo-projection:
+    <<: *worker
+    command: [python, -m, workers.run_vicidial_odoo_projection]
+    environment:
+      <<: *safe-flags
+      SERVICE_NAME: codestra-vicidial-odoo-projection
+      # Enabling this worker also requires RUNTIME_PROFILE_ID to select a
+      # profile whose vicidial-odoo-projection-runtime-authority.v1.json
+      # entry has mode "synthetic-only" (only the staging profile does
+      # today; both production profiles are "blocked-pending-protected-
+      # authority" and will refuse to start). See app/vicidial_odoo_projection_config.py.
+      NATS_URL: tls://nats.middleware-staging.svc.cluster.local:4222
+      NATS_STREAM: CODESTRA_STAGING_EVENTS
+      NATS_SUBJECT_PREFIX: codestra.staging.events
+      NATS_CREDS_FILE: /run/secrets/middleware-staging-vicidial-odoo-nats.creds
+      VICIDIAL_ODOO_DURABLE_CONSUMER: codestra-vicidial-odoo-staging-v1
+      VICIDIAL_ODOO_STATE_PATH: /var/lib/codestra-middleware/vicidial-odoo-projection.sqlite3
+      VICIDIAL_ODOO_HMAC_SECRET_FILE: /run/secrets/middleware-staging-vicidial-odoo-hmac
+      ODOO_19_BASE_URL: https://odoo-staging.internal.codestra
+      VICIDIAL_ODOO_BATCH_SIZE: "10"
+    volumes:
+      - /etc/codestra/secrets/middleware-runtime/middleware-vicidial-odoo-projection-database-url:/run/secrets/database_url:ro
+      - /etc/codestra/secrets/middleware-runtime/middleware-vicidial-odoo-projection-nats-creds:/run/secrets/middleware-staging-vicidial-odoo-nats.creds:ro
+      - /etc/codestra/secrets/middleware-runtime/middleware-vicidial-odoo-projection-hmac:/run/secrets/middleware-staging-vicidial-odoo-hmac:ro
+      - /etc/codestra/state/middleware-vicidial-odoo-projection:/var/lib/codestra-middleware:rw
+    networks:
+      - middleware_backend
+      - codestra_internal_integration
 
 networks:
   middleware_backend:

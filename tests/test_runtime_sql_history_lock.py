@@ -40,8 +40,8 @@ def repository(tmp_path: Path) -> Path:
 def test_current_protected_pin_covers_alembic_and_all_sql_bundles() -> None:
     assert len(SQL_PATHS) == 12
     expected, graph, digest = validate_authority(ROOT)
-    assert expected == "0060_agent_provisioning"
-    assert len(graph) == 73
+    assert expected == "0062_lifecycle_outcome_state"
+    assert len(graph) == 75
     assert digest == migration_history(ROOT)[1]
 
 

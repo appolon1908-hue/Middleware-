@@ -39,10 +39,10 @@ def test_reviewed_authority_convergence_record_is_fail_closed() -> None:
     assert validator.validate_forward_authority(_current_authority()) == []
 
 
-def test_current_authority_requires_schema_0010_and_new_exact_main_build() -> None:
+def test_current_authority_requires_schema_0062_and_new_exact_main_build() -> None:
     value = _current_authority()
     artifacts = value["artifactAuthority"]
-    assert artifacts["requiredSchemaHead"] == "0060_agent_provisioning"
+    assert artifacts["requiredSchemaHead"] == "0062_lifecycle_outcome_state"
     assert (
         artifacts["candidateStatus"]
         == "PENDING_EXACT_PROTECTED_MERGE_BUILD"

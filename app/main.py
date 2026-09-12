@@ -53,6 +53,9 @@ from app.api.v1.calls import router as calls_router
 from app.api.v1.activity import router as activity_router
 from app.api.v1.presence import router as presence_router
 from app.api.v1.queues import router as queues_router
+from app.api.v1.contacts import router as contacts_router
+from app.api.v1.opportunities import router as opportunities_router
+from app.api.v1.tickets import router as tickets_router
 from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
 from app.core.auth import BearerAuthError, verify_bearer
@@ -105,6 +108,9 @@ app.include_router(calls_router)
 app.include_router(activity_router)
 app.include_router(presence_router)
 app.include_router(queues_router)
+app.include_router(contacts_router)
+app.include_router(opportunities_router)
+app.include_router(tickets_router)
 app.mount("/metrics", make_asgi_app())
 
 

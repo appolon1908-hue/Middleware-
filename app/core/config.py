@@ -287,6 +287,14 @@ class Settings(BaseSettings):
     odoo_recording_hmac_secret_file: str = ""
     interaction_result_hmac_secret: str = ""
     interaction_result_hmac_secret_file: str = ""
+    # codestra_middleware_bridge (Odoo) -- contacts/notes/tasks/opportunities/
+    # tickets thin-adapter target. Same HMAC-over-canonical-headers scheme as
+    # that controller's _authenticate(), not the sync.py/OdooRuntimeClient
+    # nonce+bearer scheme, which is a different Odoo-facing contract.
+    odoo_crm_bridge_base_url: str = ""
+    odoo_crm_bridge_hmac_secret: str = ""
+    odoo_crm_bridge_hmac_secret_file: str = ""
+    odoo_crm_bridge_tenant_id: str = ""
     n8n_recording_workflow_enabled: bool = False
     n8n_recording_binding_enabled: bool = False
     n8n_recording_workflow_active: bool = False
@@ -650,6 +658,7 @@ class Settings(BaseSettings):
             ("ingestion_hmac_secret", self.vicidial_callback_hmac_secret_file),
             ("odoo_recording_hmac_secret", self.odoo_recording_hmac_secret_file),
             ("interaction_result_hmac_secret", self.interaction_result_hmac_secret_file),
+            ("odoo_crm_bridge_hmac_secret", self.odoo_crm_bridge_hmac_secret_file),
         )
         for attribute, filename in mappings:
             if filename:

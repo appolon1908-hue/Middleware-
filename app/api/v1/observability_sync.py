@@ -88,6 +88,8 @@ class KpiSnapshot(Input):
                 raise ValueError("dimension key is sensitive")
             if isinstance(value, (dict, list, tuple)) or value is None:
                 raise ValueError("dimension values must be scalar")
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("dimension value is not finite")
             if not isinstance(value, (str, int, float, bool)) or (
                 isinstance(value, str) and (not value or len(value) > 128)
             ):

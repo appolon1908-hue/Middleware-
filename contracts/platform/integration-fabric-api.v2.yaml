@@ -11038,7 +11038,6 @@ components:
           - type: string
             format: date-time
           - type: 'null'
-          default: null
           title: Resolved At
         source_deployment:
           type: string

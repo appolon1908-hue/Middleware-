@@ -186,7 +186,15 @@ def _safe_payload(body: KpiSnapshot | IncidentState, principal: Principal, idemp
 
 
 def _operation_scope(tenant: str, operation: str) -> str:
-    return f"kyyow-observability:{tenant}:{operation}"
+    tenant_digest = hashlib.sha256(tenant.encode("utf-8")).hexdigest()[:16]
+    return f"kyyow-observability:{tenant_digest}:{operation}"
+
+
+def _entity_key(payload: dict[str, Any]) -> str:
+    value = f"{payload['tenant_id']}:{payload.get('incident_id', payload.get('metric_code'))}"
+    if len(value) <= 256:
+        return value
+    return f"{value[:191]}:{_digest(value)[:64]}"
 
 
 async def _enqueue(

@@ -10840,6 +10840,7 @@ components:
         schema_version:
           type: string
           const: kyyow.observability.kpi.v1
+          default: kyyow.observability.kpi.v1
           title: Schema Version
         tenant_id:
           type: string
@@ -10888,6 +10889,7 @@ components:
           title: Unit
         dimensions:
           type: object
+          maxProperties: 32
           title: Dimensions
         source:
           type: string
@@ -10953,6 +10955,7 @@ components:
         schema_version:
           type: string
           const: kyyow.observability.incident.v1
+          default: kyyow.observability.incident.v1
           title: Schema Version
         tenant_id:
           type: string
@@ -11020,6 +11023,7 @@ components:
           title: Summary
         labels:
           type: object
+          maxProperties: 32
           title: Labels
         first_seen_at:
           type: string
@@ -11034,6 +11038,7 @@ components:
           - type: string
             format: date-time
           - type: 'null'
+          default: null
           title: Resolved At
         source_deployment:
           type: string

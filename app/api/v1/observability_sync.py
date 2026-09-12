@@ -175,7 +175,6 @@ def _safe_payload(body: KpiSnapshot | IncidentState, principal: Principal, idemp
     supplied = body.projection_hash.removeprefix("sha256:")
     if supplied != expected:
         raise HTTPException(422, "projection hash does not match the canonical payload")
-    payload["idempotency_key"] = idempotency_key
     return payload
 
 

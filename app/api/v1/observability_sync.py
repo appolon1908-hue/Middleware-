@@ -59,7 +59,7 @@ class Input(BaseModel):
 
 class KpiSnapshot(Input):
     event_id: Identifier
-    schema_version: Literal["kyyow.observability.kpi.v1"] = SCHEMA_KPI
+    schema_version: Literal["kyyow.observability.kpi.v1"] = "kyyow.observability.kpi.v1"
     tenant_id: Identifier
     metric_code: str = Field(min_length=1, max_length=96, pattern=r"^[a-z][a-z0-9_.:-]*$")
     service_id: Identifier
@@ -102,7 +102,7 @@ class KpiSnapshot(Input):
 
 class IncidentState(Input):
     event_id: Identifier
-    schema_version: Literal["kyyow.observability.incident.v1"] = SCHEMA_INCIDENT
+    schema_version: Literal["kyyow.observability.incident.v1"] = "kyyow.observability.incident.v1"
     tenant_id: Identifier
     incident_id: Identifier
     fingerprint: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:/-]+$")

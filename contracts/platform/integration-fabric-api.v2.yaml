@@ -8106,10 +8106,10 @@ paths:
       - *id001
       - *id003
       - *id004
-  /api/v1/telnexa/events:
+  /api/v1/events/telnexa:
     post:
-      summary: Ingress-Telnexa-Gateway-Events
-      operationId: ingress_telnexa_gateway_events_api_v1_telnexa_events_post
+      summary: Ingress-Telnexa-Gateway-Telnexa
+      operationId: ingress_telnexa_gateway_telnexa_api_v1_events_telnexa_post
       responses:
         '200':
           description: Successful Response

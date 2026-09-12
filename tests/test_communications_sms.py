@@ -178,7 +178,7 @@ def _event(
 
 
 def _sign(event: dict[str, Any]) -> dict[str, str]:
-    path = "/api/v1/telnexa/events"
+    path = "/api/v1/events/telnexa"
     body = json.dumps(event, separators=(",", ":"), sort_keys=True).encode()
     timestamp = str(int(time.time()))
     canonical = "\n".join(
@@ -214,7 +214,7 @@ def _sign(event: dict[str, Any]) -> dict[str, str]:
 
 def _post_event(client: TestClient, event: dict[str, Any]):
     return client.post(
-        "/api/v1/telnexa/events",
+        "/api/v1/events/telnexa",
         content=json.dumps(event, separators=(",", ":"), sort_keys=True),
         headers=_sign(event),
     )

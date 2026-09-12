@@ -21,6 +21,9 @@ def _endpoint_key(route: WebhookRoute) -> str:
     parts = [part for part in route.path.split("/") if part]
     if not parts:
         raise RuntimeError("webhook contract has no endpoint identity")
+    connector = _connector_key(route)
+    if len(parts) >= 2 and parts[-1] == connector:
+        return parts[-2]
     return parts[-1]
 
 

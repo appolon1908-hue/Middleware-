@@ -16,7 +16,7 @@ Authenticated signed ingress:
 - `POST /api/v1/odoo/events`
 - `POST /api/v1/n8n/results`
 - `POST /api/v1/vicidial/events`
-- `POST /api/v1/telnexa/events`
+- `POST /api/v1/events/telnexa`
 - `POST /api/v1/klyrow/events`
 - `POST /api/v1/kyqra/results`
 - `POST /api/v1/kyqra/progress`

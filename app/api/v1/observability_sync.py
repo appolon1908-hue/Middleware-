@@ -252,7 +252,7 @@ async def _enqueue(
     event = IntegrationEvent(
         idempotency_key=idempotency_key,
         event_type=event_type,
-        schema_version=payload["schema_version"],
+        schema_version="1.0",
         original_event_id=payload["event_id"],
         entity_key=_entity_key(payload),
         source_system="kyyow-observability",

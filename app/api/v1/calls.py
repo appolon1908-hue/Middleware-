@@ -58,6 +58,8 @@ def _call_out(call: TelephonyCallLifecycle) -> dict[str, Any]:
         "dialplan_context": call.dialplan_context,
         "disposition": call.disposition,
         "hangup_cause": call.hangup_cause,
+        "lead_model": call.lead_model,
+        "lead_id": call.lead_id,
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "connected_at": call.connected_at.isoformat() if call.connected_at else None,
         "ended_at": call.ended_at.isoformat() if call.ended_at else None,

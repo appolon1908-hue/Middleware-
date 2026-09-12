@@ -8,10 +8,11 @@ by calling it, not by reimplementing tenant storage in this codebase - see
 Mission-02's explicit "do not create duplicate identity/tenant authorities"
 instruction.
 
-This client exposes exactly the two read operations Session Context needs:
+This client exposes exactly these read operations:
 
   1. get_tenant            -> GET /v1/tenants/{tenant_id}
   2. list_entitlements     -> GET /v1/tenants/{tenant_id}/entitlements
+  3. list_tenants          -> GET /v1/tenants
 
 Nothing here writes to codestra-foundation. Tenant/billing/consent mutation
 remains that service's own API surface, called by whatever system (Odoo,
@@ -21,8 +22,21 @@ Auth: codestra-foundation's ``app.security.current_principal`` expects a
 Bearer RS256/ES256 JWT with ``sub``, ``iss``, ``aud``, ``exp``, ``iat``, a
 space-delimited ``scope`` claim, and an optional ``tenant_id`` claim (a
 token carrying ``foundation.admin`` in scope bypasses its per-tenant
-boundary check - this client intentionally never requests that scope; it
-authenticates as a tenant-scoped reader only, one call per tenant.)
+boundary check). ``get_tenant``/``list_entitlements`` intentionally never
+request that scope - they authenticate as a tenant-scoped reader only, one
+call per tenant. ``list_tenants`` is cross-tenant by definition, so it
+requests a distinct, narrower-than-admin ``foundation.tenant.list`` scope
+rather than reusing ``foundation.admin`` - callers of it (see
+``app.api.v1.tenants``) are themselves gated to platform_admin/
+platform_operator, never a tenant-scoped caller.
+
+ASSUMPTION FLAGGED FOR REVIEW: ``list_tenants``'s path (``GET /v1/tenants``,
+returning a plain JSON array of the same tenant shape ``get_tenant``
+returns) and the ``foundation.tenant.list`` scope name are inferred from
+this file's existing conventions, not verified against the actual
+``codestra-foundation`` source (a separate repo, out of this change's
+scope). Confirm both against that repo before relying on this in
+production.
 """
 
 from __future__ import annotations
@@ -98,13 +112,15 @@ class FoundationClient:
         ):
             raise FoundationUnavailable("codestra-foundation integration is not configured")
 
-    async def _authorized_get(self, http: httpx.AsyncClient, path: str) -> httpx.Response:
+    async def _authorized_get(
+        self, http: httpx.AsyncClient, path: str, *, scopes: tuple[str, ...] = ("foundation.tenant.read",),
+    ) -> httpx.Response:
         self._ensure_configured()
         token = await self._token_manager.get_token(
             http,
             token_url=self._settings.foundation_token_url,
             audience=self._settings.foundation_audience,
-            scopes=("foundation.tenant.read",),
+            scopes=scopes,
             credential_reference_id="foundation-client",
         )
         try:
@@ -146,6 +162,21 @@ class FoundationClient:
                 enabled=bool(item["enabled"]),
                 limit_value=item.get("limit_value"),
                 unit=item.get("unit"),
+            )
+            for item in response.json()
+        ]
+
+    async def list_tenants(self, http: httpx.AsyncClient) -> list[TenantRecord]:
+        response = await self._authorized_get(
+            http, "/v1/tenants", scopes=("foundation.tenant.list",),
+        )
+        if response.status_code != 200:
+            raise FoundationUnavailable(
+                f"codestra-foundation returned {response.status_code} listing tenants"
+            )
+        return [
+            TenantRecord(
+                id=str(item["id"]), slug=item["slug"], name=item["name"], status=item["status"],
             )
             for item in response.json()
         ]

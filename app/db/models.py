@@ -1425,6 +1425,12 @@ class TelephonyCallLifecycle(Base):
     source_extension: Mapped[str] = mapped_column(String(32), nullable=False)
     destination: Mapped[str] = mapped_column(String(64), nullable=False)
     dialplan_context: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Reference only, not a copy - Odoo (codestra_middleware_bridge) remains
+    # the system of record for the lead/customer-profile record itself. Set
+    # once at originate time from OriginateCallRequest.lead_model/lead_id;
+    # null for calls with no CRM linkage (e.g. internal calls).
+    lead_model: Mapped[str | None] = mapped_column(String(64))
+    lead_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

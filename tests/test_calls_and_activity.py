@@ -117,7 +117,10 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _seed_call(client_engine_session_factory, *, business_unit: str, campaign: str) -> tuple[str, str]:
+async def _seed_call(
+    client_engine_session_factory, *, business_unit: str, campaign: str,
+    lead_model: str | None = None, lead_id: int | None = None,
+) -> tuple[str, str]:
     """Insert a telephony_call_lifecycle + matching audit_event row directly.
 
     Goes straight to the DB rather than through POST /calls/originate: that
@@ -134,10 +137,15 @@ async def _seed_call(client_engine_session_factory, *, business_unit: str, campa
             sql_text(
                 "INSERT INTO telephony_call_lifecycle "
                 "(id, correlation_id, primary_unique_id, lifecycle_state, "
-                " started_at, source_extension, destination, dialplan_context) "
-                "VALUES (:id, :cid, :puid, 'STARTED', now(), '6101', '+15551234567', 'click-to-call')"
+                " started_at, source_extension, destination, dialplan_context, "
+                " lead_model, lead_id) "
+                "VALUES (:id, :cid, :puid, 'STARTED', now(), '6101', '+15551234567', "
+                " 'click-to-call', :lead_model, :lead_id)"
             ),
-            {"id": call_id, "cid": correlation_id, "puid": f"click-to-call:{call_id}"},
+            {
+                "id": call_id, "cid": correlation_id, "puid": f"click-to-call:{call_id}",
+                "lead_model": lead_model, "lead_id": lead_id,
+            },
         )
         await session.execute(
             sql_text(
@@ -187,6 +195,28 @@ async def test_list_calls_reflects_seeded_row_and_excludes_other_tenant(client, 
     call_ids = {item["call_id"] for item in body["items"]}
     assert call_id in call_ids
     assert len(body["items"]) == 1  # the OTHER_TENANT row must not leak through
+
+
+@pytest.mark.asyncio
+async def test_list_calls_exposes_lead_reference_when_present(client, authority):
+    engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    with_lead, _ = await _seed_call(
+        session_factory, business_unit="COD", campaign="TEST_SYN",
+        lead_model="crm.lead", lead_id=4821,
+    )
+    without_lead, _ = await _seed_call(session_factory, business_unit="COD", campaign="TEST_SYN")
+    await engine.dispose()
+
+    response = await client.get(
+        "/platform/v1/calls?tenant_id=COD", headers=_headers(authority())
+    )
+    assert response.status_code == 200
+    by_id = {item["call_id"]: item for item in response.json()["items"]}
+    assert by_id[with_lead]["lead_model"] == "crm.lead"
+    assert by_id[with_lead]["lead_id"] == 4821
+    assert by_id[without_lead]["lead_model"] is None
+    assert by_id[without_lead]["lead_id"] is None
 
 
 @pytest.mark.asyncio

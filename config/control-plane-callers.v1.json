@@ -100,6 +100,15 @@
       "compatibility_only": false,
       "staging_auth_matrix": true
     },
+    "production-operator": {
+      "command_scope": "email.production.write",
+      "status_scope": "email.production.read",
+      "connector_commands_allowed": false,
+      "allowed_command_prefixes": [],
+      "allowed_targets": [],
+      "compatibility_only": false,
+      "staging_auth_matrix": true
+    },
     "moneybee-backend": {
       "command_scope": "moneybee.middleware.command.write",
       "status_scope": "moneybee.middleware.status.read",

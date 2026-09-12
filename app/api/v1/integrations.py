@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.automation import canonical_hash, redact
 from app.core.config import settings
 from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.provisioning_auth import (
+    ProvisioningPrincipal,
+    require_provisioning_scope,
+    require_tenant_match,
+)
 from app.db.models import (
     AuditEvent,
     IdempotencyRecord,
@@ -187,6 +192,120 @@ async def odoo_command(
 @router.get("/odoo/commands/{command_id}")
 async def odoo_command_status(command_id: str) -> dict[str, str]:
     return {"command_id": command_id, "status": "not_configured"}
+
+
+@router.get("/odoo/status")
+async def odoo_integration_status() -> dict[str, Any]:
+    return {
+        "health": await odoo_health(),
+        "readiness": await odoo_readiness(),
+        "automation_writes_enabled": settings.odoo_automation_writes_enabled,
+    }
+
+
+# NOTE on "Odoo integration mappings": this codebase already has a real,
+# hardened campaign<->Odoo mapping projection at GET /v1/mappings/campaigns
+# and /v1/mappings/campaigns/{code} (app/api/v1/mappings.py), backed by the
+# reviewed, migration-seeded vicidial_campaign_registry table (odoo_business_
+# unit_uuid/odoo_crm_team_uuid/odoo_campaign_uuid columns, plus a
+# drift_status/last_read_back_at/observed_state_hash reconciliation-evidence
+# trail enforced by a DB CHECK constraint - see migrations/versions/
+# 0010_vicidial_registry_guards.py). Building a second, competing
+# /odoo/mappings* implementation here would be exactly the duplication this
+# session's mission repeatedly warns against. sync-status/sync-errors below
+# read that same table rather than re-deriving the concept.
+#
+# What genuinely doesn't exist anywhere in this codebase: POST /odoo/mappings,
+# PATCH/DELETE .../{id}, POST .../{id}/test, or POST /odoo/reconcile - there
+# is no mapping-mutation code path at all. vicidial_campaign_registry appears
+# to be intentionally reviewed/migration-controlled, not runtime-mutable
+# (consistent with this deployment's broader "no direct production database
+# edits" posture). Adding real write endpoints here would mean inventing a
+# net-new mutation capability with no existing precedent to follow - a
+# genuine architecture decision (should campaign<->Odoo mapping become
+# runtime-mutable at all, and if so through what review/approval gate?), not
+# something to fabricate silently. Left undone, flagged here rather than
+# guessed at.
+
+
+@router.get("/odoo/sync-status")
+async def odoo_sync_status(
+    business_unit: str,
+    environment: str = "staging",
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    authorized_unit = business_unit.strip().upper()
+    require_tenant_match(principal, authorized_unit)
+    rows = (
+        (
+            await db.execute(
+                text(
+                    "SELECT drift_status, COUNT(*) AS count FROM vicidial_campaign_registry "
+                    "WHERE environment=:environment AND business_unit_code=:unit "
+                    "GROUP BY drift_status"
+                ),
+                {"environment": environment, "unit": authorized_unit},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    by_status = {row["drift_status"]: row["count"] for row in rows}
+    return {
+        "business_unit": authorized_unit,
+        "environment": environment,
+        "mapping_count_by_drift_status": by_status,
+        "total_mappings": sum(by_status.values()),
+    }
+
+
+@router.get("/odoo/sync-errors")
+async def odoo_sync_errors(
+    business_unit: str,
+    environment: str = "staging",
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    # "not_observed" is this column's server_default (never yet reconciled),
+    # not itself an error - only rows that were checked and found drifted
+    # are reported here.
+    authorized_unit = business_unit.strip().upper()
+    require_tenant_match(principal, authorized_unit)
+    rows = (
+        (
+            await db.execute(
+                text(
+                    "SELECT canonical_campaign_code, drift_status, last_read_back_at "
+                    "FROM vicidial_campaign_registry "
+                    "WHERE environment=:environment AND business_unit_code=:unit "
+                    "AND drift_status NOT IN ('reconciled', 'not_observed') "
+                    "ORDER BY canonical_campaign_code"
+                ),
+                {"environment": environment, "unit": authorized_unit},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return {
+        "business_unit": authorized_unit,
+        "environment": environment,
+        "items": [
+            {
+                "canonical_campaign_code": row["canonical_campaign_code"],
+                "drift_status": row["drift_status"],
+                "last_read_back_at": (
+                    row["last_read_back_at"].isoformat() if row["last_read_back_at"] else None
+                ),
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.post("/n8n/dispatch", status_code=202)

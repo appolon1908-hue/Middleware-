@@ -49,6 +49,15 @@ from .lead_intake import (
     accept_lead_submission,
 )
 from .n8n_control_plane import router as n8n_control_plane_router
+from .api.v1.agent_provisioning import router as agent_provisioning_router
+from .api.v1.agent_provisioning_reads import router as agent_provisioning_reads_router
+from .api.v1.session_context import router as session_context_router
+from .api.v1.calls import router as calls_router
+from .api.v1.activity import router as activity_router
+from .api.v1.presence import router as presence_router
+from .api.v1.queues import router as queues_router
+from .api.v1.tenants import router as tenants_router
+from .api.v1.campaigns import router as campaigns_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -179,6 +188,15 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(agent_provisioning_router)
+    app.include_router(agent_provisioning_reads_router)
+    app.include_router(session_context_router)
+    app.include_router(calls_router)
+    app.include_router(activity_router)
+    app.include_router(presence_router)
+    app.include_router(queues_router)
+    app.include_router(tenants_router)
+    app.include_router(campaigns_router)
     app.include_router(monitoring_router)
 
     def realtime_store(request: Request):

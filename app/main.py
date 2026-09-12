@@ -43,7 +43,10 @@ from app.api.v1.integrations import router as integrations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
-from app.api.v1.observability_sync import router as observability_sync_router
+from app.api.v1.observability_sync import (
+    is_observability_sync_route,
+    router as observability_sync_router,
+)
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
 from app.api.v1.agent_provisioning_reads import (
@@ -245,7 +248,7 @@ async def control_request_guard(request: Request, call_next):
         and not _is_ai_console_jwt_route(request)
         and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
         and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
-        and not is_monitoring_route(request)
+        and not (is_monitoring_route(request) or is_observability_sync_route(request))
     ):
         try:
             verify_bearer(

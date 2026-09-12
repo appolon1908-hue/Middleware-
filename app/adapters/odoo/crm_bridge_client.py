@@ -67,6 +67,11 @@ class OdooCrmBridgeClient:
         self._client = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS)
         self._owns_client = client is None
 
+    @property
+    def configured_tenant_id(self) -> str:
+        """Tenant bound to this bridge credential and service identity."""
+        return self._tenant_id
+
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()

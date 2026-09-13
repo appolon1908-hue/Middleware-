@@ -20,7 +20,11 @@ from app.commands import (
     CommandState,
     MemoryCommandStore,
 )
-from app.communications import CommunicationsService, MemoryCommunicationsStore
+from app.communications import (
+    CommunicationsService,
+    CreateMessageRequest,
+    MemoryCommunicationsStore,
+)
 from app.main import create_app
 from app.replay import MemoryReplayGuard
 from app.runtime import Runtime
@@ -202,6 +206,40 @@ def test_email_message_lifecycle_idempotency_and_timeline(test_settings) -> None
         assert runtime.commands is not None
         assert isinstance(runtime.commands.store, MemoryCommandStore)
         assert len(runtime.commands.store._commands) == 1
+
+
+@pytest.mark.asyncio
+async def test_simultaneous_duplicate_email_requests_create_one_command(
+    test_settings,
+) -> None:
+    runtime = _runtime(test_settings)
+    service = runtime.communications
+    assert service is not None
+    request = CreateMessageRequest(**_message())
+    authorization = "Bearer " + _token(
+        "klyrow", ["klyrow.middleware.command.write"]
+    )
+
+    results = await asyncio.gather(
+        *(
+            service.submit_message(
+                request,
+                tenant_id="tenant-1",
+                correlation_id="email-correlation-1",
+                idempotency_key="simultaneous-email-key-1",
+                actor="user-123",
+                authorization=authorization,
+                token_verifier=runtime.tokens,
+            )
+            for _ in range(8)
+        )
+    )
+
+    assert len({str(message.messageId) for message, _ in results}) == 1
+    assert sum(not duplicate for _, duplicate in results) == 1
+    assert runtime.commands is not None
+    assert isinstance(runtime.commands.store, MemoryCommandStore)
+    assert len(runtime.commands.store._commands) == 1
 
 
 def test_email_contract_validation_sender_policy_and_kill_switch(test_settings) -> None:
@@ -513,6 +551,61 @@ def test_klyrow_signed_event_updates_canonical_read_model(test_settings) -> None
             headers=_headers(scope="klyrow.middleware.status.read"),
         )
         assert after_conflict.json()["status"] == "delivered"
+
+
+def test_dedicated_klyrow_event_resolves_message_by_command_identity(
+    test_settings,
+) -> None:
+    from app.api.internal.klyrow_mail import (
+        KlyrowDeliveryEvent,
+        _communications_envelope,
+    )
+
+    runtime = _runtime(test_settings)
+    app = create_app(settings=test_settings, runtime=runtime)
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/communications/messages",
+            json=_message(),
+            headers=_headers(key="dedicated-callback-key"),
+        ).json()
+
+    event = KlyrowDeliveryEvent.model_validate(
+        {
+            "event_id": "klyrow-delivery-event-0001",
+            "schema_version": "1.0",
+            "source_system": "klyrow",
+            "event_type": "klyrow.email.delivered",
+            "event_version": "1.0",
+            "occurred_at": "2026-09-12T12:00:00Z",
+            "tenant_id": "tenant-1",
+            "operation_id": created["operationId"],
+            "payload_hash": "a" * 64,
+            "message_id": "klyrow-message-0001",
+            "provider_message_id": "postal-message-0001",
+            "stream": "transactional",
+            "recipient_reference": "sha256:recipient-0001",
+            "status": "delivered",
+            "provider": "postal",
+            "correlation_id": "email-correlation-1",
+            "causation_id": created["operationId"],
+            "attempt": 1,
+            "metadata": {},
+        }
+    )
+    envelope = _communications_envelope(event)
+    assert runtime.communications is not None
+    assert asyncio.run(
+        runtime.communications.record_provider_event(envelope)
+    ) is True
+    assert asyncio.run(
+        runtime.communications.record_provider_event(envelope)
+    ) is False
+    projected = runtime.communications.get_message(
+        "tenant-1", UUID(created["messageId"])
+    )
+    assert projected.status == "delivered"
+    assert projected.providerReference == "postal-message-0001"
 
 
 def test_email_unknown_command_outcome_is_indeterminate_without_resubmission(

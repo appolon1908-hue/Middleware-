@@ -25,14 +25,14 @@ _SPEC.loader.exec_module(_BASE)
 
 ROOT = _BASE.ROOT
 # Forward schema requirement; preserve the reviewed historical base verbatim.
-setattr(_BASE, "CURRENT_SCHEMA_HEAD", "0060_agent_provisioning")
+setattr(_BASE, "CURRENT_SCHEMA_HEAD", "0061_kyyow_observability_odoo")
 SOURCE_RESOLUTION = (
     "resolve the exact protected-main GitHub event SHA at workflow execution"
 )
 REQUIRED_RUNTIME_EVIDENCE = (
     "signed release manifest bound to exact protected-main source",
     "immutable image digest and verified provenance",
-    "schema head 0060_agent_provisioning",
+    "schema head 0061_kyyow_observability_odoo",
     "effective source, digest, schema, profile, and capability read-back",
     "backup and isolated restore evidence",
     "rollback rehearsal and data-integrity evidence",

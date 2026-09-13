@@ -1,0 +1,8 @@
+{
+  "current_orchestrator_sha256": "cd085c9f42072f12fd0495bd9ee8debfd68e3f9db266a08cecbaa7be7efd3f5e",
+  "proposed_orchestrator_sha256": "412b6208dbc87b997f7f471a525a24b30907656376be30cd89c25b0e7bb2fc91",
+  "reviewed_test_path": "tests/integration/campaign_extension_concurrency.py",
+  "reviewed_test_sha256": "058f61fd12fd07df0a68d481cf7af716e86067348ec191a2e27a1e02b0913afd",
+  "active_launcher_changed": false,
+  "required_action": "Independently review and promote the attached one-way launcher transition on protected main, then update this PR from main. Candidate code must not authorize its own validator."
+}

@@ -220,7 +220,7 @@ async def deliver_result(
         required = {
             "status": "APPLIED",
             "event_id": standard_event.original_event_id,
-            "operation": result.standard_result_json["operation"],
+            "operation": "odoo." + result.standard_result_json["operation"],
             "correlation_id": correlation_id,
         }
     elif standard_delivery:
@@ -374,7 +374,7 @@ def _observability_body(
     # in the signed header. Keep the source key in the queue metadata, not in
     # the Odoo binding field, so retries bind to the same delivery.
     payload["idempotency_key"] = str(delivery.result_public_id)
-    payload["operation"] = operation
+    payload["operation"] = "odoo." + operation
     payload["causation_id"] = event.original_event_id
     return payload
 

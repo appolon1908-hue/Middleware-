@@ -29,3 +29,22 @@ The canonical cross-repository contract is [contracts/observability/odoo-sync.v1
 - Prometheus, Alertmanager, Grafana, exporters, Loki, Tempo, Superset, and OpenBao do not write Odoo directly.
 
 Activation stays fail-closed until OIDC credentials, tenant allowlists, endpoint-registry approval, Odoo ORM routes, and release evidence are present.
+
+### Kyyow collector binding and incident ordering
+
+Projection submissions require the service in the verified token's `services`
+claim and the same tenant/environment in the mounted monitoring registry.
+Register the KPI `source` or incident `source_deployment` under that service's
+`observation_sources`, with the authorized client ID and environment list.
+Missing or mismatched bindings are rejected before persistence.
+
+Incident submissions serialize by tenant and incident identity before checking
+`resource_version`. A new event must advance the current version; an exact replay
+retains its original delivery identity. The pre-release 0061 migration permits
+exactly one of acknowledgement, runtime-result, or integration-event delivery
+sources and requires the standard payload for integration-event deliveries.
+
+The concurrency-test allowlist repair also needs the independently reviewed
+protected-base transition in
+`docs/production/evidence/kyyow-concurrency-trust-transition.patch`.
+The PR deliberately leaves its active trust launcher unchanged.

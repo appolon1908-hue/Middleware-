@@ -13,17 +13,19 @@ import hashlib
 import json
 import math
 from typing import Any, Literal
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import IdempotencyRecord, IntegrationEvent, OdooResultDelivery
 from app.db.session import get_session
 from app.monitoring.auth import READ_ROLES, Principal, require
-from app.monitoring.routes import COLLECTOR
+from app.monitoring.routes import COLLECTOR, validate_source
+from app.monitoring.backends import load_config
 from app.monitoring.models import Digest, Environment, Identifier
 from app.monitoring.store import Store, utc
 
@@ -36,6 +38,7 @@ INCIDENT_OPERATION = "observability.incidents.upsert"
 KPI_EVENT_TYPE = "kyyow.observability.kpi.snapshot.v1"
 INCIDENT_EVENT_TYPE = "kyyow.observability.incident.state.v1"
 SAFE_KEY = r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+PROHIBITED_DATA_KEYS = {"body", "logs", "traces", "raw_samples", "raw_logs", "raw_traces", "samples"}
 SENSITIVE_KEY_PARTS = (
     "password",
     "passwd",
@@ -85,7 +88,7 @@ class KpiSnapshot(Input):
         for key, value in self.dimensions.items():
             if not isinstance(key, str) or __import__("re").fullmatch(SAFE_KEY, key) is None:
                 raise ValueError("dimension key is unsafe")
-            if any(part in key.lower().replace("-", "_") for part in SENSITIVE_KEY_PARTS):
+            if key.lower().replace("-", "_") in PROHIBITED_DATA_KEYS or any(part in key.lower().replace("-", "_") for part in SENSITIVE_KEY_PARTS):
                 raise ValueError("dimension key is sensitive")
             if isinstance(value, (dict, list, tuple)) or value is None:
                 raise ValueError("dimension values must be scalar")
@@ -136,7 +139,7 @@ class IncidentState(Input):
         for key, value in self.labels.items():
             if not isinstance(key, str) or __import__("re").fullmatch(SAFE_KEY, key) is None:
                 raise ValueError("label key is unsafe")
-            if any(part in key.lower().replace("-", "_") for part in SENSITIVE_KEY_PARTS):
+            if key.lower().replace("-", "_") in PROHIBITED_DATA_KEYS or any(part in key.lower().replace("-", "_") for part in SENSITIVE_KEY_PARTS):
                 raise ValueError("label key is sensitive")
             if not isinstance(value, (str, int, float, bool)) or (
                 isinstance(value, str) and len(value) > 256
@@ -182,6 +185,8 @@ def _safe_payload(body: KpiSnapshot | IncidentState, principal: Principal, idemp
             )
     if payload["tenant_id"] != principal.tenant:
         raise HTTPException(403, "tenant scope denied")
+    if body.service_id not in principal.services:
+        raise HTTPException(403, "collector service authority denied")
     expected = _projection_hash(payload)
     supplied = body.projection_hash.removeprefix("sha256:")
     if supplied != expected:
@@ -212,6 +217,15 @@ async def _enqueue(
     correlation_id: str,
     commit: bool = True,
 ) -> dict[str, Any]:
+    # Transaction-scoped locks also cover the absent-row case. Lock the event
+    # before the incident so concurrent replays and different incident versions
+    # use a consistent order and see committed predecessors under READ COMMITTED.
+    keys = ["event:" + payload["event_id"]]
+    if event_type == INCIDENT_EVENT_TYPE:
+        keys.append("incident:" + _entity_key(payload))
+    for key in keys:
+        lock_id = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], "big", signed=True)
+        await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_id})
     request_hash = _digest(payload)
     key_hash = _digest({"tenant": principal.tenant, "key": idempotency_key})
     scope = _operation_scope(principal.tenant, operation)
@@ -252,6 +266,16 @@ async def _enqueue(
         }
         result["duplicate"] = True
         return result
+
+    if event_type == INCIDENT_EVENT_TYPE:
+        latest = await session.scalar(
+            select(func.max(IntegrationEvent.payload_json["resource_version"].as_integer())).where(
+                IntegrationEvent.event_type == INCIDENT_EVENT_TYPE,
+                IntegrationEvent.entity_key == _entity_key(payload),
+            )
+        )
+        if latest is not None and payload["resource_version"] <= latest:
+            raise HTTPException(409, "incident resource version is stale")
 
     event = IntegrationEvent(
         idempotency_key=idempotency_key,
@@ -315,7 +339,13 @@ async def submit_kpi(
     x_correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=180),
     principal: Principal = Depends(require("observability.kpis.write", READ_ROLES | COLLECTOR)),
     session: AsyncSession = Depends(get_session),
+    config: dict = Depends(load_config),
 ):
+    validate_source(config, principal, SimpleNamespace(
+        service_id=body.service_id, environment=body.environment,
+        source_deployment=body.source if isinstance(body, KpiSnapshot) else body.source_deployment,
+        observed_at=body.observed_at,
+    ))
     if body.correlation_id != x_correlation_id:
         raise HTTPException(409, "correlation binding conflict")
     payload = _safe_payload(body, principal, idempotency_key)
@@ -373,7 +403,13 @@ async def submit_incident(
     x_correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=180),
     principal: Principal = Depends(require("observability.incidents.write", READ_ROLES | COLLECTOR)),
     session: AsyncSession = Depends(get_session),
+    config: dict = Depends(load_config),
 ):
+    validate_source(config, principal, SimpleNamespace(
+        service_id=body.service_id, environment=body.environment,
+        source_deployment=body.source if isinstance(body, KpiSnapshot) else body.source_deployment,
+        observed_at=body.observed_at,
+    ))
     if body.correlation_id != x_correlation_id:
         raise HTTPException(409, "correlation binding conflict")
     payload = _safe_payload(body, principal, idempotency_key)

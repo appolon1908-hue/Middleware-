@@ -115,6 +115,13 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
 
 
 def upgrade() -> None:
+    # This pre-release migration introduces direct projection deliveries.
+    # Preserve exactly-one-source enforcement while admitting the new source.
+    op.drop_constraint("ck_odoo_result_delivery_one_source", "odoo_result_delivery", type_="check")
+    op.create_check_constraint("ck_odoo_result_delivery_one_source", "odoo_result_delivery",
+        "num_nonnulls(acknowledgement_id, runtime_result_id, integration_event_id) = 1")
+    op.create_check_constraint("ck_odoo_result_delivery_standard_payload", "odoo_result_delivery",
+        "(integration_event_id IS NULL) = (standard_result_json IS NULL)")
     op.execute(
         """
         INSERT INTO integration_service(service_id,service_key,display_name,enabled)
@@ -155,6 +162,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Reject rollback if projection-only deliveries still need this schema.
+    op.drop_constraint("ck_odoo_result_delivery_standard_payload", "odoo_result_delivery", type_="check")
+    op.drop_constraint("ck_odoo_result_delivery_one_source", "odoo_result_delivery", type_="check")
+    op.create_check_constraint("ck_odoo_result_delivery_one_source", "odoo_result_delivery",
+        "(acknowledgement_id IS NOT NULL) <> (runtime_result_id IS NOT NULL)")
     op.execute(
         """
         DELETE FROM integration_route_binding

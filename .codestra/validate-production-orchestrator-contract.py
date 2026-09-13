@@ -500,7 +500,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "d21e9d48a1c3a174cdf05864d75e4a61"
         ),
         "services/connector-runtime/scripts/test_postgres.sh": "b9b31391d7a04aa8b3362e182a43f880e46f9e85b4d2f5c3c66cb9a9fe88f867",
-        "tests/integration/campaign_extension_concurrency.py": "252b945c5779a0a8519d3dc2225b1cf495d4995cd42089d3c24c401297475377",
+        "tests/integration/campaign_extension_concurrency.py": "058f61fd12fd07df0a68d481cf7af716e86067348ec191a2e27a1e02b0913afd",
         "tests/integration/campaign_identity_concurrency.py": "234d97cf48cf29f0ec26bd4cfd48f61d031f46e1250cee477088abb7a190be76",
         "tests/test_calling_api.py": (
             "2b02e6c7c2b084362200db67cbf5c2f9"

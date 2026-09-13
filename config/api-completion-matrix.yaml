@@ -3,6 +3,18 @@ inventory_base_sha: 8e3534e0271371e0fee057331a9a24f391356e5e
 classification_complete: true
 unknown_endpoints: 0
 operations:
+- domain: campaign-designs
+  method: POST
+  path: /api/v1/campaign-designs/approvals
+  canonical_operation_id: approve_api_v1_campaign_designs_approvals_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: campaign-designs
+  method: POST
+  path: /api/v1/campaign-designs/preview
+  canonical_operation_id: preview_api_v1_campaign_designs_preview_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: control
   method: POST
   path: /api/v1/control/ai/inference-requests

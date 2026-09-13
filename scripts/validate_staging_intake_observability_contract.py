@@ -56,6 +56,7 @@ WEBHOOK_SECRET_NAMES = {
 }
 GOVERNED_READ_PATHS = {"/metrics", "/v1/runtime/safety"}
 EXPECTED_INCLUDED_ROUTERS = {
+    "campaign_design_router": "campaign_design_api",
     "n8n_control_plane_router": "n8n_control_plane",
     "operations_dashboard_router": "operations_dashboard",
     "operations_router": "operations",

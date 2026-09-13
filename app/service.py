@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from .contracts import WebhookRoute
 from .models import EventEnvelope, IngressResult
+from .odoo_agent_events import ODOO_EVENTS_PATH, validate_odoo_agent_event
 from .replay import ReplayBusy
 from .runtime import Runtime
 from .security import RequestValidationError, authorize_tenant, verify_signed_request
@@ -106,6 +107,8 @@ async def accept_webhook(
         raise RequestValidationError("body idempotency_key does not match headers")
     if envelope.source != route.producer_client_id:
         raise RequestValidationError("body source does not match route producer")
+    if path == ODOO_EVENTS_PATH:
+        validate_odoo_agent_event(envelope)
 
     semantic_sha = semantic_digest(envelope)
     token: str | None = None

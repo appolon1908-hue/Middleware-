@@ -22,6 +22,7 @@ from app.api.v1.sales import router as sales_router
 from app.api.v1.booking import router as booking_router
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
+from app.api.v1.odoo_events import router as odoo_events_router
 from app.monitoring.routes import router as monitoring_router
 from app.api.v1.webphone import router as webphone_router
 from app.api.v1.observability_sync import router as observability_sync_router
@@ -52,6 +53,7 @@ routers = (
     booking_router,
     platform_router,
     agent_provisioning_router,
+    odoo_events_router,
     observability_sync_router,
 )
 app = FastAPI(

@@ -51,6 +51,8 @@ CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
 N8N_SERVICE_JWT_ROUTES = frozenset(
     {
         ("POST", "/api/v1/automation/policy-check"),
+        ("POST", "/api/v1/campaign-designs/preview"),
+        ("POST", "/api/v1/campaign-designs/approvals"),
         ("POST", "/api/v1/integrations/n8n/results"),
     }
 )

@@ -2,6 +2,12 @@ ARG RUNTIME_BASE=python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491
 ARG TEST_BASE=python:3.13.15-bookworm@sha256:62eafe52c91cad83c2c74e630bfde917da8c253673e695665d454def84fc9a13
 ARG FINAL_BASE=python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
 
+FROM ${FINAL_BASE} AS patched-final-base
+USER root
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpcre2-8-0=10.42-1+deb12u1 \
+ && rm -rf /var/lib/apt/lists/*
+
 FROM ${RUNTIME_BASE} AS runtime-dependencies
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
@@ -9,7 +15,7 @@ COPY requirements-runtime.txt ./
 RUN python -m pip install --require-hashes --prefix=/opt/runtime -r requirements-runtime.txt \
  && PYTHONPATH=/opt/runtime/lib/python3.13/site-packages python -m pip check
 
-FROM ${FINAL_BASE} AS runtime-common
+FROM patched-final-base AS runtime-common
 ARG SOURCE_REPOSITORY=https://github.com/appolon1908-hue/Middleware-
 ARG SOURCE_REVISION
 ARG SOURCE_VERSION
@@ -65,7 +71,7 @@ COPY services/connector-runtime/src ./runtime/src
 RUN python -m pip install --no-deps --prefix=/opt/connector ./runtime \
  && PYTHONPATH=/opt/connector/lib/python3.13/site-packages python -m pip check
 
-FROM ${FINAL_BASE} AS connector-runtime
+FROM patched-final-base AS connector-runtime
 ARG SOURCE_REPOSITORY=https://github.com/appolon1908-hue/Middleware-
 ARG SOURCE_REVISION
 ARG SOURCE_VERSION

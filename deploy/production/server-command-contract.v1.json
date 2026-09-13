@@ -9,7 +9,7 @@
     "image_repository": "ghcr.io/appolon1908-hue/codestra-middleware",
     "mode": "READ_ONLY_CANARY",
     "restricted_user": "middleware-deploy",
-    "schema_head": "0060_agent_provisioning",
+    "schema_head": "0061_kyyow_observability_odoo",
     "server_role": "CODESTRA_APPLICATION_SERVER_A",
     "source_ref": "refs/heads/main"
   },
@@ -55,7 +55,7 @@
       "EXTERNAL_EFFECTS_ENABLED": "NONE",
       "GATEWAY_EXPOSURE": "NONE",
       "HEALTH_STATUS": "PASS",
-      "MIGRATION_HEAD": "0060_agent_provisioning",
+      "MIGRATION_HEAD": "0061_kyyow_observability_odoo",
       "MIGRATION_STATUS": "PASS",
       "READINESS_STATUS": "PASS",
       "RESTORE_STATUS": "PASS",

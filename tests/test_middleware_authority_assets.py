@@ -47,7 +47,7 @@ def test_current_authority_must_require_schema_0010(tmp_path: Path) -> None:
     )
     path.write_text(json.dumps(value), encoding="utf-8")
     errors = validator.validate_assets(tmp_path)
-    assert any("must require schema 0060_agent_provisioning" in error for error in errors)
+    assert any("must require schema 0061_kyyow_observability_odoo" in error for error in errors)
 
 
 def test_current_candidate_must_remain_pending_and_null(tmp_path: Path) -> None:

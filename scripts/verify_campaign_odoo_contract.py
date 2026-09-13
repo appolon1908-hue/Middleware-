@@ -9,18 +9,31 @@ import ast
 import hashlib
 import json
 import re
+import sys
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
-from app.core.campaign_design_contract import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.core.campaign_design_contract import (  # noqa: E402
     CampaignDesignInput,
+    LIST_RANGES,
     build_manifest,
     canonical,
-    manifest_hash,
     contains_secret,
-    LIST_RANGES,
+    manifest_hash,
 )
+
+
+def require(condition: bool, message: str) -> None:
+    """Keep contract checks active even when the interpreter uses -O."""
+    if not condition:
+        raise RuntimeError(message)
 
 
 def verify(odoo_root: Path) -> dict:
@@ -67,10 +80,9 @@ def verify(odoo_root: Path) -> dict:
     }
     module = ast.Module(body=list(methods), type_ignores=[])
     exec(compile(ast.fix_missing_locations(module), str(source), "exec"), namespace)
-    root = Path(__file__).resolve().parents[1]
     request = CampaignDesignInput.model_validate(
         json.loads(
-            (root / "contracts/campaign-design-request.v1.fixture.json").read_text()
+            (ROOT / "contracts/campaign-design-request.v1.fixture.json").read_text()
         )
     )
     manifest = build_manifest(request, request.design_request_revision, 91000)
@@ -109,8 +121,11 @@ def verify(odoo_root: Path) -> dict:
         "validation_errors": [],
     }
     revision._record_preview(result)
-    assert revision.saved["state"] == "ready"
-    assert revision.saved["manifest_json"] == manifest
+    require(revision.saved["state"] == "ready", "Odoo preview did not become ready")
+    require(
+        revision.saved["manifest_json"] == manifest,
+        "Odoo changed the canonical campaign manifest",
+    )
     tampered = json.loads(json.dumps(result))
     tampered["manifest"]["n8n"]["workflows_active"] = True
     tampered["manifest_hash"] = manifest_hash(tampered["manifest"])
@@ -152,9 +167,14 @@ def verify(odoo_root: Path) -> dict:
     event = SimpleNamespace(
         ensure_one=lambda: None, business_unit_code=request.business_unit
     )
-    resolve_tenant = transport_namespace["_campaign_tenant_id"]
-    assert callable(resolve_tenant)
-    assert resolve_tenant(event) == request.tenant_id
+    resolve_tenant = cast(
+        Callable[[Any], str], transport_namespace["_campaign_tenant_id"]
+    )
+    require(callable(resolve_tenant), "Odoo tenant resolver is not callable")
+    require(
+        resolve_tenant(event) == request.tenant_id,
+        "Odoo resolved a different campaign tenant",
+    )
     environment.clear()
     try:
         resolve_tenant(event)

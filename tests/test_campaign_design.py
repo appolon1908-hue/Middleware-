@@ -200,11 +200,22 @@ def test_production_preview_requires_explicit_environment(monkeypatch):
 
 @pytest.fixture
 def database():
-    url = os.environ.get("CAMPAIGN_DESIGN_TEST_DATABASE_URL", "")
+    dedicated_url = os.environ.get("CAMPAIGN_DESIGN_TEST_DATABASE_URL", "")
+    url = dedicated_url or os.environ.get("TEST_DATABASE_URL", "")
     if not url:
         pytest.skip("isolated campaign design PostgreSQL is required")
-    if make_url(url).database != "campaign_design_test":
-        pytest.fail("refusing a database not named campaign_design_test")
+    parsed = make_url(url)
+    database_name = parsed.database or ""
+    if parsed.host not in {"127.0.0.1", "localhost"}:
+        pytest.fail("refusing a non-local campaign design database")
+    if dedicated_url:
+        if database_name != "campaign_design_test":
+            pytest.fail("refusing a dedicated database not named campaign_design_test")
+    elif not (
+        database_name.startswith("middleware_")
+        and any(marker in database_name for marker in ("test", "rehearsal", "diag"))
+    ):
+        pytest.fail("refusing a shared database without an isolated test name")
 
     def run(scenario):
         async def execute():

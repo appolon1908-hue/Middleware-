@@ -248,6 +248,22 @@ class Settings(BaseSettings):
     sms_dispatch_enabled: bool = False
     allow_live_email: bool = False
     allow_live_sms: bool = False
+    sms_delivery: bool = False
+    telnexa_event_ingress_enabled: bool = False
+    telnexa_event_api_key: str = ""
+    telnexa_event_api_key_file: str = ""
+    telnexa_event_hmac_secret: str = ""
+    telnexa_event_hmac_secret_file: str = ""
+    telnexa_event_signature_ttl_seconds: int = 300
+    telnexa_event_request_max_bytes: int = 1_048_576
+    klyrow_event_ingress_enabled: bool = False
+    klyrow_event_api_key: str = ""
+    klyrow_event_api_key_file: str = ""
+    klyrow_event_hmac_secret: str = ""
+    klyrow_event_hmac_secret_file: str = ""
+    klyrow_event_signature_ttl_seconds: int = 300
+    klyrow_event_request_max_bytes: int = 1_048_576
+    klyrow_odoo_projection_enabled: bool = False
     klyrow_mail_ingress_enabled: bool = False
     klyrow_mail_hmac_secret_file: str = ""
     klyrow_mail_signature_ttl_seconds: int = 300
@@ -478,6 +494,40 @@ class Settings(BaseSettings):
     sales_scraper_rate_limit_per_minute: int = 60
 
     def validate_safety(self) -> None:
+        if self.telnexa_event_ingress_enabled:
+            if not self.sms_delivery:
+                raise ValueError(
+                    "SMS_DELIVERY must be true before enabling Telnexa event ingress"
+                )
+            if not (
+                self.telnexa_event_api_key.strip()
+                or self.telnexa_event_api_key_file.strip()
+            ):
+                raise ValueError(
+                    "Telnexa event API key is required when ingress is enabled"
+                )
+            if not (
+                self.telnexa_event_hmac_secret.strip()
+                or self.telnexa_event_hmac_secret_file.strip()
+            ):
+                raise ValueError(
+                    "Telnexa event HMAC secret is required when ingress is enabled"
+                )
+        if self.klyrow_event_ingress_enabled:
+            if not (
+                self.klyrow_event_api_key.strip()
+                or self.klyrow_event_api_key_file.strip()
+            ):
+                raise ValueError(
+                    "Klyrow event API key is required when ingress is enabled"
+                )
+            if not (
+                self.klyrow_event_hmac_secret.strip()
+                or self.klyrow_event_hmac_secret_file.strip()
+            ):
+                raise ValueError(
+                    "Klyrow event HMAC secret is required when ingress is enabled"
+                )
         if self.social_n8n_delivery_batch_size not in range(1, 26):
             raise ValueError("social n8n delivery batch size must be between 1 and 25")
         if self.social_n8n_delivery_lease_seconds not in range(10, 601):
@@ -528,6 +578,7 @@ class Settings(BaseSettings):
             self.n8n_lead_delivery_enabled,
             self.postly_lead_delivery_enabled,
             self.odoo_production_writes_enabled,
+            self.klyrow_odoo_projection_enabled,
             self.social_odoo_write_enabled,
             self.live_identity_provisioning_enabled,
         )
@@ -957,6 +1008,42 @@ class Settings(BaseSettings):
     def validate_n8n_production_image_digest(cls, value: str) -> str:
         if value and not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
             raise ValueError("n8n image identity must be an exact sha256 digest")
+        return value
+
+    @field_validator("telnexa_event_signature_ttl_seconds")
+    @classmethod
+    def validate_telnexa_signature_ttl(cls, value: int) -> int:
+        if isinstance(value, bool) or value not in range(1, 901):
+            raise ValueError(
+                "Telnexa event signature TTL must be between 1 and 900 seconds"
+            )
+        return value
+
+    @field_validator("telnexa_event_request_max_bytes")
+    @classmethod
+    def validate_telnexa_request_max_bytes(cls, value: int) -> int:
+        if isinstance(value, bool) or value not in range(1_024, 10_485_761):
+            raise ValueError(
+                "Telnexa event request size must be between 1024 and 10485760 bytes"
+            )
+        return value
+
+    @field_validator("klyrow_event_signature_ttl_seconds")
+    @classmethod
+    def validate_klyrow_signature_ttl(cls, value: int) -> int:
+        if isinstance(value, bool) or value not in range(1, 901):
+            raise ValueError(
+                "Klyrow event signature TTL must be between 1 and 900 seconds"
+            )
+        return value
+
+    @field_validator("klyrow_event_request_max_bytes")
+    @classmethod
+    def validate_klyrow_request_max_bytes(cls, value: int) -> int:
+        if isinstance(value, bool) or value not in range(1_024, 10_485_761):
+            raise ValueError(
+                "Klyrow event request size must be between 1024 and 10485760 bytes"
+            )
         return value
 
     @field_validator("webphone_endpoint_adapter_url")

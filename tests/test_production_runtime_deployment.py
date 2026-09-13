@@ -11,7 +11,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts/validate_production_runtime_deployment.py"
-spec = importlib.util.spec_from_file_location("production_runtime_validator", MODULE_PATH)
+spec = importlib.util.spec_from_file_location(
+    "production_runtime_validator", MODULE_PATH
+)
 assert spec and spec.loader
 validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
@@ -24,9 +26,13 @@ RELEASE_ID = "a" * 12 + "-" + "b" * 12
 
 
 def valid_response() -> dict[str, str]:
-    contract = json.loads((ROOT / "deploy/production/server-command-contract.v1.json").read_text())
+    contract = json.loads(
+        (ROOT / "deploy/production/server-command-contract.v1.json").read_text()
+    )
     values = {key: "placeholder" for key in contract["response"]["required_keys"]}
-    values.update({key: str(value) for key, value in contract["response"]["fixed_values"].items()})
+    values.update(
+        {key: str(value) for key, value in contract["response"]["fixed_values"].items()}
+    )
     values.update(
         {
             "SOURCE_SHA": SOURCE_SHA,
@@ -36,7 +42,7 @@ def valid_response() -> dict[str, str]:
             "RELEASE_ID": RELEASE_ID,
             "VERSION_SOURCE_SHA": SOURCE_SHA,
             "VERSION_IMAGE_DIGEST": IMAGE_DIGEST,
-            "VERSION_SCHEMA_HEAD": "0063_telephony_lead_reference",
+            "VERSION_SCHEMA_HEAD": "0065_lifecycle_outcome_state",
             "BACKUP_SHA256": "sha256:" + "c" * 64,
             "CONFIGURATION_CHECKSUM": "d" * 64,
             "ROLLBACK_RTO_SECONDS": "4",
@@ -69,7 +75,9 @@ def test_runtime_workflow_rejects_reenabled_certification_job() -> None:
 def test_runtime_workflow_rejects_an_enabled_second_job() -> None:
     workflow = validator.WORKFLOW_PATH.read_text(encoding="utf-8")
     workflow += "\n  deploy:\n    runs-on: ubuntu-24.04\n    steps: []\n"
-    with pytest.raises(validator.ValidationError, match="only the disabled certify job"):
+    with pytest.raises(
+        validator.ValidationError, match="only the disabled certify job"
+    ):
         validator.validate_runtime_workflow(workflow)
 
 

@@ -6,10 +6,11 @@ import hashlib
 import hmac
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,6 +95,17 @@ class KlyrowDeliveryEvent(BaseModel):
     attempt: int = Field(ge=1, le=100)
     metadata: dict = Field(default_factory=dict)
 
+    @field_validator("occurred_at")
+    @classmethod
+    def require_aware_occurred_at(cls, value: str) -> str:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("occurred_at must be an ISO-8601 timestamp") from exc
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("occurred_at must include a timezone")
+        return value
+
 
 class KlyrowUsageEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -107,6 +119,56 @@ class KlyrowUsageEvent(BaseModel):
     stream: str = Field(pattern=r"^(TRANSACTIONAL|SECURITY|SYSTEM|MARKETING|BULK|transactional|security|system|marketing|bulk)$")
     billable_units: int = Field(ge=0, le=1_000_000_000)
     provider_result_category: str = Field(min_length=1, max_length=80)
+
+
+class _CommunicationsDeliveryEnvelope(BaseModel):
+    event_id: str
+    event_type: str
+    occurred_at: datetime
+    source: str
+    tenant_id: str
+    correlation_id: str
+    idempotency_key: str
+    payload: dict
+    metadata: dict
+
+
+def _communications_envelope(
+    event: KlyrowDeliveryEvent,
+) -> _CommunicationsDeliveryEnvelope:
+    return _CommunicationsDeliveryEnvelope(
+        event_id=event.event_id,
+        event_type=event.event_type,
+        occurred_at=datetime.fromisoformat(
+            event.occurred_at.replace("Z", "+00:00")
+        ),
+        source="klyrow-gateway",
+        tenant_id=event.tenant_id,
+        correlation_id=event.correlation_id,
+        idempotency_key="klyrow:event:" + event.event_id,
+        payload={
+            "message_id": event.message_id,
+            "operation_id": event.operation_id,
+            "provider_message_id": event.provider_message_id,
+            "status": event.status,
+            "provider_event_type": event.event_type,
+        },
+        metadata=event.metadata,
+    )
+
+
+async def _project_delivery_event(
+    request: Request, event: KlyrowDeliveryEvent
+) -> None:
+    runtime = getattr(request.app.state, "runtime", None)
+    communications = getattr(runtime, "communications", None)
+    if communications is None:
+        raise HTTPException(503, "communications_projection_unavailable")
+    envelope = _communications_envelope(event)
+    recorded = await communications.record_provider_event(envelope)
+    replay_key = (event.tenant_id, event.event_id)
+    if not recorded and replay_key not in communications.store.provider_event_digests:
+        raise HTTPException(503, "communication_message_projection_missing")
 
 
 def _one_header(request: Request, name: str) -> str:
@@ -225,6 +287,7 @@ async def receive_klyrow_mail(
             "event_id": event.event_id, "tenant": event.tenant_id, "message": event.message_id,
             "event_type": event.event_type, "occurred": event.occurred_at,
         })
+        await _project_delivery_event(request, event)
         await db.execute(text("""UPDATE klyrow_delivery_event_inbox
           SET status='complete',attempts=attempts+1,updated_at=now(),last_error=NULL
           WHERE event_id=:event_id"""), {"event_id": event.event_id})

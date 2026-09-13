@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     vicidial_write_enabled: bool = False
     klyrow_write_enabled: bool = False
     telnexa_write_enabled: bool = False
+    provisioning_service_invocation_enabled: bool = False
+    provisioning_service_base_url: str = ""
+    provisioning_service_hmac_secret_file: str = ""
+    provisioning_service_timeout_seconds: float = 15.0
     foundation_base_url: str = ""
     foundation_token_url: str = ""
     foundation_audience: str = "codestra-foundation"

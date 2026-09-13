@@ -183,6 +183,19 @@ def test_orchestrator_classifies_the_evidence_gate_as_read_only() -> None:
     assert orchestrator["workflow_has_runtime_mutation"](text, relative) is False
 
 
-def test_current_candidate_passes_the_unchanged_protected_trust_launcher() -> None:
+def test_repaired_candidate_requires_independent_protected_trust_transition(monkeypatch) -> None:
+    import hashlib
     launcher = load_launcher()
+    repaired = "086760b165e43963672da51ba7e22ddc37b1a6680ed7571e15b954ac48789ba3"
+    assert hashlib.sha256(ORCHESTRATOR.read_bytes()).hexdigest() == repaired
+    # Until the separately reviewed #272 transition reaches protected main,
+    # the unchanged launcher must reject this new validator generation.
+    if repaired not in launcher.APPROVED_VALIDATOR_TRANSITIONS:
+        with pytest.raises(launcher.TrustError, match="not an approved generation"):
+            launcher.validate_candidate(ROOT)
+    # Simulate only the final approved policy to verify the repaired pair;
+    # this does not change the production launcher's approval table.
+    monkeypatch.setattr(launcher, "APPROVED_VALIDATOR_TRANSITIONS", {
+        repaired: {repaired: ("security-fingerprint", launcher.SUCCESSOR_RELEASE_SECURITY_FINGERPRINT)},
+    })
     assert launcher.validate_candidate(ROOT) == ORCHESTRATOR

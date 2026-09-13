@@ -65,7 +65,7 @@ def _call_out(call: TelephonyCallLifecycle) -> dict[str, Any]:
     }
 
 
-def _encode_cursor(created_at, call_id: UUID) -> str:
+def _encode_cursor(created_at: datetime, call_id: UUID) -> str:
     return base64.urlsafe_b64encode(f"{created_at.isoformat()}|{call_id}".encode()).decode()
 
 

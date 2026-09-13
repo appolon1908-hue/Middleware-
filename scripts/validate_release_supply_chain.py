@@ -16,8 +16,8 @@ TEST_BASE = (
     "sha256:62eafe52c91cad83c2c74e630bfde917da8c253673e695665d454def84fc9a13"
 )
 FINAL_BASE = (
-    "gcr.io/distroless/python3-debian13:nonroot@"
-    "sha256:f3d5ddc6c64a019fe520e7f005f2880be21e6afc461b10a3c15ef2e4edc71e33"
+    "python:3.13.15-slim-bookworm@"
+    "sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"
 )
 REQUIRED = (
     "requirements-runtime.in",

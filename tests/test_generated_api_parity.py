@@ -13,6 +13,7 @@ from scripts.generate_api_contracts import (
     HTTP_METHODS,
     MUTATION_METHODS,
     REQUIRED_HEADERS,
+    SPECIALIZED_INGRESS_PATHS,
     _ensure_header,
     _normalize_schema_defaults,
     build_documents,
@@ -71,6 +72,8 @@ def test_generated_contract_documents_each_required_header_once() -> None:
         if not path.startswith(("/v1/", "/api/v1/")):
             continue
         if path == "/v1/runtime/safety" or "webhook" in path:
+            continue
+        if path in SPECIALIZED_INGRESS_PATHS:
             continue
         for method, operation in item.items():
             if method not in HTTP_METHODS:

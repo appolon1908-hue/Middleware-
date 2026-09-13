@@ -11,6 +11,11 @@ from .security import AuthorizationError, RequestValidationError, SecurityError,
 async def restrict_sms_identity(request: Request) -> None:
     # This global dependency can only deny. The canonical endpoints still
     # verify the original JWT, scope and tenant before any read or submission.
+    # Telnexa's exact callback uses its own shared API-key + HMAC contract;
+    # do not classify that opaque key as an Odoo JWT caller before the route
+    # has authenticated it.
+    if request.method == "POST" and request.url.path == "/api/v1/events/telnexa":
+        return
     try:
         caller = caller_for_authorization(request.headers.get("Authorization", ""))
     except SecurityError:

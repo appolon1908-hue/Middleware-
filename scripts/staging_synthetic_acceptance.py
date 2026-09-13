@@ -116,7 +116,7 @@ def validate_runtime_safety(
         raise AcceptanceError("deployed source SHA does not match the approved release")
     if release["image_digest"] != expected_image_digest:
         raise AcceptanceError("deployed image digest does not match the approved release")
-    if release["schema_head"] != "0061_kyyow_observability_odoo":
+    if release["schema_head"] != "0062_merge_telnexa_kyyow":
         raise AcceptanceError("deployed migration head is not current")
     if persistence != {"in_memory": False}:
         raise AcceptanceError("staging must use durable persistence")

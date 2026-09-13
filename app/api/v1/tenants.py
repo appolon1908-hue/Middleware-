@@ -1,4 +1,4 @@
-"""``GET /platform/v1/tenants``, ``/tenants/{tenant_id}``,
+"""``GET /platform/v1/tenants/authorized``, ``/tenants/{tenant_id}``,
 ``/tenants/{tenant_id}/campaigns``, ``/tenants/{tenant_id}/health``.
 
 ``codestra-foundation`` is the existing, already-implemented authority for
@@ -10,7 +10,7 @@ purpose. See ``app/adapters/foundation/client.py`` for the full contract.
 
 ``FoundationClient`` only exposes per-tenant lookups (``get_tenant``,
 ``list_entitlements``); it has no "list all tenants" operation. ``GET
-/tenants`` therefore enumerates the distinct ``campaign_registry.
+/tenants/authorized`` therefore enumerates the distinct ``campaign_registry.
 campaign_code`` values this deployment actually has provisioned campaigns
 for (the same three-letter business-unit vocabulary ``calls.py``/
 ``queues.py`` already treat as ``tenant_id`` - see ``mappings.py``'s
@@ -76,8 +76,8 @@ async def _resolve_tenant(
     return {"id": record.id, "slug": record.slug, "name": record.name, "status": record.status}
 
 
-@router.get("")
-async def list_tenants(
+@router.get("/authorized")
+async def list_authorized_tenants(
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:

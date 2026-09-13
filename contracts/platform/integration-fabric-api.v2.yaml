@@ -6974,12 +6974,12 @@ paths:
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
-  /platform/v1/tenants:
+  /platform/v1/tenants/authorized:
     get:
       tags:
       - tenants
-      summary: List Tenants
-      operationId: list_tenants_platform_v1_tenants_get
+      summary: List Authorized Tenants
+      operationId: list_authorized_tenants_platform_v1_tenants_authorized_get
       responses:
         '200':
           description: Successful Response
@@ -6987,7 +6987,8 @@ paths:
             application/json:
               schema:
                 type: object
-                title: Response List Tenants Platform V1 Tenants Get
+                title: Response List Authorized Tenants Platform V1 Tenants Authorized
+                  Get
         '400':
           description: Invalid canonical request
         '401':

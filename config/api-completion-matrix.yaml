@@ -467,8 +467,8 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: platform
   method: GET
-  path: /platform/v1/tenants
-  canonical_operation_id: list_tenants_platform_v1_tenants_get
+  path: /platform/v1/tenants/authorized
+  canonical_operation_id: list_authorized_tenants_platform_v1_tenants_authorized_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform

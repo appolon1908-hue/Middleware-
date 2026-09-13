@@ -132,7 +132,7 @@ def _headers(token: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_list_tenants_requires_bearer_token(client):
-    response = await client.get("/platform/v1/tenants")
+    response = await client.get("/platform/v1/tenants/authorized")
     assert response.status_code == 401
 
 

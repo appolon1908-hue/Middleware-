@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Mapping, Protocol
@@ -293,6 +295,35 @@ class MemoryCommunicationsStore:
     verified_domains: set[tuple[str, str]] = field(default_factory=set)
     sender_identities: dict[tuple[str, uuid.UUID], str] = field(default_factory=dict)
     cancellations: set[tuple[str, uuid.UUID, str]] = field(default_factory=set)
+    submission_locks: dict[tuple[str, str, str], asyncio.Lock] = field(
+        default_factory=dict, repr=False
+    )
+
+    @asynccontextmanager
+    async def submission_lock(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ):
+        key = (tenant_id, route, idempotency_key)
+        lock = self.submission_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            yield
+
+    async def refresh_idempotency(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ) -> None:
+        return None
+
+    async def message_by_operation(
+        self, tenant_id: str, operation_id: uuid.UUID
+    ) -> CommunicationMessage | None:
+        return next(
+            (
+                message
+                for (tenant, _), message in self.messages.items()
+                if tenant == tenant_id and message.operationId == operation_id
+            ),
+            None,
+        )
 
     async def ready(self) -> bool:
         return True
@@ -349,6 +380,70 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__()
         self.pool = pool
+
+    @asynccontextmanager
+    async def submission_lock(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ):
+        identity = f"{tenant_id}\0{route}\0{idempotency_key}"
+        async with self.pool.acquire() as conn:
+            await conn.execute("SELECT pg_advisory_lock(hashtextextended($1,0))", identity)
+            try:
+                yield
+            finally:
+                await conn.execute(
+                    "SELECT pg_advisory_unlock(hashtextextended($1,0))", identity
+                )
+
+    async def refresh_idempotency(
+        self, tenant_id: str, route: str, idempotency_key: str
+    ) -> None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT i.request_sha256,i.message_id,m.payload "
+                "FROM middleware_communication_idempotency i "
+                "JOIN middleware_communication_messages m "
+                "ON m.tenant_id=i.tenant_id AND m.message_id=i.message_id "
+                "WHERE i.tenant_id=$1 AND i.route=$2 AND i.idempotency_key=$3",
+                tenant_id,
+                route,
+                idempotency_key,
+            )
+        if row is None:
+            return
+        message = (
+            CommunicationMessage.model_validate_json(row["payload"])
+            if isinstance(row["payload"], str)
+            else CommunicationMessage.model_validate(row["payload"])
+        )
+        self.messages[(tenant_id, message.messageId)] = message
+        self.idempotency[(tenant_id, route, idempotency_key)] = (
+            row["request_sha256"],
+            row["message_id"],
+        )
+
+    async def message_by_operation(
+        self, tenant_id: str, operation_id: uuid.UUID
+    ) -> CommunicationMessage | None:
+        existing = await super().message_by_operation(tenant_id, operation_id)
+        if existing is not None:
+            return existing
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT payload FROM middleware_communication_messages "
+                "WHERE tenant_id=$1 AND payload->>'operationId'=$2 LIMIT 1",
+                tenant_id,
+                str(operation_id),
+            )
+        if row is None:
+            return None
+        message = (
+            CommunicationMessage.model_validate_json(row["payload"])
+            if isinstance(row["payload"], str)
+            else CommunicationMessage.model_validate(row["payload"])
+        )
+        self.messages[(tenant_id, message.messageId)] = message
+        return message
 
     async def message_by_idempotency(
         self, tenant_id: str, idempotency_key: str,
@@ -490,6 +585,33 @@ class CommunicationsService:
         actor: str,
         authorization: str,
         token_verifier: Any,
+        _governed_metadata: Mapping[str, Any] | None = None,
+    ) -> tuple[CommunicationMessage, bool]:
+        route = "POST /v1/communications/messages"
+        async with self.store.submission_lock(tenant_id, route, idempotency_key):
+            await self.store.refresh_idempotency(tenant_id, route, idempotency_key)
+            return await self._submit_message_unlocked(
+                request,
+                tenant_id=tenant_id,
+                correlation_id=correlation_id,
+                idempotency_key=idempotency_key,
+                actor=actor,
+                authorization=authorization,
+                token_verifier=token_verifier,
+                _governed_metadata=_governed_metadata,
+            )
+
+    async def _submit_message_unlocked(
+        self,
+        request: CreateMessageRequest,
+        *,
+        tenant_id: str,
+        correlation_id: str,
+        idempotency_key: str,
+        actor: str,
+        authorization: str,
+        token_verifier: Any,
+        _governed_metadata: Mapping[str, Any] | None = None,
     ) -> tuple[CommunicationMessage, bool]:
         command_type, target, capability, provider = CHANNEL_COMMAND[request.channel]
         caller = caller_for_authorization(authorization)
@@ -587,8 +709,12 @@ class CommunicationsService:
         now = datetime.now(UTC)
         message_id = uuid.uuid4()
         command_id = uuid.uuid4()
-        message_metadata = {
+        effective_metadata = {
             **request.metadata,
+            **(_governed_metadata or {}),
+        }
+        message_metadata = {
+            **effective_metadata,
             "recipientCount": len(recipients),
         }
         command_payload: dict[str, Any]
@@ -632,7 +758,7 @@ class CommunicationsService:
                 "scheduled_at": (
                     request.scheduledAt.isoformat() if request.scheduledAt else None
                 ),
-                "metadata": request.metadata,
+                "metadata": effective_metadata,
             }
         message = CommunicationMessage(
             messageId=message_id,
@@ -1028,10 +1154,29 @@ class CommunicationsService:
         try:
             message_id = uuid.UUID(str(raw_message_id))
         except ValueError:
-            return False
-        message = self.store.messages.get((tenant_id, message_id))
+            message_id = None
+        message = (
+            self.store.messages.get((tenant_id, message_id))
+            if message_id is not None
+            else None
+        )
+        if message is None:
+            raw_operation_id = (
+                payload.get("operationId")
+                or payload.get("operation_id")
+                or payload.get("command_id")
+            )
+            try:
+                operation_id = uuid.UUID(str(raw_operation_id))
+            except ValueError:
+                operation_id = None
+            if operation_id is not None:
+                message = await self.store.message_by_operation(
+                    tenant_id, operation_id
+                )
         if message is None:
             return False
+        message_id = message.messageId
         event_channel = (
             "sms"
             if envelope.source == "telnexa-gateway"
@@ -1049,9 +1194,10 @@ class CommunicationsService:
             or envelope.event_type.rsplit(".", 1)[-1]
         )
         status = _provider_status_to_canonical(raw_status)
-        is_email_unsubscribe = (
-            envelope.event_type == "codestra.email.message.unsubscribed"
-        )
+        is_email_unsubscribe = envelope.event_type in {
+            "codestra.email.message.unsubscribed",
+            "klyrow.email.unsubscribed",
+        }
         if is_email_unsubscribe:
             raw_recipient = (
                 payload.get("recipient")

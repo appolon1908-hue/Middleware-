@@ -208,6 +208,54 @@ operations:
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
+  method: POST
+  path: /platform/v1/email/production/activate
+  canonical_operation_id: activate_platform_v1_email_production_activate_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/email/production/audit
+  canonical_operation_id: audit_platform_v1_email_production_audit_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/email/production/authorize
+  canonical_operation_id: authorize_platform_v1_email_production_authorize_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/email/production/kill-switch
+  canonical_operation_id: kill_switch_platform_v1_email_production_kill_switch_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/email/production/quotas
+  canonical_operation_id: quotas_platform_v1_email_production_quotas_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/email/production/readiness
+  canonical_operation_id: readiness_platform_v1_email_production_readiness_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/email/production/revoke
+  canonical_operation_id: revoke_platform_v1_email_production_revoke_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/email/production/status
+  canonical_operation_id: status_platform_v1_email_production_status_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
   method: GET
   path: /platform/v1/hosts
   canonical_operation_id: hosts_platform_v1_hosts_get

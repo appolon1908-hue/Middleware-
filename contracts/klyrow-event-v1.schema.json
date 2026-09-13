@@ -197,7 +197,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Verified At"
         }
       },
@@ -233,7 +232,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Reason Code"
         },
         "status": {
@@ -272,7 +270,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Plan Id"
         },
         "price_id": {
@@ -285,7 +282,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Price Id"
         },
         "status": {
@@ -333,7 +329,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Name"
         },
         "organization_id": {
@@ -346,7 +341,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Organization Id"
         },
         "tenant_id": {
@@ -570,7 +564,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "title": "Causation Id"
     },
     "correlation_id": {
@@ -580,7 +573,6 @@
       "type": "string"
     },
     "data": {
-      "additionalProperties": true,
       "title": "Data",
       "type": "object"
     },

@@ -31,7 +31,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "title": "Verified At"
     }
   },

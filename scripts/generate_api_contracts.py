@@ -288,6 +288,7 @@ def _klyrow_contract_documents() -> dict[Path, str]:
         ),
     }
     for filename, value in schemas.items():
+        _normalize_schema_defaults(value)
         value["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         value["$id"] = f"https://contracts.codestra.co/klyrow/{filename}"
     schemas["klyrow-usage-daily-v1.schema.json"]["required"] = [

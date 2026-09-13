@@ -5027,7 +5027,6 @@
                       },
                       "unit": {
                         "const": "accepted_message",
-                        "default": "accepted_message",
                         "title": "Unit",
                         "type": "string"
                       }
@@ -5190,7 +5189,6 @@
                     "additionalProperties": false,
                     "properties": {
                       "enabled": {
-                        "default": true,
                         "title": "Enabled",
                         "type": "boolean"
                       },
@@ -5226,7 +5224,8 @@
                       }
                     },
                     "required": [
-                      "tenant_id"
+                      "tenant_id",
+                      "enabled"
                     ],
                     "title": "TenantEventData",
                     "type": "object"
@@ -5465,7 +5464,6 @@
                   },
                   "source": {
                     "const": "klyrow",
-                    "default": "klyrow",
                     "title": "Source",
                     "type": "string"
                   },
@@ -5493,7 +5491,6 @@
                   },
                   "version": {
                     "const": 1,
-                    "default": 1,
                     "title": "Version",
                     "type": "integer"
                   }

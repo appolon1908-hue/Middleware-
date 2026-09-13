@@ -6034,12 +6034,10 @@ paths:
                   type: string
                 version:
                   const: 1
-                  default: 1
                   title: Version
                   type: integer
                 source:
                   const: klyrow
-                  default: klyrow
                   title: Source
                   type: string
                 tenant_id:
@@ -6101,11 +6099,11 @@ paths:
                       - type: 'null'
                       title: Organization Id
                     enabled:
-                      default: true
                       title: Enabled
                       type: boolean
                   required:
                   - tenant_id
+                  - enabled
                   title: TenantEventData
                   type: object
                 SubscriptionChangedData:
@@ -6157,7 +6155,6 @@ paths:
                       type: string
                     unit:
                       const: accepted_message
-                      default: accepted_message
                       title: Unit
                       type: string
                     quantity:

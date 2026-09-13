@@ -258,6 +258,34 @@ def test_all_ten_event_payload_models_match_the_producer_contract(
     assert schema["correlation_id"]["maxLength"] == 200
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        lambda value: value.pop("version"),
+        lambda value: value.pop("source"),
+        lambda value: value["data"].pop("unit"),
+    ),
+)
+def test_wire_required_fields_cannot_be_filled_by_receiver_defaults(mutation) -> None:
+    value = json.loads(_body())
+    mutation(value)
+    body = json.dumps(value, separators=(",", ":"), sort_keys=True).encode()
+    with pytest.raises(HTTPException) as invalid:
+        _receive(_request(body, MemoryInboxStore()))
+    assert invalid.value.status_code == 422
+    assert invalid.value.detail == "invalid_klyrow_event"
+
+
+def test_tenant_enabled_is_required_on_the_wire() -> None:
+    value = json.loads(_body())
+    value["type"] = "klyrow.tenant.created"
+    value["data"] = {"tenant_id": value["tenant_id"]}
+    body = json.dumps(value, separators=(",", ":"), sort_keys=True).encode()
+    with pytest.raises(HTTPException) as invalid:
+        _receive(_request(body, MemoryInboxStore()))
+    assert invalid.value.status_code == 422
+
+
 def test_valid_signed_event_is_durable_before_exact_ack_and_duplicate_is_safe() -> None:
     inbox = MemoryInboxStore()
     body = _body()

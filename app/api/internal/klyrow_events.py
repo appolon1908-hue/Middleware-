@@ -120,7 +120,7 @@ class TenantEventData(BaseModel):
     tenant_id: str = Field(min_length=1, max_length=200)
     name: str | None = Field(default=None, max_length=200)
     organization_id: str | None = Field(default=None, max_length=200)
-    enabled: bool = True
+    enabled: bool
 
 
 class SubscriptionChangedData(BaseModel):
@@ -136,7 +136,7 @@ class SubscriptionChangedData(BaseModel):
 class DailyUsageData(BaseModel):
     model_config = ConfigDict(extra="forbid")
     date: date
-    unit: Literal["accepted_message"] = "accepted_message"
+    unit: Literal["accepted_message"]
     quantity: int = Field(ge=0)
     snapshot_at: AwareDatetime
 
@@ -207,8 +207,8 @@ class KlyrowEvent(BaseModel):
         max_length=MAX_EVENT_ID_LENGTH,
     )
     type: KlyrowEventType
-    version: Literal[1] = 1
-    source: Literal["klyrow"] = "klyrow"
+    version: Literal[1]
+    source: Literal["klyrow"]
     tenant_id: str = Field(min_length=1, max_length=200)
     correlation_id: str = Field(min_length=1, max_length=200)
     causation_id: str | None = Field(default=None, min_length=1, max_length=200)

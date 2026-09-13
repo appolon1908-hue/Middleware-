@@ -61,6 +61,14 @@ python -m pip install --disable-pip-version-check --no-input --quiet \
   --require-hashes -r requirements-test.txt
 
 pytest -q tests/integration
+python - <<'PYTHON'
+import os
+import subprocess
+url = os.environ["DATABASE_URL"]
+url = url.replace("postgresql://", "postgresql+asyncpg://", 1).replace("postgres://", "postgresql+asyncpg://", 1)
+subprocess.run(["python", "-m", "pytest", "-q", "tests/test_codestra_business_events_postgres.py"],
+               env={**os.environ, "MIDDLEWARE_BUSINESS_POSTGRES_URL": url}, check=True)
+PYTHON
 
 echo "POSTGRES_INTEGRATION=PASS"
 echo "REDIS_INTEGRATION=PASS"

@@ -5,7 +5,7 @@ import copy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 import yaml  # type: ignore[import-untyped]
@@ -517,7 +517,7 @@ def test_incident_lifecycle_is_tenant_scoped_audited_and_idempotent() -> None:
         incident_id = accepted.json()["operations"][0]["incident_id"]
         operator_headers = headers(
             "observability-operator",
-            key="incident-acknowledge-0001",
+            key=str(uuid4()),
         )
 
         detail = client.get(
@@ -557,7 +557,7 @@ def test_incident_lifecycle_is_tenant_scoped_audited_and_idempotent() -> None:
 
         resolve_headers = headers(
             "observability-operator",
-            key="incident-resolve-0001",
+            key=str(uuid4()),
         )
         resolved = client.post(
             f"/v1/observability/incidents/{incident_id}/resolve",

@@ -97,9 +97,8 @@ def _int(
 
 
 def _secret_env_name(producer_client_id: str) -> str:
-    return (
-        "WEBHOOK_SECRET_"
-        + producer_client_id.upper().replace("-", "_").replace(".", "_")
+    return "WEBHOOK_SECRET_" + producer_client_id.upper().replace("-", "_").replace(
+        ".", "_"
     )
 
 
@@ -121,14 +120,18 @@ def _runtime_profiles() -> dict[str, dict[str, object]]:
         raise ConfigurationError("runtime profile registry version is unsupported")
     raw_profiles = value.get("profiles")
     if not isinstance(raw_profiles, list) or len(raw_profiles) < 2:
-        raise ConfigurationError("runtime profile registry must declare at least two profiles")
+        raise ConfigurationError(
+            "runtime profile registry must declare at least two profiles"
+        )
     profiles: dict[str, dict[str, object]] = {}
     for raw in raw_profiles:
         if not isinstance(raw, dict):
             raise ConfigurationError("runtime profile must be an object")
         profile_id = raw.get("profile_id")
         if not isinstance(profile_id, str) or profile_id in profiles:
-            raise ConfigurationError("runtime profile identity is invalid or duplicated")
+            raise ConfigurationError(
+                "runtime profile identity is invalid or duplicated"
+            )
         profiles[profile_id] = raw
     return profiles
 
@@ -180,6 +183,22 @@ class Settings:
     odoo_timeout_seconds: int = 20
     release_id: str = "unknown"
     configuration_checksum: str = "unknown"
+    sms_delivery: bool = False
+    telnexa_event_ingress_enabled: bool = False
+    telnexa_event_api_key: str = ""
+    telnexa_event_api_key_file: str = ""
+    telnexa_event_hmac_secret: str = ""
+    telnexa_event_hmac_secret_file: str = ""
+    telnexa_event_signature_ttl_seconds: int = 300
+    telnexa_event_request_max_bytes: int = 1_048_576
+    klyrow_event_ingress_enabled: bool = False
+    klyrow_event_api_key: str = ""
+    klyrow_event_api_key_file: str = ""
+    klyrow_event_hmac_secret: str = ""
+    klyrow_event_hmac_secret_file: str = ""
+    klyrow_event_signature_ttl_seconds: int = 300
+    klyrow_event_request_max_bytes: int = 1_048_576
+    klyrow_odoo_projection_enabled: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -249,15 +268,13 @@ class Settings:
         }
         settings = cls(
             app_env=source.get("APP_ENV", "development").strip().lower(),
-            runtime_profile_id=(
-                source.get("RUNTIME_PROFILE_ID", "").strip() or None
-            ),
+            runtime_profile_id=(source.get("RUNTIME_PROFILE_ID", "").strip() or None),
             app_version=source.get("APP_VERSION", "0.1.0").strip(),
             source_sha=source.get("APP_SOURCE_SHA", "unknown").strip(),
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0061_kyyow_observability_odoo",
+                "0065_lifecycle_outcome_state",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -298,7 +315,9 @@ class Settings:
             nats_dispatch_mode=source.get(
                 "NATS_DISPATCH_MODE",
                 "disabled",
-            ).strip().lower(),
+            )
+            .strip()
+            .lower(),
             nats_allow_insecure_test_connection=_bool(
                 source,
                 "NATS_ALLOW_INSECURE_TEST_CONNECTION",
@@ -323,7 +342,9 @@ class Settings:
             temporal_worker_mode=source.get(
                 "TEMPORAL_WORKER_MODE",
                 "disabled",
-            ).strip().lower(),
+            )
+            .strip()
+            .lower(),
             temporal_server_root_ca_file=(
                 Path(source["TEMPORAL_SERVER_ROOT_CA_FILE"])
                 if source.get("TEMPORAL_SERVER_ROOT_CA_FILE")
@@ -374,9 +395,9 @@ class Settings:
             external_effects=effects,
             umbrella_controls=umbrella_controls,
             odoo_base_url=(source.get("ODOO_19_BASE_URL", "").strip() or None),
-            odoo_default_hmac_secret=source.get(
-                "ODOO_19_HMAC_SECRET", ""
-            ).encode("utf-8"),
+            odoo_default_hmac_secret=source.get("ODOO_19_HMAC_SECRET", "").encode(
+                "utf-8"
+            ),
             odoo_tenant_hmac_secrets=odoo_tenant_secrets,
             odoo_timeout_seconds=_int(
                 source,
@@ -384,6 +405,62 @@ class Settings:
                 20,
                 minimum=1,
                 maximum=120,
+            ),
+            sms_delivery=_bool(source, "SMS_DELIVERY", False),
+            telnexa_event_ingress_enabled=_bool(
+                source, "TELNEXA_EVENT_INGRESS_ENABLED", False
+            ),
+            telnexa_event_api_key=source.get("TELNEXA_EVENT_API_KEY", "").strip(),
+            telnexa_event_api_key_file=source.get(
+                "TELNEXA_EVENT_API_KEY_FILE", ""
+            ).strip(),
+            telnexa_event_hmac_secret=source.get(
+                "TELNEXA_EVENT_HMAC_SECRET", ""
+            ).strip(),
+            telnexa_event_hmac_secret_file=source.get(
+                "TELNEXA_EVENT_HMAC_SECRET_FILE", ""
+            ).strip(),
+            telnexa_event_signature_ttl_seconds=_int(
+                source,
+                "TELNEXA_EVENT_SIGNATURE_TTL_SECONDS",
+                300,
+                minimum=1,
+                maximum=900,
+            ),
+            telnexa_event_request_max_bytes=_int(
+                source,
+                "TELNEXA_EVENT_REQUEST_MAX_BYTES",
+                1_048_576,
+                minimum=1_024,
+                maximum=10_485_760,
+            ),
+            klyrow_event_ingress_enabled=_bool(
+                source, "KLYROW_EVENT_INGRESS_ENABLED", False
+            ),
+            klyrow_event_api_key=source.get("KLYROW_EVENT_API_KEY", "").strip(),
+            klyrow_event_api_key_file=source.get(
+                "KLYROW_EVENT_API_KEY_FILE", ""
+            ).strip(),
+            klyrow_event_hmac_secret=source.get("KLYROW_EVENT_HMAC_SECRET", "").strip(),
+            klyrow_event_hmac_secret_file=source.get(
+                "KLYROW_EVENT_HMAC_SECRET_FILE", ""
+            ).strip(),
+            klyrow_event_signature_ttl_seconds=_int(
+                source,
+                "KLYROW_EVENT_SIGNATURE_TTL_SECONDS",
+                300,
+                minimum=1,
+                maximum=900,
+            ),
+            klyrow_event_request_max_bytes=_int(
+                source,
+                "KLYROW_EVENT_REQUEST_MAX_BYTES",
+                1_048_576,
+                minimum=1_024,
+                maximum=10_485_760,
+            ),
+            klyrow_odoo_projection_enabled=_bool(
+                source, "KLYROW_ODOO_PROJECTION_ENABLED", False
             ),
         )
         settings.validate()
@@ -402,13 +479,43 @@ class Settings:
                 f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
             )
         if self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
-            raise ConfigurationError("KEYCLOAK_JWKS_URI must match the canonical issuer")
+            raise ConfigurationError(
+                "KEYCLOAK_JWKS_URI must match the canonical issuer"
+            )
         if self.audience != "middleware-api":
             raise ConfigurationError("MIDDLEWARE_AUDIENCE must be middleware-api")
+        if self.telnexa_event_ingress_enabled:
+            if not self.sms_delivery:
+                raise ConfigurationError(
+                    "SMS_DELIVERY must be true before enabling Telnexa event ingress"
+                )
+            if not (self.telnexa_event_api_key or self.telnexa_event_api_key_file):
+                raise ConfigurationError(
+                    "TELNEXA_EVENT_API_KEY or TELNEXA_EVENT_API_KEY_FILE is required"
+                )
+            if not (
+                self.telnexa_event_hmac_secret or self.telnexa_event_hmac_secret_file
+            ):
+                raise ConfigurationError(
+                    "TELNEXA_EVENT_HMAC_SECRET or TELNEXA_EVENT_HMAC_SECRET_FILE is required"
+                )
+        if self.klyrow_event_ingress_enabled:
+            if not (self.klyrow_event_api_key or self.klyrow_event_api_key_file):
+                raise ConfigurationError(
+                    "KLYROW_EVENT_API_KEY or KLYROW_EVENT_API_KEY_FILE is required"
+                )
+            if not (
+                self.klyrow_event_hmac_secret or self.klyrow_event_hmac_secret_file
+            ):
+                raise ConfigurationError(
+                    "KLYROW_EVENT_HMAC_SECRET or KLYROW_EVENT_HMAC_SECRET_FILE is required"
+                )
+        if self.klyrow_odoo_projection_enabled and not self.odoo_delivery_enabled:
+            raise ConfigurationError(
+                "Klyrow Odoo projection requires EXTERNAL_DELIVERY_ENABLED and ODOO_WRITE"
+            )
         self._validate_environment_profile()
-        enabled = {
-            name for name, value in self.external_effects.items() if value
-        }
+        enabled = {name for name, value in self.external_effects.items() if value}
         unsupported_enabled = sorted(enabled - SUPPORTED_EXTERNAL_EFFECTS)
         if unsupported_enabled:
             raise ConfigurationError(
@@ -442,18 +549,14 @@ class Settings:
                 "SOCIAL_DELIVERY_ENABLED"
             )
         if self.production_dialing != "DISABLED":
-            raise ConfigurationError(
-                "PRODUCTION_DIALING must remain DISABLED"
-            )
+            raise ConfigurationError("PRODUCTION_DIALING must remain DISABLED")
         if self.nats_dispatch_mode not in {"disabled", "isolated", "production"}:
             raise ConfigurationError(
                 "NATS_DISPATCH_MODE must be disabled, isolated, or production"
             )
         send_events = "SEND_EVENTS" in enabled
         dispatch_configured = self.nats_dispatch_mode != "disabled"
-        if not (
-            self.outbox_dispatch_enabled == send_events == dispatch_configured
-        ):
+        if not (self.outbox_dispatch_enabled == send_events == dispatch_configured):
             raise ConfigurationError(
                 "OUTBOX_DISPATCH_ENABLED, SEND_EVENTS, and NATS_DISPATCH_MODE "
                 "must be enabled or disabled together"
@@ -488,9 +591,9 @@ class Settings:
             ):
                 raise ConfigurationError("NATS_SUBJECT_PREFIX is invalid")
             if not insecure_local_test and (
-                    self.nats_credentials_file is None
-                    or not _is_absolute_mount_path(self.nats_credentials_file)
-                ):
+                self.nats_credentials_file is None
+                or not _is_absolute_mount_path(self.nats_credentials_file)
+            ):
                 raise ConfigurationError(
                     "NATS_CREDS_FILE must be an absolute mounted credential path"
                 )
@@ -583,8 +686,7 @@ class Settings:
                 self.temporal_client_key_file,
             )
             if not insecure_temporal_test and any(
-                path is None or not _is_absolute_mount_path(path)
-                for path in tls_paths
+                path is None or not _is_absolute_mount_path(path) for path in tls_paths
             ):
                 raise ConfigurationError(
                     "Temporal requires absolute mounted CA, client certificate, "
@@ -604,15 +706,17 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0061_kyyow_observability_odoo":
-            raise ConfigurationError(
-                "SCHEMA_HEAD must be 0061_kyyow_observability_odoo"
-            )
+        if self.schema_head != "0065_lifecycle_outcome_state":
+            raise ConfigurationError("SCHEMA_HEAD must be 0065_lifecycle_outcome_state")
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):
-                raise ConfigurationError("APP_SOURCE_SHA must be an exact 40-character SHA")
+                raise ConfigurationError(
+                    "APP_SOURCE_SHA must be an exact 40-character SHA"
+                )
             if not IMAGE_DIGEST.fullmatch(self.image_digest):
-                raise ConfigurationError("IMAGE_DIGEST must be an immutable sha256 digest")
+                raise ConfigurationError(
+                    "IMAGE_DIGEST must be an immutable sha256 digest"
+                )
             if self.build_time in {"", "unknown"}:
                 raise ConfigurationError("BUILD_TIME is required in staging/production")
             self.validate_all_webhook_secrets()
@@ -654,16 +758,17 @@ class Settings:
             raise ConfigurationError("ODOO_19_BASE_URL is required to write to Odoo")
         if not self.odoo_base_url.startswith("https://"):
             raise ConfigurationError("ODOO_19_BASE_URL must be an HTTPS endpoint")
-        secrets = [self.odoo_default_hmac_secret, *self.odoo_tenant_hmac_secrets.values()]
+        secrets = [
+            self.odoo_default_hmac_secret,
+            *self.odoo_tenant_hmac_secrets.values(),
+        ]
         if not any(secrets):
             raise ConfigurationError(
                 "ODOO_19_HMAC_SECRET or ODOO_19_TENANT_HMAC_SECRETS is required "
                 "to write to Odoo"
             )
         if any(secret and len(secret) < 32 for secret in secrets):
-            raise ConfigurationError(
-                "Odoo signing secrets must be at least 32 bytes"
-            )
+            raise ConfigurationError("Odoo signing secrets must be at least 32 bytes")
 
     @property
     def social_publishing_enabled(self) -> bool:
@@ -790,9 +895,7 @@ class Settings:
             self.temporal_client_key_file,
         ):
             normalized_credential = (
-                str(credential).replace("\\", "/")
-                if credential is not None
-                else None
+                str(credential).replace("\\", "/") if credential is not None else None
             )
             if (
                 normalized_credential is not None
@@ -814,11 +917,7 @@ class Settings:
         try:
             parsed = urlparse(self.database_url or "")
             port = parsed.port
-            query = (
-                parse_qs(parsed.query, strict_parsing=True)
-                if parsed.query
-                else {}
-            )
+            query = parse_qs(parsed.query, strict_parsing=True) if parsed.query else {}
         except ValueError as exc:
             raise ConfigurationError("DATABASE_URL is malformed") from exc
         if (
@@ -828,7 +927,8 @@ class Settings:
             or unquote(parsed.path.lstrip("/")) != raw_profile["name"]
             or unquote(parsed.username or "") != raw_profile["username"]
             or not parsed.password
-            or query != (
+            or query
+            != (
                 {"sslmode": [raw_profile["sslmode"]]}
                 if raw_profile.get("sslmode")
                 else {}

@@ -61,10 +61,15 @@ def authority(monkeypatch):
     def token(tenant_ids=("MOY",), **overrides):
         current = int(time.time())
         claims = {
-            "iss": ISSUER, "aud": AUDIENCE, "azp": "provisioning-service",
+            "iss": ISSUER,
+            "aud": AUDIENCE,
+            "azp": "provisioning-service",
             "sub": "provisioning-service-subject",
-            "iat": current, "exp": current + 300, "jti": str(uuid4()),
-            "scope": "identity.request", "tenant_ids": list(tenant_ids),
+            "iat": current,
+            "exp": current + 300,
+            "jti": str(uuid4()),
+            "scope": "identity.request",
+            "tenant_ids": list(tenant_ids),
             **overrides,
         }
         return jwt.encode(claims, private, algorithm="RS256")
@@ -94,7 +99,9 @@ async def client(authority):
     await engine.dispose()
 
 
-async def _seed_mapping(session_factory, *, unit: str, code: str, drift_status: str) -> None:
+async def _seed_mapping(
+    session_factory, *, unit: str, code: str, drift_status: str
+) -> None:
     # ck_vicidial_registry_reconciled_readback requires last_read_back_at and
     # observed_state_hash whenever drift_status='reconciled' - a real
     # production guard, not incidental to work around.
@@ -132,7 +139,9 @@ async def test_sync_status_groups_by_drift_status(client, authority):
     unit = "MOY"
     suffix = uuid4().hex[:8]
     code_a, code_b = f"{unit}-A-{suffix}", f"{unit}-B-{suffix}"
-    await _seed_mapping(session_factory, unit=unit, code=code_a, drift_status="reconciled")
+    await _seed_mapping(
+        session_factory, unit=unit, code=code_a, drift_status="reconciled"
+    )
     await _seed_mapping(session_factory, unit=unit, code=code_b, drift_status="drifted")
 
     response = await client.get(
@@ -160,10 +169,20 @@ async def test_sync_errors_excludes_reconciled_and_not_observed(client, authorit
     )
     unit = "MOY"
     suffix = uuid4().hex[:8]
-    code_ok, code_new, code_bad = f"{unit}-OK-{suffix}", f"{unit}-NEW-{suffix}", f"{unit}-BAD-{suffix}"
-    await _seed_mapping(session_factory, unit=unit, code=code_ok, drift_status="reconciled")
-    await _seed_mapping(session_factory, unit=unit, code=code_new, drift_status="not_observed")
-    await _seed_mapping(session_factory, unit=unit, code=code_bad, drift_status="drifted")
+    code_ok, code_new, code_bad = (
+        f"{unit}-OK-{suffix}",
+        f"{unit}-NEW-{suffix}",
+        f"{unit}-BAD-{suffix}",
+    )
+    await _seed_mapping(
+        session_factory, unit=unit, code=code_ok, drift_status="reconciled"
+    )
+    await _seed_mapping(
+        session_factory, unit=unit, code=code_new, drift_status="not_observed"
+    )
+    await _seed_mapping(
+        session_factory, unit=unit, code=code_bad, drift_status="drifted"
+    )
 
     response = await client.get(
         "/api/v1/integrations/odoo/sync-errors",
@@ -175,10 +194,13 @@ async def test_sync_errors_excludes_reconciled_and_not_observed(client, authorit
     # campaign_code) - other tests in this same run may have already seeded
     # rows for "MOY", so assert inclusion/exclusion of THIS test's own codes
     # rather than an exact set, which would be brittle against that sharing.
-    codes = {item["canonical_campaign_code"] for item in response.json()["items"]}
+    body = response.json()
+    codes = {item["canonical_campaign_code"] for item in body["items"]}
     assert code_bad in codes
     assert code_ok not in codes
     assert code_new not in codes
+    assert body["pagination"]["offset"] == 0
+    assert body["pagination"]["returned"] == len(body["items"])
 
 
 @pytest.mark.asyncio
@@ -191,9 +213,28 @@ async def test_sync_status_requires_authentication(client):
 
 
 @pytest.mark.asyncio
-async def test_odoo_status_aggregates_health_and_readiness(client):
+async def test_odoo_status_requires_authentication(client):
     response = await client.get("/api/v1/integrations/odoo/status")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_odoo_status_aggregates_health_and_readiness(client, authority):
+    response = await client.get(
+        "/api/v1/integrations/odoo/status",
+        headers={"Authorization": f"Bearer {authority()}"},
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["health"]["status"] == "ok"
     assert "automation_writes_enabled" in body
+
+
+@pytest.mark.asyncio
+async def test_sync_status_rejects_unknown_environment(client, authority):
+    response = await client.get(
+        "/api/v1/integrations/odoo/sync-status",
+        params={"business_unit": "MOY", "environment": "sandbox"},
+        headers={"Authorization": f"Bearer {authority()}"},
+    )
+    assert response.status_code == 422

@@ -48,6 +48,9 @@ from .lead_intake import (
     LeadSubmission,
     accept_lead_submission,
 )
+from .api.internal.klyrow_events import router as klyrow_events_router
+from .api.internal.telnexa_events import router as telnexa_events_router
+from .campaign_design_api import router as campaign_design_router
 from .n8n_control_plane import router as n8n_control_plane_router
 from .api.v1.agent_provisioning import router as agent_provisioning_router
 from .api.v1.agent_provisioning_reads import router as agent_provisioning_reads_router
@@ -85,7 +88,6 @@ from .survey_routes import register_survey_routes
 
 class TicketConsumeRequest(BaseModel):
     ticket: str = Field(min_length=32, max_length=512)
-
 
 
 def _correlation_id(request: Request) -> str:
@@ -143,7 +145,9 @@ async def _read_limited_body(request: Request, maximum: int) -> bytes:
         if len(raw_length) > 20:
             from .security import RequestValidationError
 
-            raise RequestValidationError("Content-Length is outside the supported range")
+            raise RequestValidationError(
+                "Content-Length is outside the supported range"
+            )
         length = int(raw_length)
         if length > maximum:
             raise PayloadTooLargeError(f"request body exceeds {maximum} bytes")
@@ -183,12 +187,15 @@ def create_app(
     telemetry = MiddlewareObservability(resolved)
     app.state.observability = telemetry
     app.include_router(n8n_control_plane_router)
+    app.include_router(campaign_design_router)
     app.include_router(operations_dashboard_router)
     app.include_router(operations_router)
     app.include_router(control_api_router)
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(klyrow_events_router)
+    app.include_router(telnexa_events_router)
     app.include_router(agent_provisioning_router)
     app.include_router(agent_provisioning_reads_router)
     app.include_router(session_context_router)
@@ -217,25 +224,37 @@ def create_app(
         )
 
     @app.post("/internal/v1/realtime/tickets/consume", include_in_schema=False)
-    async def consume_realtime_ticket(body: TicketConsumeRequest, request: Request) -> JSONResponse:
+    async def consume_realtime_ticket(
+        body: TicketConsumeRequest, request: Request
+    ) -> JSONResponse:
         from .security import AuthenticationError
 
         await authorize_realtime(request, "realtime.ticket.consume")
-        principal = await realtime_store(request).consume_ticket(body.ticket, datetime.now(UTC))
+        principal = await realtime_store(request).consume_ticket(
+            body.ticket, datetime.now(UTC)
+        )
         if principal is None:
             raise AuthenticationError("ticket is invalid, expired, or already consumed")
-        return JSONResponse(content={
-            "active": True,
-            "tenant_id": principal.tenant_id,
-            "campaign_id": principal.campaign_id,
-            "agent_id": principal.agent_id,
-            "role": principal.role,
-            "expires_at": principal.expires_at.astimezone(UTC).isoformat(),
-        }, headers={"Cache-Control": "no-store"})
+        return JSONResponse(
+            content={
+                "active": True,
+                "tenant_id": principal.tenant_id,
+                "campaign_id": principal.campaign_id,
+                "agent_id": principal.agent_id,
+                "role": principal.role,
+                "expires_at": principal.expires_at.astimezone(UTC).isoformat(),
+            },
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/internal/v1/realtime/events/stream", include_in_schema=False)
-    async def realtime_event_stream(request: Request, tenant_id: str, campaign_id: str,
-                                    agent_id: str, after: int = Query(0, ge=0)) -> StreamingResponse:
+    async def realtime_event_stream(
+        request: Request,
+        tenant_id: str,
+        campaign_id: str,
+        agent_id: str,
+        after: int = Query(0, ge=0),
+    ) -> StreamingResponse:
         from .security import AuthorizationError, authorize_tenant
 
         claims = await authorize_realtime(request, "realtime.events.read")
@@ -243,11 +262,18 @@ def create_app(
         for claim, requested in (("campaign_id", campaign_id), ("agent_id", agent_id)):
             allowed = claims.get(claim)
             if not isinstance(allowed, str) or allowed != requested or allowed == "*":
-                raise AuthorizationError(f"token is not authorized for requested {claim}")
+                raise AuthorizationError(
+                    f"token is not authorized for requested {claim}"
+                )
         return StreamingResponse(
-            stream_events(realtime_store(request), tenant_id=tenant_id,
-                          campaign_id=campaign_id, agent_id=agent_id, after=after,
-                          disconnected=request.is_disconnected),
+            stream_events(
+                realtime_store(request),
+                tenant_id=tenant_id,
+                campaign_id=campaign_id,
+                agent_id=agent_id,
+                after=after,
+                disconnected=request.is_disconnected,
+            ),
             media_type="application/x-ndjson",
             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )
@@ -258,9 +284,7 @@ def create_app(
             safe_correlation_id(request.headers.get("X-Correlation-ID"))
             or str(uuid.uuid4())
         )
-        request.state.traceparent = safe_traceparent(
-            request.headers.get("traceparent")
-        )
+        request.state.traceparent = safe_traceparent(request.headers.get("traceparent"))
         started = telemetry.start_request()
         status_code = 500
         try:
@@ -399,8 +423,11 @@ def create_app(
         effective["PRODUCTION_DIALING"] = safety["production_dialing"] == "ENABLED"
         return JSONResponse(
             status_code=200,
-            content={"service": "middleware-api", "environment": resolved.app_env,
-                     "capabilities": effective},
+            content={
+                "service": "middleware-api",
+                "environment": resolved.app_env,
+                "capabilities": effective,
+            },
         )
 
     @app.get("/metrics")
@@ -425,9 +452,7 @@ def create_app(
             "version": resolved.app_version,
             "release_id": resolved.release_id,
             "environment": resolved.app_env,
-            "runtime_profile_id": (
-                resolved.runtime_profile_id or "local-unlocked"
-            ),
+            "runtime_profile_id": (resolved.runtime_profile_id or "local-unlocked"),
             "source_sha": resolved.source_sha,
             "git_sha": resolved.source_sha,
             "image_digest": resolved.image_digest,
@@ -465,8 +490,16 @@ def create_app(
         _, _, tenant_id = await authenticated_tenant(request)
         return tenant_id
 
-    @app.post("/v1/communication/messages", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
-    @app.post("/v1/communications/messages", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
+    @app.post(
+        "/v1/communication/messages",
+        response_model=CommunicationMessage,
+        responses={202: {"model": CommunicationMessage}},
+    )
+    @app.post(
+        "/v1/communications/messages",
+        response_model=CommunicationMessage,
+        responses={202: {"model": CommunicationMessage}},
+    )
     async def create_communication_message(
         body: CreateMessageRequest,
         request: Request,
@@ -493,12 +526,15 @@ def create_app(
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject:
             raise AuthorizationError("authenticated token subject is required")
-        actor = optional_header(
-            request,
-            "X-Codestra-Actor",
-            minimum=1,
-            maximum=300,
-        ) or subject
+        actor = (
+            optional_header(
+                request,
+                "X-Codestra-Actor",
+                minimum=1,
+                maximum=300,
+            )
+            or subject
+        )
         if actor != subject:
             raise AuthorizationError("requested actor must equal token subject")
         message, duplicate = await communications_service(request).submit_message(
@@ -516,12 +552,18 @@ def create_app(
             headers={"X-Correlation-ID": message.correlationId},
         )
 
-    @app.get("/v1/communications/messages/by-idempotency", response_model=CommunicationMessage)
-    async def get_communication_by_idempotency(request: Request) -> CommunicationMessage:
+    @app.get(
+        "/v1/communications/messages/by-idempotency",
+        response_model=CommunicationMessage,
+    )
+    async def get_communication_by_idempotency(
+        request: Request,
+    ) -> CommunicationMessage:
         caller, _, tenant_id = await authenticated_tenant(request)
         key = required_header(request, "Idempotency-Key", minimum=8, maximum=180)
         message = await communications_service(request).store.message_by_idempotency(
-            tenant_id, key,
+            tenant_id,
+            key,
         )
         expected_channel = {
             "odoo-sms": "sms",
@@ -549,9 +591,15 @@ def create_app(
             ).model_dump(mode="json"),
         )
 
-    @app.get("/v1/communication/messages/{messageId}", response_model=CommunicationMessage)
-    @app.get("/v1/communications/messages/{messageId}", response_model=CommunicationMessage)
-    async def get_communication_message(messageId: UUID, request: Request) -> JSONResponse:
+    @app.get(
+        "/v1/communication/messages/{messageId}", response_model=CommunicationMessage
+    )
+    @app.get(
+        "/v1/communications/messages/{messageId}", response_model=CommunicationMessage
+    )
+    async def get_communication_message(
+        messageId: UUID, request: Request
+    ) -> JSONResponse:
         tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
         message = await service.refresh_command_status(tenant_id, messageId)
@@ -560,7 +608,10 @@ def create_app(
             content=message.model_dump(mode="json"),
         )
 
-    @app.get("/v1/communications/messages/{messageId}/events", response_model=CommunicationEventPage)
+    @app.get(
+        "/v1/communications/messages/{messageId}/events",
+        response_model=CommunicationEventPage,
+    )
     async def list_communication_message_events(
         messageId: UUID,
         request: Request,
@@ -578,8 +629,14 @@ def create_app(
             ).model_dump(mode="json"),
         )
 
-    @app.post("/v1/communications/messages/{messageId}/cancel", response_model=CommunicationMessage, responses={202: {"model": CommunicationMessage}})
-    async def cancel_communication_message(messageId: UUID, request: Request) -> JSONResponse:
+    @app.post(
+        "/v1/communications/messages/{messageId}/cancel",
+        response_model=CommunicationMessage,
+        responses={202: {"model": CommunicationMessage}},
+    )
+    async def cancel_communication_message(
+        messageId: UUID, request: Request
+    ) -> JSONResponse:
         _, claims, tenant_id = await authenticated_tenant(request, mutation=True)
         authorization = authorization_header(request)
         required_header(
@@ -597,12 +654,15 @@ def create_app(
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject:
             raise AuthorizationError("authenticated token subject is required")
-        actor = optional_header(
-            request,
-            "X-Codestra-Actor",
-            minimum=1,
-            maximum=300,
-        ) or subject
+        actor = (
+            optional_header(
+                request,
+                "X-Codestra-Actor",
+                minimum=1,
+                maximum=300,
+            )
+            or subject
+        )
         if actor != subject:
             raise AuthorizationError("requested actor must equal token subject")
         message, duplicate = await communications_service(request).cancel(
@@ -623,13 +683,17 @@ def create_app(
     async def get_communication_provider_health(request: Request) -> JSONResponse:
         tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
-        return JSONResponse(status_code=200, content=await service.adapter.health(tenant_id))
+        return JSONResponse(
+            status_code=200, content=await service.adapter.health(tenant_id)
+        )
 
     @app.get("/v1/communications/reputation", response_model=ProviderReputationReport)
     async def get_communication_reputation(request: Request) -> JSONResponse:
         tenant_id = await _authorize_communication_read(request)
         service = communications_service(request)
-        return JSONResponse(status_code=200, content=await service.adapter.reputation(tenant_id))
+        return JSONResponse(
+            status_code=200, content=await service.adapter.reputation(tenant_id)
+        )
 
     @app.get("/v1/communications/usage", response_model=CommunicationUsageReport)
     async def get_communication_usage(
@@ -682,6 +746,7 @@ def create_app(
                 ],
             },
         )
+
     @app.post("/v1/intake/leads")
     async def submit_lead(request: Request) -> JSONResponse:
         from .security import RequestValidationError, authorize_tenant
@@ -694,19 +759,31 @@ def create_app(
             required_scope="leads.write",
         )
         content_type = required_header(
-            request, "Content-Type", minimum=16, maximum=128,
+            request,
+            "Content-Type",
+            minimum=16,
+            maximum=128,
         )
         if content_type.split(";", 1)[0].strip().lower() != "application/json":
             raise RequestValidationError("Content-Type must be application/json")
 
         tenant_id = required_header(
-            request, "X-Tenant-ID", minimum=1, maximum=128,
+            request,
+            "X-Tenant-ID",
+            minimum=1,
+            maximum=128,
         )
         correlation_id = required_header(
-            request, "X-Correlation-ID", minimum=1, maximum=180,
+            request,
+            "X-Correlation-ID",
+            minimum=1,
+            maximum=180,
         )
         idempotency_key = required_header(
-            request, "Idempotency-Key", minimum=8, maximum=180,
+            request,
+            "Idempotency-Key",
+            minimum=8,
+            maximum=180,
         )
         authorize_tenant(claims, tenant_id)
 
@@ -722,7 +799,9 @@ def create_app(
             "form_kind": "configured" if submission.formId else "generic",
         }
         if submission.tenantId != tenant_id:
-            raise RequestValidationError("X-Tenant-ID does not match submission tenantId")
+            raise RequestValidationError(
+                "X-Tenant-ID does not match submission tenantId"
+            )
 
         try:
             result = await accept_lead_submission(
@@ -745,7 +824,9 @@ def create_app(
     @app.post(
         "/v1/commands",
         response_model=OperationResponse,
-        responses={202: {"model": OperationResponse, "description": "Command accepted"}},
+        responses={
+            202: {"model": OperationResponse, "description": "Command accepted"}
+        },
     )
     async def submit_command(
         command: CommandEnvelope,
@@ -768,14 +849,20 @@ def create_app(
 
         authorize_tenant(claims, command.tenant_id)
         tenant_id = required_header(
-            request, "X-Tenant-ID", minimum=1, maximum=128,
+            request,
+            "X-Tenant-ID",
+            minimum=1,
+            maximum=128,
         )
         if tenant_id != command.tenant_id:
             from .security import RequestValidationError
 
             raise RequestValidationError("X-Tenant-ID does not match command tenant")
         correlation_id = required_header(
-            request, "X-Correlation-ID", minimum=1, maximum=180,
+            request,
+            "X-Correlation-ID",
+            minimum=1,
+            maximum=180,
         )
         if correlation_id != command.correlation_id:
             from .security import RequestValidationError
@@ -784,7 +871,10 @@ def create_app(
                 "X-Correlation-ID does not match command correlation_id"
             )
         idempotency_key = required_header(
-            request, "Idempotency-Key", minimum=8, maximum=180,
+            request,
+            "Idempotency-Key",
+            minimum=8,
+            maximum=180,
         )
         if idempotency_key != command.idempotency_key:
             from .security import RequestValidationError
@@ -799,14 +889,10 @@ def create_app(
             raise AuthorizationError("token subject is required for commands")
         if (
             caller.client_id == "n8n-automation"
-            and active.settings.umbrella_controls.get(
-                "N8N_EXTERNAL_PROVIDER_WRITES"
-            )
+            and active.settings.umbrella_controls.get("N8N_EXTERNAL_PROVIDER_WRITES")
             is not True
         ):
-            raise CommandCapabilityDisabled(
-                "N8N_EXTERNAL_PROVIDER_WRITES is disabled"
-            )
+            raise CommandCapabilityDisabled("N8N_EXTERNAL_PROVIDER_WRITES is disabled")
         if active.commands is None:
             raise StorageError("command ledger is unavailable")
         operation = await active.commands.submit(
@@ -846,14 +932,15 @@ def create_app(
                 headers=headers,
             )
             if (
-                route.producer_client_id
-                in {"klyrow-gateway", "telnexa-gateway"}
+                route.producer_client_id in {"klyrow-gateway", "telnexa-gateway"}
                 and request.app.state.runtime.communications is not None
             ):
                 from .models import EventEnvelope
 
                 envelope = EventEnvelope.model_validate(json.loads(raw))
-                await request.app.state.runtime.communications.record_provider_event(envelope)
+                await request.app.state.runtime.communications.record_provider_event(
+                    envelope
+                )
             return JSONResponse(
                 status_code=status_code,
                 content=result.model_dump(mode="json"),

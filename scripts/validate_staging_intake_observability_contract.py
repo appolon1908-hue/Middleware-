@@ -56,6 +56,7 @@ WEBHOOK_SECRET_NAMES = {
 }
 GOVERNED_READ_PATHS = {"/metrics", "/v1/runtime/safety"}
 EXPECTED_INCLUDED_ROUTERS = {
+    "campaign_design_router": "campaign_design_api",
     "n8n_control_plane_router": "n8n_control_plane",
     "operations_dashboard_router": "operations_dashboard",
     "operations_router": "operations",
@@ -63,6 +64,8 @@ EXPECTED_INCLUDED_ROUTERS = {
     "compatibility_api_router": "compatibility_api",
     "domain_api_router": "domain_api",
     "webhook_api_router": "webhook_api",
+    "telnexa_events_router": "api.internal.telnexa_events",
+    "klyrow_events_router": "api.internal.klyrow_events",
     "agent_provisioning_router": "api.v1.agent_provisioning",
     "agent_provisioning_reads_router": "api.v1.agent_provisioning_reads",
     "session_context_router": "api.v1.session_context",

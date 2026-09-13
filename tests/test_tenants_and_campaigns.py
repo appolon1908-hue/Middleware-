@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import os
 import time
+import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -27,10 +29,14 @@ import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.adapters.foundation.client import FoundationTenantNotFound
+from app.adapters.foundation.client import (
+    FoundationTenantNotFound,
+    FoundationUnavailable,
+)
 from app.api.v1 import campaigns as campaigns_module
 from app.api.v1 import tenants as tenants_module
 from app.core.config import settings
@@ -74,9 +80,15 @@ def authority(monkeypatch):
     ):
         current = int(time.time())
         claims = {
-            "iss": ISSUER, "aud": AUDIENCE, "azp": azp,
-            "sub": subject, "iat": current, "exp": current + 300,
-            "jti": str(uuid4()), "scope": scope, "tenant_ids": list(tenant_ids),
+            "iss": ISSUER,
+            "aud": AUDIENCE,
+            "azp": azp,
+            "sub": subject,
+            "iat": current,
+            "exp": current + 300,
+            "jti": str(uuid4()),
+            "scope": scope,
+            "tenant_ids": list(tenant_ids),
             **overrides,
         }
         return jwt.encode(claims, private, algorithm="RS256")
@@ -97,12 +109,21 @@ class _StubFoundation:
     async def get_tenant(self, http, tenant_id):
         if tenant_id == "ZZZ":
             raise FoundationTenantNotFound(tenant_id)
-        return SimpleNamespace(id=tenant_id, slug=tenant_id.lower(), name="Codestra", status="ACTIVE")
+        return SimpleNamespace(
+            id=tenant_id, slug=tenant_id.lower(), name="Codestra", status="ACTIVE"
+        )
+
+
+class _UnavailableFoundation:
+    async def get_tenant(self, http, tenant_id):
+        raise FoundationUnavailable("test outage")
 
 
 @pytest_asyncio.fixture
 async def client(monkeypatch):
-    monkeypatch.setattr(tenants_module, "FoundationClient", lambda settings: _StubFoundation())
+    monkeypatch.setattr(
+        tenants_module, "FoundationClient", lambda settings: _StubFoundation()
+    )
 
     engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -130,6 +151,47 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+async def _seed_provisioning_request(
+    session_factory,
+    *,
+    tenant_id: str,
+    employee_id: str,
+    campaign_id: str,
+    channels: dict[str, bool],
+    state: str = "EFFECTIVE",
+    created_at: datetime,
+) -> None:
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                """INSERT INTO agent_provisioning_request
+                   (id, request_id, tenant_id, employee_id, primary_email, state,
+                    campaigns_json, channels_json, telephony_json, policy_revision,
+                    idempotency_hash, request_hash, correlation_id, requested_by,
+                    version, created_at, updated_at)
+                   VALUES (gen_random_uuid(), :request_id, :tenant_id, :employee_id,
+                           :email, :state, CAST(:campaigns AS jsonb),
+                           CAST(:channels AS jsonb), '{}'::jsonb, 'test-policy-1',
+                           :idempotency_hash, :request_hash, :correlation_id,
+                           'test-fixture', 1, :created_at, :created_at)"""
+            ),
+            {
+                "request_id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "employee_id": employee_id,
+                "email": f"{employee_id}@example.invalid",
+                "state": state,
+                "campaigns": json.dumps([{"campaign_id": campaign_id}]),
+                "channels": json.dumps(channels),
+                "idempotency_hash": uuid4().hex + uuid4().hex,
+                "request_hash": uuid4().hex + uuid4().hex,
+                "correlation_id": str(uuid4()),
+                "created_at": created_at,
+            },
+        )
+        await session.commit()
+
+
 @pytest.mark.asyncio
 async def test_list_tenants_requires_bearer_token(client):
     response = await client.get("/platform/v1/tenants/authorized")
@@ -145,7 +207,9 @@ async def test_get_tenant_wrong_tenant_claim_is_denied(client, authority):
 
 @pytest.mark.asyncio
 async def test_get_tenant_reflects_foundation_record(client, authority):
-    response = await client.get("/platform/v1/tenants/COD", headers=_headers(authority()))
+    response = await client.get(
+        "/platform/v1/tenants/COD", headers=_headers(authority())
+    )
     assert response.status_code == 200
     assert response.json()["name"] == "Codestra"
 
@@ -155,6 +219,19 @@ async def test_get_tenant_unknown_in_foundation_is_404(client, authority):
     token = authority(tenant_ids=("ZZZ",))
     response = await client.get("/platform/v1/tenants/ZZZ", headers=_headers(token))
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_authorized_directory_fails_closed_when_foundation_is_unavailable(
+    client, authority, monkeypatch
+):
+    monkeypatch.setattr(
+        tenants_module, "FoundationClient", lambda settings: _UnavailableFoundation()
+    )
+    response = await client.get(
+        "/platform/v1/tenants/authorized", headers=_headers(authority())
+    )
+    assert response.status_code == 503
 
 
 @pytest.mark.asyncio
@@ -219,7 +296,9 @@ async def test_get_campaign_reflects_seeded_registry_row(client, authority):
 
 
 @pytest.mark.asyncio
-async def test_campaign_channels_reports_zero_when_no_requests_reference_it(client, authority):
+async def test_campaign_channels_reports_zero_when_no_requests_reference_it(
+    client, authority
+):
     session_factory = async_sessionmaker(
         create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool),
         expire_on_commit=False,
@@ -237,13 +316,66 @@ async def test_campaign_channels_reports_zero_when_no_requests_reference_it(clie
 
 
 @pytest.mark.asyncio
-async def test_authorized_directory_excludes_other_tenants(client, authority, monkeypatch):
-    async def codes(_session):
-        return ["COD", "SMT"]
+async def test_campaign_channels_uses_only_each_agents_latest_desired_state(
+    client, authority
+):
+    session_factory = async_sessionmaker(
+        create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool),
+        expire_on_commit=False,
+    )
+    vicidial_campaign_id, campaign_code = await _seed_queue(session_factory)
+    now = datetime.now(timezone.utc)
 
-    monkeypatch.setattr(tenants_module, "_distinct_campaign_codes", codes)
+    # A retry for the same employee replaces, rather than adds to, the old
+    # desired channels.
+    await _seed_provisioning_request(
+        session_factory,
+        tenant_id=campaign_code,
+        employee_id=f"{campaign_code}.agent-1",
+        campaign_id=vicidial_campaign_id,
+        channels={"phone": True, "sms": True},
+        created_at=now - timedelta(minutes=3),
+    )
+    await _seed_provisioning_request(
+        session_factory,
+        tenant_id=campaign_code,
+        employee_id=f"{campaign_code}.agent-1",
+        campaign_id=vicidial_campaign_id,
+        channels={"phone": True, "email": True},
+        created_at=now - timedelta(minutes=2),
+    )
+    # A revoked latest request is not presented as active desired intent.
+    await _seed_provisioning_request(
+        session_factory,
+        tenant_id=campaign_code,
+        employee_id=f"{campaign_code}.agent-2",
+        campaign_id=vicidial_campaign_id,
+        channels={"phone": True},
+        state="REVOKED",
+        created_at=now - timedelta(minutes=1),
+    )
+
     response = await client.get(
-        "/platform/v1/tenants/authorized", headers=_headers(authority(tenant_ids=("COD",)))
+        f"/platform/v1/campaigns/{vicidial_campaign_id}/channels"
+        f"?tenant_id={campaign_code}",
+        headers=_headers(authority(tenant_ids=(campaign_code,))),
     )
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()["items"]] == ["COD"]
+    assert response.json() == {
+        "campaign_id": vicidial_campaign_id,
+        "provisioning_requests_referencing_campaign": 1,
+        "desired_channel_counts": {"email": 1, "phone": 1},
+        "projection": "latest_desired_request_per_agent",
+    }
+
+
+@pytest.mark.asyncio
+async def test_authorized_directory_resolves_only_verified_token_grants(
+    client, authority
+):
+    response = await client.get(
+        "/platform/v1/tenants/authorized",
+        headers=_headers(authority(tenant_ids=("SMT", "ZZZ", "COD"))),
+    )
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == ["COD", "SMT"]

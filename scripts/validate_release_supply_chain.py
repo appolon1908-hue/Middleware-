@@ -16,8 +16,8 @@ TEST_BASE = (
     "sha256:62eafe52c91cad83c2c74e630bfde917da8c253673e695665d454def84fc9a13"
 )
 FINAL_BASE = (
-    "gcr.io/distroless/python3-debian13:nonroot@"
-    "sha256:f3d5ddc6c64a019fe520e7f005f2880be21e6afc461b10a3c15ef2e4edc71e33"
+    "python:3.13.15-slim-bookworm@"
+    "sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"
 )
 REQUIRED = (
     "requirements-runtime.in",
@@ -125,6 +125,18 @@ def main() -> int:
     require(dockerfile, f"ARG RUNTIME_BASE={RUNTIME_BASE}", "digest-pinned runtime base", errors)
     require(dockerfile, f"ARG TEST_BASE={TEST_BASE}", "digest-pinned test base", errors)
     require(dockerfile, f"ARG FINAL_BASE={FINAL_BASE}", "digest-pinned final base", errors)
+    require(
+        dockerfile,
+        "FROM ${FINAL_BASE} AS patched-final-base",
+        "rebuilt patched final base stage",
+        errors,
+    )
+    require(
+        dockerfile,
+        "libpcre2-8-0=10.42-1+deb12u1",
+        "fixed PCRE2 runtime package",
+        errors,
+    )
     require(dockerfile, "--require-hashes", "hashed dependency install", errors)
     for target in ("runtime", "worker", "connector-runtime", "test"):
         require(dockerfile, f" AS {target}", f"supported {target} target", errors)
@@ -166,7 +178,7 @@ def main() -> int:
         "only-fixed: true": "actionable vulnerability gate",
         "cosign sign --yes": "image signature",
         '--annotations "codestra.source_sha=$RELEASE_SOURCE_SHA"': "source annotation",
-        '--annotations "codestra.schema_head=0060_agent_provisioning"': "schema annotation",
+        '--annotations "codestra.schema_head=0062_merge_telnexa_kyyow"': "schema annotation",
         "cosign attest --yes": "SBOM attestation",
         "--type slsaprovenance1": "signed SLSA provenance v1 attestation",
         "cosign sign-blob --yes": "manifest signature",

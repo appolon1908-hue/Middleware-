@@ -1605,7 +1605,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1652,7 +1652,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1699,7 +1699,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1746,7 +1746,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1793,7 +1793,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1840,7 +1840,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1887,7 +1887,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -1934,7 +1934,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -3185,7 +3185,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -3232,7 +3232,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ControlMutation'
+              $ref: '#/components/schemas/app__control_api__ControlMutation'
       responses:
         '200':
           description: Successful Response
@@ -3510,6 +3510,298 @@ paths:
       - *id001
       - *id003
       - *id004
+  /platform/v1/email/production/status:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Status
+      operationId: status_platform_v1_email_production_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/readiness:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Readiness
+      operationId: readiness_platform_v1_email_production_readiness_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Readiness Platform V1 Email Production Readiness Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/quotas:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Quotas
+      operationId: quotas_platform_v1_email_production_quotas_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Quotas Platform V1 Email Production Quotas Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/audit:
+    get:
+      tags:
+      - domain-control
+      - email-production
+      summary: Audit
+      operationId: audit_platform_v1_email_production_audit_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Audit Platform V1 Email Production Audit Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/authorize:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Authorize
+      operationId: authorize_platform_v1_email_production_authorize_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizeEmailProduction'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/activate:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Activate
+      operationId: activate_platform_v1_email_production_activate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__email_production_control__ControlMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/revoke:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Revoke
+      operationId: revoke_platform_v1_email_production_revoke_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__email_production_control__ControlMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/email/production/kill-switch:
+    post:
+      tags:
+      - domain-control
+      - email-production
+      summary: Kill Switch
+      operationId: kill_switch_platform_v1_email_production_kill_switch_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KillSwitchMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailProductionPolicy'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v1/odoo/commands:
     post:
       tags:
@@ -5643,6 +5935,186 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /api/v1/events/telnexa:
+    post:
+      tags:
+      - telnexa-events
+      summary: Receive Telnexa Event
+      operationId: receive_telnexa_event_api_v1_events_telnexa_post
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelnexaDeliveryAck'
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelnexaDeliveryAck'
+          description: OK
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - telnexaBearerApiKey: []
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 8192
+        description: Bearer shared API key; transport is protected by the internal
+          mTLS edge.
+      - name: X-Event-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: X-Timestamp
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,12}$
+      - name: X-Signature
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256=[0-9a-f]{64}$
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              description: The exact provider callback body, with no generic-envelope
+                fields.
+              properties:
+                event_id:
+                  maxLength: 200
+                  minLength: 1
+                  pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+                  title: Event Id
+                  type: string
+                event_type:
+                  enum:
+                  - sms.message.delivered.v1
+                  - sms.message.failed.v1
+                  - sms.message.status.v1
+                  - sms.message.reconciled.v1
+                  title: Event Type
+                  type: string
+                event_version:
+                  pattern: ^1\.0$
+                  title: Event Version
+                  type: string
+                schema_version:
+                  pattern: ^1\.0$
+                  title: Schema Version
+                  type: string
+                timestamp:
+                  pattern: ^[0-9]{1,12}$
+                  title: Timestamp
+                  type: string
+                occurred_at:
+                  format: date-time
+                  title: Occurred At
+                  type: string
+                tenant_id:
+                  maxLength: 200
+                  minLength: 1
+                  title: Tenant Id
+                  type: string
+                correlation_id:
+                  maxLength: 200
+                  minLength: 1
+                  title: Correlation Id
+                  type: string
+                idempotency_key:
+                  maxLength: 255
+                  minLength: 1
+                  title: Idempotency Key
+                  type: string
+                message_id:
+                  format: uuid
+                  title: Message Id
+                  type: string
+                provider_reference:
+                  anyOf:
+                  - maxLength: 998
+                    type: string
+                  - type: 'null'
+                  title: Provider Reference
+                status:
+                  enum:
+                  - accepted
+                  - queued
+                  - dispatched
+                  - delivered
+                  - failed
+                  - cancelled
+                  - suppressed
+                  - expired
+                  - indeterminate
+                  title: Status
+                  type: string
+                provider_status:
+                  maxLength: 120
+                  minLength: 1
+                  title: Provider Status
+                  type: string
+                failure_code:
+                  anyOf:
+                  - maxLength: 120
+                    type: string
+                  - type: 'null'
+                  title: Failure Code
+                failure_message:
+                  anyOf:
+                  - maxLength: 2000
+                    type: string
+                  - type: 'null'
+                  title: Failure Message
+              required:
+              - event_id
+              - event_type
+              - event_version
+              - schema_version
+              - timestamp
+              - occurred_at
+              - tenant_id
+              - correlation_id
+              - idempotency_key
+              - message_id
+              - status
+              - provider_status
+              title: TelnexaDeliveryEvent
+              type: object
   /platform/v1/repositories:
     get:
       tags:
@@ -7170,6 +7642,252 @@ paths:
       - *id001
       - *id003
       - *id004
+  /v1/observability/kpis:
+    post:
+      tags:
+      - kyyow-observability-sync
+      summary: Submit Kpi
+      operationId: submit_kpi_v1_observability_kpis_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiSnapshot'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: List Kpis
+      operationId: list_kpis_v1_observability_kpis_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: service_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Service Id
+      - name: environment
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - development
+            - test
+            - staging
+            - production
+            type: string
+          - type: 'null'
+          title: Environment
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+          default: ''
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/incidents:
+    post:
+      tags:
+      - kyyow-observability-sync
+      summary: Submit Incident
+      operationId: submit_incident_v1_observability_incidents_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentState'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/kpis/{event_id}:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: Get Kpi
+      operationId: get_kpi_v1_observability_kpis__event_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Event Id
+      - *id001
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /v1/observability/odoo-sync:
+    get:
+      tags:
+      - kyyow-observability-sync
+      summary: Odoo Sync Status
+      operationId: odoo_sync_status_v1_observability_odoo_sync_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+      parameters:
+      - *id001
   /health:
     get:
       summary: Health
@@ -8445,6 +9163,160 @@ components:
       - summary
       - expires_at
       title: ApprovalRequest
+    AuthorizeEmailProduction:
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+          title: Expectedversion
+        mode:
+          type: string
+          enum:
+          - TRANSACTIONAL_CANARY
+          - TRANSACTIONAL_PRODUCTION
+          - CAMPAIGN_PRODUCTION
+          title: Mode
+        approvedDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Approveddomains
+        approvedSenders:
+          items:
+            type: string
+            format: email
+          type: array
+          maxItems: 500
+          minItems: 1
+          title: Approvedsenders
+        recipientScope:
+          type: string
+          enum:
+          - DENY_ALL
+          - ALLOWLIST
+          - DOMAIN_ALLOWLIST
+          - TRANSACTIONAL_ANY
+          - CONSENTED_MARKETING
+          title: Recipientscope
+        approvedRecipients:
+          items:
+            type: string
+            format: email
+          type: array
+          maxItems: 500
+          title: Approvedrecipients
+        approvedRecipientDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approvedrecipientdomains
+        approvedCategories:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Approvedcategories
+        perMinuteLimit:
+          type: integer
+          maximum: 100000
+          minimum: 1
+          title: Perminutelimit
+        perHourLimit:
+          type: integer
+          maximum: 1000000
+          minimum: 1
+          title: Perhourlimit
+        perDayLimit:
+          type: integer
+          maximum: 10000000
+          minimum: 1
+          title: Perdaylimit
+        validFrom:
+          type: string
+          format: date-time
+          title: Validfrom
+        validUntil:
+          type: string
+          format: date-time
+          title: Validuntil
+        changeId:
+          type: string
+          maxLength: 200
+          minLength: 3
+          title: Changeid
+        productionOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Productionowner
+        monitoringOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Monitoringowner
+        escalationOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Escalationowner
+        rollbackOwner:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Rollbackowner
+        killSwitchProcedure:
+          type: string
+          maxLength: 4000
+          minLength: 10
+          title: Killswitchprocedure
+        provider:
+          type: string
+          const: klyrow-postal
+          title: Provider
+        environment:
+          type: string
+          enum:
+          - staging
+          - production
+          title: Environment
+        approvedReleaseSha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Approvedreleasesha
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expectedVersion
+      - mode
+      - approvedDomains
+      - approvedSenders
+      - recipientScope
+      - approvedCategories
+      - perMinuteLimit
+      - perHourLimit
+      - perDayLimit
+      - validFrom
+      - validUntil
+      - changeId
+      - productionOwner
+      - monitoringOwner
+      - escalationOwner
+      - rollbackOwner
+      - killSwitchProcedure
+      - provider
+      - environment
+      - approvedReleaseSha
+      - reason
+      title: AuthorizeEmailProduction
     AutomationCommandRequest:
       properties:
         tenant_id:
@@ -8482,8 +9354,8 @@ components:
           title: Workflow Key
         workflow_version:
           type: integer
-          maximum: 2147483647.0
-          minimum: 1.0
+          maximum: 2147483647
+          minimum: 1
           title: Workflow Version
         step_key:
           type: string
@@ -8578,8 +9450,8 @@ components:
           title: Metric
         value:
           type: number
-          maximum: 1000000.0
-          minimum: 0.0
+          maximum: 1000000
+          minimum: 0
           title: Value
         occurred_at:
           type: string
@@ -8908,7 +9780,7 @@ components:
           title: Environment
         expected_revision:
           type: integer
-          minimum: 0.0
+          minimum: 0
           title: Expected Revision
         artifact_id:
           type: string
@@ -8926,24 +9798,6 @@ components:
       - artifact_id
       - sha256
       title: ContractRefresh
-    ControlMutation:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 1.0
-          title: Expected Version
-        reason:
-          type: string
-          maxLength: 500
-          minLength: 1
-          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
-          title: Reason
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      - reason
-      title: ControlMutation
     CreateMessageRequest:
       properties:
         channel:
@@ -9020,7 +9874,7 @@ components:
           title: Approval Id
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         original_effect_fingerprint:
           type: string
@@ -9046,6 +9900,199 @@ components:
       - safe_replay_classification
       - replay_reason
       title: DeadLetterReplayRequest
+    EmailProductionPolicy:
+      properties:
+        tenantId:
+          type: string
+          title: Tenantid
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        mode:
+          type: string
+          enum:
+          - SAFE
+          - TRANSACTIONAL_CANARY
+          - TRANSACTIONAL_PRODUCTION
+          - CAMPAIGN_PRODUCTION
+          title: Mode
+          default: SAFE
+        authorizationState:
+          type: string
+          enum:
+          - NOT_AUTHORIZED
+          - AUTHORIZED_NOT_ACTIVE
+          - ACTIVE
+          - REVOKED
+          title: Authorizationstate
+          default: NOT_AUTHORIZED
+        approvedDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approveddomains
+        approvedSenders:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Approvedsenders
+        recipientScope:
+          type: string
+          enum:
+          - DENY_ALL
+          - ALLOWLIST
+          - DOMAIN_ALLOWLIST
+          - TRANSACTIONAL_ANY
+          - CONSENTED_MARKETING
+          title: Recipientscope
+          default: DENY_ALL
+        approvedRecipients:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Approvedrecipients
+        approvedRecipientDomains:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approvedrecipientdomains
+        approvedCategories:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Approvedcategories
+        perMinuteLimit:
+          type: integer
+          maximum: 100000
+          minimum: 0
+          title: Perminutelimit
+          default: 0
+        perHourLimit:
+          type: integer
+          maximum: 1000000
+          minimum: 0
+          title: Perhourlimit
+          default: 0
+        perDayLimit:
+          type: integer
+          maximum: 10000000
+          minimum: 0
+          title: Perdaylimit
+          default: 0
+        validFrom:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Validfrom
+        validUntil:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Validuntil
+        changeId:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Changeid
+        approvedBy:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Approvedby
+        activatedBy:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Activatedby
+        productionOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Productionowner
+        monitoringOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Monitoringowner
+        escalationOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Escalationowner
+        rollbackOwner:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Rollbackowner
+        killSwitchProcedure:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Killswitchprocedure
+        provider:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Provider
+        environment:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Environment
+        approvedReleaseSha:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Approvedreleasesha
+        authorizationTimestamp:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Authorizationtimestamp
+        activationTimestamp:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Activationtimestamp
+        killSwitchOpen:
+          type: boolean
+          title: Killswitchopen
+          default: false
+        version:
+          type: integer
+          minimum: 1
+          title: Version
+          default: 1
+        updatedAt:
+          type: string
+          format: date-time
+          title: Updatedat
+      additionalProperties: false
+      type: object
+      required:
+      - tenantId
+      title: EmailProductionPolicy
     Envelope:
       properties:
         data:
@@ -9167,7 +10214,7 @@ components:
           title: Source Deployment
         sequence:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Sequence
         observed_at:
           type: string
@@ -9228,6 +10275,148 @@ components:
       - lease_token
       - execution_id
       title: HeartbeatRequest
+    IncidentState:
+      properties:
+        event_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Event Id
+        schema_version:
+          type: string
+          const: kyyow.observability.incident.v1
+          title: Schema Version
+          default: kyyow.observability.incident.v1
+        tenant_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Tenant Id
+        incident_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Incident Id
+        fingerprint:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:/-]+$
+          title: Fingerprint
+        alertname:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          title: Alertname
+        group_key:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Group Key
+        severity:
+          type: string
+          enum:
+          - critical
+          - high
+          - warning
+          - info
+          title: Severity
+        state:
+          type: string
+          enum:
+          - firing
+          - acknowledged
+          - resolved
+          - inhibited
+          - silenced
+          title: State
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        host:
+          type: string
+          maxLength: 128
+          title: Host
+          default: ''
+        summary:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Summary
+        labels:
+          type: object
+          maxProperties: 32
+          title: Labels
+        first_seen_at:
+          type: string
+          format: date-time
+          title: First Seen At
+        last_seen_at:
+          type: string
+          format: date-time
+          title: Last Seen At
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+        source_deployment:
+          type: string
+          maxLength: 128
+          minLength: 3
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:/-]+$
+          title: Source Deployment
+        resource_version:
+          type: integer
+          minimum: 1
+          title: Resource Version
+        source_payload_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Source Payload Hash
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        correlation_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Correlation Id
+        projection_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Projection Hash
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - tenant_id
+      - incident_id
+      - fingerprint
+      - alertname
+      - group_key
+      - severity
+      - state
+      - service_id
+      - environment
+      - summary
+      - first_seen_at
+      - last_seen_at
+      - source_deployment
+      - resource_version
+      - source_payload_hash
+      - observed_at
+      - correlation_id
+      - projection_hash
+      title: IncidentState
     JobClaimRequest:
       properties:
         tenant_id:
@@ -9261,8 +10450,8 @@ components:
           title: Workflow Key
         workflow_version:
           type: integer
-          maximum: 2147483647.0
-          minimum: 1.0
+          maximum: 2147483647
+          minimum: 1
           title: Workflow Version
         execution_id:
           type: string
@@ -9280,6 +10469,142 @@ components:
       - workflow_version
       - execution_id
       title: JobClaimRequest
+    KillSwitchMutation:
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+          title: Expectedversion
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+        open:
+          type: boolean
+          title: Open
+      additionalProperties: false
+      type: object
+      required:
+      - expectedVersion
+      - reason
+      - open
+      title: KillSwitchMutation
+    KpiSnapshot:
+      properties:
+        event_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Event Id
+        schema_version:
+          type: string
+          const: kyyow.observability.kpi.v1
+          title: Schema Version
+          default: kyyow.observability.kpi.v1
+        tenant_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Tenant Id
+        metric_code:
+          type: string
+          maxLength: 96
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_.:-]*$
+          title: Metric Code
+        service_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Service Id
+        environment:
+          type: string
+          enum:
+          - development
+          - test
+          - staging
+          - production
+          title: Environment
+        period_reference:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:/-]*$
+          title: Period Reference
+        period_start:
+          type: string
+          format: date-time
+          title: Period Start
+        period_end:
+          type: string
+          format: date-time
+          title: Period End
+        value:
+          type: number
+          title: Value
+        unit:
+          type: string
+          maxLength: 32
+          minLength: 1
+          pattern: ^[A-Za-z][A-Za-z0-9_.%/-]{0,31}$
+          title: Unit
+        dimensions:
+          type: object
+          maxProperties: 32
+          title: Dimensions
+        source:
+          type: string
+          maxLength: 96
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:/-]*$
+          title: Source
+        source_revision:
+          type: integer
+          minimum: 1
+          title: Source Revision
+        source_payload_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Source Payload Hash
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        reconciliation_state:
+          type: string
+          enum:
+          - accepted
+          - reconciled
+          - drifted
+          - pending
+          title: Reconciliation State
+        correlation_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+          title: Correlation Id
+        projection_hash:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Projection Hash
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - tenant_id
+      - metric_code
+      - service_id
+      - environment
+      - period_reference
+      - period_start
+      - period_end
+      - value
+      - unit
+      - source
+      - source_revision
+      - source_payload_hash
+      - observed_at
+      - reconciliation_state
+      - correlation_id
+      - projection_hash
+      title: KpiSnapshot
     MessageContent:
       properties:
         subject:
@@ -9309,7 +10634,7 @@ components:
         templateVersion:
           anyOf:
           - type: integer
-            minimum: 1.0
+            minimum: 1
           - type: 'null'
           title: Templateversion
         variables:
@@ -9389,7 +10714,7 @@ components:
           title: Idempotency Key
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         reason:
           type: string
@@ -9445,7 +10770,7 @@ components:
           title: Source Deployment
         sequence:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Sequence
         observed_at:
           type: string
@@ -9641,7 +10966,7 @@ components:
       properties:
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         reason:
           type: string
@@ -9824,7 +11149,7 @@ components:
           title: Lead Model
         lead_id:
           type: integer
-          exclusiveMinimum: 0.0
+          exclusiveMinimum: 0
           title: Lead Id
         recording_requested:
           type: boolean
@@ -9926,7 +11251,7 @@ components:
           title: Environment
         expected_revision:
           type: integer
-          minimum: 0.0
+          minimum: 0
           title: Expected Revision
         config_digest:
           type: string
@@ -10189,14 +11514,14 @@ components:
           title: End
         step_seconds:
           type: integer
-          maximum: 86400.0
-          minimum: 1.0
+          maximum: 86400
+          minimum: 1
           title: Step Seconds
           default: 60
         limit:
           type: integer
-          maximum: 1000.0
-          minimum: 1.0
+          maximum: 1000
+          minimum: 1
           title: Limit
           default: 100
       additionalProperties: false
@@ -10272,7 +11597,7 @@ components:
       properties:
         expected_version:
           type: integer
-          minimum: 1.0
+          minimum: 1
           title: Expected Version
         action:
           type: string
@@ -10511,6 +11836,50 @@ components:
       - step_state
       - recorded_at
       title: StepRecord
+    TelnexaDeliveryAck:
+      properties:
+        accepted:
+          type: boolean
+          const: true
+          title: Accepted
+          default: true
+        duplicate:
+          type: boolean
+          title: Duplicate
+        event_id:
+          type: string
+          title: Event Id
+        status:
+          type: string
+          const: complete
+          title: Status
+          default: complete
+        message_id:
+          type: string
+          format: uuid
+          title: Message Id
+        communication_status:
+          anyOf:
+          - type: string
+            enum:
+            - accepted
+            - queued
+            - dispatched
+            - delivered
+            - failed
+            - cancelled
+            - suppressed
+            - expired
+            - indeterminate
+          - type: 'null'
+          title: Communication Status
+      additionalProperties: false
+      type: object
+      required:
+      - duplicate
+      - event_id
+      - message_id
+      title: TelnexaDeliveryAck
     TerminalResult:
       properties:
         tenant_id:
@@ -10582,6 +11951,41 @@ components:
       - msg
       - type
       title: ValidationError
+    app__control_api__ControlMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+          title: Expected Version
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - reason
+      title: ControlMutation
+    app__email_production_control__ControlMutation:
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+          title: Expectedversion
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expectedVersion
+      - reason
+      title: ControlMutation
   securitySchemes:
     HTTPBearer:
       type: http
@@ -10592,3 +11996,9 @@ components:
       bearerFormat: JWT
       description: Keycloak machine token; issuer auth.codestra.co realm codestra;
         audience middleware-api
+    telnexaBearerApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: shared API key
+      description: Telnexa shared API key; request authenticity also requires the
+        X-Signature HMAC over the exact raw body.

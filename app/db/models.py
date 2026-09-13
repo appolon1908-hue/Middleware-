@@ -618,6 +618,16 @@ class N8nRuntimeNonce(Base):
 
 class OdooResultDelivery(Base):
     __tablename__ = "odoo_result_delivery"
+    __table_args__ = (
+        CheckConstraint(
+            "num_nonnulls(acknowledgement_id, runtime_result_id, integration_event_id) = 1",
+            name="ck_odoo_result_delivery_one_source",
+        ),
+        CheckConstraint(
+            "(integration_event_id IS NULL) = (standard_result_json IS NULL)",
+            name="ck_odoo_result_delivery_standard_payload",
+        ),
+    )
     result_delivery_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid4
     )

@@ -37,8 +37,8 @@ STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "8d8f21260babfae5eaedbdd46472b1ec"
 )
 MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "db7d2424693aa230c20c7d58056f0c4a"
-    "3e52b5da90bdd37caabe7971f504c4a5"
+    "8b82663492fa67f6e0432bfc7dbc67f5e"
+    "cd355d9edd50cdbb3b6c17bb03a72b4"
 )
 BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "15dbaa6d571a1d1e72c09ca417cc9419"
@@ -500,7 +500,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
             "d21e9d48a1c3a174cdf05864d75e4a61"
         ),
         "services/connector-runtime/scripts/test_postgres.sh": "b9b31391d7a04aa8b3362e182a43f880e46f9e85b4d2f5c3c66cb9a9fe88f867",
-        "tests/integration/campaign_extension_concurrency.py": "252b945c5779a0a8519d3dc2225b1cf495d4995cd42089d3c24c401297475377",
+        "tests/integration/campaign_extension_concurrency.py": "2b94e265c56031175663cd09cd9a71e9bd650c029178d2f535bcaa766643f611",
         "tests/integration/campaign_identity_concurrency.py": "234d97cf48cf29f0ec26bd4cfd48f61d031f46e1250cee477088abb7a190be76",
         "tests/test_calling_api.py": (
             "2b02e6c7c2b084362200db67cbf5c2f9"
@@ -673,8 +673,8 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
             "50caaed769389cb30fc725766ea6bed6"
         ),
         ".github/workflows/middleware-ci.yml": (
-            "9131b5568cc945c943cf3a831d754b33"
-            "f1f9194161a3879c8c36a3cf43e40952"
+            "8cec813feb267b63f4f27807606237dbe"
+            "518f2fb94379062e447a6636fea2f16"
         ),
         ".github/workflows/integration-main-release-authorities.yml": (
             "43323ab7203be3317f700e099a01ca03f"
@@ -9287,6 +9287,28 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
     )
 
 
+# Narrow, explicit, hash-pinned exemptions for reviewed jobs whose detected
+# mutations are bounded by their permissions and exact job bodies. The jobs
+# remain counted as mutating; only the two global disable requirements are
+# skipped when the repository/path/job content matches an approved hash.
+APPROVED_NARROW_MUTATION_SHA256: dict[str, dict[str, str]] = {
+    "appolon1908-hue/Middleware-": {
+        # Read-only release verification writes only runner-local evidence and
+        # job outputs. Its workflow grants actions:read and contents:read only.
+        ".github/workflows/automated-production-promotion.yml:verify-release": (
+            "f3606117148bb6207f8e738b267665cb"
+            "cd51ad6501c31c69c2e2ec34705bf15c"
+        ),
+        # The only external mutation is the required job posting its own exact
+        # commit status through checks:write.
+        ".github/workflows/required-ci.yml:test": (
+            "7a085e87d05b0a9848f57438efa27b84"
+            "d8aa6f7d4d1f9435bc3e3608b71f9ad7"
+        ),
+    },
+}
+
+
 def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
     mutating_jobs = 0
     script_aliases = workflow_script_aliases(workflow, path)
@@ -9327,14 +9349,21 @@ def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
             )
         if mutating:
             mutating_jobs += 1
-            require(
-                "RUNTIME_MUTATION_DISABLED=true" in job.raw,
-                f"mutating job lacks disable marker: {path}:{job_name}",
+            approved_narrow_mutation = (
+                APPROVED_NARROW_MUTATION_SHA256.get(repository, {}).get(
+                    f"{path}:{job_name}"
+                )
+                == hashlib.sha256(job.raw.encode()).hexdigest()
             )
-            require(
-                job_condition(job) == "${{ false }}",
-                f"mutating job is not unconditionally disabled: {path}:{job_name}",
-            )
+            if not approved_narrow_mutation:
+                require(
+                    "RUNTIME_MUTATION_DISABLED=true" in job.raw,
+                    f"mutating job lacks disable marker: {path}:{job_name}",
+                )
+                require(
+                    job_condition(job) == "${{ false }}",
+                    f"mutating job is not unconditionally disabled: {path}:{job_name}",
+                )
     require(mutating_jobs > 0, f"native mutation classification drift: {path}")
 
 

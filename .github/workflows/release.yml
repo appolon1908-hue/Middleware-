@@ -252,7 +252,7 @@ jobs:
           PY
           cosign sign --yes \
             --annotations "codestra.source_sha=$RELEASE_SOURCE_SHA" \
-            --annotations "codestra.schema_head=0061_telnexa_delivery_events" \
+            --annotations "codestra.schema_head=0062_merge_telnexa_kyyow" \
             "$RELEASE_IMAGE_REFERENCE"
           cosign attest --yes \
             --predicate "$RELEASE_SBOM_PATH" \

@@ -65,6 +65,7 @@ EXPECTED_INCLUDED_ROUTERS = {
     "webhook_api_router": "webhook_api",
     "telnexa_events_router": "api.internal.telnexa_events",
     "monitoring_router": "monitoring.routes",
+    "observability_sync_router": "api.v1.observability_sync",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}
 EXPECTED_ROUTE_HELPERS = {"register_survey_routes": "survey_routes"}

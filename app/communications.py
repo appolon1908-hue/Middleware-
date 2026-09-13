@@ -14,6 +14,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    PrivateAttr,
     TypeAdapter,
     ValidationError,
     field_validator,
@@ -157,6 +158,12 @@ class CreateMessageRequest(BaseModel):
 
 class CommunicationMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    # The durable version belongs to this particular in-memory value, not to
+    # the message key globally.  model_copy() carries private attributes, so a
+    # mutation that started before a provider callback retains the version it
+    # actually read and cannot overwrite the newer durable projection.
+    _persisted_snapshot: tuple[datetime, str] | None = PrivateAttr(default=None)
 
     messageId: uuid.UUID
     tenantId: str
@@ -361,16 +368,11 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__()
         self.pool = pool
-        self._persisted_message_snapshots: dict[
-            tuple[str, uuid.UUID], tuple[datetime, str]
-        ] = {}
 
     def synchronize_durable_message(self, message: CommunicationMessage) -> None:
         super().synchronize_durable_message(message)
         stored = self.messages[(message.tenantId, message.messageId)]
-        self._persisted_message_snapshots[
-            (stored.tenantId, stored.messageId)
-        ] = _message_snapshot(stored)
+        stored._persisted_snapshot = _message_snapshot(stored)
 
     async def message_by_idempotency(
         self, tenant_id: str, idempotency_key: str,
@@ -419,15 +421,11 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
                 self.cancellations.add((row["tenant_id"], row["message_id"], row["idempotency_key"]))
 
     async def persist(self) -> None:
-        persisted_snapshots: dict[
-            tuple[str, uuid.UUID], tuple[datetime, str]
-        ] = {}
+        persisted_messages: list[tuple[CommunicationMessage, tuple[datetime, str]]] = []
         async with self.pool.acquire() as conn, conn.transaction():
             for (tenant, message_id), message in self.messages.items():
                 snapshot = _message_snapshot(message)
-                previous = self._persisted_message_snapshots.get(
-                    (tenant, message_id)
-                )
+                previous = message._persisted_snapshot
                 if previous == snapshot:
                     continue
                 if previous is None:
@@ -471,7 +469,7 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
                     raise CommunicationsConflict(
                         "communication message changed in another worker"
                     )
-                persisted_snapshots[(tenant, message_id)] = snapshot
+                persisted_messages.append((message, snapshot))
             for (tenant, _), timeline in self.events.items():
                 for event in timeline:
                     await conn.execute("INSERT INTO middleware_communication_events(tenant_id,event_id,message_id,occurred_at,payload) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id,event_id) DO NOTHING", tenant, event.eventId, event.messageId, event.occurredAt, event.model_dump_json())
@@ -484,7 +482,8 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
                     await conn.execute("INSERT INTO middleware_communication_suppressions(tenant_id,channel,subject) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", *item)
             for tenant, message_id, key in self.cancellations:
                 await conn.execute("INSERT INTO middleware_communication_cancellations(tenant_id,message_id,idempotency_key) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", tenant, message_id, key)
-        self._persisted_message_snapshots.update(persisted_snapshots)
+        for message, snapshot in persisted_messages:
+            message._persisted_snapshot = snapshot
 
     async def ready(self) -> bool:
         return await self.pool.fetchval("SELECT to_regclass('middleware_communication_messages') IS NOT NULL") is True

@@ -154,6 +154,70 @@ async def test_stale_worker_cannot_overwrite_newer_projection() -> None:
 
 
 @pytest.mark.asyncio
+async def test_inflight_local_mutation_keeps_its_pre_callback_version() -> None:
+    database_url = os.environ["DATABASE_URL"]
+    tenant_id = f"tenant-local-race-{uuid.uuid4()}"
+    message_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    store = await PostgresCommunicationsStore.connect(database_url)
+    try:
+        store.messages[(tenant_id, message_id)] = CommunicationMessage(
+            messageId=message_id,
+            tenantId=tenant_id,
+            channel="sms",
+            direction="outbound",
+            status="queued",
+            correlationId="correlation-local-race",
+            idempotencyKey="idempotency-local-race",
+            provider="telnexa",
+            createdAt=now,
+            updatedAt=now,
+        )
+        await store.persist()
+
+        # A request captures the queued value before an awaited command
+        # operation.  While it is suspended, the callback commits delivery
+        # and refreshes this process's cache.
+        captured = store.messages[(tenant_id, message_id)]
+        stale_cancel = captured.model_copy(
+            update={
+                "status": "cancelled",
+                "completedAt": now + timedelta(seconds=2),
+                "updatedAt": now + timedelta(seconds=2),
+            }
+        )
+        delivered = captured.model_copy(
+            update={
+                "status": "delivered",
+                "completedAt": now + timedelta(seconds=1),
+                "updatedAt": now + timedelta(seconds=1),
+            }
+        )
+        async with store.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE middleware_communication_messages "
+                "SET payload=$3::jsonb,updated_at=$4 "
+                "WHERE tenant_id=$1 AND message_id=$2",
+                tenant_id,
+                message_id,
+                delivered.model_dump_json(),
+                delivered.updatedAt,
+            )
+        store.synchronize_durable_message(delivered)
+
+        # The suspended request resumes with its old-derived value.  Its
+        # object-bound durable version must still be the queued version even
+        # though the process cache has observed delivery.
+        store.messages[(tenant_id, message_id)] = stale_cancel
+        with pytest.raises(CommunicationsConflict):
+            await store.persist()
+
+        assert store.messages[(tenant_id, message_id)].status == "delivered"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
 async def test_communication_event_ledger_is_immutable() -> None:
     store = await PostgresCommunicationsStore.connect(os.environ["DATABASE_URL"])
     try:

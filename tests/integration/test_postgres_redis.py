@@ -618,7 +618,7 @@ async def test_postgres_operation_reads_and_cancel_are_tenant_isolated_and_atomi
         "command_id": "00000000-0000-4000-8000-000000000002",
         "command_type": "crm.contact.create.v1", "command_version": "1.0",
         "target": "odoo-19", "tenant_id": "tenant-operation", "requested_by": "user-1",
-        "correlation_id": "correlation-operation-2", "idempotency_key": "idempotency-operation-2",
+        "correlation_id": "correlation-operation-2", "idempotency_key": "test-idem-2",
         "capability": "ODOO_WRITE", "payload": {"contact_id": "contact-2"},
     })
     await store.submit(command, authenticated_client_id="test-client")
@@ -643,7 +643,7 @@ async def test_postgres_operation_retry_enqueues_dispatchable_command_envelope(p
         "command_id": "00000000-0000-4000-8000-000000000003",
         "command_type": "crm.contact.create.v1", "command_version": "1.0",
         "target": "odoo-19", "tenant_id": "tenant-operation-retry", "requested_by": "user-1",
-        "correlation_id": "correlation-operation-3", "idempotency_key": "idempotency-operation-3",
+        "correlation_id": "correlation-operation-3", "idempotency_key": "test-idem-3",
         "capability": "ODOO_WRITE", "payload": {"contact_id": "contact-3"},
     })
     await store.submit(command, authenticated_client_id="test-client")

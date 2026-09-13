@@ -1,0 +1,197 @@
+{
+  "components": {
+    "schemas": {
+      "AcceptedEvent": {
+        "properties": {
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "ACCEPTED",
+            "default": "ACCEPTED",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "AcceptedEvent",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "serviceBearer": {
+        "bearerFormat": "JWT",
+        "description": "Keycloak klyrow-business-events workload; klyrow.events.write scope and tenant-bound claims.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Codestra normalized business event ingress",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/internal/v1/events/klyrow": {
+      "post": {
+        "operationId": "receive_business_event_internal_v1_events_klyrow_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Correlation-Id",
+            "required": true,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "X-Correlation-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "causation_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Causation Id",
+                    "type": "string"
+                  },
+                  "correlation_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Correlation Id",
+                    "type": "string"
+                  },
+                  "data": {
+                    "title": "Data",
+                    "type": "object"
+                  },
+                  "id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "occurred_at": {
+                    "format": "date-time",
+                    "title": "Occurred At",
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "klyrow",
+                    "title": "Source",
+                    "type": "string"
+                  },
+                  "tenant_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Tenant Id",
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "klyrow.tenant.created",
+                      "klyrow.subscription.changed",
+                      "klyrow.email.accepted",
+                      "klyrow.email.delivered",
+                      "klyrow.email.bounced",
+                      "klyrow.email.complained",
+                      "klyrow.campaign.summary",
+                      "klyrow.usage.daily",
+                      "klyrow.kpi.daily",
+                      "klyrow.domain.status",
+                      "klyrow.provider.health",
+                      "klyrow.account.held"
+                    ],
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "version": {
+                    "const": 1,
+                    "title": "Version",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "version",
+                  "source",
+                  "tenant_id",
+                  "correlation_id",
+                  "causation_id",
+                  "occurred_at",
+                  "data"
+                ],
+                "title": "BusinessEvent",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedEvent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Invalid workload identity"
+          },
+          "403": {
+            "description": "Tenant scope denied"
+          },
+          "409": {
+            "description": "Event content conflicts with prior ID"
+          },
+          "413": {
+            "description": "Event exceeds 64 KiB"
+          },
+          "415": {
+            "description": "JSON required"
+          },
+          "422": {
+            "description": "Invalid normalized event"
+          },
+          "503": {
+            "description": "Durable store unavailable"
+          }
+        },
+        "security": [
+          {
+            "serviceBearer": []
+          }
+        ],
+        "summary": "Receive Business Event",
+        "tags": [
+          "business-events"
+        ]
+      }
+    }
+  }
+}

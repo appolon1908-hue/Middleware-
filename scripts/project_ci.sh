@@ -23,6 +23,7 @@ python -m compileall -q app workers tests scripts/validate_platform_control_plan
 python scripts/validate_platform_control_plane.py
 python scripts/validate_calling_contract_pin.py
 python scripts/validate_calling_contract_pin.py --self-test
+python scripts/validate_business_event_contract.py
 pytest -q tests
 
 python - <<'PY'

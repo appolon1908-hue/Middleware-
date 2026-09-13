@@ -283,6 +283,7 @@ def create_app(
         )
         return Response(content=body, media_type="text/plain; version=0.0.4")
 
+    @app.post("/internal/v1/alerts/alertmanager")
     @app.post("/v1/integrations/alertmanager/events")
     @app.post("/v1/observability/alerts", deprecated=True)
     async def submit_alerts(request: Request) -> JSONResponse:

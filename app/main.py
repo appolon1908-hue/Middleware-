@@ -81,6 +81,8 @@ app.include_router(n8n_target_router)
 app.include_router(telephony_router)
 app.include_router(internal_ai_jobs_router)
 app.include_router(klyrow_mail_router)
+from app.api.internal.business_events import router as business_events_router
+app.include_router(business_events_router)
 app.include_router(ai_console_router)
 app.include_router(tts_router)
 app.include_router(ai_commands_router)

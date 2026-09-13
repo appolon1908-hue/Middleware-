@@ -47,4 +47,5 @@ sources and requires the standard payload for integration-event deliveries.
 The concurrency-test allowlist repair also needs the independently reviewed
 protected-base transition in
 `docs/production/evidence/kyyow-concurrency-trust-transition.patch`.
-The PR deliberately leaves its active trust launcher unchanged.
+The PR deliberately leaves its active trust launcher unchanged. The separately
+reviewable transition is Middleware PR #272.

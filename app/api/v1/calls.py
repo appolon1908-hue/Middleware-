@@ -59,6 +59,8 @@ def _call_out(call: TelephonyCallLifecycle) -> dict[str, Any]:
         "dialplan_context": call.dialplan_context,
         "disposition": call.disposition,
         "hangup_cause": call.hangup_cause,
+        "lead_model": call.lead_model,
+        "lead_id": call.lead_id,
         "fine_state": call.fine_state,
         "fine_state_at": call.fine_state_at.isoformat() if call.fine_state_at else None,
         "last_event_sequence": call.last_event_sequence,
@@ -72,7 +74,9 @@ def _call_out(call: TelephonyCallLifecycle) -> dict[str, Any]:
 
 
 def _encode_cursor(created_at: datetime, call_id: UUID) -> str:
-    return base64.urlsafe_b64encode(f"{created_at.isoformat()}|{call_id}".encode()).decode()
+    return base64.urlsafe_b64encode(
+        f"{created_at.isoformat()}|{call_id}".encode()
+    ).decode()
 
 
 def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
@@ -112,9 +116,7 @@ async def list_calls(
         )
     )
     if campaign is not None:
-        stmt = stmt.where(
-            AuditEvent.redacted_payload["campaign"].astext == campaign
-        )
+        stmt = stmt.where(AuditEvent.redacted_payload["campaign"].astext == campaign)
     if cursor is not None:
         created_at, call_id = _decode_cursor(cursor)
         stmt = stmt.where(
@@ -133,7 +135,9 @@ async def list_calls(
     rows = list((await session.execute(stmt)).scalars().all())
     has_more = len(rows) > limit
     rows = rows[:limit]
-    next_cursor = _encode_cursor(rows[-1].created_at, rows[-1].id) if has_more and rows else None
+    next_cursor = (
+        _encode_cursor(rows[-1].created_at, rows[-1].id) if has_more and rows else None
+    )
 
     return {
         "items": [_call_out(row) for row in rows],

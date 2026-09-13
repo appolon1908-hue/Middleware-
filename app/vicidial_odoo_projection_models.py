@@ -5,7 +5,14 @@ import hmac
 import json
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .models import EventEnvelope
 from .vicidial_odoo_projection_errors import ProjectionError
@@ -63,12 +70,8 @@ class OdooCallEvent(BaseModel):
     transfer_type: str | None = Field(default=None, pattern=r"^(?:blind|attended)$")
     hangup_cause: str | None = Field(default=None, max_length=255)
     hangup_cause_code: int | None = Field(default=None, ge=0, le=999)
-    dial_status: str | None = Field(
-        default=None, max_length=32, pattern=r"^[A-Z_]+$"
-    )
-    hangup_leg: str | None = Field(
-        default=None, pattern=r"^(?:agent_leg|peer_leg)$"
-    )
+    dial_status: str | None = Field(default=None, max_length=32, pattern=r"^[A-Z_]+$")
+    hangup_leg: str | None = Field(default=None, pattern=r"^(?:agent_leg|peer_leg)$")
 
     @field_validator("timestamp")
     @classmethod

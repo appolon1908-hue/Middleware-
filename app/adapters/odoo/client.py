@@ -37,6 +37,11 @@ ODOO_ENDPOINTS = {
     "reconciliation.drifts.read": "odoo.reconciliation.drifts.read",
     "sales.lookup": "odoo.sales.lookup",
     "sales.verification.read": "odoo.sales.verification.read",
+    "observability.kpis.create": "odoo.observability.kpis.create",
+    "observability.incidents.upsert": "odoo.observability.incidents.upsert",
+    "observability.kpis.read": "odoo.observability.kpis.read",
+    "observability.incidents.read": "odoo.observability.incidents.read",
+    "observability.sync.read": "odoo.observability.sync.read",
 }
 
 ODOO_READ_OPERATIONS = frozenset(
@@ -55,6 +60,9 @@ ODOO_READ_OPERATIONS = frozenset(
         "reconciliation.drifts.read",
         "sales.lookup",
         "sales.verification.read",
+        "observability.kpis.read",
+        "observability.incidents.read",
+        "observability.sync.read",
     }
 )
 
@@ -67,7 +75,7 @@ class OdooDeliveryError(RuntimeError):
 class OdooDeliveryClient:
     service_client: CommonServiceClient
     environment: str
-    organization_public_id: str
+    organization_public_id: str = ""
     business_unit_public_id: str = ""
     campaign_public_id: str = ""
 

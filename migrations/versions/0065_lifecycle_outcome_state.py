@@ -3,13 +3,13 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0062_lifecycle_outcome_state"
-down_revision = "0061_lifecycle_fine_state"
+revision = "0065_lifecycle_outcome_state"
+down_revision = "0064_lifecycle_fine_state"
 branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.add_column(
         "telephony_call_lifecycle",
         sa.Column("fine_state", sa.String(32), nullable=True),
@@ -52,7 +52,7 @@ def upgrade():
         "fine_state IN "
         "('requested','accepted','queued','dialing','ringing','answered',"
         "'connected','completed','failed','busy','no_answer','canceled',"
-        "'rejected','timeout')",
+        "'rejected')",
     )
     op.create_check_constraint(
         "ck_telephony_call_hangup_leg",
@@ -61,7 +61,7 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_constraint(
         "ck_telephony_call_hangup_leg",
         "telephony_call_lifecycle",

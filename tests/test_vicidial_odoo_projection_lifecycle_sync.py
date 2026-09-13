@@ -20,7 +20,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.models import EventEnvelope
-from app.vicidial_odoo_projection import OdooCallEventDispatcher, ProjectionSettings, ProjectionState
+from app.vicidial_odoo_projection import (
+    OdooCallEventDispatcher,
+    ProjectionSettings,
+    ProjectionState,
+)
 from workers.run_vicidial_odoo_projection import handle_message
 
 pytestmark = pytest.mark.skipif(
@@ -56,7 +60,9 @@ class NoOpDispatcher:
         pass
 
 
-def _envelope(*, event_type: str, correlation_id: str, sequence: int, **payload_overrides) -> EventEnvelope:
+def _envelope(
+    *, event_type: str, correlation_id: str, sequence: int, **payload_overrides
+) -> EventEnvelope:
     now = datetime.now(timezone.utc)
     payload = {
         "schema_version": "1.0",
@@ -115,24 +121,32 @@ async def _seed_call(engine, *, correlation_id: str) -> None:
                 "VALUES (:id, :correlation_id, :unique_id, 'STARTED', "
                 " '6101', '+18095550100', 'codestra-test-syn')"
             ),
-            {"id": call_id, "correlation_id": correlation_id, "unique_id": "1710000100.1"},
+            {
+                "id": call_id,
+                "correlation_id": correlation_id,
+                "unique_id": "1710000100.1",
+            },
         )
 
 
 async def _fetch_call(engine, *, correlation_id: str) -> dict:
     async with engine.begin() as connection:
         row = (
-            await connection.execute(
-                text(
-                    "SELECT lifecycle_state, started_at, connected_at, ended_at, "
-                    "hangup_cause, disposition, fine_state, fine_state_at, "
-                    "last_event_sequence, hangup_leg, last_event_type, last_event_at "
-                    "FROM telephony_call_lifecycle "
-                    "WHERE correlation_id = :correlation_id"
-                ),
-                {"correlation_id": correlation_id},
+            (
+                await connection.execute(
+                    text(
+                        "SELECT lifecycle_state, started_at, connected_at, ended_at, "
+                        "hangup_cause, disposition, fine_state, fine_state_at, "
+                        "last_event_sequence, hangup_leg, last_event_type, last_event_at "
+                        "FROM telephony_call_lifecycle "
+                        "WHERE correlation_id = :correlation_id"
+                    ),
+                    {"correlation_id": correlation_id},
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         return dict(row)
 
 
@@ -148,7 +162,9 @@ async def test_dispatcher_advances_lifecycle_state_on_answered_event(
             event_type="codestra.vicidial.call.lifecycle.answered",
             correlation_id=correlation_id,
             sequence=2,
-        ).model_dump_json().encode()
+        )
+        .model_dump_json()
+        .encode()
     )
     await handle_message(
         message,
@@ -179,7 +195,9 @@ async def test_dispatcher_sets_disposition_and_hangup_cause_on_completion(
                 event_type="codestra.vicidial.call.lifecycle.answered",
                 correlation_id=correlation_id,
                 sequence=2,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -193,7 +211,9 @@ async def test_dispatcher_sets_disposition_and_hangup_cause_on_completion(
                 correlation_id=correlation_id,
                 sequence=3,
                 hangup_cause="NORMAL_CLEARING",
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -239,7 +259,9 @@ async def test_dispatcher_sets_disposition_for_each_pre_answer_terminal_outcome(
                 correlation_id=correlation_id,
                 sequence=2,
                 hangup_cause=expected_disposition,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -270,7 +292,9 @@ async def test_out_of_order_redelivery_does_not_regress_state(
                 event_type="codestra.vicidial.call.lifecycle.answered",
                 correlation_id=correlation_id,
                 sequence=2,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -286,7 +310,9 @@ async def test_out_of_order_redelivery_does_not_regress_state(
                 event_type="codestra.vicidial.call.lifecycle.ringing",
                 correlation_id=correlation_id,
                 sequence=1,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -315,7 +341,9 @@ async def test_last_event_type_recorded_on_coarse_transition(
                 event_type="codestra.vicidial.call.lifecycle.ringing",
                 correlation_id=correlation_id,
                 sequence=1,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=ProjectionState(tmp_path / "projection.sqlite3"),
@@ -346,7 +374,9 @@ async def test_last_event_type_recorded_for_non_coarse_hold_event(
                 event_type="codestra.vicidial.call.lifecycle.answered",
                 correlation_id=correlation_id,
                 sequence=2,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -363,7 +393,9 @@ async def test_last_event_type_recorded_for_non_coarse_hold_event(
                 event_type="codestra.vicidial.call.lifecycle.transfer.started",
                 correlation_id=correlation_id,
                 sequence=3,
-            ).model_dump_json().encode()
+            )
+            .model_dump_json()
+            .encode()
         ),
         settings=Mock(spec=ProjectionSettings, synthetic_only=True),
         state=state,
@@ -395,7 +427,9 @@ async def test_queue_and_dialing_are_durable_fine_states(
                     event_type=event_type,
                     correlation_id=correlation_id,
                     sequence=sequence,
-                ).model_dump_json().encode()
+                )
+                .model_dump_json()
+                .encode()
             ),
             settings=Mock(spec=ProjectionSettings, synthetic_only=True),
             state=state,
@@ -426,7 +460,9 @@ async def test_hangup_is_intermediate_until_terminal_outcome(
                     correlation_id=correlation_id,
                     sequence=sequence,
                     **payload,
-                ).model_dump_json().encode()
+                )
+                .model_dump_json()
+                .encode()
             ),
             settings=Mock(spec=ProjectionSettings, synthetic_only=True),
             state=state,
@@ -475,7 +511,9 @@ async def test_readback_survives_a_lost_browser_session(
             event_type="codestra.vicidial.call.lifecycle.ringing",
             correlation_id=correlation_id,
             sequence=1,
-        ).model_dump_json().encode()
+        )
+        .model_dump_json()
+        .encode()
     )
 
     await handle_message(
@@ -503,7 +541,9 @@ async def test_event_for_unknown_correlation_id_is_a_silent_noop(
             event_type="codestra.vicidial.call.lifecycle.answered",
             correlation_id=f"vici-call-unknown-{uuid4().hex[:12]}",
             sequence=1,
-        ).model_dump_json().encode()
+        )
+        .model_dump_json()
+        .encode()
     )
     await handle_message(
         message,

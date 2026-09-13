@@ -32,6 +32,8 @@ from app.api.v1.provider_webhooks import router as provider_webhooks_router
 from app.api.v1.telephony import router as telephony_router
 from app.api.internal.ai_jobs import router as internal_ai_jobs_router
 from app.api.internal.klyrow_mail import router as klyrow_mail_router
+from app.api.internal.klyrow_events import router as klyrow_events_router
+from app.api.internal.telnexa_events import router as telnexa_events_router
 from app.api.v1.ai_console import router as ai_console_router
 from app.api.v1.tts import router as tts_router
 from app.api.v1.tts import validate_readiness as validate_tts_readiness
@@ -43,6 +45,10 @@ from app.api.v1.integrations import router as integrations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
+from app.api.v1.observability_sync import (
+    is_observability_sync_route,
+    router as observability_sync_router,
+)
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
 from app.api.v1.agent_provisioning_reads import (
@@ -52,6 +58,7 @@ from app.api.v1.session_context import router as session_context_router
 from app.api.v1.calls import router as calls_router
 from app.api.v1.activity import router as activity_router
 from app.api.v1.presence import router as presence_router
+from app.api.v1.tenants import router as tenants_router
 from app.api.v1.queues import router as queues_router
 from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
@@ -81,6 +88,8 @@ app.include_router(n8n_target_router)
 app.include_router(telephony_router)
 app.include_router(internal_ai_jobs_router)
 app.include_router(klyrow_mail_router)
+app.include_router(klyrow_events_router)
+app.include_router(telnexa_events_router)
 app.include_router(ai_console_router)
 app.include_router(tts_router)
 app.include_router(ai_commands_router)
@@ -89,6 +98,7 @@ app.include_router(ai_router)
 app.include_router(provider_commands_router)
 app.include_router(platform_router)
 app.include_router(monitoring_router)
+app.include_router(observability_sync_router)
 app.include_router(integrations_router)
 app.include_router(postiz_router)
 app.include_router(campaign_search_router)
@@ -104,6 +114,7 @@ app.include_router(session_context_router)
 app.include_router(calls_router)
 app.include_router(activity_router)
 app.include_router(presence_router)
+app.include_router(tenants_router)
 app.include_router(queues_router)
 app.mount("/metrics", make_asgi_app())
 
@@ -138,6 +149,8 @@ SIGNED_WEBHOOK_PATHS = frozenset(
         "/webhooks/vicidial/call-result/",
         "/webhooks/sms/inbound/",
         "/api/v1/events/vicidial",
+        "/api/v1/events/telnexa",
+        "/api/v1/events/klyrow",
         "/api/v1/automation/events",
         "/api/v2/telephony/canary",
         "/api/v1/n8n/executions",
@@ -243,7 +256,7 @@ async def control_request_guard(request: Request, call_next):
         and not _is_ai_console_jwt_route(request)
         and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
         and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
-        and not is_monitoring_route(request)
+        and not (is_monitoring_route(request) or is_observability_sync_route(request))
     ):
         try:
             verify_bearer(

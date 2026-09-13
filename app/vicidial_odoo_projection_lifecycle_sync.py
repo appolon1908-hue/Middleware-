@@ -39,7 +39,6 @@ _FINE_STATE_RANK = {
     "no_answer": 100,
     "canceled": 100,
     "rejected": 100,
-    "timeout": 100,
 }
 _TERMINAL_FINE_STATES = frozenset(
     {
@@ -49,7 +48,6 @@ _TERMINAL_FINE_STATES = frozenset(
         "no_answer",
         "canceled",
         "rejected",
-        "timeout",
     }
 )
 _FINE_STATE_BY_TYPE = {
@@ -96,7 +94,13 @@ _ENDED_TYPES = frozenset(
     }
 )
 _NON_COARSE_TYPES = frozenset(
-    {"call.held", "call.resumed", "call.transfer.started", "call.transfer.completed", "call.hangup"}
+    {
+        "call.held",
+        "call.resumed",
+        "call.transfer.started",
+        "call.transfer.completed",
+        "call.hangup",
+    }
 )
 _DISPOSITION_BY_TYPE = {
     "call.completed": "COMPLETED",
@@ -105,7 +109,6 @@ _DISPOSITION_BY_TYPE = {
     "call.no_answer": "NO_ANSWER",
     "call.rejected": "REJECTED",
     "call.canceled": "CANCELED",
-    "call.timeout": "TIMEOUT",
 }
 
 
@@ -138,9 +141,9 @@ async def sync_call_lifecycle(session: AsyncSession, event: OdooCallEvent) -> No
 
     row = (
         await session.execute(
-            select(TelephonyCallLifecycle).where(
-                TelephonyCallLifecycle.correlation_id == event.correlation_id
-            )
+            select(TelephonyCallLifecycle)
+            .where(TelephonyCallLifecycle.correlation_id == event.correlation_id)
+            .with_for_update()
         )
     ).scalar_one_or_none()
     if row is None:

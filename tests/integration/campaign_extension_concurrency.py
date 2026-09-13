@@ -16,6 +16,12 @@ VALUES($1,$2,$3,$4,$5,$6,'concurrency-test',$7,$8)
 """
 
 
+def require(condition: bool, message: str) -> None:
+    """Keep this deployment gate effective even when Python runs with -O."""
+    if not condition:
+        raise RuntimeError(message)
+
+
 async def insert(pool, table, name, number, start, end, delay=0):
     async with pool.acquire() as connection:
         transaction = connection.transaction()
@@ -52,6 +58,9 @@ async def create_scratch_schema(database_url: str) -> str:
             f'CREATE TABLE "{schema}".campaign_extension_allocation '
             "(LIKE public.campaign_extension_allocation INCLUDING ALL)"
         )
+    except Exception:
+        await connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        raise
     finally:
         await connection.close()
     return schema
@@ -60,10 +69,9 @@ async def create_scratch_schema(database_url: str) -> str:
 async def drop_scratch_schema(database_url: str, schema: str) -> None:
     connection = await asyncpg.connect(database_url)
     try:
-        await connection.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
     finally:
         await connection.close()
-
 
 
 async def find_test_bases(pool, table):
@@ -88,15 +96,16 @@ async def find_test_bases(pool, table):
         if extension_base is None:
             raise RuntimeError("no free extension range available for concurrency test")
         max_number = await connection.fetchval(
-            "SELECT COALESCE(MAX(campaign_number), 0) "
-            f"FROM {table}"
+            f"SELECT COALESCE(MAX(campaign_number), 0) FROM {table}"
         )
     number_base = ((int(max_number) // 100) + 1) * 100
     return extension_base, number_base
 
+
 async def main():
     database_url = os.environ["TEST_DATABASE_URL"]
-    assert "diag" in database_url or "rehearsal" in database_url
+    if "diag" not in database_url and "rehearsal" not in database_url:
+        raise RuntimeError("concurrency proof requires an isolated test database")
     schema = await create_scratch_schema(database_url)
     table = f'"{schema}".campaign_extension_allocation'
 
@@ -108,7 +117,15 @@ async def main():
         extension_base, number_base = await find_test_bases(pool, table)
 
         exact = await asyncio.gather(
-            insert(pool, table, "EXACT1", number_base, extension_base, extension_base + 99, 0.1),
+            insert(
+                pool,
+                table,
+                "EXACT1",
+                number_base,
+                extension_base,
+                extension_base + 99,
+                0.1,
+            ),
             insert(
                 pool,
                 table,
@@ -118,7 +135,7 @@ async def main():
                 extension_base + 99,
             ),
         )
-        assert sorted(exact) == ["OVERLAP", "PASS"]
+        require(sorted(exact) == ["OVERLAP", "PASS"], "exact overlap was accepted")
 
         partial = await asyncio.gather(
             insert(
@@ -139,7 +156,10 @@ async def main():
                 extension_base + 298,
             ),
         )
-        assert sorted(partial) == ["OVERLAP", "PASS"]
+        require(
+            sorted(partial) == ["OVERLAP", "PASS"],
+            "partial overlap was accepted",
+        )
 
         contained = await asyncio.gather(
             insert(
@@ -160,7 +180,10 @@ async def main():
                 extension_base + 330,
             ),
         )
-        assert sorted(contained) == ["OVERLAP", "PASS"]
+        require(
+            sorted(contained) == ["OVERLAP", "PASS"],
+            "contained overlap was accepted",
+        )
 
         adjacent = await asyncio.gather(
             insert(
@@ -181,7 +204,7 @@ async def main():
                 extension_base + 599,
             ),
         )
-        assert adjacent == ["PASS", "PASS"]
+        require(adjacent == ["PASS", "PASS"], "adjacent ranges were rejected")
 
         many = await asyncio.gather(
             *[
@@ -196,7 +219,7 @@ async def main():
                 for offset in range(5)
             ]
         )
-        assert many == ["PASS"] * 5
+        require(many == ["PASS"] * 5, "disjoint concurrent ranges were rejected")
 
         async with pool.acquire() as connection:
             transaction = connection.transaction()
@@ -214,7 +237,7 @@ async def main():
             )
             await transaction.rollback()
 
-        assert (
+        require(
             await insert(
                 pool,
                 table,
@@ -223,15 +246,15 @@ async def main():
                 extension_base + 700,
                 extension_base + 799,
             )
-            == "PASS"
+            == "PASS",
+            "rolled-back range was not released",
         )
         async with pool.acquire() as connection:
             await connection.execute(
-                f"UPDATE {table}"
-                " SET allocation_status='RETIRED' WHERE campaign_id=$1",
+                f"UPDATE {table} SET allocation_status='RETIRED' WHERE campaign_id=$1",
                 f"{RUN_ID}-AFTERROLLBACK",
             )
-        assert (
+        require(
             await insert(
                 pool,
                 table,
@@ -240,16 +263,17 @@ async def main():
                 extension_base + 700,
                 extension_base + 799,
             )
-            == "OVERLAP"
+            == "OVERLAP",
+            "retired range was incorrectly reusable",
         )
         async with pool.acquire() as connection:
-            assert (
+            require(
                 await connection.fetchval(
-                    f"SELECT count(*) FROM {table}"
-                    " WHERE source_change_id=$1",
+                    f"SELECT count(*) FROM {table} WHERE source_change_id=$1",
                     RUN_ID,
                 )
-                == 11
+                == 11,
+                "unexpected persisted row count",
             )
         print("CONCURRENT_OVERLAP_GATE=PASS")
         print("CONCURRENT_ADJACENT_GATE=PASS")

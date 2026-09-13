@@ -49,6 +49,8 @@ from .lead_intake import (
     accept_lead_submission,
 )
 from .n8n_control_plane import router as n8n_control_plane_router
+from .api.internal.telnexa_events import router as telnexa_events_router
+from .api.internal.klyrow_events import router as klyrow_events_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -56,6 +58,7 @@ from .observability import (
 )
 from .operations_dashboard import router as operations_dashboard_router
 from .monitoring.routes import router as monitoring_router
+from .api.v1.observability_sync import router as observability_sync_router
 from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
@@ -179,7 +182,10 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(klyrow_events_router)
+    app.include_router(telnexa_events_router)
     app.include_router(monitoring_router)
+    app.include_router(observability_sync_router)
 
     def realtime_store(request: Request):
         active = request.app.state.runtime
@@ -503,7 +509,11 @@ def create_app(
         message = await communications_service(request).store.message_by_idempotency(
             tenant_id, key,
         )
-        if caller.client_id == "odoo-sms" and message.channel != "sms":
+        expected_channel = {
+            "odoo-sms": "sms",
+            "odoo-email": "email",
+        }.get(caller.client_id)
+        if expected_channel is not None and message.channel != expected_channel:
             raise CommunicationsNotFound("message was not found")
         return message
 

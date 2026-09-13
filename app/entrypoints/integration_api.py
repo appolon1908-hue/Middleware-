@@ -22,8 +22,11 @@ from app.api.v1.sales import router as sales_router
 from app.api.v1.booking import router as booking_router
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
+from app.api.internal.telnexa_events import router as telnexa_events_router
+from app.api.internal.klyrow_events import router as klyrow_events_router
 from app.monitoring.routes import router as monitoring_router
 from app.api.v1.webphone import router as webphone_router
+from app.api.v1.observability_sync import router as observability_sync_router
 from app.api.v1.callbacks import router as callbacks_router
 from app.entrypoints.runtime import add_api_runtime, run_api
 
@@ -51,6 +54,9 @@ routers = (
     booking_router,
     platform_router,
     agent_provisioning_router,
+    klyrow_events_router,
+    telnexa_events_router,
+    observability_sync_router,
 )
 app = FastAPI(
     title="Codestra Integration API",
@@ -59,7 +65,11 @@ app = FastAPI(
         route
         for router in routers
         for route in router.routes
-        if not (getattr(route, "path", "") or "").startswith("/api/v1/events/")
+        if (
+            not (getattr(route, "path", "") or "").startswith("/api/v1/events/")
+            or getattr(route, "path", "")
+            in {"/api/v1/events/telnexa", "/api/v1/events/klyrow"}
+        )
     ],
 )
 app.include_router(monitoring_router)

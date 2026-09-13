@@ -14,13 +14,13 @@ additive: the existing coarse columns and their consumers are untouched.
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0061_lifecycle_fine_state"
-down_revision = "0060_agent_provisioning"
+revision = "0064_lifecycle_fine_state"
+down_revision = "0063_telephony_lead_reference"
 branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.add_column(
         "telephony_call_lifecycle",
         sa.Column("last_event_type", sa.String(64), nullable=True),
@@ -31,6 +31,6 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_column("telephony_call_lifecycle", "last_event_at")
     op.drop_column("telephony_call_lifecycle", "last_event_type")

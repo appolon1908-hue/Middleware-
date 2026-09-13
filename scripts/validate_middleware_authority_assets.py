@@ -11,15 +11,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = Path("config/middleware-authority-convergence.v1.json")
-CURRENT_AUTHORITY_PATH = Path(
-    "config/middleware-forward-release-authority.v1.json"
-)
-WORKFLOW_PATH = Path(
-    ".github/workflows/mirror-codestra-legacy-middleware-images.yml"
-)
-BACKUP_SCRIPT_PATH = Path(
-    "scripts/server-a-backup-legacy-middleware-images.sh"
-)
+CURRENT_AUTHORITY_PATH = Path("config/middleware-forward-release-authority.v1.json")
+WORKFLOW_PATH = Path(".github/workflows/mirror-codestra-legacy-middleware-images.yml")
+BACKUP_SCRIPT_PATH = Path("scripts/server-a-backup-legacy-middleware-images.sh")
 DOCKERFILE_PATH = Path("Dockerfile.runtime")
 DOCKERIGNORE_PATH = Path(".dockerignore")
 DOC_PATH = Path("docs/production/MIDDLEWARE-AUTHORITY-CONVERGENCE.md")
@@ -27,7 +21,7 @@ EXPECTED_FAMILY_COUNT = 16
 EXPECTED_WORKLOAD_COUNT = 31
 EXPECTED_REGISTRY_MIRRORS = 4
 EXPECTED_LOCAL_BACKUPS = 11
-CURRENT_SCHEMA_HEAD = "0062_lifecycle_outcome_state"
+CURRENT_SCHEMA_HEAD = "0065_lifecycle_outcome_state"
 OBSERVED_SIGNED_SCHEMA_HEAD = "0057_platform_service_catalog"
 PENDING_CANDIDATE_STATUS = "PENDING_EXACT_PROTECTED_MERGE_BUILD"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -81,9 +75,15 @@ def _validate_observed_signed_evidence(
         errors.append(f"{label} role must deny static authority")
     if value.get("promotionAuthorized") is not False:
         errors.append(f"{label} promotion must be forbidden")
-    if not isinstance(value.get("sourceSha"), str) or SHA40.fullmatch(value["sourceSha"]) is None:
+    if (
+        not isinstance(value.get("sourceSha"), str)
+        or SHA40.fullmatch(value["sourceSha"]) is None
+    ):
         errors.append(f"{label} source SHA is malformed")
-    if not isinstance(value.get("gitTreeId"), str) or SHA40.fullmatch(value["gitTreeId"]) is None:
+    if (
+        not isinstance(value.get("gitTreeId"), str)
+        or SHA40.fullmatch(value["gitTreeId"]) is None
+    ):
         errors.append(f"{label} Git tree ID is malformed")
     digest = value.get("imageDigest")
     if not isinstance(digest, str) or DIGEST.fullmatch(digest) is None:
@@ -99,7 +99,10 @@ def _validate_observed_signed_evidence(
         "sbomSha256",
         "vulnerabilityReportSha256",
     ):
-        if not isinstance(value.get(field), str) or DIGEST.fullmatch(value[field]) is None:
+        if (
+            not isinstance(value.get(field), str)
+            or DIGEST.fullmatch(value[field]) is None
+        ):
             errors.append(f"{label} {field} is malformed")
     for field in ("workflowRunId", "workflowRunAttempt", "artifactId"):
         if not isinstance(value.get(field), int) or value[field] <= 0:
@@ -153,16 +156,12 @@ def validate_assets(root: Path = ROOT) -> list[str]:
             continue
         workloads = family.get("workloads", [])
         if not isinstance(workloads, list):
-            errors.append(
-                f"family {family.get('id')!r} workloads must be an array"
-            )
+            errors.append(f"family {family.get('id')!r} workloads must be an array")
             workloads = []
         workload_count += len(workloads)
         backup = family.get("backup", {})
         if not isinstance(backup, dict):
-            errors.append(
-                f"family {family.get('id')!r} backup must be an object"
-            )
+            errors.append(f"family {family.get('id')!r} backup must be an object")
             continue
         method = backup.get("method")
         if method == "registry-preserve-digest":
@@ -211,9 +210,7 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         errors.append("current artifactAuthority must be an object")
         artifacts = {}
     if artifacts.get("requiredSchemaHead") != CURRENT_SCHEMA_HEAD:
-        errors.append(
-            f"current authority must require schema {CURRENT_SCHEMA_HEAD}"
-        )
+        errors.append(f"current authority must require schema {CURRENT_SCHEMA_HEAD}")
     if artifacts.get("candidateStatus") != PENDING_CANDIDATE_STATUS:
         errors.append("current candidate status must remain exact-main-build pending")
     if artifacts.get("currentSignedCandidate") is not None:
@@ -229,9 +226,13 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         errors=errors,
     )
     if latest.get("sourceSha") == previous.get("sourceSha"):
-        errors.append("latest and previous signed evidence must use distinct source SHAs")
+        errors.append(
+            "latest and previous signed evidence must use distinct source SHAs"
+        )
     if latest.get("imageDigest") == previous.get("imageDigest"):
-        errors.append("latest and previous signed evidence must use distinct image digests")
+        errors.append(
+            "latest and previous signed evidence must use distinct image digests"
+        )
     predecessor = artifacts.get("historicalSignedPredecessor", {})
     if not isinstance(predecessor, dict):
         errors.append("historicalSignedPredecessor must be an object")
@@ -273,8 +274,7 @@ def validate_assets(root: Path = ROOT) -> list[str]:
     ):
         if needle in workflow:
             errors.append(
-                "mirror workflow must copy, not rebuild images: "
-                f"found {needle!r}"
+                f"mirror workflow must copy, not rebuild images: found {needle!r}"
             )
 
     script_requirements = {
@@ -310,8 +310,7 @@ def validate_assets(root: Path = ROOT) -> list[str]:
     ):
         if needle in backup_script:
             errors.append(
-                "backup script must not mutate running containers: "
-                f"found {needle!r}"
+                f"backup script must not mutate running containers: found {needle!r}"
             )
 
     marker = "FROM ${TEST_BASE} AS test"
@@ -325,15 +324,12 @@ def validate_assets(root: Path = ROOT) -> list[str]:
         ):
             if path in runtime_section:
                 errors.append(
-                    "authority-only asset leaked into production runtime stage: "
-                    f"{path}"
+                    f"authority-only asset leaked into production runtime stage: {path}"
                 )
             if path not in test_section:
                 errors.append(f"Docker test target does not package {path}")
 
-    allowlist_line = (
-        "!.github/workflows/mirror-codestra-legacy-middleware-images.yml"
-    )
+    allowlist_line = "!.github/workflows/mirror-codestra-legacy-middleware-images.yml"
     if allowlist_line not in dockerignore.splitlines():
         errors.append("Docker context does not allowlist the mirror workflow")
     if ".github/workflows/*" not in dockerignore.splitlines():
@@ -355,8 +351,7 @@ def validate_assets(root: Path = ROOT) -> list[str]:
     for phrase in documentation_requirements:
         if phrase.lower() not in lower_documentation:
             errors.append(
-                "authority documentation missing required statement: "
-                f"{phrase}"
+                f"authority documentation missing required statement: {phrase}"
             )
 
     return errors

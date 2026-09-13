@@ -58,6 +58,194 @@
         "title": "ApprovalRequest",
         "type": "object"
       },
+      "AuthorizeEmailProduction": {
+        "additionalProperties": false,
+        "properties": {
+          "approvedCategories": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Approvedcategories",
+            "type": "array"
+          },
+          "approvedDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Approveddomains",
+            "type": "array"
+          },
+          "approvedRecipientDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approvedrecipientdomains",
+            "type": "array"
+          },
+          "approvedRecipients": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Approvedrecipients",
+            "type": "array"
+          },
+          "approvedReleaseSha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "title": "Approvedreleasesha",
+            "type": "string"
+          },
+          "approvedSenders": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Approvedsenders",
+            "type": "array"
+          },
+          "changeId": {
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Changeid",
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "escalationOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Escalationowner",
+            "type": "string"
+          },
+          "expectedVersion": {
+            "minimum": 1,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "killSwitchProcedure": {
+            "maxLength": 4000,
+            "minLength": 10,
+            "title": "Killswitchprocedure",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "TRANSACTIONAL_CANARY",
+              "TRANSACTIONAL_PRODUCTION",
+              "CAMPAIGN_PRODUCTION"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "monitoringOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Monitoringowner",
+            "type": "string"
+          },
+          "perDayLimit": {
+            "maximum": 10000000,
+            "minimum": 1,
+            "title": "Perdaylimit",
+            "type": "integer"
+          },
+          "perHourLimit": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "title": "Perhourlimit",
+            "type": "integer"
+          },
+          "perMinuteLimit": {
+            "maximum": 100000,
+            "minimum": 1,
+            "title": "Perminutelimit",
+            "type": "integer"
+          },
+          "productionOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Productionowner",
+            "type": "string"
+          },
+          "provider": {
+            "const": "klyrow-postal",
+            "title": "Provider",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipientScope": {
+            "enum": [
+              "DENY_ALL",
+              "ALLOWLIST",
+              "DOMAIN_ALLOWLIST",
+              "TRANSACTIONAL_ANY",
+              "CONSENTED_MARKETING"
+            ],
+            "title": "Recipientscope",
+            "type": "string"
+          },
+          "rollbackOwner": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Rollbackowner",
+            "type": "string"
+          },
+          "validFrom": {
+            "format": "date-time",
+            "title": "Validfrom",
+            "type": "string"
+          },
+          "validUntil": {
+            "format": "date-time",
+            "title": "Validuntil",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "mode",
+          "approvedDomains",
+          "approvedSenders",
+          "recipientScope",
+          "approvedCategories",
+          "perMinuteLimit",
+          "perHourLimit",
+          "perDayLimit",
+          "validFrom",
+          "validUntil",
+          "changeId",
+          "productionOwner",
+          "monitoringOwner",
+          "escalationOwner",
+          "rollbackOwner",
+          "killSwitchProcedure",
+          "provider",
+          "environment",
+          "approvedReleaseSha",
+          "reason"
+        ],
+        "title": "AuthorizeEmailProduction",
+        "type": "object"
+      },
       "AutomationCommandRequest": {
         "additionalProperties": false,
         "properties": {
@@ -140,8 +328,8 @@
             "type": "string"
           },
           "workflow_version": {
-            "maximum": 2147483647.0,
-            "minimum": 1.0,
+            "maximum": 2147483647,
+            "minimum": 1,
             "title": "Workflow Version",
             "type": "integer"
           }
@@ -224,8 +412,8 @@
             "type": "string"
           },
           "value": {
-            "maximum": 1000000.0,
-            "minimum": 0.0,
+            "maximum": 1000000,
+            "minimum": 0,
             "title": "Value",
             "type": "number"
           }
@@ -730,7 +918,7 @@
             "type": "string"
           },
           "expected_revision": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Expected Revision",
             "type": "integer"
           },
@@ -747,29 +935,6 @@
           "sha256"
         ],
         "title": "ContractRefresh",
-        "type": "object"
-      },
-      "ControlMutation": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_version": {
-            "minimum": 1.0,
-            "title": "Expected Version",
-            "type": "integer"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.: -]*$",
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_version",
-          "reason"
-        ],
-        "title": "ControlMutation",
         "type": "object"
       },
       "CreateMessageRequest": {
@@ -873,7 +1038,7 @@
             "type": "string"
           },
           "expected_version": {
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -916,6 +1081,316 @@
           "replay_reason"
         ],
         "title": "DeadLetterReplayRequest",
+        "type": "object"
+      },
+      "EmailProductionPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "activatedBy": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activatedby"
+          },
+          "activationTimestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activationtimestamp"
+          },
+          "approvedBy": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvedby"
+          },
+          "approvedCategories": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approvedcategories",
+            "type": "array"
+          },
+          "approvedDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approveddomains",
+            "type": "array"
+          },
+          "approvedRecipientDomains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Approvedrecipientdomains",
+            "type": "array"
+          },
+          "approvedRecipients": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Approvedrecipients",
+            "type": "array"
+          },
+          "approvedReleaseSha": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvedreleasesha"
+          },
+          "approvedSenders": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Approvedsenders",
+            "type": "array"
+          },
+          "authorizationState": {
+            "default": "NOT_AUTHORIZED",
+            "enum": [
+              "NOT_AUTHORIZED",
+              "AUTHORIZED_NOT_ACTIVE",
+              "ACTIVE",
+              "REVOKED"
+            ],
+            "title": "Authorizationstate",
+            "type": "string"
+          },
+          "authorizationTimestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorizationtimestamp"
+          },
+          "changeId": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changeid"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "escalationOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalationowner"
+          },
+          "killSwitchOpen": {
+            "default": false,
+            "title": "Killswitchopen",
+            "type": "boolean"
+          },
+          "killSwitchProcedure": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Killswitchprocedure"
+          },
+          "mode": {
+            "default": "SAFE",
+            "enum": [
+              "SAFE",
+              "TRANSACTIONAL_CANARY",
+              "TRANSACTIONAL_PRODUCTION",
+              "CAMPAIGN_PRODUCTION"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "monitoringOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitoringowner"
+          },
+          "perDayLimit": {
+            "default": 0,
+            "maximum": 10000000,
+            "minimum": 0,
+            "title": "Perdaylimit",
+            "type": "integer"
+          },
+          "perHourLimit": {
+            "default": 0,
+            "maximum": 1000000,
+            "minimum": 0,
+            "title": "Perhourlimit",
+            "type": "integer"
+          },
+          "perMinuteLimit": {
+            "default": 0,
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "Perminutelimit",
+            "type": "integer"
+          },
+          "productionOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productionowner"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "recipientScope": {
+            "default": "DENY_ALL",
+            "enum": [
+              "DENY_ALL",
+              "ALLOWLIST",
+              "DOMAIN_ALLOWLIST",
+              "TRANSACTIONAL_ANY",
+              "CONSENTED_MARKETING"
+            ],
+            "title": "Recipientscope",
+            "type": "string"
+          },
+          "rollbackOwner": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollbackowner"
+          },
+          "tenantId": {
+            "title": "Tenantid",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenantId"
+        ],
+        "title": "EmailProductionPolicy",
         "type": "object"
       },
       "Envelope": {
@@ -1081,7 +1556,7 @@
             "type": "string"
           },
           "sequence": {
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Sequence",
             "type": "integer"
           },
@@ -1163,6 +1638,182 @@
         "title": "HeartbeatRequest",
         "type": "object"
       },
+      "IncidentState": {
+        "additionalProperties": false,
+        "properties": {
+          "alertname": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Alertname",
+            "type": "string"
+          },
+          "correlation_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "development",
+              "test",
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "event_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "fingerprint": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:/-]+$",
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "group_key": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Group Key",
+            "type": "string"
+          },
+          "host": {
+            "default": "",
+            "maxLength": 128,
+            "title": "Host",
+            "type": "string"
+          },
+          "incident_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Incident Id",
+            "type": "string"
+          },
+          "labels": {
+            "maxProperties": 32,
+            "title": "Labels",
+            "type": "object"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "projection_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Projection Hash",
+            "type": "string"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resource_version": {
+            "minimum": 1,
+            "title": "Resource Version",
+            "type": "integer"
+          },
+          "schema_version": {
+            "const": "kyyow.observability.incident.v1",
+            "default": "kyyow.observability.incident.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "service_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Service Id",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "warning",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "source_deployment": {
+            "maxLength": 128,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]+$",
+            "title": "Source Deployment",
+            "type": "string"
+          },
+          "source_payload_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Source Payload Hash",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "firing",
+              "acknowledged",
+              "resolved",
+              "inhibited",
+              "silenced"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "tenant_id",
+          "incident_id",
+          "fingerprint",
+          "alertname",
+          "group_key",
+          "severity",
+          "state",
+          "service_id",
+          "environment",
+          "summary",
+          "first_seen_at",
+          "last_seen_at",
+          "source_deployment",
+          "resource_version",
+          "source_payload_hash",
+          "observed_at",
+          "correlation_id",
+          "projection_hash"
+        ],
+        "title": "IncidentState",
+        "type": "object"
+      },
       "JobClaimRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1207,8 +1858,8 @@
             "type": "string"
           },
           "workflow_version": {
-            "maximum": 2147483647.0,
-            "minimum": 1.0,
+            "maximum": 2147483647,
+            "minimum": 1,
             "title": "Workflow Version",
             "type": "integer"
           }
@@ -1224,6 +1875,193 @@
           "execution_id"
         ],
         "title": "JobClaimRequest",
+        "type": "object"
+      },
+      "KillSwitchMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "minimum": 1,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason",
+          "open"
+        ],
+        "title": "KillSwitchMutation",
+        "type": "object"
+      },
+      "KlyrowEventAck": {
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "pattern": "^op_[a-f0-9]{32}$",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "ACCEPTED",
+            "default": "ACCEPTED",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "KlyrowEventAck",
+        "type": "object"
+      },
+      "KpiSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "dimensions": {
+            "maxProperties": 32,
+            "title": "Dimensions",
+            "type": "object"
+          },
+          "environment": {
+            "enum": [
+              "development",
+              "test",
+              "staging",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "event_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "metric_code": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.:-]*$",
+            "title": "Metric Code",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date-time",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]*$",
+            "title": "Period Reference",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "projection_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Projection Hash",
+            "type": "string"
+          },
+          "reconciliation_state": {
+            "enum": [
+              "accepted",
+              "reconciled",
+              "drifted",
+              "pending"
+            ],
+            "title": "Reconciliation State",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "kyyow.observability.kpi.v1",
+            "default": "kyyow.observability.kpi.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "service_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Service Id",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]*$",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_payload_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Source Payload Hash",
+            "type": "string"
+          },
+          "source_revision": {
+            "minimum": 1,
+            "title": "Source Revision",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_.%/-]{0,31}$",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "event_id",
+          "tenant_id",
+          "metric_code",
+          "service_id",
+          "environment",
+          "period_reference",
+          "period_start",
+          "period_end",
+          "value",
+          "unit",
+          "source",
+          "source_revision",
+          "source_payload_hash",
+          "observed_at",
+          "reconciliation_state",
+          "correlation_id",
+          "projection_hash"
+        ],
+        "title": "KpiSnapshot",
         "type": "object"
       },
       "MessageContent": {
@@ -1283,7 +2121,7 @@
           "templateVersion": {
             "anyOf": [
               {
-                "minimum": 1.0,
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -1396,7 +2234,7 @@
         "additionalProperties": false,
         "properties": {
           "expected_version": {
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -1482,7 +2320,7 @@
             "type": "string"
           },
           "sequence": {
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Sequence",
             "type": "integer"
           },
@@ -1757,7 +2595,7 @@
         "additionalProperties": false,
         "properties": {
           "expected_version": {
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -2023,7 +2861,7 @@
             "type": "string"
           },
           "lead_id": {
-            "exclusiveMinimum": 0.0,
+            "exclusiveMinimum": 0,
             "title": "Lead Id",
             "type": "integer"
           },
@@ -2160,7 +2998,7 @@
             "type": "string"
           },
           "expected_revision": {
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Expected Revision",
             "type": "integer"
           },
@@ -2506,8 +3344,8 @@
           },
           "limit": {
             "default": 100,
-            "maximum": 1000.0,
-            "minimum": 1.0,
+            "maximum": 1000,
+            "minimum": 1,
             "title": "Limit",
             "type": "integer"
           },
@@ -2535,8 +3373,8 @@
           },
           "step_seconds": {
             "default": 60,
-            "maximum": 86400.0,
-            "minimum": 1.0,
+            "maximum": 86400,
+            "minimum": 1,
             "title": "Step Seconds",
             "type": "integer"
           }
@@ -2641,7 +3479,7 @@
             "type": "string"
           },
           "expected_version": {
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Version",
             "type": "integer"
           },
@@ -2937,6 +3775,65 @@
         "title": "StepRecord",
         "type": "object"
       },
+      "TelnexaDeliveryAck": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "const": true,
+            "default": true,
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "communication_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "accepted",
+                  "queued",
+                  "dispatched",
+                  "delivered",
+                  "failed",
+                  "cancelled",
+                  "suppressed",
+                  "expired",
+                  "indeterminate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Communication Status"
+          },
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "complete",
+            "default": "complete",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "duplicate",
+          "event_id",
+          "message_id"
+        ],
+        "title": "TelnexaDeliveryAck",
+        "type": "object"
+      },
       "TerminalResult": {
         "additionalProperties": false,
         "properties": {
@@ -3031,6 +3928,51 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "app__control_api__ControlMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.: -]*$",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "reason"
+        ],
+        "title": "ControlMutation",
+        "type": "object"
+      },
+      "app__email_production_control__ControlMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "minimum": 1,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "title": "ControlMutation",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -3041,6 +3983,18 @@
       "bearerAuth": {
         "bearerFormat": "JWT",
         "description": "Keycloak machine token; issuer auth.codestra.co realm codestra; audience middleware-api",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "klyrowBearerApiKey": {
+        "bearerFormat": "shared service credential",
+        "description": "Klyrow gateway credential; request authenticity also requires the X-Signature HMAC over the exact raw body.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "telnexaBearerApiKey": {
+        "bearerFormat": "shared API key",
+        "description": "Telnexa shared API key; request authenticity also requires the X-Signature HMAC over the exact raw body.",
         "scheme": "bearer",
         "type": "http"
       }
@@ -3850,6 +4804,1009 @@
         "tags": [
           "durable-control",
           "provider-control"
+        ]
+      }
+    },
+    "/api/v1/events/klyrow": {
+      "post": {
+        "operationId": "receive_klyrow_event_api_v1_events_klyrow_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "maxLength": 8192,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Event-Id",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "pattern": "^evt_[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Timestamp",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{1,12}$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Signature",
+            "required": true,
+            "schema": {
+              "pattern": "^sha256=[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 5,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Correlation-Id",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$defs": {
+                  "AccountStateData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "changed_at": {
+                        "format": "date-time",
+                        "title": "Changed At",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "maxLength": 300,
+                        "minLength": 1,
+                        "title": "Reason",
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "HELD",
+                          "RELEASED"
+                        ],
+                        "title": "Status",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "reason",
+                      "changed_at"
+                    ],
+                    "title": "AccountStateData",
+                    "type": "object"
+                  },
+                  "CampaignSummaryData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "audience_count": {
+                        "minimum": 0,
+                        "title": "Audience Count",
+                        "type": "integer"
+                      },
+                      "campaign_id": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "title": "Campaign Id",
+                        "type": "string"
+                      },
+                      "campaign_version": {
+                        "minimum": 1,
+                        "title": "Campaign Version",
+                        "type": "integer"
+                      },
+                      "delivered_count": {
+                        "minimum": 0,
+                        "title": "Delivered Count",
+                        "type": "integer"
+                      },
+                      "failed_count": {
+                        "minimum": 0,
+                        "title": "Failed Count",
+                        "type": "integer"
+                      },
+                      "status": {
+                        "enum": [
+                          "COMPLETED",
+                          "CANCELLED",
+                          "FAILED"
+                        ],
+                        "title": "Status",
+                        "type": "string"
+                      },
+                      "suppressed_count": {
+                        "minimum": 0,
+                        "title": "Suppressed Count",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "campaign_id",
+                      "campaign_version",
+                      "status",
+                      "audience_count",
+                      "delivered_count",
+                      "suppressed_count",
+                      "failed_count"
+                    ],
+                    "title": "CampaignSummaryData",
+                    "type": "object"
+                  },
+                  "DailyKpiData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "accepted": {
+                        "minimum": 0,
+                        "title": "Accepted",
+                        "type": "integer"
+                      },
+                      "bounced": {
+                        "minimum": 0,
+                        "title": "Bounced",
+                        "type": "integer"
+                      },
+                      "complained": {
+                        "minimum": 0,
+                        "title": "Complained",
+                        "type": "integer"
+                      },
+                      "date": {
+                        "format": "date",
+                        "title": "Date",
+                        "type": "string"
+                      },
+                      "delivered": {
+                        "minimum": 0,
+                        "title": "Delivered",
+                        "type": "integer"
+                      },
+                      "snapshot_at": {
+                        "format": "date-time",
+                        "title": "Snapshot At",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "accepted",
+                      "delivered",
+                      "bounced",
+                      "complained",
+                      "snapshot_at"
+                    ],
+                    "title": "DailyKpiData",
+                    "type": "object"
+                  },
+                  "DailyUsageData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "date": {
+                        "format": "date",
+                        "title": "Date",
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "minimum": 0,
+                        "title": "Quantity",
+                        "type": "integer"
+                      },
+                      "snapshot_at": {
+                        "format": "date-time",
+                        "title": "Snapshot At",
+                        "type": "string"
+                      },
+                      "unit": {
+                        "const": "accepted_message",
+                        "title": "Unit",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "unit",
+                      "quantity",
+                      "snapshot_at"
+                    ],
+                    "title": "DailyUsageData",
+                    "type": "object"
+                  },
+                  "DomainStatusData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "domain": {
+                        "maxLength": 253,
+                        "minLength": 1,
+                        "title": "Domain",
+                        "type": "string"
+                      },
+                      "domain_id": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "title": "Domain Id",
+                        "type": "string"
+                      },
+                      "status": {
+                        "maxLength": 50,
+                        "minLength": 1,
+                        "title": "Status",
+                        "type": "string"
+                      },
+                      "verified_at": {
+                        "anyOf": [
+                          {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Verified At"
+                      }
+                    },
+                    "required": [
+                      "domain_id",
+                      "domain",
+                      "status"
+                    ],
+                    "title": "DomainStatusData",
+                    "type": "object"
+                  },
+                  "ProviderHealthData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "checked_at": {
+                        "format": "date-time",
+                        "title": "Checked At",
+                        "type": "string"
+                      },
+                      "provider": {
+                        "maxLength": 100,
+                        "minLength": 1,
+                        "title": "Provider",
+                        "type": "string"
+                      },
+                      "reason_code": {
+                        "anyOf": [
+                          {
+                            "maxLength": 100,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Reason Code"
+                      },
+                      "status": {
+                        "enum": [
+                          "HEALTHY",
+                          "DEGRADED",
+                          "UNAVAILABLE"
+                        ],
+                        "title": "Status",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "status",
+                      "checked_at"
+                    ],
+                    "title": "ProviderHealthData",
+                    "type": "object"
+                  },
+                  "SubscriptionChangedData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "effective_at": {
+                        "format": "date-time",
+                        "title": "Effective At",
+                        "type": "string"
+                      },
+                      "plan_id": {
+                        "anyOf": [
+                          {
+                            "maxLength": 200,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Plan Id"
+                      },
+                      "price_id": {
+                        "anyOf": [
+                          {
+                            "maxLength": 200,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Price Id"
+                      },
+                      "status": {
+                        "maxLength": 50,
+                        "minLength": 1,
+                        "title": "Status",
+                        "type": "string"
+                      },
+                      "subscription_id": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "title": "Subscription Id",
+                        "type": "string"
+                      },
+                      "version": {
+                        "minimum": 1,
+                        "title": "Version",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "subscription_id",
+                      "status",
+                      "version",
+                      "effective_at"
+                    ],
+                    "title": "SubscriptionChangedData",
+                    "type": "object"
+                  },
+                  "TenantEventData": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "title": "Enabled",
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "anyOf": [
+                          {
+                            "maxLength": 200,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Name"
+                      },
+                      "organization_id": {
+                        "anyOf": [
+                          {
+                            "maxLength": 200,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Organization Id"
+                      },
+                      "tenant_id": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "title": "Tenant Id",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "tenant_id",
+                      "enabled"
+                    ],
+                    "title": "TenantEventData",
+                    "type": "object"
+                  }
+                },
+                "$id": "https://contracts.codestra.co/klyrow/event-v1.schema.json",
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.tenant.created"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/TenantEventData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.tenant.updated"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/TenantEventData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.subscription.changed"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/SubscriptionChangedData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.usage.daily"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/DailyUsageData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.kpi.daily"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/DailyKpiData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.campaign.summary"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/CampaignSummaryData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.domain.status"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/DomainStatusData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.provider.health"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/ProviderHealthData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.account.held"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/AccountStateData"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "klyrow.account.released"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/$defs/AccountStateData"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "properties": {
+                  "causation_id": {
+                    "anyOf": [
+                      {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Causation Id"
+                  },
+                  "correlation_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Correlation Id",
+                    "type": "string"
+                  },
+                  "data": {
+                    "title": "Data",
+                    "type": "object"
+                  },
+                  "id": {
+                    "maxLength": 200,
+                    "minLength": 5,
+                    "pattern": "^evt_[A-Za-z0-9_-]+$",
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "occurred_at": {
+                    "format": "date-time",
+                    "title": "Occurred At",
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "klyrow",
+                    "title": "Source",
+                    "type": "string"
+                  },
+                  "tenant_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Tenant Id",
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "klyrow.tenant.created",
+                      "klyrow.tenant.updated",
+                      "klyrow.subscription.changed",
+                      "klyrow.usage.daily",
+                      "klyrow.kpi.daily",
+                      "klyrow.campaign.summary",
+                      "klyrow.domain.status",
+                      "klyrow.provider.health",
+                      "klyrow.account.held",
+                      "klyrow.account.released"
+                    ],
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "version": {
+                    "const": 1,
+                    "title": "Version",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "version",
+                  "source",
+                  "tenant_id",
+                  "correlation_id",
+                  "occurred_at",
+                  "data"
+                ],
+                "title": "Klyrow business event v1",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KlyrowEventAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "klyrowBearerApiKey": []
+          }
+        ],
+        "summary": "Receive Klyrow Event",
+        "tags": [
+          "klyrow-events"
+        ]
+      }
+    },
+    "/api/v1/events/telnexa": {
+      "post": {
+        "operationId": "receive_telnexa_event_api_v1_events_telnexa_post",
+        "parameters": [
+          {
+            "description": "Bearer shared API key; transport is protected by the internal mTLS edge.",
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "maxLength": 8192,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Event-Id",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Timestamp",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{1,12}$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Signature",
+            "required": true,
+            "schema": {
+              "pattern": "^sha256=[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "The exact provider callback body, with no generic-envelope fields.",
+                "properties": {
+                  "correlation_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Correlation Id",
+                    "type": "string"
+                  },
+                  "event_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                    "title": "Event Id",
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "enum": [
+                      "sms.message.delivered.v1",
+                      "sms.message.failed.v1",
+                      "sms.message.status.v1",
+                      "sms.message.reconciled.v1"
+                    ],
+                    "title": "Event Type",
+                    "type": "string"
+                  },
+                  "event_version": {
+                    "pattern": "^1\\.0$",
+                    "title": "Event Version",
+                    "type": "string"
+                  },
+                  "failure_code": {
+                    "anyOf": [
+                      {
+                        "maxLength": 120,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Failure Code"
+                  },
+                  "failure_message": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Failure Message"
+                  },
+                  "idempotency_key": {
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "title": "Idempotency Key",
+                    "type": "string"
+                  },
+                  "message_id": {
+                    "format": "uuid",
+                    "title": "Message Id",
+                    "type": "string"
+                  },
+                  "occurred_at": {
+                    "format": "date-time",
+                    "title": "Occurred At",
+                    "type": "string"
+                  },
+                  "provider_reference": {
+                    "anyOf": [
+                      {
+                        "maxLength": 998,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Provider Reference"
+                  },
+                  "provider_status": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "title": "Provider Status",
+                    "type": "string"
+                  },
+                  "schema_version": {
+                    "pattern": "^1\\.0$",
+                    "title": "Schema Version",
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "accepted",
+                      "queued",
+                      "dispatched",
+                      "delivered",
+                      "failed",
+                      "cancelled",
+                      "suppressed",
+                      "expired",
+                      "indeterminate"
+                    ],
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "tenant_id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Tenant Id",
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "pattern": "^[0-9]{1,12}$",
+                    "title": "Timestamp",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "event_id",
+                  "event_type",
+                  "event_version",
+                  "schema_version",
+                  "timestamp",
+                  "occurred_at",
+                  "tenant_id",
+                  "correlation_id",
+                  "idempotency_key",
+                  "message_id",
+                  "status",
+                  "provider_status"
+                ],
+                "title": "TelnexaDeliveryEvent",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelnexaDeliveryAck"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelnexaDeliveryAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "telnexaBearerApiKey": []
+          }
+        ],
+        "summary": "Receive Telnexa Event",
+        "tags": [
+          "telnexa-events"
         ]
       }
     },
@@ -5958,7 +7915,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -6093,7 +8050,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -6933,6 +8890,642 @@
           }
         ],
         "summary": "Metrics"
+      }
+    },
+    "/platform/v1/email/production/activate": {
+      "post": {
+        "operationId": "activate_platform_v1_email_production_activate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__email_production_control__ControlMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Activate",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/audit": {
+      "get": {
+        "operationId": "audit_platform_v1_email_production_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Audit Platform V1 Email Production Audit Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Audit",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/authorize": {
+      "post": {
+        "operationId": "authorize_platform_v1_email_production_authorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeEmailProduction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Authorize",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/kill-switch": {
+      "post": {
+        "operationId": "kill_switch_platform_v1_email_production_kill_switch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Kill Switch",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/quotas": {
+      "get": {
+        "operationId": "quotas_platform_v1_email_production_quotas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Quotas Platform V1 Email Production Quotas Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Quotas",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/readiness": {
+      "get": {
+        "operationId": "readiness_platform_v1_email_production_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Readiness Platform V1 Email Production Readiness Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Readiness",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/revoke": {
+      "post": {
+        "operationId": "revoke_platform_v1_email_production_revoke_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__email_production_control__ControlMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
+      }
+    },
+    "/platform/v1/email/production/status": {
+      "get": {
+        "operationId": "status_platform_v1_email_production_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailProductionPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Status",
+        "tags": [
+          "domain-control",
+          "email-production"
+        ]
       }
     },
     "/platform/v1/hosts": {
@@ -12088,7 +14681,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -12328,7 +14921,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -12463,7 +15056,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -12598,7 +15191,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -14797,6 +17390,132 @@
         ]
       }
     },
+    "/v1/observability/incidents": {
+      "post": {
+        "operationId": "submit_incident_v1_observability_incidents_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentState"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Submit Incident",
+        "tags": [
+          "kyyow-observability-sync"
+        ]
+      }
+    },
     "/v1/observability/integrations": {
       "get": {
         "operationId": "integrations_v1_observability_integrations_get",
@@ -14983,6 +17702,393 @@
         "summary": "Integration",
         "tags": [
           "integrated-monitoring"
+        ]
+      }
+    },
+    "/v1/observability/kpis": {
+      "get": {
+        "operationId": "list_kpis_v1_observability_kpis_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "service_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Service Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "development",
+                    "test",
+                    "staging",
+                    "production"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Environment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 512,
+              "title": "Cursor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Kpis",
+        "tags": [
+          "kyyow-observability-sync"
+        ]
+      },
+      "post": {
+        "operationId": "submit_kpi_v1_observability_kpis_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 180,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KpiSnapshot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Submit Kpi",
+        "tags": [
+          "kyyow-observability-sync"
+        ]
+      }
+    },
+    "/v1/observability/kpis/{event_id}": {
+      "get": {
+        "operationId": "get_kpi_v1_observability_kpis__event_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "correlation_id": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "correlation_id",
+                        "retryable",
+                        "details"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Kpi",
+        "tags": [
+          "kyyow-observability-sync"
         ]
       }
     },
@@ -15367,6 +18473,63 @@
         "summary": "Query Metrics Range",
         "tags": [
           "integrated-monitoring"
+        ]
+      }
+    },
+    "/v1/observability/odoo-sync": {
+      "get": {
+        "operationId": "odoo_sync_status_v1_observability_odoo_sync_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid canonical request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Scope or tenant denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Version, state, or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "Required durable dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Odoo Sync Status",
+        "tags": [
+          "kyyow-observability-sync"
         ]
       }
     },
@@ -18828,7 +21991,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -18963,7 +22126,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -19098,7 +22261,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },
@@ -19581,7 +22744,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ControlMutation"
+                "$ref": "#/components/schemas/app__control_api__ControlMutation"
               }
             }
           },

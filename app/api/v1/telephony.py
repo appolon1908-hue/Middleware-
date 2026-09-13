@@ -455,9 +455,7 @@ async def _lookup_agent_assignment(employee_id: str, campaign: str) -> dict:
             )
             if response.status_code >= 400:
                 raise HTTPException(
-                    response.status_code
-                    if response.status_code in {401, 403}
-                    else 503,
+                    response.status_code if response.status_code in {401, 403} else 503,
                     "employee identity not authorized",
                 )
             payload = response.json()
@@ -505,6 +503,16 @@ async def originate_call(
     # below, so it starts blank and is filled in once known.
     call_id = uuid4()
     now = datetime.now(UTC)
+    audit_payload = {
+        "employee_id": payload.employee_id,
+        "campaign": payload.campaign,
+        "business_unit": payload.business_unit,
+        "lead_model": payload.lead_model,
+        "lead_id": payload.lead_id,
+        "destination_reference": hashlib.sha256(
+            payload.destination.encode()
+        ).hexdigest()[:16],
+    }
     lifecycle = TelephonyCallLifecycle(
         id=call_id,
         correlation_id=correlation_id,
@@ -517,6 +525,8 @@ async def originate_call(
         source_extension="",
         destination=payload.destination,
         dialplan_context="click-to-call",
+        lead_model=payload.lead_model,
+        lead_id=payload.lead_id,
     )
     session.add(lifecycle)
     await session.commit()
@@ -529,6 +539,15 @@ async def originate_call(
         lifecycle.disposition = "REJECTED"
         lifecycle.ended_at = rejected_at
         lifecycle.hangup_cause = reason
+        session.add(
+            AuditEvent(
+                action="telephony.calls.originate",
+                subject=str(call_id),
+                correlation_id=correlation_id,
+                decision="DENY",
+                redacted_payload={**audit_payload, "rejection_reason": reason},
+            )
+        )
         await session.commit()
 
     try:
@@ -543,9 +562,7 @@ async def originate_call(
         # The request body's campaign/business_unit/caller_id are claims from
         # Odoo; only the identity service's answer is trusted for
         # authorization.
-        identity = await _lookup_agent_assignment(
-            payload.employee_id, payload.campaign
-        )
+        identity = await _lookup_agent_assignment(payload.employee_id, payload.campaign)
         campaigns = identity.get("campaign_ids")
         endpoint = identity.get("endpoint")
         vicidial_username = identity.get("vicidial_username")
@@ -618,16 +635,7 @@ async def originate_call(
             subject=str(call_id),
             correlation_id=correlation_id,
             decision=decision.value,
-            redacted_payload={
-                "employee_id": payload.employee_id,
-                "campaign": payload.campaign,
-                "business_unit": payload.business_unit,
-                "lead_model": payload.lead_model,
-                "lead_id": payload.lead_id,
-                "destination_reference": hashlib.sha256(
-                    payload.destination.encode()
-                ).hexdigest()[:16],
-            },
+            redacted_payload=audit_payload,
         )
     )
 

@@ -618,6 +618,16 @@ class N8nRuntimeNonce(Base):
 
 class OdooResultDelivery(Base):
     __tablename__ = "odoo_result_delivery"
+    __table_args__ = (
+        CheckConstraint(
+            "num_nonnulls(acknowledgement_id, runtime_result_id, integration_event_id) = 1",
+            name="ck_odoo_result_delivery_one_source",
+        ),
+        CheckConstraint(
+            "(integration_event_id IS NULL) = (standard_result_json IS NULL)",
+            name="ck_odoo_result_delivery_standard_payload",
+        ),
+    )
     result_delivery_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid4
     )
@@ -1426,15 +1436,19 @@ class TelephonyCallLifecycle(Base):
         String(32), nullable=False, default="requested"
     )
     fine_state_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_event_sequence: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    last_event_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     hangup_leg: Mapped[str | None] = mapped_column(String(16))
     last_event_type: Mapped[str | None] = mapped_column(String(64))
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_extension: Mapped[str] = mapped_column(String(32), nullable=False)
     destination: Mapped[str] = mapped_column(String(64), nullable=False)
     dialplan_context: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Reference only, not a copy - Odoo (codestra_middleware_bridge) remains
+    # the system of record for the lead/customer-profile record itself. Set
+    # once at originate time from OriginateCallRequest.lead_model/lead_id;
+    # null for calls with no CRM linkage (e.g. internal calls).
+    lead_model: Mapped[str | None] = mapped_column(String(64))
+    lead_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1453,7 +1467,7 @@ class TelephonyCallLifecycle(Base):
             "fine_state IN ("
             "'requested','accepted','queued','dialing','ringing','answered',"
             "'connected','completed','failed','busy','no_answer','canceled',"
-            "'rejected','timeout')",
+            "'rejected')",
             name="ck_telephony_call_fine_state",
         ),
         CheckConstraint(
@@ -1504,30 +1518,45 @@ class AgentCallState(Base):
     campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
     agent_id: Mapped[str] = mapped_column(String(128), nullable=False)
     extension: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
-    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    correlation_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, unique=True
+    )
     asterisk_uniqueid: Mapped[str] = mapped_column(String(128), nullable=False)
     linkedid: Mapped[str] = mapped_column(String(128), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     state_rank: Mapped[int] = mapped_column(Integer, nullable=False)
     sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    event_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    context_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    event_timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    context_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     __table_args__ = (
-        UniqueConstraint("extension", "sequence", name="uq_agent_call_state_extension_sequence"),
+        UniqueConstraint(
+            "extension", "sequence", name="uq_agent_call_state_extension_sequence"
+        ),
         CheckConstraint("sequence >= 0", name="ck_agent_call_state_sequence"),
     )
 
 
 class AgentCallEvent(Base):
     __tablename__ = "agent_call_event"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     schema_version: Mapped[str] = mapped_column(String(16), nullable=False)
     event_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    idempotency_key: Mapped[str] = mapped_column(
+        String(128), nullable=False, unique=True
+    )
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
     call_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -1538,14 +1567,20 @@ class AgentCallEvent(Base):
     asterisk_uniqueid: Mapped[str] = mapped_column(String(128), nullable=False)
     linkedid: Mapped[str] = mapped_column(String(128), nullable=False)
     sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    event_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    event_timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    payload_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     transition_applied: Mapped[bool] = mapped_column(Boolean, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     __table_args__ = (
-        UniqueConstraint("call_id", "sequence", name="uq_agent_call_event_call_sequence"),
+        UniqueConstraint(
+            "call_id", "sequence", name="uq_agent_call_event_call_sequence"
+        ),
         CheckConstraint("sequence >= 0", name="ck_agent_call_event_sequence"),
     )
 
@@ -1775,7 +1810,9 @@ class CallbackRecord(Base):
     """Canonical callback control state; customer CRM data remains in Odoo."""
 
     __tablename__ = "callback_record"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
     campaign_id: Mapped[str] = mapped_column(String(128), nullable=False)
     contact_id: Mapped[str | None] = mapped_column(String(128))
@@ -1789,18 +1826,32 @@ class CallbackRecord(Base):
     supervisor_id: Mapped[str | None] = mapped_column(String(128))
     phone_number: Mapped[str] = mapped_column(String(32), nullable=False)
     normalized_phone: Mapped[str] = mapped_column(String(32), nullable=False)
-    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     customer_timezone: Mapped[str] = mapped_column(String(64), nullable=False)
     priority: Mapped[str] = mapped_column(String(16), nullable=False, default="NORMAL")
     reason: Mapped[str] = mapped_column(String(256), nullable=False)
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     state: Mapped[str] = mapped_column(String(32), nullable=False, default="SCHEDULED")
-    desired_state: Mapped[str] = mapped_column(String(32), nullable=False, default="SCHEDULED")
-    actual_state: Mapped[str] = mapped_column(String(32), nullable=False, default="SCHEDULED")
-    reminder_email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    reminder_popup_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    email_reminder_1_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    email_reminder_2_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    desired_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="SCHEDULED"
+    )
+    actual_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="SCHEDULED"
+    )
+    reminder_email_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    reminder_popup_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    email_reminder_1_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    email_reminder_2_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     popup_reminder_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
@@ -1814,18 +1865,45 @@ class CallbackRecord(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    sync_state: Mapped[str] = mapped_column(String(32), nullable=False, default="PENDING")
-    compliance_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    context_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    sync_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="PENDING"
+    )
+    compliance_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    context_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     created_by: Mapped[str] = mapped_column(String(128), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     __table_args__ = (
-        CheckConstraint("assigned_agent_id IS NOT NULL OR assigned_team_id IS NOT NULL", name="ck_callback_owner"),
-        CheckConstraint("version >= 1 AND attempt_count >= 0 AND max_attempts >= 1", name="ck_callback_counters"),
-        UniqueConstraint("tenant_id", "idempotency_key", name="uq_callback_tenant_idempotency"),
+        CheckConstraint(
+            "assigned_agent_id IS NOT NULL OR assigned_team_id IS NOT NULL",
+            name="ck_callback_owner",
+        ),
+        CheckConstraint(
+            "version >= 1 AND attempt_count >= 0 AND max_attempts >= 1",
+            name="ck_callback_counters",
+        ),
+        UniqueConstraint(
+            "tenant_id", "idempotency_key", name="uq_callback_tenant_idempotency"
+        ),
         Index("ix_callback_due_claim", "state", "scheduled_at"),
-        Index("ix_callback_agent_queue", "tenant_id", "campaign_id", "assigned_agent_id", "scheduled_at"),
+        Index(
+            "ix_callback_agent_queue",
+            "tenant_id",
+            "campaign_id",
+            "assigned_agent_id",
+            "scheduled_at",
+        ),
         Index("ix_callback_phone", "tenant_id", "normalized_phone"),
         Index("ix_callback_correlation", "correlation_id"),
     )
@@ -1833,8 +1911,14 @@ class CallbackRecord(Base):
 
 class CallbackEvent(Base):
     __tablename__ = "callback_event"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    callback_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("callback_record.id", ondelete="RESTRICT"), nullable=False)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    callback_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("callback_record.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
     campaign_id: Mapped[str] = mapped_column(String(128), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1842,41 +1926,83 @@ class CallbackEvent(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
     actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     __table_args__ = (
-        UniqueConstraint("callback_id", "version", "event_type", name="uq_callback_event_version_type"),
-        UniqueConstraint("tenant_id", "idempotency_key", name="uq_callback_event_idempotency"),
+        UniqueConstraint(
+            "callback_id",
+            "version",
+            "event_type",
+            name="uq_callback_event_version_type",
+        ),
+        UniqueConstraint(
+            "tenant_id", "idempotency_key", name="uq_callback_event_idempotency"
+        ),
         Index("ix_callback_event_outbox", "published_at", "occurred_at"),
     )
 
 
 class CallbackDelivery(Base):
     __tablename__ = "callback_delivery"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    callback_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("callback_record.id", ondelete="RESTRICT"), nullable=False)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    callback_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("callback_record.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     callback_version: Mapped[int] = mapped_column(Integer, nullable=False)
     channel: Mapped[str] = mapped_column(String(16), nullable=False)
     stage: Mapped[str] = mapped_column(String(32), nullable=False)
-    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    idempotency_key: Mapped[str] = mapped_column(
+        String(128), nullable=False, unique=True
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="QUEUED")
     message_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     provider_message_id: Mapped[str | None] = mapped_column(String(128))
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error_code: Mapped[str | None] = mapped_column(String(64))
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     __table_args__ = (
-        UniqueConstraint("callback_id", "callback_version", "channel", "stage", name="uq_callback_delivery_stage"),
+        UniqueConstraint(
+            "callback_id",
+            "callback_version",
+            "channel",
+            "stage",
+            name="uq_callback_delivery_stage",
+        ),
         Index("ix_callback_delivery_retry", "status", "next_attempt_at"),
     )
 
 
 AGENT_PROVISIONING_STATES = (
-    "REQUESTED", "VALIDATING", "IDENTITY", "ENTITLEMENTS", "CHANNEL_PROVISIONING",
-    "READBACK", "EFFECTIVE", "PARTIAL", "FAILED", "RECONCILING", "SUSPENDED", "REVOKED",
+    "REQUESTED",
+    "VALIDATING",
+    "IDENTITY",
+    "ENTITLEMENTS",
+    "CHANNEL_PROVISIONING",
+    "READBACK",
+    "EFFECTIVE",
+    "PARTIAL",
+    "FAILED",
+    "RECONCILING",
+    "SUSPENDED",
+    "REVOKED",
 )
 
 
@@ -1892,26 +2018,43 @@ class AgentProvisioningRequest(Base):
     """
 
     __tablename__ = "agent_provisioning_request"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     request_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     employee_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     primary_email: Mapped[str] = mapped_column(String(255), nullable=False)
-    campaigns_json: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
-    channels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    telephony_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    campaigns_json: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    channels_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    telephony_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     state: Mapped[str] = mapped_column(String(24), nullable=False, default="REQUESTED")
     keycloak_subject: Mapped[str | None] = mapped_column(String(64))
     policy_revision: Mapped[str] = mapped_column(String(32), nullable=False)
-    idempotency_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    idempotency_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     requested_by: Mapped[str] = mapped_column(String(255), nullable=False)
     last_error_code: Mapped[str | None] = mapped_column(String(64))
     last_error_summary: Mapped[str | None] = mapped_column(String(500))
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     __table_args__ = (
         CheckConstraint(
             "state IN ('" + "','".join(AGENT_PROVISIONING_STATES) + "')",
@@ -1934,11 +2077,14 @@ class AgentProvisioningStep(Base):
     """
 
     __tablename__ = "agent_provisioning_step"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     request_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("agent_provisioning_request.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     system: Mapped[str] = mapped_column(String(32), nullable=False)
     operation: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1950,7 +2096,9 @@ class AgentProvisioningStep(Base):
     readback_state: Mapped[str | None] = mapped_column(String(32))
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_summary: Mapped[str | None] = mapped_column(String(500))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     __table_args__ = (
         CheckConstraint(
             "system IN ('keycloak','vicidial','klyrow','telnexa','odoo')",
@@ -1964,11 +2112,14 @@ class AgentProvisioningAudit(Base):
     """Append-only state-transition ledger. No update/delete path exists."""
 
     __tablename__ = "agent_provisioning_audit"
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     request_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("agent_provisioning_request.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     from_state: Mapped[str] = mapped_column(String(24), nullable=False)
     to_state: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -1976,4 +2127,6 @@ class AgentProvisioningAudit(Base):
     actor_subject: Mapped[str] = mapped_column(String(255), nullable=False)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
     record_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

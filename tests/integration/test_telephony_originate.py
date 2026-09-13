@@ -87,12 +87,12 @@ async def _scenario_default_deny(database_url: str, monkeypatch) -> None:
             assert lifecycle.destination == "+15551234567"
             assert lifecycle.source_extension == "6101"
             assert lifecycle.disposition == "REJECTED"
+            assert lifecycle.lead_model == "crm.lead"
+            assert lifecycle.lead_id == 42
 
             audit = (
                 await session.execute(
-                    select(AuditEvent).where(
-                        AuditEvent.subject == response["call_id"]
-                    )
+                    select(AuditEvent).where(AuditEvent.subject == response["call_id"])
                 )
             ).scalar_one()
             assert audit.action == "telephony.calls.originate"
@@ -129,8 +129,7 @@ async def _scenario_idempotent_replay(database_url: str, monkeypatch) -> None:
         async with factory() as session:
             count = await session.scalar(
                 select(TelephonyCallLifecycle.id).where(
-                    TelephonyCallLifecycle.correlation_id
-                    == first["correlation_id"]
+                    TelephonyCallLifecycle.correlation_id == first["correlation_id"]
                 )
             )
             assert count is not None
@@ -181,6 +180,19 @@ async def _scenario_production_campaign_rejected(
             # extension was never known, so it must stay the placeholder,
             # not silently default to something misleading.
             assert lifecycle.source_extension == ""
+
+            audit = (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.correlation_id == correlation_id
+                    )
+                )
+            ).scalar_one()
+            assert audit.decision == "DENY"
+            assert audit.redacted_payload["rejection_reason"] == (
+                "pre_dial_validation:403"
+            )
+            assert "destination" not in audit.redacted_payload
     finally:
         await engine.dispose()
 
@@ -264,6 +276,18 @@ async def _scenario_invalid_destination(database_url: str, monkeypatch) -> None:
             # real extension should have been filled in even though the call
             # was ultimately rejected.
             assert lifecycle.source_extension == "6101"
+
+            audit = (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.correlation_id == correlation_id
+                    )
+                )
+            ).scalar_one()
+            assert audit.decision == "DENY"
+            assert audit.redacted_payload["rejection_reason"] == (
+                "pre_dial_validation:422"
+            )
     finally:
         await engine.dispose()
 

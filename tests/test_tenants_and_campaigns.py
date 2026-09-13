@@ -16,9 +16,9 @@ FoundationClient's HTTP behavior (which is that adapter's own concern).
 
 from __future__ import annotations
 
+import json
 import os
 import time
-import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
@@ -247,8 +247,15 @@ async def test_tenant_campaigns_reflects_seeded_registry_row(client, authority):
         headers=_headers(authority(tenant_ids=(campaign_code,))),
     )
     assert response.status_code == 200
-    ids = {item["campaign_id"] for item in response.json()["items"]}
+    body = response.json()
+    ids = {item["campaign_id"] for item in body["items"]}
     assert vicidial_campaign_id in ids
+    assert body["pagination"] == {
+        "limit": 100,
+        "offset": 0,
+        "returned": 1,
+        "total": 1,
+    }
 
 
 @pytest.mark.asyncio
@@ -293,6 +300,31 @@ async def test_get_campaign_reflects_seeded_registry_row(client, authority):
     body = response.json()
     assert body["campaign_id"] == vicidial_campaign_id
     assert body["campaign_code"] == campaign_code
+
+
+@pytest.mark.asyncio
+async def test_list_campaigns_is_tenant_scoped_and_paginated(client, authority):
+    session_factory = async_sessionmaker(
+        create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool),
+        expire_on_commit=False,
+    )
+    vicidial_campaign_id, campaign_code = await _seed_queue(session_factory)
+
+    response = await client.get(
+        "/platform/v1/campaigns",
+        params={"tenant_id": campaign_code, "limit": 1, "offset": 0},
+        headers=_headers(authority(tenant_ids=(campaign_code,))),
+    )
+    assert response.status_code == 200
+    assert [item["campaign_id"] for item in response.json()["items"]] == [
+        vicidial_campaign_id
+    ]
+    assert response.json()["pagination"] == {
+        "limit": 1,
+        "offset": 0,
+        "returned": 1,
+        "total": 1,
+    }
 
 
 @pytest.mark.asyncio
@@ -379,3 +411,27 @@ async def test_authorized_directory_resolves_only_verified_token_grants(
     )
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == ["COD", "SMT"]
+    assert response.json()["pagination"] == {
+        "limit": 100,
+        "offset": 0,
+        "returned": 2,
+        "granted": 3,
+    }
+
+
+@pytest.mark.asyncio
+async def test_authorized_directory_pages_before_resolving_foundation(
+    client, authority
+):
+    response = await client.get(
+        "/platform/v1/tenants/authorized?limit=1&offset=1",
+        headers=_headers(authority(tenant_ids=("SMT", "ZZZ", "COD"))),
+    )
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == ["SMT"]
+    assert response.json()["pagination"] == {
+        "limit": 1,
+        "offset": 1,
+        "returned": 1,
+        "granted": 3,
+    }

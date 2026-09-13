@@ -8158,9 +8158,28 @@ paths:
       tags:
       - tenants
       summary: List Authorized Tenants
-      description: Resolve only the tenant grants carried by the verified machine
-        token.
+      description: Page through tenant grants carried by the verified machine token.
       operationId: list_authorized_tenants_platform_v1_tenants_authorized_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -8172,6 +8191,9 @@ paths:
                   Get
         '400':
           description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
         '401':
           description: Authentication failed
         '403':
@@ -8184,8 +8206,6 @@ paths:
           description: Rate limited
         '503':
           description: Required durable dependency unavailable
-      security:
-      - bearerAuth: []
   /platform/v1/tenants/{tenant_id}:
     get:
       tags:
@@ -8243,6 +8263,23 @@ paths:
         schema:
           type: string
           title: Tenant Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -8327,6 +8364,23 @@ paths:
           description: campaign_code to scope results to
           title: Tenant Id
         description: campaign_code to scope results to
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -8423,6 +8477,23 @@ paths:
           description: campaign_code expected to own this campaign
           title: Tenant Id
         description: campaign_code expected to own this campaign
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response

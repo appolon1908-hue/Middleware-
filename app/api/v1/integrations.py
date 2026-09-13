@@ -263,7 +263,7 @@ async def odoo_sync_status(
     ),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    authorized_unit = business_unit.strip().upper()
+    authorized_unit = business_unit.upper()
     require_tenant_match(principal, authorized_unit)
     rows = (
         (
@@ -304,7 +304,7 @@ async def odoo_sync_errors(
     # "not_observed" is this column's server_default (never yet reconciled),
     # not itself an error - only rows that were checked and found drifted
     # are reported here.
-    authorized_unit = business_unit.strip().upper()
+    authorized_unit = business_unit.upper()
     require_tenant_match(principal, authorized_unit)
     rows = (
         (
@@ -314,12 +314,12 @@ async def odoo_sync_errors(
                     "FROM vicidial_campaign_registry "
                     "WHERE environment=:environment AND business_unit_code=:unit "
                     "AND drift_status NOT IN ('reconciled', 'not_observed') "
-                    "ORDER BY canonical_campaign_code LIMIT :limit OFFSET :offset"
+                    "ORDER BY canonical_campaign_code LIMIT :fetch_limit OFFSET :offset"
                 ),
                 {
                     "environment": environment,
                     "unit": authorized_unit,
-                    "limit": limit,
+                    "fetch_limit": limit + 1,
                     "offset": offset,
                 },
             )
@@ -327,6 +327,8 @@ async def odoo_sync_errors(
         .mappings()
         .all()
     )
+    has_more = len(rows) > limit
+    page = rows[:limit]
     return {
         "business_unit": authorized_unit,
         "environment": environment,
@@ -340,12 +342,13 @@ async def odoo_sync_errors(
                     else None
                 ),
             }
-            for row in rows
+            for row in page
         ],
         "pagination": {
             "limit": limit,
             "offset": offset,
-            "returned": len(rows),
+            "returned": len(page),
+            "has_more": has_more,
         },
     }
 

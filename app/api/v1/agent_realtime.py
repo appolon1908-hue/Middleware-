@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.db.models import (
     AgentCallEvent,
     AgentCallState,
     AgentProvisioningRequest,
+    AgentProvisioningStep,
     TelephonyExtensionReservation,
 )
 from app.db.session import SessionFactory, get_session
@@ -135,16 +136,19 @@ async def _publish(event: AgentEventEnvelope, applied: bool) -> None:
 
 
 async def _authorize_agent_event(
-    db: AsyncSession, principal: ProvisioningPrincipal, event: AgentEventEnvelope,
+    db: AsyncSession,
+    principal: ProvisioningPrincipal,
+    event: AgentEventEnvelope,
 ) -> None:
     """Reject an event whose campaign/extension the caller cannot prove.
 
-    Two paths:
+    Two evidence paths:
 
     1. The staging fixture (``campaign_id``/``extension`` exactly matching
        the single hardcoded ``webphone_staging_campaign``/
        ``webphone_staging_endpoint`` pair) - preserved as-is so the existing
-       staging flow this module was built for keeps working unchanged.
+       staging flow this module was built for keeps working. Tenant binding
+       is still enforced before this exception is evaluated.
     2. Every other campaign/extension: a real, per-caller check. The
        caller's own token must cover ``event.tenant_id`` (the same
        ``require_tenant_match`` every other provisioning-scoped endpoint in
@@ -153,50 +157,74 @@ async def _authorize_agent_event(
        its most recent ``AgentProvisioningRequest`` (the same durable
        source ``app.api.v1.agent_provisioning_reads.get_user_campaigns``
        already reads - not a second, parallel campaign-membership store),
-       and ``event.extension`` must be an active
-       ``TelephonyExtensionReservation`` row for that same employee_id.
+       and ``event.extension`` must be proven either by this service's
+       extension reservation ledger or by the successful reserve/adopt step
+       written by the primary agent-provisioning saga.
 
-    ASSUMPTION FLAGGED FOR REVIEW: this treats the envelope's ``agent_id``
-    as the same identifier space as ``AgentProvisioningRequest``/
-    ``TelephonyExtensionReservation``'s ``employee_id`` - both are
-    documented elsewhere in this codebase as VICIdial/Odoo-originated agent
-    identifiers, but no single source in this file's own history confirms
-    they are always identical strings. Confirm against the actual
-    VICIdial/Odoo agent-identity mapping before relying on this in
-    production; until then this check is strictly more real than the two
-    hardcoded constants it replaces, not a claim of a fully verified join.
+    The event identity may use either the Odoo employee identifier or the
+    campaign's VICIdial user identifier. Both resolve through the same
+    provisioning request; reservation ownership is always checked against
+    its canonical employee_id, preventing identifier-space confusion from
+    granting another agent's extension.
     """
+    require_tenant_match(principal, event.tenant_id)
     if (
         event.campaign_id == settings.webphone_staging_campaign
         and event.extension == settings.webphone_staging_endpoint
     ):
         return
-    require_tenant_match(principal, event.tenant_id)
     stmt = (
         select(AgentProvisioningRequest)
         .where(
             AgentProvisioningRequest.tenant_id == event.tenant_id,
-            AgentProvisioningRequest.employee_id == event.agent_id,
+            AgentProvisioningRequest.campaigns_json.contains(
+                [{"campaign_id": event.campaign_id}]
+            ),
+            or_(
+                AgentProvisioningRequest.employee_id == event.agent_id,
+                AgentProvisioningRequest.campaigns_json.contains(
+                    [
+                        {
+                            "campaign_id": event.campaign_id,
+                            "vicidial_user_id": event.agent_id,
+                        }
+                    ]
+                ),
+            ),
         )
-        .order_by(AgentProvisioningRequest.created_at.desc(), AgentProvisioningRequest.id.desc())
+        .order_by(
+            AgentProvisioningRequest.created_at.desc(),
+            AgentProvisioningRequest.id.desc(),
+        )
         .limit(1)
     )
     request = await db.scalar(stmt)
-    campaign_ids = {
-        entry.get("campaign_id")
-        for entry in (request.campaigns_json or [])
-        if isinstance(entry, dict)
-    } if request else set()
-    if event.campaign_id not in campaign_ids:
+    if request is None or request.state in {"FAILED", "SUSPENDED", "REVOKED"}:
         raise HTTPException(403, "campaign denied")
     reservation = await db.scalar(
         select(TelephonyExtensionReservation).where(
-            TelephonyExtensionReservation.employee_id == event.agent_id,
+            TelephonyExtensionReservation.employee_id == request.employee_id,
             TelephonyExtensionReservation.extension == int(event.extension),
-            TelephonyExtensionReservation.state.in_(("RESERVED", "DISABLED_READY", "ACTIVE")),
+            TelephonyExtensionReservation.state.in_(
+                ("RESERVED", "DISABLED_READY", "ACTIVE")
+            ),
         )
     )
-    if reservation is None:
+    provisioning_step = await db.scalar(
+        select(AgentProvisioningStep)
+        .where(
+            AgentProvisioningStep.request_id == request.id,
+            AgentProvisioningStep.system == "vicidial",
+            AgentProvisioningStep.operation.in_(
+                ("reserve_extension", "adopt_extension")
+            ),
+            AgentProvisioningStep.state == "succeeded",
+            AgentProvisioningStep.external_reference == event.extension,
+        )
+        .order_by(AgentProvisioningStep.created_at.desc())
+        .limit(1)
+    )
+    if reservation is None and provisioning_step is None:
         raise HTTPException(403, "extension denied")
 
 
@@ -275,7 +303,11 @@ async def ingest_agent_event(
     try:
         await _publish(event, applied)
     except RedisError:
-        return {"status": "persisted", "transition_applied": applied, "realtime": "deferred"}
+        return {
+            "status": "persisted",
+            "transition_applied": applied,
+            "realtime": "deferred",
+        }
     return {"status": "accepted", "transition_applied": applied}
 
 
@@ -297,7 +329,9 @@ async def agent_websocket(websocket: WebSocket) -> None:
     try:
         identity = await browser_identity(websocket)
     except HTTPException as exc:
-        await websocket.close(code=4400 + min(exc.status_code, 99), reason="authentication denied")
+        await websocket.close(
+            code=4400 + min(exc.status_code, 99), reason="authentication denied"
+        )
         return
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     lock_key = f"agent-socket:{identity.tenant_id}:{identity.agent_id}"
@@ -319,7 +353,10 @@ async def agent_websocket(websocket: WebSocket) -> None:
                 )
             ).all()
             for state in states:
-                if _authorized(identity, state) and state.event_type not in TERMINAL_EVENTS:
+                if (
+                    _authorized(identity, state)
+                    and state.event_type not in TERMINAL_EVENTS
+                ):
                     await websocket.send_json(
                         {
                             "type": "authoritative_state",

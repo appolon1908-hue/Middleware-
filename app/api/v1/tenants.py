@@ -24,13 +24,14 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.adapters.foundation.client import FoundationClient, FoundationUnavailable
 from app.core.config import settings
 from app.core.platform_auth import PlatformPrincipal, require_platform_scope
 
 router = APIRouter(prefix="/platform/v1/tenants", tags=["tenants"])
+TENANT_DIRECTORY_ROLES = frozenset({"platform_admin", "platform_operator"})
 
 
 def _tenant_out(record: Any) -> dict[str, str]:
@@ -44,17 +45,31 @@ def _tenant_out(record: Any) -> dict[str, str]:
 
 @router.get("")
 async def list_tenants(
+    status: str | None = Query(default=None, pattern="^(ACTIVE|SUSPENDED|CLOSED)$"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: PlatformPrincipal = Depends(
-        require_platform_scope("platform.tenants.read")
+        require_platform_scope(
+            "platform.tenants.read", allowed_roles=TENANT_DIRECTORY_ROLES
+        )
     ),
 ) -> dict[str, Any]:
     foundation = FoundationClient(settings)
     async with httpx.AsyncClient() as http:
         try:
-            records = await foundation.list_tenants(http)
+            records = await foundation.list_tenants(
+                http, status=status, limit=limit, offset=offset
+            )
         except FoundationUnavailable as exc:
             # Fail closed, not fail open - an empty list here would read as
             # "zero tenants exist", which is never true in production. An
             # unavailable upstream must surface as an error, not silence.
             raise HTTPException(503, "codestra-foundation is unavailable") from exc
-    return {"tenants": [_tenant_out(record) for record in records]}
+    return {
+        "tenants": [_tenant_out(record) for record in records],
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(records),
+        },
+    }

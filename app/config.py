@@ -273,7 +273,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0062_merge_telnexa_kyyow",
+                "0063_telephony_lead_reference",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -713,9 +713,9 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0062_merge_telnexa_kyyow":
+        if self.schema_head != "0063_telephony_lead_reference":
             raise ConfigurationError(
-                "SCHEMA_HEAD must be 0062_merge_telnexa_kyyow"
+                "SCHEMA_HEAD must be 0063_telephony_lead_reference"
             )
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):

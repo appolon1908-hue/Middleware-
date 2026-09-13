@@ -24,19 +24,12 @@ space-delimited ``scope`` claim, and an optional ``tenant_id`` claim (a
 token carrying ``foundation.admin`` in scope bypasses its per-tenant
 boundary check). ``get_tenant``/``list_entitlements`` intentionally never
 request that scope - they authenticate as a tenant-scoped reader only, one
-call per tenant. ``list_tenants`` is cross-tenant by definition, so it
-requests a distinct, narrower-than-admin ``foundation.tenant.list`` scope
-rather than reusing ``foundation.admin`` - callers of it (see
-``app.api.v1.tenants``) are themselves gated to platform_admin/
-platform_operator, never a tenant-scoped caller.
-
-ASSUMPTION FLAGGED FOR REVIEW: ``list_tenants``'s path (``GET /v1/tenants``,
-returning a plain JSON array of the same tenant shape ``get_tenant``
-returns) and the ``foundation.tenant.list`` scope name are inferred from
-this file's existing conventions, not verified against the actual
-``codestra-foundation`` source (a separate repo, out of this change's
-scope). Confirm both against that repo before relying on this in
-production.
+call per tenant. ``list_tenants`` is cross-tenant by definition and the
+authoritative codestra-foundation route requires ``foundation.admin``. The
+Middleware route is correspondingly restricted to platform administrators
+and operators and remains read-only. The route, scope, status filter, and
+pagination contract are pinned to codestra-foundation's API catalogue and
+``app/routers/tenants.py`` rather than inferred locally.
 """
 
 from __future__ import annotations
@@ -100,7 +93,9 @@ class FoundationClient:
 
     async def _load_secret(self, _credential_reference_id: str) -> str:
         if self._settings.foundation_client_secret_file:
-            with open(self._settings.foundation_client_secret_file, encoding="utf-8") as handle:
+            with open(
+                self._settings.foundation_client_secret_file, encoding="utf-8"
+            ) as handle:
                 return handle.read().strip()
         return self._settings.foundation_client_secret
 
@@ -110,10 +105,17 @@ class FoundationClient:
             and self._settings.foundation_token_url
             and self._settings.foundation_client_id
         ):
-            raise FoundationUnavailable("codestra-foundation integration is not configured")
+            raise FoundationUnavailable(
+                "codestra-foundation integration is not configured"
+            )
 
     async def _authorized_get(
-        self, http: httpx.AsyncClient, path: str, *, scopes: tuple[str, ...] = ("foundation.tenant.read",),
+        self,
+        http: httpx.AsyncClient,
+        path: str,
+        *,
+        scopes: tuple[str, ...] = ("foundation.tenant.read",),
+        params: dict[str, Any] | None = None,
     ) -> httpx.Response:
         self._ensure_configured()
         token = await self._token_manager.get_token(
@@ -127,6 +129,7 @@ class FoundationClient:
             response = await http.get(
                 f"{self._settings.foundation_base_url.rstrip('/')}{path}",
                 headers={"Authorization": f"Bearer {token}"},
+                params=params,
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
         except httpx.HTTPError as exc:
@@ -143,13 +146,20 @@ class FoundationClient:
             )
         body = response.json()
         return TenantRecord(
-            id=str(body["id"]), slug=body["slug"], name=body["name"], status=body["status"],
+            id=str(body["id"]),
+            slug=body["slug"],
+            name=body["name"],
+            status=body["status"],
         )
 
     async def list_entitlements(
-        self, http: httpx.AsyncClient, tenant_id: str,
+        self,
+        http: httpx.AsyncClient,
+        tenant_id: str,
     ) -> list[EntitlementRecord]:
-        response = await self._authorized_get(http, f"/v1/tenants/{tenant_id}/entitlements")
+        response = await self._authorized_get(
+            http, f"/v1/tenants/{tenant_id}/entitlements"
+        )
         if response.status_code == 404:
             return []
         if response.status_code != 200:
@@ -166,9 +176,22 @@ class FoundationClient:
             for item in response.json()
         ]
 
-    async def list_tenants(self, http: httpx.AsyncClient) -> list[TenantRecord]:
+    async def list_tenants(
+        self,
+        http: httpx.AsyncClient,
+        *,
+        status: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[TenantRecord]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if status is not None:
+            params["status"] = status
         response = await self._authorized_get(
-            http, "/v1/tenants", scopes=("foundation.tenant.list",),
+            http,
+            "/v1/tenants",
+            scopes=("foundation.admin",),
+            params=params,
         )
         if response.status_code != 200:
             raise FoundationUnavailable(
@@ -176,7 +199,10 @@ class FoundationClient:
             )
         return [
             TenantRecord(
-                id=str(item["id"]), slug=item["slug"], name=item["name"], status=item["status"],
+                id=str(item["id"]),
+                slug=item["slug"],
+                name=item["name"],
+                status=item["status"],
             )
             for item in response.json()
         ]

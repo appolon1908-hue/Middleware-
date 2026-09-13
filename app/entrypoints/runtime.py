@@ -188,6 +188,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
             in {
                 "/api/v1/events/vicidial",
                 "/api/v1/events/telnexa",
+                "/api/v1/events/klyrow",
                 "/api/v2/telephony/canary",
                 "/api/v1/n8n/executions",
                 "/api/v1/n8n/executions/register",
@@ -232,6 +233,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
         signed_paths = {
             "/api/v1/events/vicidial",
             "/api/v1/events/telnexa",
+            "/api/v1/events/klyrow",
             "/api/v1/automation/events",
             "/api/v2/telephony/canary",
             "/api/v1/n8n/executions",

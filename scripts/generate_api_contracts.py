@@ -21,7 +21,11 @@ MUTATION_METHODS = frozenset({"post", "put", "patch", "delete"})
 PUBLIC_PATHS = frozenset(
     {"/health", "/ready", "/readiness", "/dependencies", "/version", "/capabilities"}
 )
-SPECIALIZED_INGRESS_PATHS = frozenset({"/api/v1/events/telnexa"})
+SPECIALIZED_INGRESS_SECURITY = {
+    "/api/v1/events/telnexa": "telnexaBearerApiKey",
+    "/api/v1/events/klyrow": "klyrowBearerApiKey",
+}
+SPECIALIZED_INGRESS_PATHS = frozenset(SPECIALIZED_INGRESS_SECURITY)
 INVENTORY_BASE_SHA = "8e3534e0271371e0fee057331a9a24f391356e5e"
 
 DESCRIPTION = (
@@ -45,6 +49,15 @@ TELNEXA_BEARER_SECURITY_SCHEME = {
     "bearerFormat": "shared API key",
     "description": (
         "Telnexa shared API key; request authenticity also requires the "
+        "X-Signature HMAC over the exact raw body."
+    ),
+}
+KLYROW_BEARER_SECURITY_SCHEME = {
+    "type": "http",
+    "scheme": "bearer",
+    "bearerFormat": "shared service credential",
+    "description": (
+        "Klyrow gateway credential; request authenticity also requires the "
         "X-Signature HMAC over the exact raw body."
     ),
 }
@@ -181,9 +194,8 @@ def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
     components = schema.setdefault("components", {})
     security_schemes = components.setdefault("securitySchemes", {})
     security_schemes["bearerAuth"] = deepcopy(BEARER_SECURITY_SCHEME)
-    security_schemes["telnexaBearerApiKey"] = deepcopy(
-        TELNEXA_BEARER_SECURITY_SCHEME
-    )
+    security_schemes["telnexaBearerApiKey"] = deepcopy(TELNEXA_BEARER_SECURITY_SCHEME)
+    security_schemes["klyrowBearerApiKey"] = deepcopy(KLYROW_BEARER_SECURITY_SCHEME)
 
     operations: list[dict[str, Any]] = []
     for path, item in schema["paths"].items():
@@ -191,7 +203,7 @@ def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
             if method not in HTTP_METHODS:
                 continue
             if path in SPECIALIZED_INGRESS_PATHS:
-                operation.setdefault("security", [{"telnexaBearerApiKey": []}])
+                operation["security"] = [{SPECIALIZED_INGRESS_SECURITY[path]: []}]
             elif path not in PUBLIC_PATHS:
                 operation["security"] = [{"bearerAuth": []}]
             if _governed_api_path(path):
@@ -238,7 +250,7 @@ def render_documents(
     schema: dict[str, Any],
     matrix: dict[str, Any],
 ) -> dict[Path, str]:
-    return {
+    documents = {
         OUTPUT_PATHS["json"]: json.dumps(schema, indent=2, sort_keys=True) + "\n",
         OUTPUT_PATHS["yaml"]: yaml.safe_dump(
             schema,
@@ -246,6 +258,49 @@ def render_documents(
             allow_unicode=True,
         ),
         OUTPUT_PATHS["matrix"]: yaml.safe_dump(matrix, sort_keys=False),
+    }
+    documents.update(_klyrow_contract_documents())
+    return documents
+
+
+def _klyrow_contract_documents() -> dict[Path, str]:
+    """Render the ingress schemas from the same models used by the route."""
+
+    from app.api.internal.klyrow_events import (
+        CampaignSummaryData,
+        DailyKpiData,
+        DailyUsageData,
+        DomainStatusData,
+        ProviderHealthData,
+        klyrow_event_schema,
+    )
+
+    schemas: dict[str, dict[str, Any]] = {
+        "klyrow-event-v1.schema.json": klyrow_event_schema(),
+        "klyrow-usage-daily-v1.schema.json": DailyUsageData.model_json_schema(),
+        "klyrow-kpi-daily-v1.schema.json": DailyKpiData.model_json_schema(),
+        "klyrow-campaign-summary-v1.schema.json": (
+            CampaignSummaryData.model_json_schema()
+        ),
+        "klyrow-domain-status-v1.schema.json": DomainStatusData.model_json_schema(),
+        "klyrow-provider-health-v1.schema.json": (
+            ProviderHealthData.model_json_schema()
+        ),
+    }
+    for filename, value in schemas.items():
+        _normalize_schema_defaults(value)
+        value["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+        value["$id"] = f"https://contracts.codestra.co/klyrow/{filename}"
+    schemas["klyrow-usage-daily-v1.schema.json"]["required"] = [
+        "date",
+        "unit",
+        "quantity",
+        "snapshot_at",
+    ]
+    return {
+        ROOT / "contracts" / filename: json.dumps(value, indent=2, sort_keys=True)
+        + "\n"
+        for filename, value in schemas.items()
     }
 
 

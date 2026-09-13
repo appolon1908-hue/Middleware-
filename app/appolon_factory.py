@@ -50,6 +50,7 @@ from .lead_intake import (
 )
 from .n8n_control_plane import router as n8n_control_plane_router
 from .api.internal.telnexa_events import router as telnexa_events_router
+from .api.internal.klyrow_events import router as klyrow_events_router
 from .observability import (
     MiddlewareObservability,
     safe_correlation_id,
@@ -181,6 +182,7 @@ def create_app(
     app.include_router(compatibility_api_router)
     app.include_router(domain_api_router)
     app.include_router(webhook_api_router)
+    app.include_router(klyrow_events_router)
     app.include_router(telnexa_events_router)
     app.include_router(monitoring_router)
     app.include_router(observability_sync_router)

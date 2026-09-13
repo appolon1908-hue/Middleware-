@@ -15,6 +15,7 @@ from scripts.generate_api_contracts import (
     REQUIRED_HEADERS,
     SPECIALIZED_INGRESS_PATHS,
     _ensure_header,
+    _klyrow_contract_documents,
     _normalize_schema_defaults,
     build_documents,
     render_documents,
@@ -119,6 +120,11 @@ def test_generator_normalizes_only_redundant_open_object_defaults() -> None:
         "closed": {"type": "object", "additionalProperties": False},
         "nested": [{"additionalProperties": {"type": "string"}}],
     }
+
+
+def test_generated_klyrow_contracts_normalize_open_object_defaults() -> None:
+    for rendered in _klyrow_contract_documents().values():
+        assert '"additionalProperties": true' not in rendered
 
 
 def test_generated_contract_documents_mutation_headers() -> None:

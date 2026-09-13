@@ -188,6 +188,14 @@ class Settings:
     telnexa_event_hmac_secret_file: str = ""
     telnexa_event_signature_ttl_seconds: int = 300
     telnexa_event_request_max_bytes: int = 1_048_576
+    klyrow_event_ingress_enabled: bool = False
+    klyrow_event_api_key: str = ""
+    klyrow_event_api_key_file: str = ""
+    klyrow_event_hmac_secret: str = ""
+    klyrow_event_hmac_secret_file: str = ""
+    klyrow_event_signature_ttl_seconds: int = 300
+    klyrow_event_request_max_bytes: int = 1_048_576
+    klyrow_odoo_projection_enabled: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -421,6 +429,36 @@ class Settings:
                 minimum=1_024,
                 maximum=10_485_760,
             ),
+            klyrow_event_ingress_enabled=_bool(
+                source, "KLYROW_EVENT_INGRESS_ENABLED", False
+            ),
+            klyrow_event_api_key=source.get("KLYROW_EVENT_API_KEY", "").strip(),
+            klyrow_event_api_key_file=source.get(
+                "KLYROW_EVENT_API_KEY_FILE", ""
+            ).strip(),
+            klyrow_event_hmac_secret=source.get(
+                "KLYROW_EVENT_HMAC_SECRET", ""
+            ).strip(),
+            klyrow_event_hmac_secret_file=source.get(
+                "KLYROW_EVENT_HMAC_SECRET_FILE", ""
+            ).strip(),
+            klyrow_event_signature_ttl_seconds=_int(
+                source,
+                "KLYROW_EVENT_SIGNATURE_TTL_SECONDS",
+                300,
+                minimum=1,
+                maximum=900,
+            ),
+            klyrow_event_request_max_bytes=_int(
+                source,
+                "KLYROW_EVENT_REQUEST_MAX_BYTES",
+                1_048_576,
+                minimum=1_024,
+                maximum=10_485_760,
+            ),
+            klyrow_odoo_projection_enabled=_bool(
+                source, "KLYROW_ODOO_PROJECTION_ENABLED", False
+            ),
         )
         settings.validate()
         return settings
@@ -460,6 +498,22 @@ class Settings:
                 raise ConfigurationError(
                     "TELNEXA_EVENT_HMAC_SECRET or TELNEXA_EVENT_HMAC_SECRET_FILE is required"
                 )
+        if self.klyrow_event_ingress_enabled:
+            if not (self.klyrow_event_api_key or self.klyrow_event_api_key_file):
+                raise ConfigurationError(
+                    "KLYROW_EVENT_API_KEY or KLYROW_EVENT_API_KEY_FILE is required"
+                )
+            if not (
+                self.klyrow_event_hmac_secret
+                or self.klyrow_event_hmac_secret_file
+            ):
+                raise ConfigurationError(
+                    "KLYROW_EVENT_HMAC_SECRET or KLYROW_EVENT_HMAC_SECRET_FILE is required"
+                )
+        if self.klyrow_odoo_projection_enabled and not self.odoo_delivery_enabled:
+            raise ConfigurationError(
+                "Klyrow Odoo projection requires EXTERNAL_DELIVERY_ENABLED and ODOO_WRITE"
+            )
         self._validate_environment_profile()
         enabled = {
             name for name, value in self.external_effects.items() if value

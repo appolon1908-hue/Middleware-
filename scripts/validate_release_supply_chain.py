@@ -125,6 +125,18 @@ def main() -> int:
     require(dockerfile, f"ARG RUNTIME_BASE={RUNTIME_BASE}", "digest-pinned runtime base", errors)
     require(dockerfile, f"ARG TEST_BASE={TEST_BASE}", "digest-pinned test base", errors)
     require(dockerfile, f"ARG FINAL_BASE={FINAL_BASE}", "digest-pinned final base", errors)
+    require(
+        dockerfile,
+        "FROM ${FINAL_BASE} AS patched-final-base",
+        "rebuilt patched final base stage",
+        errors,
+    )
+    require(
+        dockerfile,
+        "libpcre2-8-0=10.42-1+deb12u1",
+        "fixed PCRE2 runtime package",
+        errors,
+    )
     require(dockerfile, "--require-hashes", "hashed dependency install", errors)
     for target in ("runtime", "worker", "connector-runtime", "test"):
         require(dockerfile, f" AS {target}", f"supported {target} target", errors)

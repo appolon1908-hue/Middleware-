@@ -575,6 +575,8 @@ async def originate_call(
         source_extension=endpoint,
         destination=payload.destination,
         dialplan_context="click-to-call",
+        lead_model=payload.lead_model,
+        lead_id=payload.lead_id,
     )
     session.add(lifecycle)
     session.add(

@@ -1,6 +1,6 @@
 {
   "current_orchestrator_sha256": "aa54d934fed699906e78c70a1d70a572dd285d5b450c4b0b9a43194e7f2148d4",
-  "proposed_orchestrator_sha256": "c874dafa9625ff97ab83d467c5c6d0cfc60d9389c148db2a56e5cc02ba1e6034",
+  "proposed_orchestrator_sha256": "5fd0fd21b0d0f714c395f1f105298c6a66fc3b670827b9ff73bb5ee4ca43e0d4",
   "reviewed_test_path": "tests/integration/campaign_extension_concurrency.py",
   "reviewed_test_sha256": "058f61fd12fd07df0a68d481cf7af716e86067348ec191a2e27a1e02b0913afd",
   "active_launcher_changed": false,

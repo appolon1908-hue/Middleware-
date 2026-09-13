@@ -37,8 +37,8 @@ STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "8d8f21260babfae5eaedbdd46472b1ec"
 )
 MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "db7d2424693aa230c20c7d58056f0c4a"
-    "3e52b5da90bdd37caabe7971f504c4a5"
+    "8b82663492fa67f6e0432bfc7dbc67f5e"
+    "cd355d9edd50cdbb3b6c17bb03a72b4"
 )
 BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "15dbaa6d571a1d1e72c09ca417cc9419"
@@ -673,8 +673,8 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
             "50caaed769389cb30fc725766ea6bed6"
         ),
         ".github/workflows/middleware-ci.yml": (
-            "9131b5568cc945c943cf3a831d754b33"
-            "f1f9194161a3879c8c36a3cf43e40952"
+            "8cec813feb267b63f4f27807606237dbe"
+            "518f2fb94379062e447a6636fea2f16"
         ),
         ".github/workflows/integration-main-release-authorities.yml": (
             "43323ab7203be3317f700e099a01ca03f"
@@ -9287,12 +9287,20 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
     )
 
 
-# Narrow, explicit, hash-pinned exemption for the one reviewed job whose only
-# mutation is posting its own required-check status back to GitHub. The job
-# remains counted as mutating; only the two global disable requirements are
-# skipped when this exact repository/path/job content matches this exact hash.
-APPROVED_SELF_STATUS_MUTATION_SHA256: dict[str, dict[str, str]] = {
+# Narrow, explicit, hash-pinned exemptions for reviewed jobs whose detected
+# mutations are bounded by their permissions and exact job bodies. The jobs
+# remain counted as mutating; only the two global disable requirements are
+# skipped when the repository/path/job content matches an approved hash.
+APPROVED_NARROW_MUTATION_SHA256: dict[str, dict[str, str]] = {
     "appolon1908-hue/Middleware-": {
+        # Read-only release verification writes only runner-local evidence and
+        # job outputs. Its workflow grants actions:read and contents:read only.
+        ".github/workflows/automated-production-promotion.yml:verify-release": (
+            "f3606117148bb6207f8e738b267665cb"
+            "cd51ad6501c31c69c2e2ec34705bf15c"
+        ),
+        # The only external mutation is the required job posting its own exact
+        # commit status through checks:write.
         ".github/workflows/required-ci.yml:test": (
             "7a085e87d05b0a9848f57438efa27b84"
             "d8aa6f7d4d1f9435bc3e3608b71f9ad7"
@@ -9341,13 +9349,13 @@ def require_mutating_jobs_disabled(workflow: str, path: str) -> None:
             )
         if mutating:
             mutating_jobs += 1
-            approved_self_status_mutation = (
-                APPROVED_SELF_STATUS_MUTATION_SHA256.get(repository, {}).get(
+            approved_narrow_mutation = (
+                APPROVED_NARROW_MUTATION_SHA256.get(repository, {}).get(
                     f"{path}:{job_name}"
                 )
                 == hashlib.sha256(job.raw.encode()).hexdigest()
             )
-            if not approved_self_status_mutation:
+            if not approved_narrow_mutation:
                 require(
                     "RUNTIME_MUTATION_DISABLED=true" in job.raw,
                     f"mutating job lacks disable marker: {path}:{job_name}",

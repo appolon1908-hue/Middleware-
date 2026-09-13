@@ -1,6 +1,12 @@
 ARG RUNTIME_BASE=python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
 ARG TEST_BASE=python:3.13.15-bookworm@sha256:62eafe52c91cad83c2c74e630bfde917da8c253673e695665d454def84fc9a13
-ARG FINAL_BASE=gcr.io/distroless/python3-debian13:nonroot@sha256:f3d5ddc6c64a019fe520e7f005f2880be21e6afc461b10a3c15ef2e4edc71e33
+ARG FINAL_BASE=python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
+
+FROM ${FINAL_BASE} AS patched-final-base
+USER root
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpcre2-8-0=10.42-1+deb12u1 \
+ && rm -rf /var/lib/apt/lists/*
 
 FROM ${RUNTIME_BASE} AS runtime-dependencies
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
@@ -9,7 +15,7 @@ COPY requirements-runtime.txt ./
 RUN python -m pip install --require-hashes --prefix=/opt/runtime -r requirements-runtime.txt \
  && PYTHONPATH=/opt/runtime/lib/python3.13/site-packages python -m pip check
 
-FROM ${FINAL_BASE} AS runtime-common
+FROM patched-final-base AS runtime-common
 ARG SOURCE_REPOSITORY=https://github.com/appolon1908-hue/Middleware-
 ARG SOURCE_REVISION
 ARG SOURCE_VERSION
@@ -41,11 +47,12 @@ COPY --chown=65532:65532 scripts/migrate_runtime.py ./scripts/migrate_runtime.py
 COPY --chown=65532:65532 scripts/production_migration_authority.py ./scripts/production_migration_authority.py
 COPY --chown=65532:65532 scripts/runtime_sql_schema.py ./scripts/runtime_sql_schema.py
 USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/python3.13"]
 
 FROM runtime-common AS runtime
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["/usr/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+  CMD ["/usr/local/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
 CMD ["-m", "uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1"]
 
 FROM runtime-common AS worker
@@ -64,7 +71,7 @@ COPY services/connector-runtime/src ./runtime/src
 RUN python -m pip install --no-deps --prefix=/opt/connector ./runtime \
  && PYTHONPATH=/opt/connector/lib/python3.13/site-packages python -m pip check
 
-FROM ${FINAL_BASE} AS connector-runtime
+FROM patched-final-base AS connector-runtime
 ARG SOURCE_REPOSITORY=https://github.com/appolon1908-hue/Middleware-
 ARG SOURCE_REVISION
 ARG SOURCE_VERSION
@@ -84,9 +91,10 @@ WORKDIR /app
 COPY --chown=65532:65532 services/connector-runtime/alembic.ini ./alembic.ini
 COPY --chown=65532:65532 services/connector-runtime/migrations ./migrations
 USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/python3.13"]
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["/usr/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+  CMD ["/usr/local/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
 CMD ["-m", "uvicorn", "codestra_connector_runtime.main:app", "--host", "0.0.0.0", "--port", "8081", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1"]
 
 FROM ${TEST_BASE} AS test

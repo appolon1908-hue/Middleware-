@@ -8,6 +8,7 @@ import asyncpg
 
 
 RUN_ID = "concurrency-" + uuid.uuid4().hex
+SCHEMA_NAME = "campaign_concurrency_" + uuid.uuid4().hex
 INSERT = """
 INSERT INTO campaign_extension_allocation
 (id,campaign_id,campaign_number,allocation_public_id,extension_start,
@@ -45,39 +46,41 @@ async def insert(pool, name, number, start, end, delay=0):
 
 
 
-async def find_test_bases(pool):
-    """Choose a free extension band and unique campaign numbers for this run."""
-    async with pool.acquire() as connection:
-        extension_base = None
-        for candidate in range(6100, 9201, 100):
-            occupied = await connection.fetchval(
-                """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM campaign_extension_allocation
-                    WHERE extension_range && int4range($1, $2, '[]')
-                )
-                """,
-                candidate,
-                candidate + 799,
-            )
-            if not occupied:
-                extension_base = candidate
-                break
-        if extension_base is None:
-            raise RuntimeError("no free extension range available for concurrency test")
-        max_number = await connection.fetchval(
-            "SELECT COALESCE(MAX(campaign_number), 0) "
-            "FROM campaign_extension_allocation"
+async def create_isolated_pool(database_url):
+    """Clone the migrated ledger so the proof cannot exhaust shared test data."""
+    admin = await asyncpg.connect(database_url)
+    try:
+        await admin.execute(f"CREATE SCHEMA {SCHEMA_NAME}")
+        await admin.execute(
+            f"CREATE TABLE {SCHEMA_NAME}.campaign_extension_allocation "
+            "(LIKE public.campaign_extension_allocation INCLUDING ALL)"
         )
-    number_base = ((int(max_number) // 100) + 1) * 100
-    return extension_base, number_base
+    except Exception:
+        await admin.execute(f"DROP SCHEMA IF EXISTS {SCHEMA_NAME} CASCADE")
+        raise
+    finally:
+        await admin.close()
+
+    return await asyncpg.create_pool(
+        database_url,
+        min_size=2,
+        server_settings={"search_path": f"{SCHEMA_NAME},public"},
+    )
+
+
+async def drop_isolated_schema(database_url):
+    admin = await asyncpg.connect(database_url)
+    try:
+        await admin.execute(f"DROP SCHEMA IF EXISTS {SCHEMA_NAME} CASCADE")
+    finally:
+        await admin.close()
 
 async def main():
     database_url = os.environ["TEST_DATABASE_URL"]
-    assert "diag" in database_url or "rehearsal" in database_url
-    pool = await asyncpg.create_pool(database_url)
-    extension_base, number_base = await find_test_bases(pool)
+    if "diag" not in database_url and "rehearsal" not in database_url:
+        raise RuntimeError("concurrency proof requires an isolated test database")
+    pool = await create_isolated_pool(database_url)
+    extension_base, number_base = 6100, 100
 
     exact = await asyncio.gather(
         insert(pool, "EXACT1", number_base, extension_base, extension_base + 99, 0.1),
@@ -214,6 +217,7 @@ async def main():
             == 11
         )
     await pool.close()
+    await drop_isolated_schema(database_url)
     print("CONCURRENT_OVERLAP_GATE=PASS")
     print("CONCURRENT_ADJACENT_GATE=PASS")
     print("RACE_CONDITION_GATE=PASS")

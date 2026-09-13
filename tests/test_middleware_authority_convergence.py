@@ -8,9 +8,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "config" / "middleware-authority-convergence.v1.json"
-CURRENT_AUTHORITY = (
-    ROOT / "config" / "middleware-forward-release-authority.v1.json"
-)
+CURRENT_AUTHORITY = ROOT / "config" / "middleware-forward-release-authority.v1.json"
 VALIDATOR = ROOT / "scripts" / "validate_middleware_authority_convergence.py"
 
 spec = importlib.util.spec_from_file_location(
@@ -42,11 +40,8 @@ def test_reviewed_authority_convergence_record_is_fail_closed() -> None:
 def test_current_authority_requires_schema_0010_and_new_exact_main_build() -> None:
     value = _current_authority()
     artifacts = value["artifactAuthority"]
-    assert artifacts["requiredSchemaHead"] == "0061_codestra_business_events"
-    assert (
-        artifacts["candidateStatus"]
-        == "PENDING_EXACT_PROTECTED_MERGE_BUILD"
-    )
+    assert artifacts["requiredSchemaHead"] == "0065_lifecycle_outcome_state"
+    assert artifacts["candidateStatus"] == "PENDING_EXACT_PROTECTED_MERGE_BUILD"
     assert artifacts["currentSignedCandidate"] is None
 
 
@@ -83,18 +78,16 @@ def test_current_candidate_cannot_be_filled_with_historical_predecessor() -> Non
 
 def test_required_schema_head_cannot_regress_to_0009() -> None:
     value = copy.deepcopy(_current_authority())
-    value["artifactAuthority"]["requiredSchemaHead"] = (
-        "0009_observability_incidents"
-    )
+    value["artifactAuthority"]["requiredSchemaHead"] = "0009_observability_incidents"
     errors = validator.validate_forward_authority(value)
     assert any("current required schema head" in error for error in errors)
 
 
 def test_historical_predecessor_cannot_become_promotable() -> None:
     value = copy.deepcopy(_current_authority())
-    value["artifactAuthority"]["historicalSignedPredecessor"][
-        "promotionAuthorized"
-    ] = True
+    value["artifactAuthority"]["historicalSignedPredecessor"]["promotionAuthorized"] = (
+        True
+    )
     errors = validator.validate_forward_authority(value)
     assert any("promotion must be forbidden" in error for error in errors)
 
@@ -120,9 +113,9 @@ def test_snapshot_predecessor_reference_must_bind_exact_digest() -> None:
 
 def test_snapshot_must_match_historical_predecessor_evidence() -> None:
     value = copy.deepcopy(_document())
-    value["forwardAuthority"]["image"]["currentSignedCandidate"][
-        "schemaHead"
-    ] = "0059_integrated_monitoring"
+    value["forwardAuthority"]["image"]["currentSignedCandidate"]["schemaHead"] = (
+        "0059_integrated_monitoring"
+    )
     errors = validator.validate_document(value, root=ROOT)
     assert any("snapshot predecessor" in error for error in errors)
 
@@ -134,8 +127,7 @@ def test_workload_cannot_appear_in_multiple_image_families() -> None:
     value["serverA"]["runtimeWorkloadsCatalogued"] += 1
     errors = validator.validate_document(value, root=ROOT)
     assert any(
-        "workload appears in multiple image families" in error
-        for error in errors
+        "workload appears in multiple image families" in error for error in errors
     )
 
 

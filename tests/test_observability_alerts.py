@@ -5,7 +5,7 @@ import copy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import jwt
 import yaml  # type: ignore[import-untyped]
@@ -246,12 +246,20 @@ def test_canonical_internal_path_shares_authorization_and_replay_store() -> None
     with TestClient(app()) as client:
         canonical = "/internal/v1/alerts/alertmanager"
         assert client.post(canonical, json=webhook()).status_code in {401, 403}
+
         accepted = client.post(canonical, json=webhook(), headers=headers())
         assert accepted.status_code == 202
-        replay = client.post("/v1/integrations/alertmanager/events", json=webhook(), headers=headers())
+
+        replay = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=headers(),
+        )
         assert replay.status_code == 200
-        assert replay.json()["operations"][0]["duplicate"] is True
-        assert replay.json()["operations"][0]["operation_id"] == accepted.json()["operations"][0]["operation_id"]
+        accepted_operation = accepted.json()["operations"][0]
+        replay_operation = replay.json()["operations"][0]
+        assert replay_operation["duplicate"] is True
+        assert replay_operation["operation_id"] == accepted_operation["operation_id"]
 
 
 def test_mixed_status_group_processes_each_alert_transition() -> None:
@@ -517,7 +525,7 @@ def test_incident_lifecycle_is_tenant_scoped_audited_and_idempotent() -> None:
         incident_id = accepted.json()["operations"][0]["incident_id"]
         operator_headers = headers(
             "observability-operator",
-            key=str(uuid4()),
+            key="incident-acknowledge-0001",
         )
 
         detail = client.get(
@@ -557,7 +565,7 @@ def test_incident_lifecycle_is_tenant_scoped_audited_and_idempotent() -> None:
 
         resolve_headers = headers(
             "observability-operator",
-            key=str(uuid4()),
+            key="incident-resolve-0001",
         )
         resolved = client.post(
             f"/v1/observability/incidents/{incident_id}/resolve",

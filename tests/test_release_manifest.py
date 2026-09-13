@@ -57,18 +57,32 @@ def test_generated_release_manifest_matches_json_schema(tmp_path: Path) -> None:
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
     assert value["image"]["reference"].endswith(IMAGE_DIGEST)
     assert value["promotion"]["staging_and_production_same_digest"] is True
-    assert value["runtime"]["schema_or_migration_head"] == "0061_codestra_business_events"
+    assert (
+        value["runtime"]["schema_or_migration_head"] == "0065_lifecycle_outcome_state"
+    )
 
 
 def test_manifest_is_canonical_and_binds_workspace_evidence(tmp_path: Path) -> None:
-    source_sha = os.environ.get("CODESTRA_TEST_SOURCE_SHA") or subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
-        capture_output=True, text=True,
-    ).stdout.strip()
-    tree_id = os.environ.get("CODESTRA_TEST_GIT_TREE_ID") or subprocess.run(
-        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, check=True,
-        capture_output=True, text=True,
-    ).stdout.strip()
+    source_sha = (
+        os.environ.get("CODESTRA_TEST_SOURCE_SHA")
+        or subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+    tree_id = (
+        os.environ.get("CODESTRA_TEST_GIT_TREE_ID")
+        or subprocess.run(
+            ["git", "rev-parse", "HEAD^{tree}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
     sbom, report = evidence(tmp_path)
     value = build_manifest(
         root=ROOT,

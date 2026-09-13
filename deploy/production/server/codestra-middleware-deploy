@@ -182,6 +182,8 @@ exact = {
     "LIVE_WRITE": "false",
     "LIVE_WRITES": "false",
     "ODOO_WRITE": "false",
+    "KLYROW_EVENT_INGRESS_ENABLED": "false",
+    "KLYROW_ODOO_PROJECTION_ENABLED": "false",
     "FORM_ODOO_DELIVERY_ENABLED": "false",
     "CRAWLER_ODOO_DELIVERY_ENABLED": "false",
     "SCRAPPER_ODOO_DELIVERY_ENABLED": "false",

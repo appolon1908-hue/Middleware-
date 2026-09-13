@@ -25,14 +25,14 @@ _SPEC.loader.exec_module(_BASE)
 
 ROOT = _BASE.ROOT
 # Forward schema requirement; preserve the reviewed historical base verbatim.
-setattr(_BASE, "CURRENT_SCHEMA_HEAD", "0061_codestra_business_events")
+setattr(_BASE, "CURRENT_SCHEMA_HEAD", "0065_lifecycle_outcome_state")
 SOURCE_RESOLUTION = (
     "resolve the exact protected-main GitHub event SHA at workflow execution"
 )
 REQUIRED_RUNTIME_EVIDENCE = (
     "signed release manifest bound to exact protected-main source",
     "immutable image digest and verified provenance",
-    "schema head 0061_codestra_business_events",
+    "schema head 0065_lifecycle_outcome_state",
     "effective source, digest, schema, profile, and capability read-back",
     "backup and isolated restore evidence",
     "rollback rehearsal and data-integrity evidence",
@@ -61,7 +61,10 @@ def validate_forward_authority(authority: dict[str, Any]) -> list[str]:
     errors = list(_BASE_VALIDATE_FORWARD_AUTHORITY(authority))
 
     repository = authority.get("repositoryAuthority")
-    if isinstance(repository, dict) and repository.get("sourceResolution") != SOURCE_RESOLUTION:
+    if (
+        isinstance(repository, dict)
+        and repository.get("sourceResolution") != SOURCE_RESOLUTION
+    ):
         errors.append(
             "forward authority sourceResolution must resolve the exact "
             "protected-main GitHub event SHA at workflow execution"
@@ -70,7 +73,10 @@ def validate_forward_authority(authority: dict[str, Any]) -> list[str]:
     runtime = authority.get("runtimeAuthority")
     if isinstance(runtime, dict):
         required_evidence = runtime.get("requiredEvidence")
-        if not isinstance(required_evidence, list) or tuple(required_evidence) != REQUIRED_RUNTIME_EVIDENCE:
+        if (
+            not isinstance(required_evidence, list)
+            or tuple(required_evidence) != REQUIRED_RUNTIME_EVIDENCE
+        ):
             errors.append(
                 "runtimeAuthority.requiredEvidence must contain the exact named "
                 "backup, isolated-restore, rollback, schema, provenance, read-back, "
@@ -79,9 +85,7 @@ def validate_forward_authority(authority: dict[str, Any]) -> list[str]:
 
     safety = authority.get("safetyBoundary")
     if not isinstance(safety, dict) or set(safety) != set(REQUIRED_SAFETY_BOUNDARY):
-        errors.append(
-            "forward safetyBoundary must contain the exact required key set"
-        )
+        errors.append("forward safetyBoundary must contain the exact required key set")
     elif safety != REQUIRED_SAFETY_BOUNDARY:
         errors.append(
             "forward safetyBoundary values must preserve every fail-closed denial"

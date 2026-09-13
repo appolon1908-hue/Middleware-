@@ -75,7 +75,9 @@ def direct_requirements(path: Path, errors: list[str]) -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith(("#", "-r ")):
             continue
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9,_.-]+\])?==([^\s]+)", line)
+        match = re.fullmatch(
+            r"([A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9,_.-]+\])?==([^\s]+)", line
+        )
         if match is None:
             errors.append(f"{path.name} direct requirement is not exact: {line}")
             continue
@@ -108,7 +110,14 @@ def main() -> int:
     for package, version in runtime_direct.items():
         if runtime_packages.get(package) != version:
             errors.append(f"runtime lock does not bind {package}=={version}")
-    for package in ("fastapi", "asyncpg", "redis", "nats-py", "temporalio", "prometheus-client"):
+    for package in (
+        "fastapi",
+        "asyncpg",
+        "redis",
+        "nats-py",
+        "temporalio",
+        "prometheus-client",
+    ):
         if package not in runtime_packages:
             errors.append(f"runtime lock is missing {package}")
     if {"pytest", "pytest-asyncio"} & set(runtime_packages):
@@ -122,9 +131,16 @@ def main() -> int:
         errors.append("connector production lock contains test tooling")
 
     dockerfile = (ROOT / "Dockerfile.runtime").read_text(encoding="utf-8")
-    require(dockerfile, f"ARG RUNTIME_BASE={RUNTIME_BASE}", "digest-pinned runtime base", errors)
+    require(
+        dockerfile,
+        f"ARG RUNTIME_BASE={RUNTIME_BASE}",
+        "digest-pinned runtime base",
+        errors,
+    )
     require(dockerfile, f"ARG TEST_BASE={TEST_BASE}", "digest-pinned test base", errors)
-    require(dockerfile, f"ARG FINAL_BASE={FINAL_BASE}", "digest-pinned final base", errors)
+    require(
+        dockerfile, f"ARG FINAL_BASE={FINAL_BASE}", "digest-pinned final base", errors
+    )
     require(
         dockerfile,
         "FROM ${FINAL_BASE} AS patched-final-base",
@@ -178,7 +194,7 @@ def main() -> int:
         "only-fixed: true": "actionable vulnerability gate",
         "cosign sign --yes": "image signature",
         '--annotations "codestra.source_sha=$RELEASE_SOURCE_SHA"': "source annotation",
-        '--annotations "codestra.schema_head=0061_codestra_business_events"': "schema annotation",
+        '--annotations "codestra.schema_head=0065_lifecycle_outcome_state"': "schema annotation",
         "cosign attest --yes": "SBOM attestation",
         "--type slsaprovenance1": "signed SLSA provenance v1 attestation",
         "cosign sign-blob --yes": "manifest signature",
@@ -204,9 +220,9 @@ def main() -> int:
         "release-manifest final base-image identity",
         errors,
     )
-    release_schema = (
-        ROOT / "contracts/release-manifest.v1.schema.json"
-    ).read_text(encoding="utf-8")
+    release_schema = (ROOT / "contracts/release-manifest.v1.schema.json").read_text(
+        encoding="utf-8"
+    )
     require(
         release_schema,
         FINAL_BASE,

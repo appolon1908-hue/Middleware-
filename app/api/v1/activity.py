@@ -186,9 +186,10 @@ async def get_activity(
     if ":" not in activity_id:
         raise HTTPException(422, "malformed activity_id")
     source, _, raw_id = activity_id.partition(":")
+    stmt: Any
 
     if source == "agent_provisioning_audit":
-        stmt = (
+        provisioning_stmt = (
             select(AgentProvisioningAudit, AgentProvisioningRequest.employee_id)
             .join(
                 AgentProvisioningRequest,
@@ -199,20 +200,20 @@ async def get_activity(
                 AgentProvisioningRequest.tenant_id == tenant_id,
             )
         )
-        row = (await session.execute(stmt)).first()
-        if row is None:
+        provisioning_row = (await session.execute(provisioning_stmt)).first()
+        if provisioning_row is None:
             raise HTTPException(404, "activity not found for this tenant")
-        audit, employee_id = row
+        audit, employee_id = provisioning_row
         out = _provisioning_audit_out(audit, tenant_id, employee_id)
     elif source == "audit_event":
-        stmt = select(AuditEvent).where(
+        audit_stmt = select(AuditEvent).where(
             AuditEvent.id == UUID(raw_id),
             AuditEvent.redacted_payload["business_unit"].astext == tenant_id,
         )
-        row = (await session.execute(stmt)).scalar_one_or_none()
-        if row is None:
+        audit_row = (await session.execute(audit_stmt)).scalar_one_or_none()
+        if audit_row is None:
             raise HTTPException(404, "activity not found for this tenant")
-        out = _audit_event_out(row)
+        out = _audit_event_out(audit_row)
     else:
         raise HTTPException(422, "unrecognized activity source")
 

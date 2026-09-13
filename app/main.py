@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
 from app.api.v1.automation import router as automation_router
+from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.campaign_search import router as campaign_search_router
 from app.api.v1.commands import router as commands_router
 from app.api.v1.control import router as control_router
@@ -32,6 +33,8 @@ from app.api.v1.provider_webhooks import router as provider_webhooks_router
 from app.api.v1.telephony import router as telephony_router
 from app.api.internal.ai_jobs import router as internal_ai_jobs_router
 from app.api.internal.klyrow_mail import router as klyrow_mail_router
+from app.api.internal.klyrow_events import router as klyrow_events_router
+from app.api.internal.telnexa_events import router as telnexa_events_router
 from app.api.v1.ai_console import router as ai_console_router
 from app.api.v1.tts import router as tts_router
 from app.api.v1.tts import validate_readiness as validate_tts_readiness
@@ -43,6 +46,10 @@ from app.api.v1.integrations import router as integrations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
+from app.api.v1.observability_sync import (
+    is_observability_sync_route,
+    router as observability_sync_router,
+)
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
 from app.api.v1.agent_provisioning_reads import (
@@ -52,6 +59,8 @@ from app.api.v1.session_context import router as session_context_router
 from app.api.v1.calls import router as calls_router
 from app.api.v1.activity import router as activity_router
 from app.api.v1.presence import router as presence_router
+from app.api.v1.tenants import router as tenants_router
+from app.api.v1.campaigns import router as campaigns_router
 from app.api.v1.queues import router as queues_router
 from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
@@ -65,6 +74,7 @@ app.include_router(events_router)
 app.include_router(callbacks_router)
 app.include_router(control_router)
 app.include_router(automation_router)
+app.include_router(campaign_design_router)
 app.include_router(reports_router)
 app.include_router(operations_router)
 app.include_router(lead_reconciliation_router)
@@ -81,8 +91,8 @@ app.include_router(n8n_target_router)
 app.include_router(telephony_router)
 app.include_router(internal_ai_jobs_router)
 app.include_router(klyrow_mail_router)
-from app.api.internal.business_events import router as business_events_router
-app.include_router(business_events_router)
+app.include_router(klyrow_events_router)
+app.include_router(telnexa_events_router)
 app.include_router(ai_console_router)
 app.include_router(tts_router)
 app.include_router(ai_commands_router)
@@ -91,6 +101,7 @@ app.include_router(ai_router)
 app.include_router(provider_commands_router)
 app.include_router(platform_router)
 app.include_router(monitoring_router)
+app.include_router(observability_sync_router)
 app.include_router(integrations_router)
 app.include_router(postiz_router)
 app.include_router(campaign_search_router)
@@ -106,7 +117,9 @@ app.include_router(session_context_router)
 app.include_router(calls_router)
 app.include_router(activity_router)
 app.include_router(presence_router)
+app.include_router(tenants_router)
 app.include_router(queues_router)
+app.include_router(campaigns_router)
 app.mount("/metrics", make_asgi_app())
 
 
@@ -140,6 +153,8 @@ SIGNED_WEBHOOK_PATHS = frozenset(
         "/webhooks/vicidial/call-result/",
         "/webhooks/sms/inbound/",
         "/api/v1/events/vicidial",
+        "/api/v1/events/telnexa",
+        "/api/v1/events/klyrow",
         "/api/v1/automation/events",
         "/api/v2/telephony/canary",
         "/api/v1/n8n/executions",
@@ -181,6 +196,8 @@ CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
 N8N_SERVICE_JWT_ROUTES = frozenset(
     {
         ("POST", "/api/v1/automation/policy-check"),
+        ("POST", "/api/v1/campaign-designs/preview"),
+        ("POST", "/api/v1/campaign-designs/approvals"),
         ("POST", "/api/v1/integrations/n8n/results"),
     }
 )
@@ -229,10 +246,7 @@ async def control_request_guard(request: Request, call_next):
     if content_length > settings.request_max_bytes:
         return JSONResponse({"detail": "request too large"}, status_code=413)
     if (
-        (
-            request.url.path.startswith("/api/")
-            or request.url.path.startswith("/v1/")
-        )
+        (request.url.path.startswith("/api/") or request.url.path.startswith("/v1/"))
         and request.url.path not in SIGNED_WEBHOOK_PATHS
         and not RECORDING_EXPORTER_PATH.fullmatch(request.url.path)
         and not (
@@ -245,7 +259,7 @@ async def control_request_guard(request: Request, call_next):
         and not _is_ai_console_jwt_route(request)
         and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
         and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
-        and not is_monitoring_route(request)
+        and not (is_monitoring_route(request) or is_observability_sync_route(request))
     ):
         try:
             verify_bearer(
@@ -253,7 +267,9 @@ async def control_request_guard(request: Request, call_next):
             )
         except BearerAuthError:
             status_code = 503 if not settings.middleware_secret else 401
-            detail = "authentication unavailable" if status_code == 503 else "unauthorized"
+            detail = (
+                "authentication unavailable" if status_code == 503 else "unauthorized"
+            )
             return JSONResponse({"detail": detail}, status_code=status_code)
     response = await call_next(request)
     response.headers["X-Correlation-ID"] = (
@@ -320,7 +336,11 @@ async def health_dependencies() -> dict[str, object]:
         "service": "codestra-contact-center-middleware",
         "environment": settings.environment,
         "status": "configured",
-        "dependencies": {"postgres": "configured", "redis": "configured", "keycloak": "configured"},
+        "dependencies": {
+            "postgres": "configured",
+            "redis": "configured",
+            "keycloak": "configured",
+        },
         "timestamp": datetime.now(UTC).isoformat(),
     }
 

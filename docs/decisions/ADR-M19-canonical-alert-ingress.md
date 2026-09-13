@@ -3,7 +3,7 @@
 The Codestra mission pack names `/internal/v1/alerts/alertmanager`; deployed
 clients already use `/v1/integrations/alertmanager/events`. Register both paths
 on the same handler in the observability alert application. Authentication,
-tenant/source policy, durable incident identity, replay and recovery remain
+tenant/source policy, durable incident identity, replay, and recovery remain
 shared. Keep the older path during client migration.
 
 This is an internal service route. It is not added to the public gateway.

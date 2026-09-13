@@ -14,7 +14,10 @@ async def restrict_sms_identity(request: Request) -> None:
     # Telnexa's exact callback uses its own shared API-key + HMAC contract;
     # do not classify that opaque key as an Odoo JWT caller before the route
     # has authenticated it.
-    if request.method == "POST" and request.url.path == "/api/v1/events/telnexa":
+    if request.method == "POST" and request.url.path in {
+        "/api/v1/events/telnexa",
+        "/api/v1/events/klyrow",
+    }:
         return
     try:
         caller = caller_for_authorization(request.headers.get("Authorization", ""))

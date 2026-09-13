@@ -242,26 +242,6 @@ def test_firing_alert_is_durable_and_replay_safe() -> None:
         assert events.json()["items"][0]["new_state"] == "persisted"
 
 
-def test_canonical_internal_path_shares_authorization_and_replay_store() -> None:
-    with TestClient(app()) as client:
-        canonical = "/internal/v1/alerts/alertmanager"
-        assert client.post(canonical, json=webhook()).status_code in {401, 403}
-
-        accepted = client.post(canonical, json=webhook(), headers=headers())
-        assert accepted.status_code == 202
-
-        replay = client.post(
-            "/v1/integrations/alertmanager/events",
-            json=webhook(),
-            headers=headers(),
-        )
-        assert replay.status_code == 200
-        accepted_operation = accepted.json()["operations"][0]
-        replay_operation = replay.json()["operations"][0]
-        assert replay_operation["duplicate"] is True
-        assert replay_operation["operation_id"] == accepted_operation["operation_id"]
-
-
 def test_mixed_status_group_processes_each_alert_transition() -> None:
     value = webhook()
     resolved = copy.deepcopy(value["alerts"][0])
@@ -1603,3 +1583,23 @@ def test_native_informational_is_normalized_to_state_only_info() -> None:
         )
         assert response.status_code == 202
         assert response.json()["operations"][0]["operation_id"] is None
+
+
+def test_canonical_internal_path_shares_authorization_and_replay_store() -> None:
+    with TestClient(app()) as client:
+        canonical = "/internal/v1/alerts/alertmanager"
+        assert client.post(canonical, json=webhook()).status_code in {401, 403}
+
+        accepted = client.post(canonical, json=webhook(), headers=headers())
+        assert accepted.status_code == 202
+
+        replay = client.post(
+            "/v1/integrations/alertmanager/events",
+            json=webhook(),
+            headers=headers(),
+        )
+        assert replay.status_code == 200
+        accepted_operation = accepted.json()["operations"][0]
+        replay_operation = replay.json()["operations"][0]
+        assert replay_operation["duplicate"] is True
+        assert replay_operation["operation_id"] == accepted_operation["operation_id"]

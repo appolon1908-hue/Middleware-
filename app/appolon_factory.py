@@ -63,6 +63,7 @@ from .observability import (
 )
 from .operations_dashboard import router as operations_dashboard_router
 from .monitoring.routes import router as monitoring_router
+from .api.v1.observability_sync import router as observability_sync_router
 from .operations import OperationResponse, _operation_json, router as operations_router
 from .runtime import Runtime, build_runtime
 from .runtime_safety import RuntimeSafetyReadback, runtime_safety_readback
@@ -194,6 +195,7 @@ def create_app(
     app.include_router(presence_router)
     app.include_router(queues_router)
     app.include_router(monitoring_router)
+    app.include_router(observability_sync_router)
 
     def realtime_store(request: Request):
         active = request.app.state.runtime

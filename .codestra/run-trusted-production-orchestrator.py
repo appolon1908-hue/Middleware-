@@ -32,22 +32,25 @@ SHA = re.compile(r"[0-9a-f]{40}")
 # key is a candidate generation it may accept. This one-way transition graph
 # prevents an older validator from being replayed after its successor merges.
 CURRENT_VALIDATOR_SHA256 = (
-    "cd085c9f42072f12fd0495bd9ee8debfd68e3f9db266a08cecbaa7be7efd3f5e"
-)
-SUCCESSOR_VALIDATOR_SHA256 = (
     "aa54d934fed699906e78c70a1d70a572dd285d5b450c4b0b9a43194e7f2148d4"
 )
+SUCCESSOR_VALIDATOR_SHA256 = (
+    "5fd0fd21b0d0f714c395f1f105298c6a66fc3b670827b9ff73bb5ee4ca43e0d4"
+)
 CURRENT_RELEASE_VALIDATOR_SHA256 = (
-    "97f3891f1d638141780a1c2e5772f7cb7c51dcae44325299777605ee92097497"
+    "0c7da47aeaee9efdb74dde15cdcab465f9183200f5efe98c0ec5ccbbdc03ec1e"
+)
+CURRENT_RELEASE_SECURITY_FINGERPRINT = (
+    "db7d2424693aa230c20c7d58056f0c4a3e52b5da90bdd37caabe7971f504c4a5"
 )
 SUCCESSOR_RELEASE_SECURITY_FINGERPRINT = (
-    "db7d2424693aa230c20c7d58056f0c4a3e52b5da90bdd37caabe7971f504c4a5"
+    "8b82663492fa67f6e0432bfc7dbc67f5ecd355d9edd50cdbb3b6c17bb03a72b4"
 )
 APPROVED_VALIDATOR_TRANSITIONS = {
     CURRENT_VALIDATOR_SHA256: {
         CURRENT_VALIDATOR_SHA256: (
             "security-fingerprint",
-            SUCCESSOR_RELEASE_SECURITY_FINGERPRINT,
+            CURRENT_RELEASE_SECURITY_FINGERPRINT,
         ),
         SUCCESSOR_VALIDATOR_SHA256: (
             "security-fingerprint",

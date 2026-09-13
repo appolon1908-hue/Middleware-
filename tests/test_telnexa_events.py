@@ -272,6 +272,52 @@ def test_missing_communication_message_is_retryable_not_acknowledged(
     assert database.commit_count == 1
 
 
+def test_authenticated_delayed_retry_can_finish_existing_inbox(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure(monkeypatch)
+    message = _message()
+    database = _Session(None)
+    body = _event(message)
+    with pytest.raises(HTTPException):
+        _receive(_request(body, _headers(body)), database)
+    assert database.inbox["processing_status"] == "retry"
+
+    timestamp = int(json.loads(body)["timestamp"])
+    monkeypatch.setattr(
+        "app.api.internal.telnexa_events.time.time",
+        lambda: timestamp + 301,
+    )
+    database.message = message
+    result = _receive(_request(body, _headers(body)), database)
+
+    assert result["duplicate"] is True
+    assert database.inbox["processing_status"] == "complete"
+    assert database.updated_payload is not None
+    assert database.updated_payload["status"] == "delivered"
+
+
+def test_stale_first_delivery_is_rejected_before_inbox_insert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure(monkeypatch)
+    message = _message()
+    body = _event(message)
+    timestamp = int(json.loads(body)["timestamp"])
+    monkeypatch.setattr(
+        "app.api.internal.telnexa_events.time.time",
+        lambda: timestamp + 301,
+    )
+    database = _Session(message)
+
+    with pytest.raises(HTTPException) as error:
+        _receive(_request(body, _headers(body)), database)
+
+    assert error.value.status_code == 401
+    assert error.value.detail == "expired_telnexa_signature"
+    assert database.inbox == {}
+
+
 def test_nonterminal_callbacks_are_monotonic() -> None:
     assert _effective_status("dispatched", "queued") == ("dispatched", True)
     assert _effective_status("queued", "accepted") == ("queued", True)

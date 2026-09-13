@@ -244,20 +244,6 @@ def _authenticate(request: Request, body: bytes) -> tuple[str, str, str, str]:
         raise HTTPException(401, "invalid_telnexa_event_id")
     if not timestamp.isascii() or not timestamp.isdecimal() or len(timestamp) > 12:
         raise HTTPException(401, "invalid_telnexa_timestamp")
-    try:
-        ttl = int(
-            cast(
-                int | str,
-                _runtime_setting(request, "telnexa_event_signature_ttl_seconds", 300),
-            )
-        )
-        if ttl <= 0:
-            raise HTTPException(503, "telnexa_signature_configuration_invalid")
-        if abs(time.time() - int(timestamp)) > ttl:
-            raise HTTPException(401, "expired_telnexa_signature")
-    except ValueError as exc:
-        raise HTTPException(401, "invalid_telnexa_timestamp") from exc
-
     secret = _read_secret(
         _runtime_setting(request, "telnexa_event_hmac_secret", ""),
         _runtime_setting(request, "telnexa_event_hmac_secret_file", ""),
@@ -270,6 +256,21 @@ def _authenticate(request: Request, body: bytes) -> tuple[str, str, str, str]:
     if not hmac.compare_digest(expected, supplied_signature):
         raise HTTPException(401, "invalid_telnexa_signature")
     return event_id, timestamp, idempotency_key, supplied_signature
+
+
+def _signature_is_fresh(request: Request, timestamp: str) -> bool:
+    try:
+        ttl = int(
+            cast(
+                int | str,
+                _runtime_setting(request, "telnexa_event_signature_ttl_seconds", 300),
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(503, "telnexa_signature_configuration_invalid") from exc
+    if ttl <= 0:
+        raise HTTPException(503, "telnexa_signature_configuration_invalid")
+    return abs(time.time() - int(timestamp)) <= ttl
 
 
 def _parse_event(body: bytes) -> TelnexaDeliveryEvent:
@@ -392,6 +393,8 @@ async def _insert_inbox_if_new(
     event: TelnexaDeliveryEvent,
     body_hash: str,
     payload_json: str,
+    *,
+    signature_fresh: bool,
 ) -> tuple[bool, str | None]:
     existing = (
         (
@@ -410,6 +413,8 @@ async def _insert_inbox_if_new(
         if not hmac.compare_digest(str(existing["payload_hash"]), body_hash):
             raise HTTPException(409, "telnexa_event_replay_conflict")
         return True, str(existing["processing_status"])
+    if not signature_fresh:
+        raise HTTPException(401, "expired_telnexa_signature")
     await db.execute(
         text("""INSERT INTO telnexa_delivery_event_inbox
           (event_id,payload_hash,received_at,source,event_version,schema_version,
@@ -484,6 +489,7 @@ async def receive_telnexa_event(
         raise HTTPException(415, "application_json_required")
 
     event_id, timestamp, header_idempotency_key, _ = _authenticate(request, body)
+    signature_fresh = _signature_is_fresh(request, timestamp)
     event = _parse_event(body)
     if (
         event.event_id != event_id
@@ -502,7 +508,11 @@ async def receive_telnexa_event(
     )
     try:
         duplicate, previous_status = await _insert_inbox_if_new(
-            db, event, body_hash, payload_json
+            db,
+            event,
+            body_hash,
+            payload_json,
+            signature_fresh=signature_fresh,
         )
         if duplicate and previous_status == "complete":
             await db.commit()
@@ -642,9 +652,7 @@ async def receive_telnexa_event(
         store = getattr(communications, "store", None)
         if store is not None:
             try:
-                store.messages[(event.tenant_id, event.message_id)] = updated.model_copy(
-                    deep=True
-                )
+                store.synchronize_durable_message(updated)
                 store.add_event(
                     event.tenant_id,
                     event.message_id,

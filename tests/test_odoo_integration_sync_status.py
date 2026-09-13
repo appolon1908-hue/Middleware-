@@ -201,6 +201,7 @@ async def test_sync_errors_excludes_reconciled_and_not_observed(client, authorit
     assert code_new not in codes
     assert body["pagination"]["offset"] == 0
     assert body["pagination"]["returned"] == len(body["items"])
+    assert isinstance(body["pagination"]["has_more"], bool)
 
 
 @pytest.mark.asyncio

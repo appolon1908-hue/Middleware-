@@ -40,7 +40,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.calls import _business_unit_column
@@ -62,6 +62,7 @@ router = APIRouter(prefix="/platform/v1/campaigns", tags=["campaigns"])
 
 RECENT_ACTIVE_WINDOW = timedelta(minutes=30)
 RECENT_HEALTH_WINDOW = timedelta(hours=1)
+INACTIVE_PROVISIONING_STATES = frozenset({"FAILED", "SUSPENDED", "REVOKED"})
 
 
 async def _registry_row(
@@ -93,6 +94,8 @@ def _campaign_out(registry: CampaignRegistry) -> dict[str, Any]:
 @router.get("")
 async def list_campaigns(
     tenant_id: str = Query(..., description="campaign_code to scope results to"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
     ),
@@ -103,9 +106,27 @@ async def list_campaigns(
         select(CampaignRegistry)
         .where(CampaignRegistry.campaign_code == tenant_id)
         .order_by(CampaignRegistry.campaign_number)
+        .limit(limit)
+        .offset(offset)
     )
     rows = (await session.execute(stmt)).scalars().all()
-    return {"items": [_campaign_out(row) for row in rows]}
+    total = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(CampaignRegistry)
+            .where(CampaignRegistry.campaign_code == tenant_id)
+        )
+        or 0
+    )
+    return {
+        "items": [_campaign_out(row) for row in rows],
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(rows),
+            "total": total,
+        },
+    }
 
 
 @router.get("/{campaign_id}")
@@ -130,6 +151,8 @@ async def list_campaign_members(
     tenant_id: str = Query(
         ..., description="campaign_code expected to own this campaign"
     ),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
     ),
@@ -147,9 +170,22 @@ async def list_campaign_members(
         )
         .distinct()
         .order_by(AgentCallState.agent_id)
+        .limit(limit + 1)
+        .offset(offset)
     )
-    agent_ids = (await session.execute(stmt)).scalars().all()
-    return {"recently_active_agents": sorted(agent_ids)}
+    rows = list((await session.execute(stmt)).scalars().all())
+    has_more = len(rows) > limit
+    agent_ids = rows[:limit]
+    return {
+        "recently_active_agents": agent_ids,
+        "window_minutes": int(RECENT_ACTIVE_WINDOW.total_seconds() // 60),
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(agent_ids),
+            "has_more": has_more,
+        },
+    }
 
 
 @router.get("/{campaign_id}/channels")
@@ -185,35 +221,27 @@ async def get_campaign_channels(
         .where(AgentProvisioningRequest.tenant_id == tenant_id)
         .subquery()
     )
-    requests = (
-        await session.execute(
-            select(
-                latest.c.campaigns_json,
-                latest.c.channels_json,
-                latest.c.state,
-            ).where(latest.c.request_rank == 1)
-        )
-    ).all()
+    requests = list(
+        (
+            await session.execute(
+                select(latest.c.channels_json).where(
+                    latest.c.request_rank == 1,
+                    latest.c.state.not_in(INACTIVE_PROVISIONING_STATES),
+                    latest.c.campaigns_json.contains([{"campaign_id": campaign_id}]),
+                )
+            )
+        ).scalars()
+    )
 
     counts: dict[str, int] = {}
-    matched_requests = 0
-    for campaigns_json, channels_json, state in requests:
-        if state in {"FAILED", "SUSPENDED", "REVOKED"}:
-            continue
-        campaigns = campaigns_json or []
-        if not any(
-            isinstance(entry, dict) and entry.get("campaign_id") == campaign_id
-            for entry in campaigns
-        ):
-            continue
-        matched_requests += 1
+    for channels_json in requests:
         for channel, desired in (channels_json or {}).items():
             if desired:
                 counts[channel] = counts.get(channel, 0) + 1
 
     return {
         "campaign_id": campaign_id,
-        "provisioning_requests_referencing_campaign": matched_requests,
+        "provisioning_requests_referencing_campaign": len(requests),
         "desired_channel_counts": counts,
         "projection": "latest_desired_request_per_agent",
     }
@@ -234,24 +262,30 @@ async def get_campaign_health(
     await _registry_row(session, campaign_id, tenant_id)
 
     since = datetime.now(UTC) - RECENT_HEALTH_WINDOW
-    stmt = (
-        select(TelephonyCallLifecycle)
-        .join(
-            AuditEvent,
-            AuditEvent.correlation_id == TelephonyCallLifecycle.correlation_id,
-        )
+    matching_originate = (
+        select(1)
+        .select_from(AuditEvent)
         .where(
             AuditEvent.action == "telephony.calls.originate",
+            AuditEvent.correlation_id == TelephonyCallLifecycle.correlation_id,
             _business_unit_column() == tenant_id,
-            TelephonyCallLifecycle.created_at >= since,
         )
+        .correlate(TelephonyCallLifecycle)
     )
-    calls = (await session.execute(stmt)).scalars().unique().all()
-    ended = sum(1 for c in calls if c.lifecycle_state == "ENDED")
+    states = list(
+        (
+            await session.execute(
+                select(TelephonyCallLifecycle.lifecycle_state).where(
+                    TelephonyCallLifecycle.created_at >= since,
+                    exists(matching_originate),
+                )
+            )
+        ).scalars()
+    )
 
     return {
         "campaign_id": campaign_id,
         "scope": "tenant",
-        "calls_last_hour": len(calls),
-        "ended_last_hour": ended,
+        "calls_last_hour": len(states),
+        "ended_last_hour": states.count("ENDED"),
     }

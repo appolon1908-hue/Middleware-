@@ -94,19 +94,30 @@ async def list_tenants(
 
 @router.get("/authorized")
 async def list_authorized_tenants(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
     ),
 ) -> dict[str, Any]:
-    """Resolve only the tenant grants carried by the verified machine token."""
+    """Page through tenant grants carried by the verified machine token."""
     foundation = FoundationClient(settings)
     items: list[dict[str, str]] = []
+    granted_ids = sorted(principal.tenant_ids)
     async with httpx.AsyncClient(timeout=5.0) as http:
-        for tenant_id in sorted(principal.tenant_ids):
+        for tenant_id in granted_ids[offset : offset + limit]:
             tenant = await _resolve_tenant(foundation, http, tenant_id)
             if tenant is not None:
                 items.append(tenant)
-    return {"items": items}
+    return {
+        "items": items,
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(items),
+            "granted": len(granted_ids),
+        },
+    }
 
 
 @router.get("/{tenant_id}")
@@ -128,6 +139,8 @@ async def get_tenant(
 @router.get("/{tenant_id}/campaigns")
 async def list_tenant_campaigns(
     tenant_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
     ),
@@ -140,10 +153,20 @@ async def list_tenant_campaigns(
                 select(CampaignRegistry)
                 .where(CampaignRegistry.campaign_code == tenant_id)
                 .order_by(CampaignRegistry.campaign_number)
+                .limit(limit)
+                .offset(offset)
             )
         )
         .scalars()
         .all()
+    )
+    total = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(CampaignRegistry)
+            .where(CampaignRegistry.campaign_code == tenant_id)
+        )
+        or 0
     )
     return {
         "items": [
@@ -154,7 +177,13 @@ async def list_tenant_campaigns(
                 "registry_status": row.registry_status,
             }
             for row in rows
-        ]
+        ],
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(rows),
+            "total": total,
+        },
     }
 
 

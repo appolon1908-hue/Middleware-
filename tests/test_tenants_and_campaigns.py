@@ -234,3 +234,16 @@ async def test_campaign_channels_reports_zero_when_no_requests_reference_it(clie
     body = response.json()
     assert body["provisioning_requests_referencing_campaign"] == 0
     assert body["desired_channel_counts"] == {}
+
+
+@pytest.mark.asyncio
+async def test_authorized_directory_excludes_other_tenants(client, authority, monkeypatch):
+    async def codes(_session):
+        return ["COD", "SMT"]
+
+    monkeypatch.setattr(tenants_module, "_distinct_campaign_codes", codes)
+    response = await client.get(
+        "/platform/v1/tenants/authorized", headers=_headers(authority(tenant_ids=("COD",)))
+    )
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == ["COD"]

@@ -1187,8 +1187,15 @@ def test_release_artifact_reader_rejects_links_and_oversized_files(tmp_path):
     artifact = tmp_path / "api.json"
     artifact.write_bytes(b"{}")
     expected = "sha256:" + hashlib.sha256(b"{}").hexdigest()
-    (tmp_path / "linked.json").symlink_to(artifact)
-    with pytest.raises(OSError):
+    link = tmp_path / "linked.json"
+    try:
+        link.symlink_to(artifact)
+    except OSError:
+        # Creating symlinks requires elevated privileges/Developer Mode on
+        # Windows. Link-rejection is still exercised on platforms where a
+        # symlink can be created (all supported CI runners are Linux).
+        pytest.skip("symlink creation is not permitted on this platform")
+    with pytest.raises((OSError, ValueError)):
         read_artifact(str(tmp_path), "linked.json", expected)
     artifact.write_bytes(b"x" * (MAX_RESPONSE_BYTES + 1))
     with pytest.raises(ValueError, match="size limit"):

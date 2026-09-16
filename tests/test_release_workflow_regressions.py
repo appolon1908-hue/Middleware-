@@ -7,6 +7,7 @@ function in rendering tests; no network, credentials, or repository writes occur
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,20 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 CANDIDATE = WORKFLOWS / "source-lock-candidate-build.yml"
 REVIEWER = WORKFLOWS / "production-reviewer-access.yml"
+
+
+def bash_executable() -> str:
+    found = shutil.which("bash")
+    if found:
+        return found
+    for candidate in (
+        os.path.join(os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"), "Programs", "Git", "bin", "bash.exe"),
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    return "bash"
 
 
 def run_block(text: str, step_name: str) -> str:
@@ -70,7 +85,7 @@ class ReleaseWorkflowRegressions(unittest.TestCase):
 
     def test_reviewer_publish_shell_is_syntactically_valid(self) -> None:
         script = run_block(REVIEWER.read_text(encoding="utf-8"), "Publish issue result")
-        result = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True, timeout=10)
+        result = subprocess.run([bash_executable(), "-n"], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_historical_unindented_comment_is_rejected(self) -> None:
@@ -93,7 +108,7 @@ class ReleaseWorkflowRegressions(unittest.TestCase):
                     "ROLLOUT_OUTCOME": outcome,
                     "CAPTURE_PATH": str(capture),
                 }
-                result = subprocess.run(["bash"], input=mock + script, text=True, capture_output=True, env=environment, timeout=10)
+                result = subprocess.run([bash_executable()], input=mock + script, text=True, capture_output=True, env=environment, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 arguments = capture.read_bytes().decode().split("\0")[:-1]
                 self.assertEqual(arguments[:6], ["issue", "comment", "130", "--repo", environment["GITHUB_REPOSITORY"], "--body"])

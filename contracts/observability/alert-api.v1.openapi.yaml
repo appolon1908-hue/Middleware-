@@ -105,6 +105,24 @@ paths:
       responses:
         '200': {description: Durable dependencies ready}
         '503': {$ref: '#/components/responses/Problem'}
+  /platform/v1/health:
+    get:
+      operationId: platformHealthObservabilityAlerts
+      security: []
+      responses:
+        '200': {description: Process health}
+    head:
+      operationId: platformHeadHealthObservabilityAlerts
+      security: []
+      responses:
+        '200': {description: Process health}
+  /platform/v1/readiness:
+    get:
+      operationId: platformReadinessObservabilityAlerts
+      security: []
+      responses:
+        '200': {description: Durable dependencies ready}
+        '503': {$ref: '#/components/responses/Problem'}
   /version:
     get:
       operationId: versionObservabilityAlerts
@@ -305,7 +323,7 @@ components:
       in: header
       required: false
       description: >-
-        Explicit v4 compatibility mode for the authenticated alertmanager-service.
+        Explicit v4 compatibility mode for the authenticated alertmanager client.
         Supports the six canonical middleware-* receivers, at most 100 alerts,
         server-derived idempotency and correlation, and informational-to-info
         normalization. Tenant, scope, source deployment, metadata and body limits

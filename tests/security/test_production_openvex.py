@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -20,6 +21,20 @@ SHA = "4db1c245c1733e4abc7ea695d76862ffdc3fd698"
 DIGEST = "sha256:" + "a" * 64
 IDENTITY = "https://github.com/appolon1908-hue/Middleware-/.github/workflows/security-owner-decision-sign.yml@refs/heads/main"
 ISSUER = "https://token.actions.githubusercontent.com"
+
+
+def bash_executable() -> str:
+    found = shutil.which("bash")
+    if found:
+        return found
+    for candidate in (
+        os.path.join(os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"), "Programs", "Git", "bin", "bash.exe"),
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    return "bash"
 
 
 def document() -> dict:
@@ -61,34 +76,44 @@ def test_invalid_openvex_is_rejected(mutation: str) -> None:
 
 
 def write_artifact(path: Path, *, signer: str = IDENTITY, issuer: str = ISSUER) -> None:
-    vex = json.dumps(document(), sort_keys=True, separators=(",", ":")) + "\n"
-    (path / "openvex.json").write_text(vex)
-    bundle = {"signer": signer, "issuer": issuer, "payload_sha256": hashlib.sha256(vex.encode()).hexdigest()}
-    (path / "openvex.sigstore.json").write_text(json.dumps(bundle))
-    sums = []
-    for name in ("openvex.json", "openvex.sigstore.json"):
-        sums.append(f"{hashlib.sha256((path / name).read_bytes()).hexdigest()}  {name}\n")
-    (path / "SHA256SUMS").write_text("".join(sums))
+   vex = json.dumps(document(), sort_keys=True, separators=(",", ":")) + "\n"
+   (path / "openvex.json").write_bytes(vex.encode("utf-8"))
+   bundle = {"signer": signer, "issuer": issuer, "payload_sha256": hashlib.sha256(vex.encode()).hexdigest()}
+   (path / "openvex.sigstore.json").write_bytes(json.dumps(bundle, separators=(",", ":")).encode("utf-8"))
+   sums = []
+   for name in ("openvex.json", "openvex.sigstore.json"):
+       sums.append(f"{hashlib.sha256((path / name).read_bytes()).hexdigest()}  {name}\n")
+   (path / "SHA256SUMS").write_bytes("".join(sums).encode("utf-8"))
 
 
 def fake_cosign(path: Path) -> Path:
-    script = path / "cosign"
-    script.write_text("""#!/usr/bin/env python3
+   script = path / "cosign"
+   script.write_text("""#!/usr/bin/env python
 import hashlib,json,sys
+
 a=sys.argv; b=json.load(open(a[a.index('--bundle')+1])); payload=a[-1]
 expected_identity=a[a.index('--certificate-identity')+1]
 expected_issuer=a[a.index('--certificate-oidc-issuer')+1]
 valid=(b.get('signer')==expected_identity and b.get('issuer')==expected_issuer and b.get('payload_sha256')==hashlib.sha256(open(payload,'rb').read()).hexdigest())
 raise SystemExit(0 if valid else 1)
-""")
-    script.chmod(0o755)
-    return script
+""", encoding="utf-8", newline="\n")
+   script.chmod(0o755)
+   return script
 
 
 def verify(path: Path, cosign: Path) -> subprocess.CompletedProcess[str]:
-    env = os.environ | {"COSIGN_BIN": str(cosign)}
+    env = os.environ.copy()
+    env["COSIGN_BIN"] = str(cosign)
+    for candidate in (
+        os.path.join(os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"), "Programs", "Git", "bin"),
+        r"C:\Program Files\Git\bin",
+        r"C:\Program Files\Git\usr\bin",
+    ):
+        if os.path.isdir(candidate):
+            env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+            break
     return subprocess.run(
-        ["bash", "scripts/security/verify-production-openvex.sh", str(path), SHA, DIGEST],
+        [bash_executable(), "scripts/security/verify-production-openvex.sh", str(path), SHA, DIGEST],
         cwd=ROOT, env=env, text=True, capture_output=True, check=False,
     )
 

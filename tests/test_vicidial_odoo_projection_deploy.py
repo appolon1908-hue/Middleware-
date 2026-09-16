@@ -19,6 +19,18 @@ from workers.init_vicidial_odoo_projection_state import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+GETUID = getattr(os, "getuid", None)
+GETGID = getattr(os, "getgid", None)
+
+
+def _uid() -> int:
+    return 0 if GETUID is None else GETUID()
+
+
+def _gid() -> int:
+    return 0 if GETGID is None else GETGID()
+
+
 COMPOSE = (
     ROOT
     / "deploy"
@@ -259,23 +271,29 @@ def test_python_initializer_prepares_private_state_directory(
 
     prepare_state_directory(
         state_directory,
-        uid=os.getuid(),
-        gid=os.getgid(),
+        uid=_uid(),
+        gid=_gid(),
     )
 
     info = state_directory.stat()
-    assert info.st_uid == os.getuid()
-    assert info.st_gid == os.getgid()
-    assert stat.S_IMODE(info.st_mode) == 0o700
+    assert info.st_uid == _uid()
+    assert info.st_gid == _gid()
+    if os.name != "nt":
+        assert stat.S_IMODE(info.st_mode) == 0o700
 
 
 def test_python_initializer_rejects_symlink_state_path(
     tmp_path: Path,
 ) -> None:
+    if not hasattr(os, "symlink"):
+        pytest.skip("symbolic links are unavailable on this platform")
     target = tmp_path / "target"
     target.mkdir()
     link = tmp_path / "state-link"
-    link.symlink_to(target, target_is_directory=True)
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except (NotImplementedError, OSError):
+        pytest.skip("symbolic links are unavailable on this platform")
 
     with pytest.raises(
         StateDirectoryInitializationError,
@@ -283,8 +301,8 @@ def test_python_initializer_rejects_symlink_state_path(
     ):
         prepare_state_directory(
             link,
-            uid=os.getuid(),
-            gid=os.getgid(),
+            uid=_uid(),
+            gid=_gid(),
         )
 
 

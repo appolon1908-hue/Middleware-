@@ -242,14 +242,17 @@ def create_app(
         )
 
     @app.get("/health")
+    @app.get("/platform/v1/health")
     async def health() -> dict[str, str]:
         return {"status": "healthy", "service": "middleware-observability-alerts"}
 
     @app.head("/health")
+    @app.head("/platform/v1/health")
     async def health_head() -> Response:
         return Response(status_code=200)
 
     @app.get("/readiness")
+    @app.get("/platform/v1/readiness")
     async def readiness(request: Request) -> JSONResponse:
         report = await request.app.state.runtime.readiness()
         return JSONResponse(

@@ -8,7 +8,9 @@
   "api_contract_url": "https://raw.githubusercontent.com/appolon1908-hue/Middleware-/cedaa23b89f84f365ae6789413411c3f01516952/contracts/observability/integrated-monitoring.openapi.json",
   "api_operation_count": 36,
   "repository_inventory_count": 63,
-  "service_ids": [],
+  "service_ids": [
+    "tempo"
+  ],
   "runtime_coverage": "unverified",
   "activation_enabled": false,
   "required_identity_fields": [

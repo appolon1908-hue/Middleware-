@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -43,7 +44,7 @@ def validate(tmp_path: Path, manifest: dict[str, object]) -> subprocess.Complete
     path.write_text(json.dumps(manifest), encoding="utf-8")
     return subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(VALIDATOR),
             "--manifest",
             str(path),
@@ -79,7 +80,7 @@ def test_schema_accepts_non_historical_positive_pr_number(tmp_path: Path) -> Non
     path.write_text(json.dumps(manifest), encoding="utf-8")
     result = subprocess.run(
         [
-            "python3", str(VALIDATOR), "--manifest", str(path), "--schema", str(SCHEMA),
+            sys.executable, str(VALIDATOR), "--manifest", str(path), "--schema", str(SCHEMA),
             "--expected-company", "Codestra LLC", "--expected-repository",
             "appolon1908-hue/Middleware-", "--expected-pr-number", "214",
             "--expected-head-sha", HEAD, "--expected-image-repository",

@@ -90,7 +90,8 @@ class VicidialInternalCallAdapter:
         if not path.is_absolute() or path.is_symlink():
             raise ConfigurationError("VICIDIAL HMAC secret path is unsafe")
         try:
-            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags)
             with os.fdopen(descriptor, "rb") as stream:
                 metadata = os.fstat(stream.fileno())
                 value = stream.read(4097).strip()

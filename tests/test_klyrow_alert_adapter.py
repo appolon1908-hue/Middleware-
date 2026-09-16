@@ -28,7 +28,7 @@ def request() -> CommandExecutionRequest:
             "command_version": "1.0",
             "target": "klyrow-alert-email",
             "tenant_id": "codestra-platform",
-            "requested_by": "service-account-alertmanager-service",
+            "requested_by": "service-account-alertmanager",
             "correlation_id": "corr-observability-alert-0001",
             "idempotency_key": "obs-alert-v1:" + "1" * 64,
             "capability": "OBSERVABILITY_ALERT_EMAIL_DELIVERY",

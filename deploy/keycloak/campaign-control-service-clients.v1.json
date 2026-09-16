@@ -10,7 +10,7 @@
   ],
   "environments": {
     "staging": {
-      "issuer": "https://auth.staging.internal.codestra.agency/realms/codestra",
+      "issuer": "https://auth-staging.codestra.co/realms/codestra",
       "clients": [
         {
           "client_id": "codestra-middleware-odoo-results",

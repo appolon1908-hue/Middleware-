@@ -493,3 +493,33 @@ def test_campaign_reader_fails_closed_when_no_client_is_configured(monkeypatch):
     with pytest.raises(integrations.HTTPException) as raised:
         integrations._authenticate_odoo("Bearer x", "odoo.campaigns.read")
     assert raised.value.status_code == 503
+
+
+def test_n8n_authenticator_pins_deployment_environment_and_accepts_listed_clients(monkeypatch):
+    captured = {}
+
+    class Recorder:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def validate(self, _token):
+            return {}
+
+    monkeypatch.setattr(integrations, "KeycloakValidator", Recorder)
+    monkeypatch.setattr(integrations.settings, "environment", "staging")
+    monkeypatch.setattr(integrations.settings, "n8n_campaign_service_client_id", "single-client")
+    monkeypatch.setattr(
+        integrations.settings, "n8n_campaign_service_client_ids",
+        "test-syn-n8n-submit, test-syn-n8n-read,test-syn-wrong-tenant",
+    )
+    integrations._authenticate_n8n("Bearer x", "n8n.results.read")
+    assert captured["required_environment"] == "staging"
+    assert captured["authorized_parties"] == frozenset(
+        {"test-syn-n8n-submit", "test-syn-n8n-read", "test-syn-wrong-tenant"}
+    )
+    # Empty list falls back to the single production client.
+    monkeypatch.setattr(integrations.settings, "n8n_campaign_service_client_ids", "")
+    monkeypatch.setattr(integrations.settings, "environment", "production")
+    integrations._authenticate_n8n("Bearer x", "n8n.results.submit")
+    assert captured["authorized_parties"] == frozenset({"single-client"})
+    assert captured["required_environment"] == "production"

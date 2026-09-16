@@ -130,7 +130,22 @@ def _scope_values(claims: dict[str, Any], plural: str, singular: str) -> set[str
     return {str(item) for item in values or []}
 
 
+def _n8n_authorized_parties() -> frozenset[str]:
+    listed = frozenset(
+        value.strip()
+        for value in settings.n8n_campaign_service_client_ids.split(",")
+        if value.strip()
+    )
+    return listed or frozenset({settings.n8n_campaign_service_client_id})
+
+
 def _authenticate_n8n(authorization: str, required_scope: str) -> dict[str, Any]:
+    """n8n service JWT, pinned to the deployment's own environment claim.
+
+    The token's ``environment`` must equal ``settings.environment`` (staging
+    tokens in staging, production tokens in production); a token minted for
+    another environment is rejected even when every other claim is valid.
+    """
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, "bearer token required")
     try:
@@ -138,9 +153,9 @@ def _authenticate_n8n(authorization: str, required_scope: str) -> dict[str, Any]
             issuer=settings.n8n_service_issuer,
             audience=settings.n8n_service_audience,
             jwks_url=settings.n8n_service_jwks_url,
-            authorized_parties=frozenset({settings.n8n_campaign_service_client_id}),
+            authorized_parties=_n8n_authorized_parties(),
             required_scopes=frozenset({required_scope}),
-            required_environment="production",
+            required_environment=settings.environment,
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
         raise HTTPException(401, str(exc)) from exc

@@ -204,6 +204,10 @@ class Settings(BaseSettings):
     n8n_service_jwks_url: str = ""
     n8n_service_client_id: str = "codestra-n8n-production"
     n8n_campaign_service_client_id: str = "codestra-n8n-campaign-crm-production"
+    # Optional comma-separated list of n8n service clients accepted on the
+    # standard-result routes (submit + readback). Empty falls back to the
+    # single client above. Staging certification uses one client per scope.
+    n8n_campaign_service_client_ids: str = ""
     middleware_n8n_token_url: str = ""
     middleware_n8n_client_id: str = "codestra-middleware-production"
     middleware_n8n_client_secret_file: str = ""

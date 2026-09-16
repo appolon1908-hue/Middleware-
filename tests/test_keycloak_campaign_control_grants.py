@@ -29,13 +29,20 @@ def _migration():
     return module
 
 
-def _clients(environment: str) -> dict[str, dict]:
-    return {c["client_id"]: c for c in GRANTS["environments"][environment]["clients"]}
+NEGATIVE = "certification_negative"
+
+
+def _clients(environment: str, *, include_negative: bool = False) -> dict[str, dict]:
+    return {
+        c["client_id"]: c
+        for c in GRANTS["environments"][environment]["clients"]
+        if include_negative or c["direction"] != NEGATIVE
+    }
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
 def test_middleware_never_holds_the_desired_state_write_scope(environment):
-    for client in _clients(environment).values():
+    for client in _clients(environment, include_negative=True).values():
         assert FORBIDDEN not in client["scopes"], client["client_id"]
     assert {g["scope"] for g in GRANTS["forbidden_grants"]} == {FORBIDDEN}
     assert {g["client_id"] for g in GRANTS["forbidden_grants"]} == {settings.odoo_results_client_id}
@@ -73,6 +80,34 @@ def test_staging_grants_are_bound_to_the_test_syn_triple_only():
         assert client["campaigns"] == [campaign]
 
 
+def test_negative_certification_identities_hold_no_outbound_or_forbidden_scope():
+    negatives = {
+        cid: c for cid, c in _clients("staging", include_negative=True).items() if c["direction"] == NEGATIVE
+    }
+    assert set(negatives) == {"test-syn-wrong-audience", "test-syn-wrong-tenant"}
+    outbound = set(_clients("staging")[settings.odoo_results_client_id]["scopes"])
+    assert negatives["test-syn-wrong-audience"]["scopes"] == []
+    assert negatives["test-syn-wrong-audience"]["audience"] != "codestra-middleware"
+    assert set(negatives["test-syn-wrong-tenant"]["scopes"]) == {"n8n.results.read", "odoo.campaigns.read"}
+    assert negatives["test-syn-wrong-tenant"]["organizations"] == ["TEST_SYN_OTHER_TENANT"]
+    for client in negatives.values():
+        assert not outbound & set(client["scopes"])
+        assert FORBIDDEN not in client["scopes"]
+
+
+def test_staging_middleware_settings_admit_exactly_the_certification_identities():
+    staging = GRANTS["environments"]["staging"]
+    listed = {c["client_id"] for c in staging["clients"]}
+    n8n = set(staging["middleware_settings"]["N8N_CAMPAIGN_SERVICE_CLIENT_IDS"].split(","))
+    readers = set(staging["middleware_settings"]["ODOO_CAMPAIGN_READER_CLIENT_IDS"].split(","))
+    assert n8n == {"test-syn-n8n-submit", "test-syn-n8n-read", "test-syn-wrong-tenant"}
+    assert readers == {"test-syn-odoo-reader", "test-syn-wrong-tenant"}
+    assert (n8n | readers) <= listed
+    assert "test-syn-wrong-audience" not in n8n | readers
+    assert staging["middleware_settings"]["N8N_SERVICE_AUDIENCE"] == settings.n8n_service_audience
+    assert staging["middleware_settings"]["N8N_SERVICE_ISSUER"] == staging["issuer"]
+
+
 @pytest.mark.parametrize("environment", ["staging", "production"])
 def test_every_edge_contract_scope_is_granted_to_exactly_one_direction(environment):
     clients = _clients(environment)
@@ -98,6 +133,10 @@ def test_n8n_client_ids_and_scopes_match_the_middleware_validator():
     n8n = production[settings.n8n_campaign_service_client_id]
     assert set(n8n["scopes"]) == {"n8n.results.submit", "n8n.results.read"}
     assert n8n["audience"] == settings.n8n_service_audience
+    staging = _clients("staging")
+    assert staging["test-syn-n8n-submit"]["scopes"] == ["n8n.results.submit"]
+    assert staging["test-syn-n8n-read"]["scopes"] == ["n8n.results.read"]
+    assert set(staging["test-syn-odoo-reader"]["scopes"]) == {"odoo.campaigns.read"}
     reader_scopes = {
         scope for _m, _t, _p, auth, scope in route_policy.INTEGRATION_SERVICE_JWT_ROUTES if auth == "odoo-service-jwt"
     }

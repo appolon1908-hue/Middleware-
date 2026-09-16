@@ -143,9 +143,18 @@ def test_forbidden_scope_literal_never_appears_in_migration_or_app(migration_sou
 
 def test_middleware_scopes_in_catalog_are_the_reviewed_set(catalog):
     operations = catalog["operations"]
-    assert operations["campaign.actual_state.write"]["scope"] == "odoo.campaign.actual_state.write"
-    assert operations["automation_results.apply"]["scope"] == "odoo.integration.automation_results.write"
-    assert operations["provider_activities.create"]["scope"] == "odoo.integration.provider_activities.write"
+    assert (
+        operations["campaign.actual_state.write"]["scope"]
+        == "odoo.campaign.actual_state.write"
+    )
+    assert (
+        operations["automation_results.apply"]["scope"]
+        == "odoo.integration.automation_results.write"
+    )
+    assert (
+        operations["provider_activities.create"]["scope"]
+        == "odoo.integration.provider_activities.write"
+    )
     assert operations["campaigns.read"]["scope"] == "odoo.campaign.control.read"
     assert operations["desired_state.read"]["scope"] == "odoo.campaign.control.read"
 
@@ -204,16 +213,16 @@ def test_synthetic_adapter_result_states_use_catalog_vocabulary(catalog):
     operations = set(typing.get_args(campaign_control.CampaignOperation))
     result_state = catalog["synthetic_adapter_result_state"]
     assert set(result_state) == operations
-    assert set(catalog["outbox_events"]["operation_by_event_type"].values()) == operations
+    assert (
+        set(catalog["outbox_events"]["operation_by_event_type"].values()) == operations
+    )
     for operation, state in result_state.items():
         assert state is None or state in catalog["effective_states"], operation
 
 
 def test_outbox_allowlist_matches_saga_allowed_event_types(catalog):
-    try:
-        from app import odoo_campaign_saga
-    except ImportError:
-        pytest.skip("app.odoo_campaign_saga is not present in this tree yet")
+    from app import odoo_campaign_saga
+
     allowed = odoo_campaign_saga.ALLOWED_EVENT_TYPES
     allowlist = catalog["outbox_events"]["allowlist"]
     assert set(allowed) == set(allowlist)
@@ -244,10 +253,13 @@ def test_staging_write_binding_snapshot_matches_the_catalog():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    catalog = json.loads((root / "contracts/odoo/campaign-control.v1.json").read_text(encoding="utf-8"))
+    catalog = json.loads(
+        (root / "contracts/odoo/campaign-control.v1.json").read_text(encoding="utf-8")
+    )
     binding = catalog["registry_policy_0066"]["staging"]["write_binding"]
     spec = importlib.util.spec_from_file_location(
-        "migration_0066_binding", root / "migrations/versions/0066_reconcile_odoo_campaign_scope.py"
+        "migration_0066_binding",
+        root / "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
     )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

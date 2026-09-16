@@ -285,15 +285,10 @@ def test_python_initializer_prepares_private_state_directory(
 def test_python_initializer_rejects_symlink_state_path(
     tmp_path: Path,
 ) -> None:
-    if not hasattr(os, "symlink"):
-        pytest.skip("symbolic links are unavailable on this platform")
     target = tmp_path / "target"
     target.mkdir()
     link = tmp_path / "state-link"
-    try:
-        link.symlink_to(target, target_is_directory=True)
-    except (NotImplementedError, OSError):
-        pytest.skip("symbolic links are unavailable on this platform")
+    link.symlink_to(target, target_is_directory=True)
 
     with pytest.raises(
         StateDirectoryInitializationError,

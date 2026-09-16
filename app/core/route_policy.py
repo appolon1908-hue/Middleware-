@@ -29,6 +29,10 @@ N8N_SERVICE_JWT_ROUTES: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
+ODOO_SERVICE_JWT_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {("POST", "/api/v1/odoo/events")}
+)
+
 # Integration service JWT routes with path parameters. The scope column is
 # what the handler enforces; it is exported so the edge-route contract and
 # the Keycloak desired state can be checked against the same table.
@@ -79,6 +83,7 @@ def handler_authenticated(method: str, path: str) -> bool:
     """True when the handler, not the shared-secret guard, authenticates the request."""
     return (
         is_n8n_service_jwt_route(method, path)
+        or (method.upper(), path) in ODOO_SERVICE_JWT_ROUTES
         or is_integration_service_jwt_route(method, path)
         or is_callback_jwt_path(path)
     )
@@ -93,6 +98,15 @@ def service_jwt_route_contract() -> list[dict[str, str]]:
     rows.extend(
         {"method": method, "path": template, "auth": auth, "scope": scope}
         for method, template, _pattern, auth, scope in INTEGRATION_SERVICE_JWT_ROUTES
+    )
+    rows.extend(
+        {
+            "method": method,
+            "path": path,
+            "auth": "odoo-service-jwt",
+            "scope": "odoo.events.publish",
+        }
+        for method, path in sorted(ODOO_SERVICE_JWT_ROUTES)
     )
     return rows
 

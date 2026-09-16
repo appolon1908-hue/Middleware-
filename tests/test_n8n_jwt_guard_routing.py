@@ -18,6 +18,11 @@ APPROVED_INTEGRATION_ROUTES = {
     ("GET", "/api/v1/integrations/odoo/campaigns/{campaign_id}/desired-state", "odoo.campaigns.read"),
     ("GET", "/api/v1/integrations/n8n/results/{event_id}", "n8n.results.read"),
 }
+# Odoo event ingress authenticates its own odoo-integration service JWT in the
+# handler; the shared-secret guard must never run first on this route.
+APPROVED_ODOO_ROUTES = {
+    ("POST", "/api/v1/odoo/events", "odoo.events.publish"),
+}
 
 
 def test_shared_policy_is_exactly_the_approved_route_set():
@@ -26,6 +31,9 @@ def test_shared_policy_is_exactly_the_approved_route_set():
         (method, template, scope)
         for method, template, _pattern, _auth, scope in route_policy.INTEGRATION_SERVICE_JWT_ROUTES
     } == APPROVED_INTEGRATION_ROUTES
+    assert {(m, p) for m, p, _s in APPROVED_ODOO_ROUTES} == set(
+        route_policy.ODOO_SERVICE_JWT_ROUTES
+    )
 
 
 def test_both_entrypoints_delegate_to_the_shared_policy_and_keep_no_local_copy():
@@ -56,12 +64,21 @@ def test_exemptions_are_exact_method_and_path_not_prefixes():
     assert not ok("GET", "/api/v1/integrations/odoo/campaign-commands/x")
     assert not ok("POST", "/api/v1/integration/campaign-actions")
     assert ok("POST", "/api/v1/callbacks/anything")
+    assert ok("POST", "/api/v1/odoo/events")
+    assert not ok("GET", "/api/v1/odoo/events")
+    assert not ok("POST", "/api/v1/odoo/events/")
+    assert not ok("POST", "/api/v1/odoo/events/anything")
 
 
 def test_contract_rows_expose_auth_and_scope_for_every_exempt_route():
     rows = route_policy.service_jwt_route_contract()
     assert {(r["method"], r["path"]) for r in rows} == APPROVED_N8N_ROUTES | {
-        (m, p) for m, p, _s in APPROVED_INTEGRATION_ROUTES
+        (m, p) for m, p, _s in APPROVED_INTEGRATION_ROUTES | APPROVED_ODOO_ROUTES
     }
     assert all(r["auth"] in {"n8n-service-jwt", "odoo-service-jwt"} for r in rows)
-    assert {r["scope"] for r in rows if "scope" in r} == {"odoo.campaigns.read", "n8n.results.read"}
+    assert {r["scope"] for r in rows if "scope" in r} == {
+        "odoo.campaigns.read",
+        "n8n.results.read",
+        "odoo.events.publish",
+    }
+    assert {r["auth"] for r in rows if r["path"] == "/api/v1/odoo/events"} == {"odoo-service-jwt"}

@@ -108,6 +108,8 @@ ODOO_CAMPAIGN_ACTION_TYPES = frozenset(
         "CHANGE_STATUS",
     }
 )
+
+
 def _require_replay_headers(
     timestamp: str | None, nonce: str | None, signature: str | None
 ) -> None:
@@ -139,6 +141,22 @@ def _n8n_authorized_parties() -> frozenset[str]:
     return listed or frozenset({settings.n8n_campaign_service_client_id})
 
 
+_JWT_PERMISSION_DENIALS = frozenset(
+    {
+        "authorized party denied",
+        "required role denied",
+        "required scope denied",
+        "business unit denied",
+        "campaign denied",
+    }
+)
+
+
+def _jwt_error_status(exc: JWTAuthError) -> int:
+    """Map valid-token permission failures to 403 and identity failures to 401."""
+    return 403 if str(exc) in _JWT_PERMISSION_DENIALS else 401
+
+
 def _authenticate_n8n(authorization: str, required_scope: str) -> dict[str, Any]:
     """n8n service JWT, pinned to the deployment's own environment claim.
 
@@ -158,7 +176,7 @@ def _authenticate_n8n(authorization: str, required_scope: str) -> dict[str, Any]
             required_environment=settings.environment,
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        raise HTTPException(_jwt_error_status(exc), str(exc)) from exc
 
 
 def _authenticate_odoo(authorization: str, required_scope: str) -> dict[str, Any]:
@@ -186,7 +204,7 @@ def _authenticate_odoo(authorization: str, required_scope: str) -> dict[str, Any
             required_environment=settings.environment,
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        raise HTTPException(_jwt_error_status(exc), str(exc)) from exc
 
 
 def _require_campaign_claim(claims: dict[str, Any], campaign_id: str) -> None:
@@ -209,7 +227,9 @@ def _require_context_binding(
         raise HTTPException(403, "business-unit scope denied")
 
 
-def _odoo_payload(campaign_id: str, tenant_id: str, business_unit_id: str) -> dict[str, str]:
+def _odoo_payload(
+    campaign_id: str, tenant_id: str, business_unit_id: str
+) -> dict[str, str]:
     return {
         "organization_public_id": tenant_id,
         "business_unit_public_id": business_unit_id,
@@ -538,7 +558,9 @@ async def n8n_dispatch(
 async def n8n_result(
     body: dict[str, Any],
     authorization: str = Header(alias="Authorization"),
-    idempotency_key: str = Header(alias="Idempotency-Key"),
+    idempotency_key: str = Header(
+        alias="Idempotency-Key", min_length=8, max_length=180
+    ),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     if "event_id" in body:

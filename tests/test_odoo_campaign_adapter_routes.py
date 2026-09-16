@@ -36,6 +36,14 @@ CLAIMS = {"campaigns": ["CMP-MBL"], "business_units": ["MBL"], "tenant_id": "cod
 GUARD_REJECTIONS = {"unauthorized", "authentication unavailable"}
 
 
+@pytest.fixture(autouse=True)
+def canonical_runtime_environment(monkeypatch):
+    """Give the split entrypoint an explicit disposable test runtime."""
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ALLOW_IN_MEMORY_STORAGE", "true")
+
+
 class FakeSession:
     def __init__(self, values):
         self.values = iter(values)

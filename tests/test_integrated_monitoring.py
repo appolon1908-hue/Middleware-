@@ -56,6 +56,10 @@ SCOPES = " ".join(
 
 @pytest.fixture
 def system(tmp_path, monkeypatch):
+    # The deployed entrypoint's lifespan builds the canonical domain runtime
+    # from the environment; give it the explicit in-memory test runtime.
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ALLOW_IN_MEMORY_STORAGE", "true")
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     class Keys:

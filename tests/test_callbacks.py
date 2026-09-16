@@ -93,12 +93,24 @@ def test_phone_and_reminder_policy():
     )
 
 
+def _mounted_paths(routes, prefix: str = "") -> set[str]:
+    paths: set[str] = set()
+    for route in routes:
+        original = getattr(route, "original_router", None)
+        if original is not None:
+            context = getattr(route, "include_context", None)
+            paths |= _mounted_paths(
+                original.routes, prefix + (getattr(context, "prefix", "") or "")
+            )
+            continue
+        path = getattr(route, "path", None)
+        if path is not None:
+            paths.add(prefix + path)
+    return paths
+
+
 def test_production_runtime_exposes_callback_contract_fail_closed():
-    paths = {
-        getattr(route, "path", "")
-        for included in integration_app.router.routes
-        for route in getattr(included, "routes", [included])
-    }
+    paths = _mounted_paths(integration_app.router.routes)
     assert "/api/v1/control/callbacks" in paths
     assert settings.callback_scheduler_enabled is False
     assert settings.callback_delivery_enabled is False

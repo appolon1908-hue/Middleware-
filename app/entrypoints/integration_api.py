@@ -1,14 +1,15 @@
 """Authenticated integration and control surface."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-from app.api.v1.automation import router as automation_router
 from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.commands import router as commands_router
 from app.api.v1.control import router as control_router
 from app.api.v1.lead_reconciliation import router as lead_reconciliation_router
 from app.api.v1.lead_automation import router as lead_automation_router
-from app.api.v1.integrations import router as integrations_router
 from app.api.v1.mappings import router as mappings_router
 from app.api.v1.n8n_staging import router as n8n_staging_router
 from app.api.v1.n8n_transport import router as n8n_transport_router
@@ -22,27 +23,37 @@ from app.api.v1.telephony import router as telephony_router
 from app.api.v1.sales import router as sales_router
 from app.api.v1.booking import router as booking_router
 from app.api.v1.platform import router as platform_router
-from app.api.v1.agent_provisioning import router as agent_provisioning_router
 from app.api.internal.telnexa_events import router as telnexa_events_router
 from app.api.internal.klyrow_events import router as klyrow_events_router
-from app.monitoring.routes import router as monitoring_router
 from app.api.v1.webphone import router as webphone_router
-from app.api.v1.observability_sync import router as observability_sync_router
-from app.api.v1.callbacks import router as callbacks_router
 from app.entrypoints.runtime import add_api_runtime, run_api
+from app.config import Settings as DomainSettings
+from app.router_registry import mount_canonical_routers
+from app.runtime import build_runtime as build_domain_runtime
 
 SERVICE = "middleware-integration-api"
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    """Own the canonical API runtime for exactly this deployed process."""
+
+    runtime = await build_domain_runtime(DomainSettings.from_env())
+    application.state.runtime = runtime
+    try:
+        yield
+    finally:
+        await runtime.close()
+
+
 routers = (
     commands_router,
-    callbacks_router,
     control_router,
-    automation_router,
     campaign_design_router,
     reports_router,
     operations_router,
     lead_reconciliation_router,
     lead_automation_router,
-    integrations_router,
     orchestration_router,
     provider_webhooks_router,
     mappings_router,
@@ -55,14 +66,13 @@ routers = (
     sales_router,
     booking_router,
     platform_router,
-    agent_provisioning_router,
     klyrow_events_router,
     telnexa_events_router,
-    observability_sync_router,
 )
 app = FastAPI(
     title="Codestra Integration API",
     version="1.0.0",
+    lifespan=lifespan,
     routes=[
         route
         for router in routers
@@ -74,7 +84,7 @@ app = FastAPI(
         )
     ],
 )
-app.include_router(monitoring_router)
+mount_canonical_routers(app)
 add_api_runtime(app, SERVICE)
 
 

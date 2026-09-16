@@ -55,9 +55,9 @@ WEBHOOK_SECRET_NAMES = {
     "WEBHOOK_SECRET_POSTLY_ADAPTER",
 }
 GOVERNED_READ_PATHS = {"/metrics", "/v1/runtime/safety"}
+# Routers the application factory includes directly with ``app.include_router``.
 EXPECTED_INCLUDED_ROUTERS = {
     "campaign_design_router": "campaign_design_api",
-    "n8n_control_plane_router": "n8n_control_plane",
     "operations_dashboard_router": "operations_dashboard",
     "operations_router": "operations",
     "control_api_router": "control_api",
@@ -66,17 +66,41 @@ EXPECTED_INCLUDED_ROUTERS = {
     "webhook_api_router": "webhook_api",
     "telnexa_events_router": "api.internal.telnexa_events",
     "klyrow_events_router": "api.internal.klyrow_events",
-    "agent_provisioning_router": "api.v1.agent_provisioning",
-    "agent_provisioning_reads_router": "api.v1.agent_provisioning_reads",
-    "session_context_router": "api.v1.session_context",
-    "calls_router": "api.v1.calls",
-    "activity_router": "api.v1.activity",
-    "presence_router": "api.v1.presence",
-    "queues_router": "api.v1.queues",
-    "tenants_router": "api.v1.tenants",
-    "campaigns_router": "api.v1.campaigns",
-    "monitoring_router": "monitoring.routes",
-    "observability_sync_router": "api.v1.observability_sync",
+}
+# Routers mounted through the shared canonical registry
+# (``app/router_registry.py``). Every application factory mounts exactly this
+# set through ``mount_canonical_routers``; the legacy tuple is monolith-only.
+# Values are ``(module, imported name)`` relative to the ``app`` package.
+EXPECTED_ROUTER_REGISTRY_MODULE = "router_registry"
+EXPECTED_REGISTRY_ROUTERS = {
+    "automation_v2_router": ("automation_v2", "v2_router"),
+    "automation_router": ("api.v1.automation", "router"),
+    "callbacks_router": ("api.v1.callbacks", "router"),
+    "email_production_router": ("email_production_control", "router"),
+    "agent_provisioning_router": ("api.v1.agent_provisioning", "router"),
+    "agent_provisioning_reads_router": ("api.v1.agent_provisioning_reads", "router"),
+    "session_context_router": ("api.v1.session_context", "router"),
+    "calls_router": ("api.v1.calls", "router"),
+    "activity_router": ("api.v1.activity", "router"),
+    "presence_router": ("api.v1.presence", "router"),
+    "queues_router": ("api.v1.queues", "router"),
+    "tenants_router": ("api.v1.tenants", "router"),
+    "campaigns_router": ("api.v1.campaigns", "router"),
+    "monitoring_router": ("monitoring.routes", "router"),
+    "observability_sync_router": ("api.v1.observability_sync", "router"),
+    "integrations_router": ("api.v1.integrations", "router"),
+    "odoo_event_router": ("webhook_api", "odoo_event_router"),
+    "n8n_control_plane_router": ("n8n_control_plane", "router"),
+}
+EXPECTED_REGISTRY_TUPLES = {
+    "CANONICAL_ROUTERS": frozenset(
+        name for name in EXPECTED_REGISTRY_ROUTERS if name != "n8n_control_plane_router"
+    ),
+    "LEGACY_MONOLITH_ONLY_ROUTERS": frozenset({"n8n_control_plane_router"}),
+}
+EXPECTED_REGISTRY_MOUNTERS = {
+    "mount_canonical_routers": "CANONICAL_ROUTERS",
+    "mount_legacy_monolith_routers": "LEGACY_MONOLITH_ONLY_ROUTERS",
 }
 EXPECTED_SIDE_EFFECT_ROUTER_MODULES = {"provider_control_api"}
 EXPECTED_ROUTE_HELPERS = {"register_survey_routes": "survey_routes"}
@@ -657,6 +681,28 @@ def authenticated_get_routes(
         imported_routers == EXPECTED_INCLUDED_ROUTERS,
         "application factory included-router imports are incomplete",
     )
+    imported_mounters: dict[str, str] = {}
+    for statement in tree.body:
+        if not isinstance(statement, ast.ImportFrom) or statement.level != 1:
+            continue
+        for imported in statement.names:
+            bound = imported.asname or imported.name
+            if bound not in EXPECTED_REGISTRY_MOUNTERS:
+                continue
+            require(
+                imported.asname is None
+                and statement.module == EXPECTED_ROUTER_REGISTRY_MODULE,
+                f"router registry import drift: {bound}",
+            )
+            require(
+                bound not in imported_mounters,
+                f"duplicate router registry import: {bound}",
+            )
+            imported_mounters[bound] = statement.module or ""
+    require(
+        set(imported_mounters) == set(EXPECTED_REGISTRY_MOUNTERS),
+        "application factory router registry imports are incomplete",
+    )
     imported_route_helpers: dict[str, str] = {}
     for statement in tree.body:
         if not isinstance(statement, ast.ImportFrom) or statement.level != 1:
@@ -709,6 +755,34 @@ def authenticated_get_routes(
         and candidate.id in EXPECTED_ROUTE_HELPERS
     }
     require(not rebound_helper_names, "route helper binding is reassigned")
+    rebound_mounter_names = {
+        candidate.id
+        for candidate in current_scope_nodes(tree)
+        if isinstance(candidate, ast.Name)
+        and isinstance(candidate.ctx, (ast.Store, ast.Del))
+        and candidate.id in EXPECTED_REGISTRY_MOUNTERS
+    }
+    require(not rebound_mounter_names, "router registry binding is reassigned")
+
+    # The shared registry mounts the canonical route set in every factory. Each
+    # mounter is called exactly once on ``app`` so the deployed entrypoint and
+    # the monolith cannot drift apart or mount a router twice.
+    for mounter_name in EXPECTED_REGISTRY_MOUNTERS:
+        mounter_calls = [
+            candidate
+            for candidate in ast.walk(factories[0])
+            if isinstance(candidate, ast.Call)
+            and isinstance(candidate.func, ast.Name)
+            and candidate.func.id == mounter_name
+        ]
+        require(
+            len(mounter_calls) == 1
+            and len(mounter_calls[0].args) == 1
+            and not mounter_calls[0].keywords
+            and isinstance(mounter_calls[0].args[0], ast.Name)
+            and mounter_calls[0].args[0].id == "app",
+            f"router registry mounter call is missing or ambiguous: {mounter_name}",
+        )
 
     include_calls = [
         candidate
@@ -760,7 +834,10 @@ def authenticated_get_routes(
     def approved_app_argument_call(call: ast.Call) -> bool:
         if (
             isinstance(call.func, ast.Name)
-            and call.func.id in EXPECTED_ROUTE_HELPERS
+            and (
+                call.func.id in EXPECTED_ROUTE_HELPERS
+                or call.func.id in EXPECTED_REGISTRY_MOUNTERS
+            )
             and len(call.args) == 1
             and not call.keywords
         ):
@@ -779,7 +856,8 @@ def authenticated_get_routes(
         )
 
     require(
-        len(app_argument_calls) == len(EXPECTED_ROUTE_HELPERS) + 1
+        len(app_argument_calls)
+        == len(EXPECTED_ROUTE_HELPERS) + len(EXPECTED_REGISTRY_MOUNTERS) + 1
         and all(approved_app_argument_call(call) for call in app_argument_calls),
         "FastAPI app is passed to an untracked registration helper",
     )
@@ -1232,10 +1310,110 @@ def authenticated_get_routes(
             )
         )
 
+    def verify_router_registry() -> None:
+        """Prove the shared registry mounts exactly the approved router set."""
+        registry_tree = load_router_module(EXPECTED_ROUTER_REGISTRY_MODULE)
+        imported: dict[str, tuple[str, str]] = {}
+        for statement in registry_tree.body:
+            if not isinstance(statement, ast.ImportFrom):
+                continue
+            module = statement.module or ""
+            if statement.level != 0 or not module.startswith("app."):
+                continue
+            for name in statement.names:
+                bound = name.asname or name.name
+                if bound not in EXPECTED_REGISTRY_ROUTERS:
+                    continue
+                require(
+                    bound not in imported,
+                    f"duplicate router registry import: {bound}",
+                )
+                imported[bound] = (module.removeprefix("app."), name.name)
+        require(
+            imported == EXPECTED_REGISTRY_ROUTERS,
+            "router registry imports drifted from the approved router set",
+        )
+        rebound = {
+            candidate.id
+            for candidate in ast.walk(registry_tree)
+            if isinstance(candidate, ast.Name)
+            and isinstance(candidate.ctx, (ast.Store, ast.Del))
+            and candidate.id in EXPECTED_REGISTRY_ROUTERS
+        }
+        require(not rebound, "router registry rebinds an approved router")
+        tuples: dict[str, list[str]] = {}
+        for statement in registry_tree.body:
+            if not (
+                isinstance(statement, ast.Assign)
+                and len(statement.targets) == 1
+                and isinstance(statement.targets[0], ast.Name)
+                and statement.targets[0].id in EXPECTED_REGISTRY_TUPLES
+            ):
+                continue
+            target = statement.targets[0].id
+            require(
+                target not in tuples, f"router registry tuple is duplicated: {target}"
+            )
+            require(
+                isinstance(statement.value, ast.Tuple)
+                and all(isinstance(item, ast.Name) for item in statement.value.elts),
+                f"router registry tuple is not a literal tuple of routers: {target}",
+            )
+            names = [item.id for item in statement.value.elts]  # type: ignore[attr-defined]
+            require(
+                len(names) == len(set(names))
+                and set(names) == EXPECTED_REGISTRY_TUPLES[target],
+                f"router registry tuple drifted from the approved router set: {target}",
+            )
+            tuples[target] = names
+        require(
+            set(tuples) == set(EXPECTED_REGISTRY_TUPLES),
+            "router registry tuples are incomplete",
+        )
+        for mounter_name, tuple_name in EXPECTED_REGISTRY_MOUNTERS.items():
+            definitions = [
+                node
+                for node in registry_tree.body
+                if isinstance(node, ast.FunctionDef) and node.name == mounter_name
+            ]
+            require(
+                len(definitions) == 1,
+                f"router registry mounter is not unique: {mounter_name}",
+            )
+            loops = [
+                node
+                for node in ast.walk(definitions[0])
+                if isinstance(node, ast.For)
+                and isinstance(node.target, ast.Name)
+                and isinstance(node.iter, ast.Name)
+                and node.iter.id == tuple_name
+            ]
+            require(
+                len(loops) == 1,
+                f"router registry mounter does not iterate {tuple_name}",
+            )
+            includes = [
+                node
+                for node in ast.walk(definitions[0])
+                if isinstance(node, ast.Call)
+                and attribute_path(node.func) == ["app", "include_router"]
+            ]
+            require(
+                len(includes) == 1
+                and len(includes[0].args) == 1
+                and not includes[0].keywords
+                and isinstance(includes[0].args[0], ast.Name)
+                and includes[0].args[0].id == loops[0].target.id,  # type: ignore[attr-defined]
+                f"router registry mounter includes an unapproved router: {mounter_name}",
+            )
+
+    verify_router_registry()
+
     pending_modules = list(
         dict.fromkeys(
             [
                 *EXPECTED_INCLUDED_ROUTERS.values(),
+                *(module for module, _name in EXPECTED_REGISTRY_ROUTERS.values()),
                 *sorted(EXPECTED_SIDE_EFFECT_ROUTER_MODULES),
             ]
         )

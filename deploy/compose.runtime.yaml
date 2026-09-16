@@ -207,7 +207,7 @@ services:
       MIDDLEWARE_N8N_AUDIENCE: codestra-n8n-production
       MIDDLEWARE_N8N_SCOPE: n8n.events.submit
       N8N_SERVICE_ISSUER: https://auth.codestra.co/realms/codestra
-      N8N_SERVICE_AUDIENCE: codestra-middleware
+      N8N_SERVICE_AUDIENCE: middleware-api
       N8N_SERVICE_JWKS_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/certs
       N8N_SERVICE_CLIENT_ID: codestra-n8n-production
       ODOO_RESULTS_URL: https://odoo.internal.codestra.agency/api/v1/integration/results

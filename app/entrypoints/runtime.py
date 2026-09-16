@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Gauge, make_asgi_app
 from sqlalchemy import text
 
+from app.core import route_policy
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
 from app.db.session import engine
@@ -47,15 +48,7 @@ MAX_RATE_IDENTITIES = 4096
 N8N_TRANSITION_PATH = re.compile(
     r"^/api/v1/n8n/executions/[0-9a-fA-F-]{36}/transitions$"
 )
-CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
-N8N_SERVICE_JWT_ROUTES = frozenset(
-    {
-        ("POST", "/api/v1/automation/policy-check"),
-        ("POST", "/api/v1/campaign-designs/preview"),
-        ("POST", "/api/v1/campaign-designs/approvals"),
-        ("POST", "/api/v1/integrations/n8n/results"),
-    }
-)
+# Service-JWT route policy is shared with app.main; see app/core/route_policy.py.
 
 
 class JsonFormatter(logging.Formatter):
@@ -254,8 +247,7 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
             )
             and request.url.path not in signed_paths
             and not signed_write
-            and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
-            and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
+            and not route_policy.handler_authenticated(request.method, request.url.path)
             and not _is_monitoring_route(request)
         ):
             try:

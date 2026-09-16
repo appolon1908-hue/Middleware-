@@ -64,6 +64,7 @@ from app.api.v1.campaigns import router as campaigns_router
 from app.api.v1.queues import router as queues_router
 from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
+from app.core import route_policy
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
 from app.n8n_control_plane import router as n8n_control_plane_router
@@ -192,15 +193,8 @@ N8N_TRANSITION_PATH = re.compile(
 RECORDING_EXPORTER_PATH = re.compile(
     r"^/api/v1/recordings(?:/reservations|/REC-[0-9a-f]{32}/(?:complete|failure))$"
 )
-CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
-N8N_SERVICE_JWT_ROUTES = frozenset(
-    {
-        ("POST", "/api/v1/automation/policy-check"),
-        ("POST", "/api/v1/campaign-designs/preview"),
-        ("POST", "/api/v1/campaign-designs/approvals"),
-        ("POST", "/api/v1/integrations/n8n/results"),
-    }
-)
+# Service-JWT route policy is shared with app.entrypoints.runtime; see
+# app/core/route_policy.py. Handlers on those routes verify the JWT themselves.
 
 
 def _is_ai_console_jwt_route(request: Request) -> bool:
@@ -257,8 +251,7 @@ async def control_request_guard(request: Request, call_next):
             request.method == "POST" and SOCIAL_WEBHOOK_PATH.fullmatch(request.url.path)
         )
         and not _is_ai_console_jwt_route(request)
-        and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
-        and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
+        and not route_policy.handler_authenticated(request.method, request.url.path)
         and not (is_monitoring_route(request) or is_observability_sync_route(request))
     ):
         try:

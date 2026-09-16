@@ -8,11 +8,13 @@ Credentials and URL paths are never emitted.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import socket
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from app.core import route_policy
 from app.core.config import settings
 from app.entrypoints.integration_api import app
 
@@ -29,11 +31,34 @@ URL_SCHEMES = {
 }
 
 
+CONTRACT_HASH = ROOT / "deploy/public-api-route-contract.sha256"
+# Handler-authenticated in both guards, but whether Kong/Caddy expose them is
+# a separate edge decision. Listed here so the audit reports them instead of
+# silently treating them as declared or as forbidden.
+EDGE_EXPOSURE_UNDECIDED = frozenset(
+    {
+        ("POST", "/api/v1/campaign-designs/preview"),
+        ("POST", "/api/v1/campaign-designs/approvals"),
+    }
+)
+
+
+def contract_sha256(contract: dict) -> str:
+    canonical = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def source_audit() -> list[str]:
-    contract = json.loads(CONTRACT.read_text())
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     assert contract["schema"] == "codestra.middleware.public-api-route-contract.v1"
     assert contract["service"] == "middleware-integration-api"
     assert contract["listener_port"] == 8095
+    digest = contract_sha256(contract)
+    pinned = CONTRACT_HASH.read_text(encoding="utf-8").strip()
+    if pinned != digest:
+        raise SystemExit(
+            f"public API route contract hash drift: pinned {pinned} computed {digest}"
+        )
     actual = {
         (method.upper(), path)
         for route in app.routes
@@ -44,7 +69,35 @@ def source_audit() -> list[str]:
     missing = sorted(expected - actual)
     if missing:
         raise SystemExit(f"public API route contract missing routes: {missing}")
-    return [f"ROUTE={method}|{path}|PASS" for method, path in sorted(expected)]
+    # Edge exposure and the in-process guard must agree route by route: every
+    # contract route that names a service-JWT auth class is handler
+    # authenticated, and every handler-authenticated service-JWT route is in
+    # the contract (so Kong/Caddy cannot expose an unguarded path, nor hide an
+    # approved one).
+    for row in contract["routes"]:
+        if row["auth"] == "callback-jwt":
+            continue
+        sample = row["path"].replace("{campaign_id}", "CMP-PROBE").replace("{event_id}", "EVT-PROBE")
+        if not route_policy.handler_authenticated(row["method"], sample):
+            raise SystemExit(f"contract route is not handler authenticated: {row['method']} {row['path']}")
+    policy_rows = {(r["method"], r["path"]) for r in route_policy.service_jwt_route_contract()}
+    undeclared = sorted(policy_rows - expected - EDGE_EXPOSURE_UNDECIDED)
+    if undeclared:
+        raise SystemExit(f"service-JWT routes missing from the edge contract: {undeclared}")
+    warnings = [
+        f"ROUTE={method}|{path}|EDGE_EXPOSURE_UNDECIDED"
+        for method, path in sorted(policy_rows & EDGE_EXPOSURE_UNDECIDED)
+    ]
+    for row in contract["routes"]:
+        policy = next(
+            (r for r in route_policy.service_jwt_route_contract() if (r["method"], r["path"]) == (row["method"], row["path"])),
+            None,
+        )
+        if policy and policy.get("scope") and policy["scope"] != row.get("scope"):
+            raise SystemExit(f"scope drift for {row['method']} {row['path']}: contract {row.get('scope')} policy {policy['scope']}")
+    return [f"ROUTE_CONTRACT_SHA256={digest}"] + [
+        f"ROUTE={method}|{path}|PASS" for method, path in sorted(expected)
+    ] + warnings
 
 
 def configured_upstreams() -> list[tuple[str, str, int]]:

@@ -5,7 +5,7 @@ from scripts.audit_release_endpoints import configured_upstreams, source_audit
 
 
 def test_public_route_contract_matches_application() -> None:
-    assert len(source_audit()) == 4
+    assert len(source_audit()) == 10  # hash line + 7 routes + 2 undecided
 
 
 def test_route_contract_uses_exact_listener_and_no_secrets() -> None:

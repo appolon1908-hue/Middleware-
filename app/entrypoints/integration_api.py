@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.v1.automation import router as automation_router
+from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.commands import router as commands_router
 from app.api.v1.control import router as control_router
 from app.api.v1.lead_reconciliation import router as lead_reconciliation_router
@@ -23,6 +24,8 @@ from app.api.v1.booking import router as booking_router
 from app.api.v1.platform import router as platform_router
 from app.api.v1.agent_provisioning import router as agent_provisioning_router
 from app.api.v1.odoo_events import router as odoo_events_router
+from app.api.internal.telnexa_events import router as telnexa_events_router
+from app.api.internal.klyrow_events import router as klyrow_events_router
 from app.monitoring.routes import router as monitoring_router
 from app.api.v1.webphone import router as webphone_router
 from app.api.v1.observability_sync import router as observability_sync_router
@@ -35,6 +38,7 @@ routers = (
     callbacks_router,
     control_router,
     automation_router,
+    campaign_design_router,
     reports_router,
     operations_router,
     lead_reconciliation_router,
@@ -54,6 +58,8 @@ routers = (
     platform_router,
     agent_provisioning_router,
     odoo_events_router,
+    klyrow_events_router,
+    telnexa_events_router,
     observability_sync_router,
 )
 app = FastAPI(
@@ -63,7 +69,11 @@ app = FastAPI(
         route
         for router in routers
         for route in router.routes
-        if not (getattr(route, "path", "") or "").startswith("/api/v1/events/")
+        if (
+            not (getattr(route, "path", "") or "").startswith("/api/v1/events/")
+            or getattr(route, "path", "")
+            in {"/api/v1/events/telnexa", "/api/v1/events/klyrow"}
+        )
     ],
 )
 app.include_router(monitoring_router)

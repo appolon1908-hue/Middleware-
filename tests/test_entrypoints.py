@@ -70,7 +70,7 @@ def test_api_surfaces_are_narrow_and_cover_existing_routes():
     assert "/webphone-api/v1/session" in route_paths(webphone_session_issuer.app)
 
 
-def test_integration_api_excludes_event_gateway_routes_in_fresh_runtime():
+def test_integration_api_registers_the_exact_telnexa_callback_in_fresh_runtime():
     result = subprocess.run(
         [
             sys.executable,
@@ -78,7 +78,8 @@ def test_integration_api_excludes_event_gateway_routes_in_fresh_runtime():
             (
                 "from app.entrypoints.integration_api import app;"
                 "paths=app.openapi()['paths'];"
-                "assert not any(p.startswith('/api/v1/events/') for p in paths)"
+                "assert '/api/v1/events/telnexa' in paths;"
+                "assert '/api/v1/events/vicidial' not in paths"
             ),
         ],
         check=False,

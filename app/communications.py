@@ -16,6 +16,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    PrivateAttr,
     TypeAdapter,
     ValidationError,
     field_validator,
@@ -160,6 +161,12 @@ class CreateMessageRequest(BaseModel):
 class CommunicationMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # The durable version belongs to this particular in-memory value, not to
+    # the message key globally.  model_copy() carries private attributes, so a
+    # mutation that started before a provider callback retains the version it
+    # actually read and cannot overwrite the newer durable projection.
+    _persisted_snapshot: tuple[datetime, str] | None = PrivateAttr(default=None)
+
     messageId: uuid.UUID
     tenantId: str
     channel: CommunicationChannel
@@ -229,6 +236,13 @@ def _canonical_digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()
     ).hexdigest()
+
+
+def _message_snapshot(message: CommunicationMessage) -> tuple[datetime, str]:
+    return (
+        message.updatedAt,
+        _canonical_digest(message.model_dump(mode="json")),
+    )
 
 
 def _provider_status_to_canonical(status: str) -> MessageStatus:
@@ -334,6 +348,11 @@ class MemoryCommunicationsStore:
     async def close(self) -> None:
         return None
 
+    def synchronize_durable_message(self, message: CommunicationMessage) -> None:
+        self.messages[(message.tenantId, message.messageId)] = message.model_copy(
+            deep=True
+        )
+
     async def message_by_idempotency(
         self, tenant_id: str, idempotency_key: str,
     ) -> CommunicationMessage:
@@ -381,6 +400,11 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
         super().__init__()
         self.pool = pool
 
+    def synchronize_durable_message(self, message: CommunicationMessage) -> None:
+        super().synchronize_durable_message(message)
+        stored = self.messages[(message.tenantId, message.messageId)]
+        stored._persisted_snapshot = _message_snapshot(stored)
+
     @asynccontextmanager
     async def submission_lock(
         self, tenant_id: str, route: str, idempotency_key: str
@@ -416,7 +440,7 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
             if isinstance(row["payload"], str)
             else CommunicationMessage.model_validate(row["payload"])
         )
-        self.messages[(tenant_id, message.messageId)] = message
+        self.synchronize_durable_message(message)
         self.idempotency[(tenant_id, route, idempotency_key)] = (
             row["request_sha256"],
             row["message_id"],
@@ -442,7 +466,7 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
             if isinstance(row["payload"], str)
             else CommunicationMessage.model_validate(row["payload"])
         )
-        self.messages[(tenant_id, message.messageId)] = message
+        self.synchronize_durable_message(message)
         return message
 
     async def message_by_idempotency(
@@ -477,7 +501,7 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
             for row in await conn.fetch("SELECT payload FROM middleware_communication_messages"):
                 raw = row["payload"]
                 message = (CommunicationMessage.model_validate_json(raw) if isinstance(raw, str) else CommunicationMessage.model_validate(raw))
-                self.messages[(message.tenantId, message.messageId)] = message
+                self.synchronize_durable_message(message)
             for row in await conn.fetch("SELECT tenant_id,payload FROM middleware_communication_events ORDER BY occurred_at,id"):
                 raw = row["payload"]
                 event = (MessageEvent.model_validate_json(raw) if isinstance(raw, str) else MessageEvent.model_validate(raw))
@@ -492,9 +516,55 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
                 self.cancellations.add((row["tenant_id"], row["message_id"], row["idempotency_key"]))
 
     async def persist(self) -> None:
+        persisted_messages: list[tuple[CommunicationMessage, tuple[datetime, str]]] = []
         async with self.pool.acquire() as conn, conn.transaction():
-            for (tenant, _), message in self.messages.items():
-                await conn.execute("INSERT INTO middleware_communication_messages(tenant_id,message_id,payload,updated_at) VALUES($1,$2,$3::jsonb,$4) ON CONFLICT(tenant_id,message_id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at", tenant, message.messageId, message.model_dump_json(), message.updatedAt)
+            for (tenant, message_id), message in self.messages.items():
+                snapshot = _message_snapshot(message)
+                previous = message._persisted_snapshot
+                if previous == snapshot:
+                    continue
+                if previous is None:
+                    written_at = await conn.fetchval(
+                        "INSERT INTO middleware_communication_messages"
+                        "(tenant_id,message_id,payload,updated_at) "
+                        "VALUES($1,$2,$3::jsonb,$4) "
+                        "ON CONFLICT(tenant_id,message_id) DO NOTHING "
+                        "RETURNING updated_at",
+                        tenant,
+                        message_id,
+                        message.model_dump_json(),
+                        message.updatedAt,
+                    )
+                else:
+                    written_at = await conn.fetchval(
+                        "UPDATE middleware_communication_messages "
+                        "SET payload=$3::jsonb,updated_at=$4 "
+                        "WHERE tenant_id=$1 AND message_id=$2 AND updated_at=$5 "
+                        "RETURNING updated_at",
+                        tenant,
+                        message_id,
+                        message.model_dump_json(),
+                        message.updatedAt,
+                        previous[0],
+                    )
+                if written_at is None:
+                    current = await conn.fetchval(
+                        "SELECT payload FROM middleware_communication_messages "
+                        "WHERE tenant_id=$1 AND message_id=$2",
+                        tenant,
+                        message_id,
+                    )
+                    if current is not None:
+                        durable = (
+                            CommunicationMessage.model_validate_json(current)
+                            if isinstance(current, str)
+                            else CommunicationMessage.model_validate(current)
+                        )
+                        self.synchronize_durable_message(durable)
+                    raise CommunicationsConflict(
+                        "communication message changed in another worker"
+                    )
+                persisted_messages.append((message, snapshot))
             for (tenant, _), timeline in self.events.items():
                 for event in timeline:
                     await conn.execute("INSERT INTO middleware_communication_events(tenant_id,event_id,message_id,occurred_at,payload) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id,event_id) DO NOTHING", tenant, event.eventId, event.messageId, event.occurredAt, event.model_dump_json())
@@ -507,6 +577,8 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
                     await conn.execute("INSERT INTO middleware_communication_suppressions(tenant_id,channel,subject) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", *item)
             for tenant, message_id, key in self.cancellations:
                 await conn.execute("INSERT INTO middleware_communication_cancellations(tenant_id,message_id,idempotency_key) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", tenant, message_id, key)
+        for message, snapshot in persisted_messages:
+            message._persisted_snapshot = snapshot
 
     async def ready(self) -> bool:
         return await self.pool.fetchval("SELECT to_regclass('middleware_communication_messages') IS NOT NULL") is True

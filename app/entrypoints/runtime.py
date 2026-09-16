@@ -51,6 +51,8 @@ CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
 N8N_SERVICE_JWT_ROUTES = frozenset(
     {
         ("POST", "/api/v1/automation/policy-check"),
+        ("POST", "/api/v1/campaign-designs/preview"),
+        ("POST", "/api/v1/campaign-designs/approvals"),
         ("POST", "/api/v1/integrations/n8n/results"),
     }
 )
@@ -188,6 +190,8 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
             in {
                 "/api/v1/events/vicidial",
                 "/api/v1/odoo/events",
+                "/api/v1/events/telnexa",
+                "/api/v1/events/klyrow",
                 "/api/v2/telephony/canary",
                 "/api/v1/n8n/executions",
                 "/api/v1/n8n/executions/register",
@@ -232,6 +236,8 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
         signed_paths = {
             "/api/v1/events/vicidial",
             "/api/v1/odoo/events",
+            "/api/v1/events/telnexa",
+            "/api/v1/events/klyrow",
             "/api/v1/automation/events",
             "/api/v2/telephony/canary",
             "/api/v1/n8n/executions",

@@ -18,6 +18,11 @@ GRANTS = json.loads(
 )
 EDGE = json.loads((ROOT / "deploy/public-api-route-contract.json").read_text(encoding="utf-8"))
 FORBIDDEN = "odoo.campaign.control.write"
+INGRESS_SCOPES = {
+    "n8n.results.submit",
+    "n8n.results.read",
+    "odoo.campaigns.read",
+}
 
 
 def _migration():
@@ -87,7 +92,7 @@ def test_negative_certification_identities_hold_no_outbound_or_forbidden_scope()
     assert set(negatives) == {"test-syn-wrong-audience", "test-syn-wrong-tenant"}
     outbound = set(_clients("staging")[settings.odoo_results_client_id]["scopes"])
     assert negatives["test-syn-wrong-audience"]["scopes"] == []
-    assert negatives["test-syn-wrong-audience"]["audience"] != "codestra-middleware"
+    assert negatives["test-syn-wrong-audience"]["audience"] != "middleware-api"
     assert set(negatives["test-syn-wrong-tenant"]["scopes"]) == {"n8n.results.read", "odoo.campaigns.read"}
     assert negatives["test-syn-wrong-tenant"]["organizations"] == ["TEST_SYN_OTHER_TENANT"]
     for client in negatives.values():
@@ -116,6 +121,8 @@ def test_every_edge_contract_scope_is_granted_to_exactly_one_direction(environme
         for scope in client["scopes"]:
             by_scope.setdefault(scope, set()).add(client["direction"])
     for row in EDGE["routes"]:
+        if row["classification"] != "shared_edge" or row["scope"] not in INGRESS_SCOPES:
+            continue
         scope = row.get("scope")
         if scope:
             assert by_scope.get(scope), f"{scope} not granted in {environment}"

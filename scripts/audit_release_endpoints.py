@@ -50,7 +50,7 @@ def contract_sha256(contract: dict) -> str:
 
 def source_audit() -> list[str]:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    assert contract["schema"] == "codestra.middleware.public-api-route-contract.v1"
+    assert contract["schema"] == "codestra.middleware.public-api-route-contract.v2"
     assert contract["service"] == "middleware-integration-api"
     assert contract["listener_port"] == 8095
     digest = contract_sha256(contract)
@@ -59,23 +59,49 @@ def source_audit() -> list[str]:
         raise SystemExit(
             f"public API route contract hash drift: pinned {pinned} computed {digest}"
         )
-    actual = {
-        (method.upper(), path)
-        for route in app.routes
-        if (path := getattr(route, "path", None)) is not None
-        for method in (getattr(route, "methods", None) or set())
+    actual: set[tuple[str, str]] = set()
+
+    def walk(routes, prefix: str = "") -> None:
+        for route in routes:
+            original = getattr(route, "original_router", None)
+            if original is not None:
+                context = getattr(route, "include_context", None)
+                walk(original.routes, prefix + (getattr(context, "prefix", "") or ""))
+                continue
+            path = getattr(route, "path", None)
+            if path is None:
+                continue
+            for method in getattr(route, "methods", None) or ():
+                actual.add((method.upper(), prefix + path))
+
+    walk(app.routes)
+    expected = {
+        (row["method"], row["path"])
+        for row in contract["routes"]
+        if row["classification"] == "shared_edge"
     }
-    expected = {(row["method"], row["path"]) for row in contract["routes"]}
+    denied = {
+        (row["method"], row["path"])
+        for row in contract["routes"]
+        if row["classification"] == "denied"
+    }
     missing = sorted(expected - actual)
     if missing:
         raise SystemExit(f"public API route contract missing routes: {missing}")
+    exposed_denied = sorted(denied & actual)
+    if exposed_denied:
+        raise SystemExit(f"denied public API routes are mounted: {exposed_denied}")
     # Edge exposure and the in-process guard must agree route by route: every
     # contract route that names a service-JWT auth class is handler
     # authenticated, and every handler-authenticated service-JWT route is in
     # the contract (so Kong/Caddy cannot expose an unguarded path, nor hide an
     # approved one).
     for row in contract["routes"]:
-        if row["auth"] == "callback-jwt":
+        if row["classification"] != "shared_edge" or row["auth"] not in {
+            "callback-jwt",
+            "n8n-service-jwt",
+            "odoo-service-jwt",
+        }:
             continue
         sample = row["path"].replace("{campaign_id}", "CMP-PROBE").replace("{event_id}", "EVT-PROBE")
         if not route_policy.handler_authenticated(row["method"], sample):
@@ -89,6 +115,8 @@ def source_audit() -> list[str]:
         for method, path in sorted(policy_rows & EDGE_EXPOSURE_UNDECIDED)
     ]
     for row in contract["routes"]:
+        if row["classification"] != "shared_edge":
+            continue
         policy = next(
             (r for r in route_policy.service_jwt_route_contract() if (r["method"], r["path"]) == (row["method"], row["path"])),
             None,

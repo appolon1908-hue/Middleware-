@@ -200,7 +200,7 @@ class Settings(BaseSettings):
     n8n_workflow_package_sha256: str = ""
     n8n_target_ca_file: str = ""
     n8n_service_issuer: str = ""
-    n8n_service_audience: str = "codestra-middleware"
+    n8n_service_audience: str = "middleware-api"
     n8n_service_jwks_url: str = ""
     n8n_service_client_id: str = "codestra-n8n-production"
     n8n_campaign_service_client_id: str = "codestra-n8n-campaign-crm-production"

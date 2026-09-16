@@ -49,7 +49,7 @@
           "full_scope_allowed": false,
           "rotation_days": 30,
           "revocable": true,
-          "audience": "codestra-middleware",
+          "audience": "middleware-api",
           "scopes": [
             "n8n.results.submit"
           ],
@@ -73,7 +73,7 @@
           "full_scope_allowed": false,
           "rotation_days": 30,
           "revocable": true,
-          "audience": "codestra-middleware",
+          "audience": "middleware-api",
           "scopes": [
             "n8n.results.read"
           ],
@@ -97,7 +97,7 @@
           "full_scope_allowed": false,
           "rotation_days": 30,
           "revocable": true,
-          "audience": "codestra-middleware",
+          "audience": "middleware-api",
           "scopes": [
             "odoo.campaigns.read"
           ],
@@ -144,7 +144,7 @@
           "full_scope_allowed": false,
           "rotation_days": 30,
           "revocable": true,
-          "audience": "codestra-middleware",
+          "audience": "middleware-api",
           "scopes": [
             "n8n.results.read",
             "odoo.campaigns.read"
@@ -171,7 +171,7 @@
           }
         }
       ],
-      "audience_note": "Certification identities use audience codestra-middleware (Kong manifest, N8N_SERVICE_AUDIENCE). The Keycloak authority's canonical Middleware audience is middleware-api; the divergence is recorded as a finding by the Keycloak session, not resolved here.",
+      "audience_note": "Certification identities use the canonical middleware-api audience; no compatibility audience is accepted.",
       "token_claims": {
         "environment": "staging",
         "tenant_id": "TEST_SYN_TENANT",
@@ -187,10 +187,10 @@
       },
       "middleware_settings": {
         "N8N_SERVICE_ISSUER": "https://auth-staging.codestra.co/realms/codestra",
-        "N8N_SERVICE_AUDIENCE": "codestra-middleware",
+        "N8N_SERVICE_AUDIENCE": "middleware-api",
         "N8N_CAMPAIGN_SERVICE_CLIENT_IDS": "test-syn-n8n-submit,test-syn-n8n-read,test-syn-wrong-tenant",
         "KEYCLOAK_ISSUER": "https://auth-staging.codestra.co/realms/codestra",
-        "KEYCLOAK_AUDIENCE": "codestra-middleware",
+        "KEYCLOAK_AUDIENCE": "middleware-api",
         "ODOO_CAMPAIGN_READER_CLIENT_IDS": "test-syn-odoo-reader,test-syn-wrong-tenant",
         "ENVIRONMENT": "staging",
         "note": "The negative identity test-syn-wrong-tenant must pass azp so the cross-tenant matrix rows are denied by claims (indistinguishable 404), not by a 401 at azp."
@@ -239,7 +239,7 @@
           "direction": "n8n_to_middleware",
           "service_accounts_enabled": true,
           "interactive_flows_enabled": false,
-          "audience": "codestra-middleware",
+          "audience": "middleware-api",
           "scopes": [
             "n8n.results.submit",
             "n8n.results.read"
@@ -270,7 +270,7 @@
           "direction": "caller_to_middleware",
           "service_accounts_enabled": true,
           "interactive_flows_enabled": false,
-          "audience": "codestra-middleware",
+          "audience": "middleware-api",
           "scopes": [
             "odoo.campaigns.read"
           ],

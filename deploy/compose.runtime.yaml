@@ -421,6 +421,38 @@ services:
       - identity_service
       - codestra_internal_integration
 
+  # Odoo campaign-control saga: Odoo outbox -> synthetic adapter -> actual-state
+  # readback. Disabled by default; production write routes are kill-switched in
+  # the registry (migration 0066) regardless of this flag.
+  middleware-odoo-campaign-saga-worker:
+    <<: *worker
+    command: [python, -m, app.entrypoints.odoo_campaign_saga_worker]
+    environment:
+      <<: *safe-flags
+      SERVICE_NAME: middleware-odoo-campaign-saga-worker
+      QUEUE_NAME: odoo-campaign-saga
+      ENVIRONMENT: production
+      ODOO_CAMPAIGN_SAGA_ENABLED: "false"
+      ODOO_CAMPAIGN_SAGA_ADAPTER: synthetic
+      ODOO_CAMPAIGN_SAGA_LEASE_SECONDS: "90"
+      ODOO_CAMPAIGN_SAGA_RETRY_LIMIT: "3"
+      ODOO_RESULTS_TOKEN_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/token
+      ODOO_RESULTS_CLIENT_ID: codestra-middleware-odoo-results
+      ODOO_RESULTS_CLIENT_SECRET_FILE: /run/secrets/odoo_results_client_secret
+      ODOO_RESULTS_AUDIENCE: codestra-odoo
+      ODOO_RESULTS_CA_FILE: /run/secrets/internal_integration_ca
+      ODOO_SERVICE_CREDENTIAL_REFERENCE: secret://production/odoo-results-client
+      REGISTRY_SNAPSHOT_SIGNING_KEY_FILE: /run/secrets/registry_snapshot_signing_key
+    volumes:
+      - /etc/codestra/secrets/middleware-runtime/middleware-odoo-campaign-saga-worker-database-url:/run/secrets/database_url:ro
+      - /etc/codestra/secrets/internal-n8n/odoo-results-client-secret:/run/secrets/odoo_results_client_secret:ro
+      - /etc/codestra/pki/internal-integration/ca.crt:/run/secrets/internal_integration_ca:ro
+      - /etc/codestra/secrets/internal-n8n/registry-snapshot-key:/run/secrets/registry_snapshot_signing_key:ro
+    networks:
+      - middleware_backend
+      - identity_service
+      - codestra_internal_integration
+
   middleware-evidence-runner:
     <<: *worker
     command: [python, -m, app.entrypoints.evidence_runner]

@@ -2130,3 +2130,66 @@ class AgentProvisioningAudit(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class OdooCampaignSaga(Base):
+    """One saga per accepted Odoo campaign-control outbox event.
+
+    The unique ``integration_event_id`` is the "exactly one saga row per
+    event" guarantee; concurrent selectors lose on the constraint, not on a
+    race. Saga status (dispatch lifecycle) and ``effective_state`` (what the
+    adapter observed and Odoo was told) are deliberately separate columns.
+    """
+
+    __tablename__ = "odoo_campaign_saga"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING','RESERVED','RETRY','COMPLETED','DEAD_LETTER')",
+            name="ck_odoo_campaign_saga_status",
+        ),
+        CheckConstraint(
+            "effective_state IS NULL OR effective_state IN "
+            "('unknown','absent','provisioned_disabled','synthetic_tested','active','disabled')",
+            name="ck_odoo_campaign_saga_effective_state",
+        ),
+        Index("ix_odoo_campaign_saga_claim", "status", "next_attempt_at"),
+    )
+    saga_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    integration_event_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("integration_event.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    event_uuid: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    command_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    organization_public_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    business_unit_public_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    campaign_public_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    configuration_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    manifest_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    manifest_hash: Mapped[str] = mapped_column(String(80), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reserved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_class: Mapped[str | None] = mapped_column(String(64))
+    effective_state: Mapped[str | None] = mapped_column(String(32))
+    evidence_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    readback_idempotency_key: Mapped[str | None] = mapped_column(String(160))
+    readback_attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    readback_id: Mapped[str | None] = mapped_column(String(128))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

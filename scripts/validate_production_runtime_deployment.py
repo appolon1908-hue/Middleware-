@@ -147,7 +147,7 @@ def validate_source(root: Path = ROOT) -> None:
     require(deployment.get("mode") == "READ_ONLY_CANARY", "deployment mode drift")
     require(deployment.get("source_ref") == "refs/heads/main", "source ref drift")
     require(
-        deployment.get("schema_head") == "0065_lifecycle_outcome_state",
+        deployment.get("schema_head") == "0066_reconcile_odoo_campaign_scope",
         "schema head drift",
     )
     for key in (
@@ -316,7 +316,7 @@ def validate_response(
         "RELEASE_ID": release_id,
         "VERSION_SOURCE_SHA": source_sha,
         "VERSION_IMAGE_DIGEST": image_reference.rsplit("@", 1)[1],
-        "VERSION_SCHEMA_HEAD": "0065_lifecycle_outcome_state",
+        "VERSION_SCHEMA_HEAD": "0066_reconcile_odoo_campaign_scope",
     }
     for key, expected in expected_dynamic.items():
         require(values.get(key) == expected, f"response dynamic value mismatch: {key}")

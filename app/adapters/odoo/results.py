@@ -1,5 +1,7 @@
 """Fail-closed durable delivery of acknowledged n8n results to Odoo."""
 
+import logging
+import math
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
@@ -7,14 +9,16 @@ from uuid import UUID, uuid4
 
 import httpx
 from redis.asyncio import Redis
-from sqlalchemy import select, update
+from sqlalchemy import Update, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.odoo.client import OdooDeliveryClient
 from app.core.automation import canonical_hash
 from app.core.config import settings
 from app.core.endpoint_registry import (
+    RegistryDependencyUnavailable,
     RegistryResolver,
+    ResolutionDenied,
     ResolutionRequest,
     SignedSnapshotCache,
     SqlEndpointRepository,
@@ -23,13 +27,22 @@ from app.core.service_client import CommonServiceClient
 from app.core.token_manager import ClientSecretTokenManager, TokenManager
 from app.db.models import (
     BroadEventDelivery,
+    IntegrationEndpoint,
+    IntegrationEndpointVersion,
     IntegrationEvent,
+    IntegrationService,
     N8nAcknowledgement,
     N8nExecutionRegistration,
     N8nRuntimeExecution,
     N8nRuntimeResult,
     OdooResultDelivery,
 )
+
+LOGGER = logging.getLogger("codestra.odoo_results")
+
+# Added on top of the slowest enabled Odoo registry route (connect + request
+# timeout) so lease recovery never reclaims a request that is still in flight.
+STALE_LEASE_MARGIN_SECONDS = 15
 
 
 class OdooResultError(RuntimeError):
@@ -143,6 +156,8 @@ async def deliver_result(
         causation_id = str(acknowledgement.acknowledgement_id)
     result.status = "RESERVED"
     result.reserved_at = datetime.now(UTC)
+    # attempts counts dispatches: an interrupted request is still an attempt.
+    result.attempts += 1
     await session.commit()
     owns_client = client is None
     service_client = client or _build_odoo_client(session, body)
@@ -153,7 +168,7 @@ async def deliver_result(
                 if provider_activity_delivery
                 else result.standard_result_json["operation"]
                 if observability_delivery and result.standard_result_json is not None
-                else "campaign_actions.apply"
+                else "automation_results.apply"
                 if standard_delivery
                 else "results.create",
                 body,
@@ -171,6 +186,16 @@ async def deliver_result(
                 retryable=True,
             )
             raise OdooResultError("Odoo result dependency unavailable") from exc
+        except (ResolutionDenied, RegistryDependencyUnavailable) as exc:
+            # No active registry route (or the registry itself is down): the
+            # row must not stay RESERVED until lease recovery.
+            await _record_delivery_failure(
+                session,
+                result_delivery_id,
+                error_class="ODOO_ROUTE_UNRESOLVED",
+                retryable=True,
+            )
+            raise OdooResultError("Odoo route resolution failed") from exc
     finally:
         if owns_client:
             await service_client.aclose()
@@ -284,10 +309,9 @@ async def _record_delivery_failure(
     )
     if delivery is None:
         raise OdooResultError("result reservation disappeared")
-    delivery.attempts += 1
     delivery.last_error_class = error_class
     delivery.reserved_at = None
-    if retryable and delivery.attempts < 3:
+    if retryable and delivery.attempts < settings.odoo_result_delivery_retry_limit:
         delivery.status = "RETRY"
         delivery.next_attempt_at = datetime.now(UTC) + timedelta(
             seconds=5 * 2 ** (delivery.attempts - 1)
@@ -299,28 +323,101 @@ async def _record_delivery_failure(
 
 
 async def recover_stale_result_deliveries(
-    session: AsyncSession, lease_seconds: int = 60
+    session: AsyncSession, lease_seconds: int | None = None
 ) -> int:
-    """Return interrupted reservations to retry; Odoo idempotency prevents replay effects."""
-    if lease_seconds < 1:
+    """Release reservations whose lease expired; Odoo idempotency prevents replay effects.
+
+    The lease defaults to ``settings.odoo_result_delivery_lease_seconds`` and is
+    raised to the slowest enabled Odoo registry route (connect + request
+    timeout) plus a margin, so an in-flight request is never reclaimed.
+    Interrupted rows return to RETRY, or to DEAD_LETTER when the dispatch that
+    reserved them already reached the retry limit. Attempts are counted at
+    dispatch and never changed here.
+    """
+    lease = (
+        lease_seconds
+        if lease_seconds is not None
+        else settings.odoo_result_delivery_lease_seconds
+    )
+    if lease < 1:
         raise ValueError("lease_seconds must be positive")
-    now = datetime.now(UTC)
-    result = await session.execute(
-        update(OdooResultDelivery)
-        .where(
-            OdooResultDelivery.status == "RESERVED",
-            OdooResultDelivery.reserved_at <= now - timedelta(seconds=lease_seconds),
+    minimum = await _registry_minimum_lease_seconds(session)
+    effective = max(lease, minimum)
+    if lease < minimum:
+        LOGGER.warning(
+            "odoo result delivery lease %ss is below the registry minimum %ss; "
+            "recovering with %ss",
+            lease,
+            minimum,
+            effective,
         )
+    recovered = 0
+    for statement in stale_recovery_statements(
+        datetime.now(UTC), effective, settings.odoo_result_delivery_retry_limit
+    ):
+        result = await session.execute(statement)
+        recovered += int(result.rowcount or 0)
+    await session.commit()
+    return recovered
+
+
+def stale_recovery_statements(
+    now: datetime, lease_seconds: int, retry_limit: int
+) -> tuple[Update, Update]:
+    """Build the exhausted (DEAD_LETTER) and re-queue (RETRY) recovery updates."""
+    stale = (
+        OdooResultDelivery.status == "RESERVED",
+        OdooResultDelivery.reserved_at <= now - timedelta(seconds=lease_seconds),
+    )
+    exhausted = (
+        update(OdooResultDelivery)
+        .where(*stale, OdooResultDelivery.attempts >= retry_limit)
+        .values(
+            status="DEAD_LETTER",
+            next_attempt_at=None,
+            reserved_at=None,
+            last_error_class="STALE_RESERVATION_EXHAUSTED",
+        )
+    )
+    requeued = (
+        update(OdooResultDelivery)
+        .where(*stale, OdooResultDelivery.attempts < retry_limit)
         .values(
             status="RETRY",
             next_attempt_at=now,
             reserved_at=None,
-            attempts=OdooResultDelivery.attempts + 1,
             last_error_class="STALE_RESERVATION_RECOVERED",
         )
     )
-    await session.commit()
-    return int(result.rowcount or 0)
+    return exhausted, requeued
+
+
+async def _registry_minimum_lease_seconds(session: AsyncSession) -> int:
+    """Slowest enabled Odoo route (connect + request) in whole seconds plus margin."""
+    slowest_ms = await session.scalar(
+        select(
+            func.max(
+                IntegrationEndpointVersion.timeout_ms
+                + IntegrationEndpointVersion.connection_timeout_ms
+            )
+        )
+        .select_from(IntegrationEndpointVersion)
+        .join(
+            IntegrationEndpoint,
+            IntegrationEndpoint.endpoint_id == IntegrationEndpointVersion.endpoint_id,
+        )
+        .join(
+            IntegrationService,
+            IntegrationService.service_id == IntegrationEndpoint.service_id,
+        )
+        .where(
+            IntegrationService.service_key == "odoo",
+            IntegrationEndpointVersion.enabled.is_(True),
+        )
+    )
+    if slowest_ms is None:
+        return 0
+    return math.ceil(int(slowest_ms) / 1000) + STALE_LEASE_MARGIN_SECONDS
 
 
 def _acknowledgement_result_body(

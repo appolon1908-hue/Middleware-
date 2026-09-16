@@ -7,7 +7,9 @@ fail-closed until the approved Odoo adapter and live-write flag are enabled.
 
 from datetime import datetime, timezone
 from typing import Any, Literal
+from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
@@ -28,6 +30,13 @@ from app.db.models import (
     OdooResultDelivery,
 )
 from app.db.session import get_session
+from app.adapters.odoo.campaign_control import (
+    OdooCampaignAdapterError,
+    read_campaign,
+    read_desired_state,
+)
+from app.adapters.odoo.results import OdooResultError, _build_odoo_client
+from app.core.endpoint_registry import RegistryDependencyUnavailable, ResolutionDenied
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
 
@@ -99,8 +108,6 @@ ODOO_CAMPAIGN_ACTION_TYPES = frozenset(
         "CHANGE_STATUS",
     }
 )
-
-
 def _require_replay_headers(
     timestamp: str | None, nonce: str | None, signature: str | None
 ) -> None:
@@ -137,6 +144,100 @@ def _authenticate_n8n(authorization: str, required_scope: str) -> dict[str, Any]
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
         raise HTTPException(401, str(exc)) from exc
+
+
+def _authenticate_odoo(authorization: str, required_scope: str) -> dict[str, Any]:
+    """Campaign-read caller: a dedicated service client, pinned to this environment.
+
+    Deliberately not the interactive agent-UI allowlist
+    (``keycloak_authorized_parties``); an empty reader list authorizes nobody.
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "bearer token required")
+    readers = frozenset(
+        value.strip()
+        for value in settings.odoo_campaign_reader_client_ids.split(",")
+        if value.strip()
+    )
+    if not readers:
+        raise HTTPException(503, "campaign reader client is not configured")
+    try:
+        return KeycloakValidator(
+            issuer=settings.keycloak_issuer,
+            audience=settings.keycloak_audience,
+            jwks_url=settings.keycloak_jwks_url,
+            authorized_parties=readers,
+            required_scopes=frozenset({required_scope}),
+            required_environment=settings.environment,
+        ).validate(authorization.removeprefix("Bearer ").strip())
+    except JWTAuthError as exc:
+        raise HTTPException(401, str(exc)) from exc
+
+
+def _require_campaign_claim(claims: dict[str, Any], campaign_id: str) -> None:
+    if campaign_id not in _scope_values(claims, "campaigns", "campaign_scope"):
+        raise HTTPException(403, "campaign scope denied")
+
+
+def _require_context_binding(
+    claims: dict[str, Any],
+    *,
+    tenant_id: str,
+    business_unit_id: str,
+) -> None:
+    claimed_tenant = claims.get("tenant_id")
+    if not claimed_tenant or not tenant_id or str(claimed_tenant) != tenant_id:
+        raise HTTPException(403, "tenant scope denied")
+    if business_unit_id not in _scope_values(
+        claims, "business_units", "business_unit_scope"
+    ):
+        raise HTTPException(403, "business-unit scope denied")
+
+
+def _odoo_payload(campaign_id: str, tenant_id: str, business_unit_id: str) -> dict[str, str]:
+    return {
+        "organization_public_id": tenant_id,
+        "business_unit_public_id": business_unit_id,
+        "campaign_public_id": campaign_id,
+    }
+
+
+# Configuration, registry, and transport faults are dependency outages (503),
+# distinct from Odoo answering with an error (502).
+_ODOO_DEPENDENCY_ERRORS = (
+    OdooResultError,
+    ResolutionDenied,
+    RegistryDependencyUnavailable,
+    httpx.TransportError,
+)
+
+
+async def _odoo_read(
+    operation: str,
+    payload: dict[str, str],
+    *,
+    correlation_id: str,
+    db: AsyncSession,
+) -> dict[str, Any]:
+    client = _build_odoo_client(db, payload)
+    try:
+        if operation == "campaigns.read":
+            return await read_campaign(
+                client,
+                payload,
+                request_id=f"REQ-{uuid4()}",
+                correlation_id=correlation_id,
+                traceparent=f"00-{canonical_hash({'correlation_id': correlation_id})[:32]}-{canonical_hash(payload)[:16]}-01",
+            )
+        return await read_desired_state(
+            client,
+            payload,
+            request_id=f"REQ-{uuid4()}",
+            correlation_id=correlation_id,
+            traceparent=f"00-{canonical_hash({'correlation_id': correlation_id})[:32]}-{canonical_hash(payload)[:16]}-01",
+        )
+    finally:
+        await client.aclose()
 
 
 @router.get("/runtime", response_model=RuntimeIntegrationStatus)
@@ -194,6 +295,58 @@ async def odoo_readiness() -> dict[str, str]:
         "status": "ready" if settings.auth_ready else "not-ready",
         "provider": "odoo",
     }
+
+
+@router.get("/odoo/campaigns/{campaign_id}")
+async def odoo_campaign_read(
+    campaign_id: str,
+    tenant_id: str = Query(min_length=1, max_length=128),
+    business_unit_id: str = Query(min_length=1, max_length=128),
+    authorization: str = Header(..., alias="Authorization"),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    claims = _authenticate_odoo(authorization, "odoo.campaigns.read")
+    _require_campaign_claim(claims, campaign_id)
+    _require_context_binding(
+        claims, tenant_id=tenant_id, business_unit_id=business_unit_id
+    )
+    try:
+        return await _odoo_read(
+            "campaigns.read",
+            _odoo_payload(campaign_id, tenant_id, business_unit_id),
+            correlation_id=str(uuid4()),
+            db=db,
+        )
+    except OdooCampaignAdapterError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except _ODOO_DEPENDENCY_ERRORS as exc:
+        raise HTTPException(503, "Odoo campaign dependency unavailable") from exc
+
+
+@router.get("/odoo/campaigns/{campaign_id}/desired-state")
+async def odoo_campaign_desired_state(
+    campaign_id: str,
+    tenant_id: str = Query(min_length=1, max_length=128),
+    business_unit_id: str = Query(min_length=1, max_length=128),
+    authorization: str = Header(..., alias="Authorization"),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    claims = _authenticate_odoo(authorization, "odoo.campaigns.read")
+    _require_campaign_claim(claims, campaign_id)
+    _require_context_binding(
+        claims, tenant_id=tenant_id, business_unit_id=business_unit_id
+    )
+    try:
+        return await _odoo_read(
+            "desired_state.read",
+            _odoo_payload(campaign_id, tenant_id, business_unit_id),
+            correlation_id=str(uuid4()),
+            db=db,
+        )
+    except OdooCampaignAdapterError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except _ODOO_DEPENDENCY_ERRORS as exc:
+        raise HTTPException(503, "Odoo campaign dependency unavailable") from exc
 
 
 @router.post("/odoo/commands", status_code=202)
@@ -376,101 +529,161 @@ async def n8n_result(
     if "event_id" in body:
         result = AutomationResult.model_validate(body)
         claims = _authenticate_n8n(authorization, "n8n.results.submit")
-        if idempotency_key != result.idempotency_key:
-            raise HTTPException(409, "idempotency binding conflict")
-        event = await db.scalar(
-            select(IntegrationEvent).where(
-                IntegrationEvent.original_event_id == result.event_id
-            )
-        )
-        envelope = event.payload_json if event else {}
-        if (
-            event is None
-            or event.correlation_id != result.correlation_id
-            or event.idempotency_key != result.idempotency_key
-            or envelope.get("event_id") != result.event_id
-            or envelope.get("campaign_id")
-            not in _scope_values(claims, "campaigns", "campaign_scope")
-            or envelope.get("business_unit_id")
-            not in _scope_values(claims, "business_units", "business_unit_scope")
-        ):
-            raise HTTPException(409, "automation result source binding mismatch")
-        if result.actions:
-            unavailable = sorted(
-                {
-                    action.action_type
-                    for action in result.actions
-                    if action.action_type not in ODOO_CAMPAIGN_ACTION_TYPES
-                }
-            )
-            if unavailable:
-                raise HTTPException(
-                    503,
-                    "automation action adapter is not production enabled: "
-                    + ",".join(unavailable),
-                )
-            if not settings.odoo_automation_writes_enabled:
-                raise HTTPException(503, "Odoo automation writes are disabled")
-        scope = "n8n-standard-result"
-        key_hash = canonical_hash({"idempotency_key": result.idempotency_key})
-        request_hash = canonical_hash(redact(result.model_dump(mode="json")))
-        await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
-            {"scope": f"{scope}:{key_hash}"},
-        )
-        prior = await db.scalar(
-            select(IdempotencyRecord).where(
-                IdempotencyRecord.scope == scope,
-                IdempotencyRecord.key_hash == key_hash,
-            )
-        )
-        response = {
-            "accepted": "true",
-            "event_id": result.event_id,
-            "status": result.status,
-        }
-        if prior:
-            if prior.request_hash != request_hash:
-                await db.rollback()
-                raise HTTPException(409, "automation result idempotency conflict")
-            await db.commit()
-            return response
-        db.add(
-            IdempotencyRecord(
-                scope=scope,
-                key_hash=key_hash,
-                request_hash=request_hash,
-                response=response,
-                status_code=202,
-                event_id=event.id,
-            )
-        )
-        if result.actions:
-            db.add(
-                OdooResultDelivery(
-                    integration_event_id=event.id,
-                    originating_outbox_public_id=result.event_id,
-                    request_hash=request_hash,
-                    status="PENDING",
-                    standard_result_json=result.model_dump(mode="json"),
-                )
-            )
-        db.add(
-            AuditEvent(
-                action="n8n.standard_result.accepted",
-                subject=result.event_id,
-                correlation_id=result.correlation_id,
-                decision=result.status,
-                redacted_payload={
-                    "workflow_key": result.workflow_key,
-                    "execution_id": result.execution_id,
-                },
-            )
-        )
-        await db.commit()
-        return response
+        return await _accept_standard_result(result, claims, idempotency_key, db)
     CallbackResult.model_validate(body)
     raise HTTPException(410, "legacy unauthenticated callbacks are retired")
+
+
+async def _accept_standard_result(
+    result: AutomationResult,
+    claims: dict[str, Any],
+    idempotency_key: str,
+    db: AsyncSession,
+) -> dict[str, str]:
+    if idempotency_key != result.idempotency_key:
+        raise HTTPException(409, "idempotency binding conflict")
+    event = await db.scalar(
+        select(IntegrationEvent).where(
+            IntegrationEvent.original_event_id == result.event_id
+        )
+    )
+    envelope = event.payload_json if event else {}
+    if (
+        event is None
+        or event.correlation_id != result.correlation_id
+        or event.idempotency_key != result.idempotency_key
+        or envelope.get("event_id") != result.event_id
+        or envelope.get("campaign_id")
+        not in _scope_values(claims, "campaigns", "campaign_scope")
+        or envelope.get("business_unit_id")
+        not in _scope_values(claims, "business_units", "business_unit_scope")
+    ):
+        raise HTTPException(409, "automation result source binding mismatch")
+    if result.actions:
+        unavailable = sorted(
+            {
+                action.action_type
+                for action in result.actions
+                if action.action_type not in ODOO_CAMPAIGN_ACTION_TYPES
+            }
+        )
+        if unavailable:
+            raise HTTPException(
+                503,
+                "automation action adapter is not production enabled: "
+                + ",".join(unavailable),
+            )
+        if not settings.odoo_automation_writes_enabled:
+            raise HTTPException(503, "Odoo automation writes are disabled")
+    scope = "n8n-standard-result"
+    key_hash = canonical_hash({"idempotency_key": result.idempotency_key})
+    request_hash = canonical_hash(redact(result.model_dump(mode="json")))
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {"scope": f"{scope}:{key_hash}"},
+    )
+    prior = await db.scalar(
+        select(IdempotencyRecord).where(
+            IdempotencyRecord.scope == scope,
+            IdempotencyRecord.key_hash == key_hash,
+        )
+    )
+    response = {
+        "accepted": "true",
+        "event_id": result.event_id,
+        "status": result.status,
+    }
+    if prior:
+        if prior.request_hash != request_hash:
+            await db.rollback()
+            raise HTTPException(409, "automation result idempotency conflict")
+        await db.commit()
+        return response
+    db.add(
+        IdempotencyRecord(
+            scope=scope,
+            key_hash=key_hash,
+            request_hash=request_hash,
+            response=response,
+            status_code=202,
+            event_id=event.id,
+        )
+    )
+    if result.actions:
+        db.add(
+            OdooResultDelivery(
+                integration_event_id=event.id,
+                originating_outbox_public_id=result.event_id,
+                request_hash=request_hash,
+                status="PENDING",
+                standard_result_json=result.model_dump(mode="json"),
+            )
+        )
+    db.add(
+        AuditEvent(
+            action="n8n.standard_result.accepted",
+            subject=result.event_id,
+            correlation_id=result.correlation_id,
+            decision=result.status,
+            redacted_payload={
+                "workflow_key": result.workflow_key,
+                "execution_id": result.execution_id,
+            },
+        )
+    )
+    await db.commit()
+    return response
+
+
+@router.get("/n8n/results/{event_id}")
+async def n8n_result_status(
+    event_id: str,
+    authorization: str = Header(alias="Authorization"),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Delivery state of an accepted standard result, for the submitting n8n identity.
+
+    Returns delivery state only. Missing and out-of-scope records are the same
+    404 so the endpoint cannot be used to probe other campaigns' event ids.
+    Results without actions create no delivery and therefore read back 404.
+    """
+    claims = _authenticate_n8n(authorization, "n8n.results.read")
+    delivery = await db.scalar(
+        select(OdooResultDelivery).where(
+            OdooResultDelivery.originating_outbox_public_id == event_id,
+            OdooResultDelivery.integration_event_id.is_not(None),
+            OdooResultDelivery.standard_result_json.is_not(None),
+        )
+    )
+    event = (
+        await db.scalar(
+            select(IntegrationEvent).where(
+                IntegrationEvent.id == delivery.integration_event_id
+            )
+        )
+        if delivery is not None
+        else None
+    )
+    envelope = event.payload_json if event is not None else {}
+    if (
+        delivery is None
+        or event is None
+        or envelope.get("campaign_id")
+        not in _scope_values(claims, "campaigns", "campaign_scope")
+        or envelope.get("business_unit_id")
+        not in _scope_values(claims, "business_units", "business_unit_scope")
+    ):
+        raise HTTPException(404, "standard result not found")
+    return {
+        "event_id": event_id,
+        "receipt_id": str(delivery.result_public_id),
+        "status": delivery.status,
+        "attempts": delivery.attempts,
+        "delivered_at": (
+            delivery.delivered_at.isoformat() if delivery.delivered_at else None
+        ),
+        "last_error_class": delivery.last_error_class,
+    }
 
 
 @router.post("/n8n/progress", status_code=202)

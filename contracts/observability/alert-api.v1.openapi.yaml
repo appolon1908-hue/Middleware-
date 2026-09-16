@@ -9,6 +9,34 @@ info:
 servers:
   - url: https://middleware-observability-alerts.internal.codestra.co
 paths:
+  /internal/v1/alerts/alertmanager:
+    post:
+      operationId: submitCanonicalAlertmanagerEvent
+      summary: Persist Alertmanager transitions as durable operations
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/NativeWebhook'}
+        - {$ref: '#/components/parameters/TenantId'}
+        - {$ref: '#/components/parameters/WebhookCorrelationId'}
+        - {$ref: '#/components/parameters/WebhookIdempotencyKey'}
+        - {$ref: '#/components/parameters/SourceDeployment'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - {$ref: '#/components/schemas/AlertmanagerWebhook'}
+                - {$ref: '#/components/schemas/NativeAlertmanagerWebhook'}
+      responses:
+        '202': {description: New durable operations were accepted}
+        '200': {description: Exact idempotent replay}
+        '207': {description: Native batch accepted with explicit per-alert failures}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /v1/integrations/alertmanager/events:
     post:
       operationId: ingestAlertmanagerEvent

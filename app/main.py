@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
 from app.api.v1.automation import router as automation_router
+from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.campaign_search import router as campaign_search_router
 from app.api.v1.commands import router as commands_router
 from app.api.v1.control import router as control_router
@@ -59,6 +60,7 @@ from app.api.v1.calls import router as calls_router
 from app.api.v1.activity import router as activity_router
 from app.api.v1.presence import router as presence_router
 from app.api.v1.tenants import router as tenants_router
+from app.api.v1.campaigns import router as campaigns_router
 from app.api.v1.queues import router as queues_router
 from app.monitoring.routes import router as monitoring_router, is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
@@ -72,6 +74,7 @@ app.include_router(events_router)
 app.include_router(callbacks_router)
 app.include_router(control_router)
 app.include_router(automation_router)
+app.include_router(campaign_design_router)
 app.include_router(reports_router)
 app.include_router(operations_router)
 app.include_router(lead_reconciliation_router)
@@ -116,6 +119,7 @@ app.include_router(activity_router)
 app.include_router(presence_router)
 app.include_router(tenants_router)
 app.include_router(queues_router)
+app.include_router(campaigns_router)
 app.mount("/metrics", make_asgi_app())
 
 
@@ -192,6 +196,8 @@ CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
 N8N_SERVICE_JWT_ROUTES = frozenset(
     {
         ("POST", "/api/v1/automation/policy-check"),
+        ("POST", "/api/v1/campaign-designs/preview"),
+        ("POST", "/api/v1/campaign-designs/approvals"),
         ("POST", "/api/v1/integrations/n8n/results"),
     }
 )
@@ -240,10 +246,7 @@ async def control_request_guard(request: Request, call_next):
     if content_length > settings.request_max_bytes:
         return JSONResponse({"detail": "request too large"}, status_code=413)
     if (
-        (
-            request.url.path.startswith("/api/")
-            or request.url.path.startswith("/v1/")
-        )
+        (request.url.path.startswith("/api/") or request.url.path.startswith("/v1/"))
         and request.url.path not in SIGNED_WEBHOOK_PATHS
         and not RECORDING_EXPORTER_PATH.fullmatch(request.url.path)
         and not (
@@ -264,7 +267,9 @@ async def control_request_guard(request: Request, call_next):
             )
         except BearerAuthError:
             status_code = 503 if not settings.middleware_secret else 401
-            detail = "authentication unavailable" if status_code == 503 else "unauthorized"
+            detail = (
+                "authentication unavailable" if status_code == 503 else "unauthorized"
+            )
             return JSONResponse({"detail": detail}, status_code=status_code)
     response = await call_next(request)
     response.headers["X-Correlation-ID"] = (
@@ -331,7 +336,11 @@ async def health_dependencies() -> dict[str, object]:
         "service": "codestra-contact-center-middleware",
         "environment": settings.environment,
         "status": "configured",
-        "dependencies": {"postgres": "configured", "redis": "configured", "keycloak": "configured"},
+        "dependencies": {
+            "postgres": "configured",
+            "redis": "configured",
+            "keycloak": "configured",
+        },
         "timestamp": datetime.now(UTC).isoformat(),
     }
 

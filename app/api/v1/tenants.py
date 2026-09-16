@@ -1,37 +1,40 @@
-"""``GET /platform/v1/tenants`` - the platform-wide tenant directory.
+"""Tenant directory and tenant-scoped operational projections.
 
-Middleware owns no tenant table of its own (Mission-02's explicit "do not
-create duplicate identity/tenant authorities" instruction - see
-``app.adapters.foundation.client``'s module docstring). This endpoint is a
-thin, read-only passthrough onto ``codestra-foundation``'s tenant list, the
-same way ``app.api.v1.session_context`` already reads single-tenant state
-from it rather than reimplementing tenant storage here.
-
-Scope: gated to ``platform_admin``/``platform_operator`` only (via
-``require_platform_scope``, the same dependency ``app.api.v1.platform``
-already uses). There is currently no established pattern anywhere in this
-codebase for a human tenant_admin to call a Middleware API directly with
-their own session token (every existing tenant-scoped endpoint -
-``session_context.py``, ``agent_provisioning.py`` - authenticates a
-*machine* caller via ``require_provisioning_scope``, not a logged-in human).
-Building that primitive is out of this change's scope; a tenant_admin
-narrowing this list to their own tenant is therefore not yet supported and
-is flagged here rather than silently faked.
+Tenant identity and lifecycle remain authoritative in codestra-foundation.
+Platform operators can page through that authority directly, while machine
+callers can resolve only the tenant IDs already present in their verified
+token. Campaign and recent-agent data comes from Middleware's existing
+registry/read models; this module creates no competing tenant store.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.foundation.client import FoundationClient, FoundationUnavailable
+from app.adapters.foundation.client import (
+    FoundationClient,
+    FoundationTenantNotFound,
+    FoundationUnavailable,
+)
 from app.core.config import settings
 from app.core.platform_auth import PlatformPrincipal, require_platform_scope
+from app.core.provisioning_auth import (
+    ProvisioningPrincipal,
+    require_provisioning_scope,
+    require_tenant_match,
+)
+from app.db.models import AgentCallState, CampaignRegistry
+from app.db.session import get_session
 
 router = APIRouter(prefix="/platform/v1/tenants", tags=["tenants"])
 TENANT_DIRECTORY_ROLES = frozenset({"platform_admin", "platform_operator"})
+RECENT_ACTIVE_WINDOW = timedelta(minutes=30)
 
 
 def _tenant_out(record: Any) -> dict[str, str]:
@@ -41,6 +44,19 @@ def _tenant_out(record: Any) -> dict[str, str]:
         "name": record.name,
         "status": record.status,
     }
+
+
+async def _resolve_tenant(
+    foundation: FoundationClient,
+    http: httpx.AsyncClient,
+    tenant_id: str,
+) -> dict[str, str] | None:
+    try:
+        return _tenant_out(await foundation.get_tenant(http, tenant_id))
+    except FoundationTenantNotFound:
+        return None
+    except FoundationUnavailable as exc:
+        raise HTTPException(503, "codestra-foundation is unavailable") from exc
 
 
 @router.get("")
@@ -54,16 +70,17 @@ async def list_tenants(
         )
     ),
 ) -> dict[str, Any]:
+    """Return the real Foundation directory to authorized platform operators."""
     foundation = FoundationClient(settings)
-    async with httpx.AsyncClient() as http:
+    async with httpx.AsyncClient(timeout=5.0) as http:
         try:
             records = await foundation.list_tenants(
-                http, status=status, limit=limit, offset=offset
+                http,
+                status=status,
+                limit=limit,
+                offset=offset,
             )
         except FoundationUnavailable as exc:
-            # Fail closed, not fail open - an empty list here would read as
-            # "zero tenants exist", which is never true in production. An
-            # unavailable upstream must surface as an error, not silence.
             raise HTTPException(503, "codestra-foundation is unavailable") from exc
     return {
         "tenants": [_tenant_out(record) for record in records],
@@ -72,4 +89,136 @@ async def list_tenants(
             "offset": offset,
             "returned": len(records),
         },
+    }
+
+
+@router.get("/authorized")
+async def list_authorized_tenants(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
+) -> dict[str, Any]:
+    """Page through tenant grants carried by the verified machine token."""
+    foundation = FoundationClient(settings)
+    items: list[dict[str, str]] = []
+    granted_ids = sorted(principal.tenant_ids)
+    async with httpx.AsyncClient(timeout=5.0) as http:
+        for tenant_id in granted_ids[offset : offset + limit]:
+            tenant = await _resolve_tenant(foundation, http, tenant_id)
+            if tenant is not None:
+                items.append(tenant)
+    return {
+        "items": items,
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(items),
+            "granted": len(granted_ids),
+        },
+    }
+
+
+@router.get("/{tenant_id}")
+async def get_tenant(
+    tenant_id: str,
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
+) -> dict[str, str]:
+    require_tenant_match(principal, tenant_id)
+    foundation = FoundationClient(settings)
+    async with httpx.AsyncClient(timeout=5.0) as http:
+        tenant = await _resolve_tenant(foundation, http, tenant_id)
+    if tenant is None:
+        raise HTTPException(404, "tenant not found")
+    return tenant
+
+
+@router.get("/{tenant_id}/campaigns")
+async def list_tenant_campaigns(
+    tenant_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    require_tenant_match(principal, tenant_id)
+    rows = (
+        (
+            await session.execute(
+                select(CampaignRegistry)
+                .where(CampaignRegistry.campaign_code == tenant_id)
+                .order_by(CampaignRegistry.campaign_number)
+                .limit(limit)
+                .offset(offset)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    total = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(CampaignRegistry)
+            .where(CampaignRegistry.campaign_code == tenant_id)
+        )
+        or 0
+    )
+    return {
+        "items": [
+            {
+                "campaign_id": row.vicidial_campaign_id,
+                "campaign_number": row.campaign_number,
+                "name": row.name,
+                "registry_status": row.registry_status,
+            }
+            for row in rows
+        ],
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(rows),
+            "total": total,
+        },
+    }
+
+
+@router.get("/{tenant_id}/health")
+async def get_tenant_health(
+    tenant_id: str,
+    principal: ProvisioningPrincipal = Depends(
+        require_provisioning_scope("identity.request")
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    require_tenant_match(principal, tenant_id)
+    campaign_ids = list(
+        (
+            await session.execute(
+                select(CampaignRegistry.vicidial_campaign_id).where(
+                    CampaignRegistry.campaign_code == tenant_id
+                )
+            )
+        ).scalars()
+    )
+    active_agents = 0
+    if campaign_ids:
+        since = datetime.now(UTC) - RECENT_ACTIVE_WINDOW
+        active_agents = int(
+            await session.scalar(
+                select(func.count(func.distinct(AgentCallState.agent_id))).where(
+                    AgentCallState.campaign_id.in_(campaign_ids),
+                    AgentCallState.updated_at >= since,
+                )
+            )
+            or 0
+        )
+    return {
+        "tenant_id": tenant_id,
+        "campaign_count": len(campaign_ids),
+        "active_agents_last_30m": active_agents,
     }

@@ -686,6 +686,148 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /api/v1/campaign-designs/preview:
+    post:
+      tags:
+      - campaign-design
+      summary: Preview
+      operationId: preview_api_v1_campaign_designs_preview_post
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Authorization
+      - name: X-Business-Unit
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Business-Unit
+      - name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignDesignInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /api/v1/campaign-designs/approvals:
+    post:
+      tags:
+      - campaign-design
+      summary: Approve
+      operationId: approve_api_v1_campaign_designs_approvals_post
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Authorization
+      - name: X-Business-Unit
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Business-Unit
+      - name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 180
+      - name: X-Correlation-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 180
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignApprovalInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v1/operations-dashboard/overview:
     get:
       tags:
@@ -6619,6 +6761,1863 @@ paths:
               - provider_status
               title: TelnexaDeliveryEvent
               type: object
+  /platform/v1/agent-provisioning/requests:
+    post:
+      tags:
+      - agent-provisioning
+      summary: Create Provisioning Request
+      operationId: create_provisioning_request_platform_v1_agent_provisioning_requests_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 256
+          title: Idempotency-Key
+      - name: X-Correlation-ID
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Correlation-Id
+      - name: X-Policy-Revision
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Policy-Revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvisioningCreate'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agent-provisioning/requests/{request_id}:
+    get:
+      tags:
+      - agent-provisioning
+      summary: Get Provisioning Request
+      operationId: get_provisioning_request_platform_v1_agent_provisioning_requests__request_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Request Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agent-provisioning/requests/{request_id}/reconcile:
+    post:
+      tags:
+      - agent-provisioning
+      summary: Reconcile Provisioning Request
+      operationId: reconcile_provisioning_request_platform_v1_agent_provisioning_requests__request_id__reconcile_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Request Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agent-provisioning/requests/{request_id}/suspend:
+    post:
+      tags:
+      - agent-provisioning
+      summary: Suspend Provisioning Request
+      operationId: suspend_provisioning_request_platform_v1_agent_provisioning_requests__request_id__suspend_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Request Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agent-provisioning/requests/{request_id}/reactivate:
+    post:
+      tags:
+      - agent-provisioning
+      summary: Reactivate Provisioning Request
+      operationId: reactivate_provisioning_request_platform_v1_agent_provisioning_requests__request_id__reactivate_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Request Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agent-provisioning/requests/{request_id}/revoke:
+    post:
+      tags:
+      - agent-provisioning
+      summary: Revoke Provisioning Request
+      operationId: revoke_provisioning_request_platform_v1_agent_provisioning_requests__request_id__revoke_post
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Request Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/users/{employee_id}:
+    get:
+      tags:
+      - agent-provisioning-reads
+      summary: Get User
+      operationId: get_user_platform_v1_users__employee_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: employee_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Employee Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get User Platform V1 Users  Employee Id  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/users/{employee_id}/campaigns:
+    get:
+      tags:
+      - agent-provisioning-reads
+      summary: Get User Campaigns
+      operationId: get_user_campaigns_platform_v1_users__employee_id__campaigns_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: employee_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Employee Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get User Campaigns Platform V1 Users  Employee Id  Campaigns
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/users/{employee_id}/entitlements:
+    get:
+      tags:
+      - agent-provisioning-reads
+      summary: Get User Entitlements
+      operationId: get_user_entitlements_platform_v1_users__employee_id__entitlements_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: employee_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Employee Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get User Entitlements Platform V1 Users  Employee
+                  Id  Entitlements Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/telephony/assignments:
+    get:
+      tags:
+      - agent-provisioning-reads
+      summary: List Telephony Assignments
+      operationId: list_telephony_assignments_platform_v1_telephony_assignments_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Tenant Id
+      - name: employee_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Employee Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Telephony Assignments Platform V1 Telephony Assignments
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/email/identities:
+    get:
+      tags:
+      - agent-provisioning-reads
+      summary: List Email Identities
+      operationId: list_email_identities_platform_v1_email_identities_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Tenant Id
+      - name: employee_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Employee Id
+      - name: campaign_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Campaign Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Email Identities Platform V1 Email Identities
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/sms/identities:
+    get:
+      tags:
+      - agent-provisioning-reads
+      summary: List Sms Identities
+      operationId: list_sms_identities_platform_v1_sms_identities_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Tenant Id
+      - name: employee_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Employee Id
+      - name: campaign_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Campaign Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Sms Identities Platform V1 Sms Identities Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/session/context:
+    get:
+      tags:
+      - session-context
+      summary: Get Session Context
+      operationId: get_session_context_platform_v1_session_context_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Session Context Platform V1 Session Context Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/session/context/select:
+    post:
+      tags:
+      - session-context
+      summary: Select Session Context
+      operationId: select_session_context_platform_v1_session_context_select_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextSelectRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Select Session Context Platform V1 Session Context
+                  Select Post
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/calls:
+    get:
+      tags:
+      - calls
+      summary: List Calls
+      operationId: list_calls_platform_v1_calls_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: business_unit to scope results to
+          title: Tenant Id
+        description: business_unit to scope results to
+      - name: campaign
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Campaign
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Calls Platform V1 Calls Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/calls/{call_id}:
+    get:
+      tags:
+      - calls
+      summary: Get Call
+      operationId: get_call_platform_v1_calls__call_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: call_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Call Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: business_unit expected to own this call
+          title: Tenant Id
+        description: business_unit expected to own this call
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Call Platform V1 Calls  Call Id  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/activity:
+    get:
+      tags:
+      - activity
+      summary: List Activity
+      operationId: list_activity_platform_v1_activity_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Activity Platform V1 Activity Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/activity/{activity_id}:
+    get:
+      tags:
+      - activity
+      summary: Get Activity
+      operationId: get_activity_platform_v1_activity__activity_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: activity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Activity Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Activity Platform V1 Activity  Activity Id  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agents/presence:
+    get:
+      tags:
+      - presence
+      summary: List Agents Presence
+      operationId: list_agents_presence_platform_v1_agents_presence_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: business_unit to scope results to
+          title: Tenant Id
+        description: business_unit to scope results to
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Agents Presence Platform V1 Agents Presence Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/agents/{user_id}/presence:
+    get:
+      tags:
+      - presence
+      summary: Get Agent Presence
+      operationId: get_agent_presence_platform_v1_agents__user_id__presence_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: business_unit expected to own this agent
+          title: Tenant Id
+        description: business_unit expected to own this agent
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Agent Presence Platform V1 Agents  User Id  Presence
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/me/presence:
+    get:
+      tags:
+      - presence
+      summary: Get My Presence
+      operationId: get_my_presence_platform_v1_me_presence_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get My Presence Platform V1 Me Presence Get
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/queues:
+    get:
+      tags:
+      - queues
+      summary: List Queues
+      operationId: list_queues_platform_v1_queues_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code to scope results to
+          title: Tenant Id
+        description: campaign_code to scope results to
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Queues Platform V1 Queues Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/queues/{queue_id}:
+    get:
+      tags:
+      - queues
+      summary: Get Queue
+      operationId: get_queue_platform_v1_queues__queue_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: queue_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Queue Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this queue
+          title: Tenant Id
+        description: campaign_code expected to own this queue
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Queue Platform V1 Queues  Queue Id  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/queues/{queue_id}/members:
+    get:
+      tags:
+      - queues
+      summary: List Queue Members
+      operationId: list_queue_members_platform_v1_queues__queue_id__members_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: queue_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Queue Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this queue
+          title: Tenant Id
+        description: campaign_code expected to own this queue
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Queue Members Platform V1 Queues  Queue Id  Members
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/queues/{queue_id}/calls:
+    get:
+      tags:
+      - queues
+      summary: List Queue Calls
+      operationId: list_queue_calls_platform_v1_queues__queue_id__calls_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: queue_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Queue Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this queue
+          title: Tenant Id
+        description: campaign_code expected to own this queue
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Queue Calls Platform V1 Queues  Queue Id  Calls
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/queues/{queue_id}/metrics:
+    get:
+      tags:
+      - queues
+      summary: Get Queue Metrics
+      operationId: get_queue_metrics_platform_v1_queues__queue_id__metrics_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: queue_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Queue Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this queue
+          title: Tenant Id
+        description: campaign_code expected to own this queue
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Queue Metrics Platform V1 Queues  Queue Id  Metrics
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/tenants:
+    get:
+      tags:
+      - tenants
+      summary: List Tenants
+      description: Return the real Foundation directory to authorized platform operators.
+      operationId: list_tenants_platform_v1_tenants_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(ACTIVE|SUSPENDED|CLOSED)$
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Tenants Platform V1 Tenants Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/tenants/authorized:
+    get:
+      tags:
+      - tenants
+      summary: List Authorized Tenants
+      description: Page through tenant grants carried by the verified machine token.
+      operationId: list_authorized_tenants_platform_v1_tenants_authorized_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Authorized Tenants Platform V1 Tenants Authorized
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/tenants/{tenant_id}:
+    get:
+      tags:
+      - tenants
+      summary: Get Tenant
+      operationId: get_tenant_platform_v1_tenants__tenant_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                title: Response Get Tenant Platform V1 Tenants  Tenant Id  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/tenants/{tenant_id}/campaigns:
+    get:
+      tags:
+      - tenants
+      summary: List Tenant Campaigns
+      operationId: list_tenant_campaigns_platform_v1_tenants__tenant_id__campaigns_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Tenant Campaigns Platform V1 Tenants  Tenant
+                  Id  Campaigns Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/tenants/{tenant_id}/health:
+    get:
+      tags:
+      - tenants
+      summary: Get Tenant Health
+      operationId: get_tenant_health_platform_v1_tenants__tenant_id__health_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Tenant Health Platform V1 Tenants  Tenant Id  Health
+                  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/campaigns:
+    get:
+      tags:
+      - campaigns
+      summary: List Campaigns
+      operationId: list_campaigns_platform_v1_campaigns_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code to scope results to
+          title: Tenant Id
+        description: campaign_code to scope results to
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Campaigns Platform V1 Campaigns Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/campaigns/{campaign_id}:
+    get:
+      tags:
+      - campaigns
+      summary: Get Campaign
+      operationId: get_campaign_platform_v1_campaigns__campaign_id__get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Campaign Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this campaign
+          title: Tenant Id
+        description: campaign_code expected to own this campaign
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Campaign Platform V1 Campaigns  Campaign Id  Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/campaigns/{campaign_id}/members:
+    get:
+      tags:
+      - campaigns
+      summary: List Campaign Members
+      operationId: list_campaign_members_platform_v1_campaigns__campaign_id__members_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Campaign Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this campaign
+          title: Tenant Id
+        description: campaign_code expected to own this campaign
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response List Campaign Members Platform V1 Campaigns  Campaign
+                  Id  Members Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/campaigns/{campaign_id}/channels:
+    get:
+      tags:
+      - campaigns
+      summary: Get Campaign Channels
+      operationId: get_campaign_channels_platform_v1_campaigns__campaign_id__channels_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Campaign Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this campaign
+          title: Tenant Id
+        description: campaign_code expected to own this campaign
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Campaign Channels Platform V1 Campaigns  Campaign
+                  Id  Channels Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+  /platform/v1/campaigns/{campaign_id}/health:
+    get:
+      tags:
+      - campaigns
+      summary: Get Campaign Health
+      operationId: get_campaign_health_platform_v1_campaigns__campaign_id__health_get
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Campaign Id
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: campaign_code expected to own this campaign
+          title: Tenant Id
+        description: campaign_code expected to own this campaign
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Response Get Campaign Health Platform V1 Campaigns  Campaign
+                  Id  Health Get
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id002
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
   /platform/v1/repositories:
     get:
       tags:
@@ -10049,6 +12048,330 @@ components:
       - dialing
       - reason
       title: CallingResponse
+    CampaignApprovalInput:
+      properties:
+        tenant_id:
+          anyOf:
+          - type: string
+            maxLength: 128
+            minLength: 1
+          - type: 'null'
+          title: Tenant Id
+        integration_uuid:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          title: Integration Uuid
+        business_unit:
+          type: string
+          pattern: ^(MOY|COD|SCP|MBL|RLP|FTP|TRX|CAL|TEST|STAGING)$
+          title: Business Unit
+        environment:
+          type: string
+          enum:
+          - test
+          - staging
+          - production
+          title: Environment
+        design_revision:
+          type: integer
+          minimum: 1
+          title: Design Revision
+        manifest_hash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Manifest Hash
+        reason:
+          type: string
+          maxLength: 512
+          minLength: 8
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - integration_uuid
+      - business_unit
+      - environment
+      - design_revision
+      - manifest_hash
+      - reason
+      title: CampaignApprovalInput
+    CampaignAssignment:
+      properties:
+        campaign_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Campaign Id
+        role:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Role
+        vicidial_user_id:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{3}[0-9]{4,12}$
+          - type: 'null'
+          title: Vicidial User Id
+        vicidial_user_group:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z0-9_]{2,20}$
+          - type: 'null'
+          title: Vicidial User Group
+        vicidial_supervisor_subject:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Vicidial Supervisor Subject
+        campaign_email:
+          anyOf:
+          - type: string
+            maxLength: 255
+            minLength: 3
+          - type: 'null'
+          title: Campaign Email
+        sms_sender:
+          anyOf:
+          - type: string
+            maxLength: 20
+            minLength: 1
+          - type: 'null'
+          title: Sms Sender
+        sms_sender_type:
+          type: string
+          maxLength: 32
+          title: Sms Sender Type
+          default: alphanumeric
+        sms_countries:
+          items:
+            type: string
+          type: array
+          maxItems: 64
+          title: Sms Countries
+      type: object
+      required:
+      - campaign_id
+      - role
+      title: CampaignAssignment
+    CampaignDesignConfiguration:
+      properties:
+        time_zone:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Time Zone
+        calling_hour_start:
+          type: number
+          exclusiveMaximum: 24
+          minimum: 0
+          title: Calling Hour Start
+        calling_hour_end:
+          type: number
+          maximum: 24
+          exclusiveMinimum: 0
+          title: Calling Hour End
+        consent_required:
+          type: boolean
+          title: Consent Required
+        dnc_enforced:
+          type: boolean
+          title: Dnc Enforced
+        team_ids:
+          items:
+            type: integer
+          type: array
+          maxItems: 1000
+          title: Team Ids
+        supervisor_ids:
+          items:
+            type: integer
+          type: array
+          maxItems: 1000
+          title: Supervisor Ids
+        campaign_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Campaign Type
+        lead_source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Lead Source Id
+        dialer_mode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dialer Mode
+        routing_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Routing Strategy
+        max_call_attempts:
+          type: integer
+          maximum: 1000
+          minimum: 0
+          title: Max Call Attempts
+          default: 1
+        max_retries:
+          type: integer
+          maximum: 1000
+          minimum: 0
+          title: Max Retries
+          default: 0
+        callback_rule:
+          anyOf:
+          - type: string
+          - type: boolean
+          - type: 'null'
+          title: Callback Rule
+        escalation_rule:
+          anyOf:
+          - type: string
+          - type: boolean
+          - type: 'null'
+          title: Escalation Rule
+        inputs:
+          type: object
+          title: Inputs
+      additionalProperties: false
+      type: object
+      required:
+      - time_zone
+      - calling_hour_start
+      - calling_hour_end
+      - consent_required
+      - dnc_enforced
+      - team_ids
+      - supervisor_ids
+      title: CampaignDesignConfiguration
+    CampaignDesignInput:
+      properties:
+        schema_version:
+          type: string
+          const: campaign-provisioning.v1
+          title: Schema Version
+          default: campaign-provisioning.v1
+        event_id:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Event Id
+        integration_uuid:
+          type: string
+          title: Integration Uuid
+        tenant_id:
+          anyOf:
+          - type: string
+            maxLength: 128
+            minLength: 1
+          - type: 'null'
+          title: Tenant Id
+        design_request_revision:
+          type: integer
+          minimum: 1
+          title: Design Request Revision
+          default: 1
+        odoo_campaign_id:
+          type: integer
+          exclusiveMinimum: 0
+          title: Odoo Campaign Id
+        environment:
+          type: string
+          enum:
+          - test
+          - staging
+          - production
+          title: Environment
+        business_unit:
+          type: string
+          title: Business Unit
+        purpose:
+          type: string
+          pattern: ^[A-Z0-9]{2,16}$
+          title: Purpose
+        direction:
+          type: string
+          enum:
+          - inbound
+          - outbound
+          - blended
+          title: Direction
+        campaign_code:
+          type: string
+          title: Campaign Code
+        expected_campaign_code:
+          type: string
+          title: Expected Campaign Code
+        owner_user_id:
+          type: integer
+          exclusiveMinimum: 0
+          title: Owner User Id
+        supervisor_user_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Supervisor User Id
+        correlation_id:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Correlation Id
+        validation:
+          $ref: '#/components/schemas/DesignValidation'
+        design_configuration:
+          $ref: '#/components/schemas/CampaignDesignConfiguration'
+        feature_flags:
+          additionalProperties:
+            type: boolean
+          type: object
+          title: Feature Flags
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - integration_uuid
+      - odoo_campaign_id
+      - environment
+      - business_unit
+      - purpose
+      - direction
+      - campaign_code
+      - expected_campaign_code
+      - owner_user_id
+      - supervisor_user_id
+      - correlation_id
+      - validation
+      - design_configuration
+      - feature_flags
+      title: CampaignDesignInput
+    ChannelSelection:
+      properties:
+        odoo:
+          type: boolean
+          title: Odoo
+          default: false
+        phone:
+          type: boolean
+          title: Phone
+          default: false
+        webrtc:
+          type: boolean
+          title: Webrtc
+          default: false
+        sms:
+          type: boolean
+          title: Sms
+          default: false
+        email:
+          type: boolean
+          title: Email
+          default: false
+      type: object
+      title: ChannelSelection
     CommandEnvelope:
       properties:
         command_id:
@@ -10272,6 +12595,20 @@ components:
       - to
       - totals
       title: CommunicationUsageReport
+    ContextSelectRequest:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        campaign_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Campaign Id
+      type: object
+      required:
+      - tenant_id
+      title: ContextSelectRequest
     ContractRefresh:
       properties:
         environment:
@@ -10404,6 +12741,24 @@ components:
       - safe_replay_classification
       - replay_reason
       title: DeadLetterReplayRequest
+    DesignValidation:
+      properties:
+        status:
+          type: string
+          enum:
+          - READY
+          - BLOCKED
+          title: Status
+          default: READY
+        errors:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          title: Errors
+      additionalProperties: false
+      type: object
+      title: DesignValidation
     EmailProductionPolicy:
       properties:
         tenantId:
@@ -10779,6 +13134,27 @@ components:
       - lease_token
       - execution_id
       title: HeartbeatRequest
+    IdentitySelection:
+      properties:
+        email:
+          type: string
+          maxLength: 255
+          minLength: 3
+          title: Email
+        first_name:
+          type: string
+          maxLength: 128
+          title: First Name
+          default: ''
+        last_name:
+          type: string
+          maxLength: 128
+          title: Last Name
+          default: ''
+      type: object
+      required:
+      - email
+      title: IdentitySelection
     IncidentState:
       properties:
         event_id:
@@ -12002,6 +14378,78 @@ components:
       - domains
       - providers
       title: ProviderReputationReport
+    ProvisioningCreate:
+      properties:
+        request_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Request Id
+        tenant_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Tenant Id
+        employee_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Employee Id
+        identity:
+          $ref: '#/components/schemas/IdentitySelection'
+        campaigns:
+          items:
+            $ref: '#/components/schemas/CampaignAssignment'
+          type: array
+          maxItems: 32
+          title: Campaigns
+        channels:
+          $ref: '#/components/schemas/ChannelSelection'
+        entitlements:
+          $ref: '#/components/schemas/ProvisioningEntitlements'
+        telephony:
+          $ref: '#/components/schemas/TelephonySelection'
+      type: object
+      required:
+      - request_id
+      - tenant_id
+      - employee_id
+      - identity
+      - channels
+      title: ProvisioningCreate
+    ProvisioningEntitlements:
+      properties:
+        agent_desktop:
+          type: boolean
+          title: Agent Desktop
+          default: true
+        voicemail:
+          type: boolean
+          title: Voicemail
+          default: false
+        recording_access:
+          type: boolean
+          title: Recording Access
+          default: false
+        monitoring_access:
+          type: boolean
+          title: Monitoring Access
+          default: false
+      additionalProperties: false
+      type: object
+      title: ProvisioningEntitlements
+      description: 'Approved optional capabilities for this agent.
+
+
+        These are deliberately separate from transport channels.  A request may
+
+        need an Odoo identity without an agent desktop, and voicemail/recording/
+
+        monitoring are capability grants rather than delivery channels.  Keeping
+
+        them explicit prevents the Odoo approval from being silently discarded at
+
+        the Middleware boundary.'
     QueryRequest:
       properties:
         service_id:
@@ -12356,6 +14804,36 @@ components:
       - step_state
       - recorded_at
       title: StepRecord
+    TelephonySelection:
+      properties:
+        existing_extension:
+          anyOf:
+          - type: string
+            maxLength: 16
+          - type: 'null'
+          title: Existing Extension
+        incoming_allowed:
+          type: boolean
+          title: Incoming Allowed
+          default: true
+        outgoing_allowed:
+          type: boolean
+          title: Outgoing Allowed
+          default: true
+        max_webrtc_sessions:
+          type: integer
+          maximum: 1
+          minimum: 1
+          title: Max Webrtc Sessions
+          default: 1
+        extension_pool:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Extension Pool
+      type: object
+      title: TelephonySelection
     TelnexaDeliveryAck:
       properties:
         accepted:
@@ -12445,6 +14923,17 @@ components:
       - execution_id
       - result_code
       title: TerminalResult
+    TransitionRequest:
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+          minLength: 1
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: TransitionRequest
     ValidationError:
       properties:
         loc:

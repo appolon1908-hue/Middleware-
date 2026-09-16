@@ -21,7 +21,7 @@ All work was done on the isolated branch `codex/cross-repo-authority-20260916` i
 | Kong | `bc166fddba62b79b67bc960ca875b27f50782b97` | `4348e5171f7f4d03986843f4129c2b282791bbc9` | https://github.com/appolon1908-hue/Kong/pull/105 |
 | Caddy | `dc6f7e4447d76d611d9b8ce9068b34e87b90d948` | `54edf07bdb0d2feb6a53e373ea448bff87d48a74` | https://github.com/appolon1908-hue/Caddy/pull/174 |
 | Keycloak | `7f8a7dfafe708dac01f67589d2ba4058f34f5a4a` | `bd4ca21601bc1079a2f3d1f0814420c7ef264dd8` | https://github.com/appolon1908-hue/Keycloak/pull/118 |
-| Odoo | `11c47bc15eb41b581f682217b87581fb0ab8e335` | `f8f8dc5d39a6848540d94dc4d4a91596f3970af1` | https://github.com/appolon1908-hue/Odoo/pull/142 |
+| Odoo | `11c47bc15eb41b581f682217b87581fb0ab8e335` | `f8f8dc5d39a6848540d94dc4d4a91596f3970af1` (+ `897fab7` config-only: override records point at PR #142) | https://github.com/appolon1908-hue/Odoo/pull/142 |
 | N8N | `dd100d8ebd17f7eb90871522e74863dedbccd2e9` | `cf6e0ecdc364d2c1720c2d2d7d9296a39a2e13d6` | https://github.com/appolon1908-hue/N8N/pull/66 |
 
 ## Canonical contract
@@ -144,6 +144,7 @@ Unchanged and disabled: `runtime_apply_authorized=false` / `runtimeApplyAuthoriz
 
 | Blocker | Reproduction | Needed |
 |---|---|---|
+| GitHub Actions cannot start any job for the repository owner | `gh run list -R appolon1908-hue/<repo> --branch codex/cross-repo-authority-20260916` shows `startup_failure`; the check-run annotation reads "The job was not started because your account is locked due to a billing issue." (runs on other branches succeeded until 2026-09-16T02:00Z) | Resolve the account billing lock, then re-run the workflows on all six pull requests (`gh run rerun <id>` or close/reopen) so the exact-head and merge-result validations produce the Linux CI evidence this gate cannot substitute for |
 | Local integration runtime | `docker info` → HTTP 500; `wsl -l -v` → no distribution | Install WSL 2 / enable the Docker Linux engine with elevation, then `docker compose -f deploy/compose.runtime.yaml …` with namespaced volumes and non-production ports |
 | Middleware disposable-DB integration suite | `RUNTIME_INTEGRATION_TESTS=1 RUNTIME_INTEGRATION_ALLOW_DISPOSABLE=YES DATABASE_URL=postgresql://… REDIS_URL=redis://… python -m pytest -q tests/integration` | the runtime above |
 | Odoo install/upgrade/ORM tests | Odoo 19 + PostgreSQL container: `odoo -i call_center_campaign,codestra_campaign_control_plane --test-enable --stop-after-init` | the runtime above |

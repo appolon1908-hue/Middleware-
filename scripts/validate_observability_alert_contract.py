@@ -106,6 +106,7 @@ REQUIRED_PATHS = {
     "/readiness",
     "/version",
     "/capabilities",
+    "/internal/v1/alerts/alertmanager",
     "/v1/integrations/alertmanager/events",
     "/v1/integrations/alertmanager/status-events",
     "/v1/observability/alerts",

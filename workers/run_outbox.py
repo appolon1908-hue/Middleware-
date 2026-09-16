@@ -9,8 +9,14 @@ import httpx
 from app.config import ConfigurationError, Settings
 from app.commands import ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
+from app.klyrow_odoo_projection import KlyrowOdooProjectionDispatcher
 from app.odoo_transport import OdooCommandDispatcher
-from app.storage import NATS_JETSTREAM_DESTINATION, OutboxRecord, PostgresOutboxStore
+from app.storage import (
+    KLYROW_ODOO_PROJECTION_DESTINATION,
+    NATS_JETSTREAM_DESTINATION,
+    OutboxRecord,
+    PostgresOutboxStore,
+)
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
 from app.worker import OutboxWorker
@@ -49,7 +55,13 @@ async def main() -> None:
     settings = Settings.from_env()
     temporal_enabled = settings.temporal_worker_mode != "disabled"
     odoo_enabled = settings.odoo_delivery_enabled
-    if not settings.outbox_dispatch_enabled and not temporal_enabled and not odoo_enabled:
+    klyrow_odoo_enabled = settings.klyrow_odoo_projection_enabled
+    if (
+        not settings.outbox_dispatch_enabled
+        and not temporal_enabled
+        and not odoo_enabled
+        and not klyrow_odoo_enabled
+    ):
         raise ConfigurationError(
             "JetStream, Temporal, and Odoo outbox dispatch are all intentionally "
             "disabled"
@@ -95,6 +107,19 @@ async def main() -> None:
                 source_delivery_enabled=settings.odoo_source_delivery_enabled,
                 default_secret=settings.odoo_default_hmac_secret or None,
             ).dispatch
+        if klyrow_odoo_enabled:
+            if odoo_client is None:
+                odoo_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(settings.odoo_timeout_seconds)
+                )
+            handlers[KLYROW_ODOO_PROJECTION_DESTINATION] = (
+                KlyrowOdooProjectionDispatcher(
+                    client=odoo_client,
+                    base_url=settings.odoo_base_url or "",
+                    secrets=dict(settings.odoo_tenant_hmac_secrets),
+                    default_secret=settings.odoo_default_hmac_secret or None,
+                ).dispatch
+            )
         worker = OutboxWorker(
             PostgresOutboxStore(pool),
             handlers,

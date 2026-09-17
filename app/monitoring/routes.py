@@ -462,29 +462,41 @@ async def reconcile_one(store, principal, config, service_id, environment):
     reported = {
         r["payload"].get("component"): r["payload"].get("status") for r in fresh
     }
-    if desired != approved:
-        state = "pending-release-approval"
-    elif not desired or not required or not required <= actual.keys():
-        state = "unknown"
-    elif all(actual[x] == desired for x in required):
-        state = "synced"
-    else:
-        state = "drifted"
+    component_states = {
+        component: component_state(
+            component, desired, approved, actual, reported, required
+        )
+        for component in sorted(required | actual.keys())
+    }
+    state = service_state(desired, approved, required, component_states)
     return {
         "service_id": service_id,
         "environment": environment,
         "desired_digest": desired,
         "approved_digest": approved,
         "components": actual,
-        "component_states": {
-            component: component_state(
-                component, desired, approved, actual, reported, required
-            )
-            for component in sorted(required | actual.keys())
-        },
+        "component_states": component_states,
         "missing_components": sorted(required - actual.keys()),
         "state": state,
     }
+
+
+def service_state(desired, approved, required, component_states):
+    """Fold per-component states into the service state, worst first.
+
+    A collector-reported ``failed`` or ``applying`` component wins over digest
+    comparison; a required component without a fresh digest read-back keeps the
+    service ``unknown`` (an unreachable Prometheus never yields ``synced``).
+    """
+    if desired != approved:
+        return "pending-release-approval"
+    if not desired or not required:
+        return "unknown"
+    states = [component_states.get(component, "unknown") for component in required]
+    for worst in ("failed", "applying", "unknown", "drifted"):
+        if worst in states:
+            return worst
+    return "synced"
 
 
 def component_state(component, desired, approved, actual, reported, required):

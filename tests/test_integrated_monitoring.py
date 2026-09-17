@@ -448,6 +448,7 @@ def test_all_36_operations_have_working_success_paths(system):
         {"environment": "production", "service_ids": ["sample-api"]},
     ).json()["data"]
     assert reconciliation["results"][0]["state"] == "synced"
+    assert reconciliation["results"][0]["component_states"] == {"prometheus": "synced"}
     probe = call(
         "POST",
         "/v1/observability/probe-runs",

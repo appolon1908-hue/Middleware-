@@ -73,7 +73,72 @@ datasources/dashboards, Loki, Tempo, Alloy, OpenBao health, exporters,
 Blackbox) is `pending`, `applying`, `synced`, `drifted`, `failed` or
 `unknown`, from a fresh `config` observation carrying the active
 configuration digest (and optionally `status`). A component without a fresh
-digest read-back is `unknown`, never `synced`.
+digest read-back is `unknown`, never `synced`. The service `state` folds the
+component states worst-first (`failed` > `applying` > `unknown` > `drifted` >
+`synced`; `pending-release-approval` when the desired digest is not yet the
+approved one), so an unreachable Prometheus or a collector-reported failure
+can never leave a service `synced`.
+
+## Monitoring collector (runtime wiring)
+
+`app/monitoring/collector.py` / `python -m scripts.monitoring_collector
+--config /abs/collector.json --output /abs/dir` is the read-only runtime half
+of the reconciler. From a profile such as
+`config/monitoring/collector.staging.v1.json.example` it reads, with GET only,
+verified TLS and no redirects: Prometheus `/-/ready`, `/api/v1/status/config`
+(digest of the *active* YAML), `/api/v1/targets` (health, last scrape,
+freshness), `/api/v1/rules`; Alertmanager `/-/ready`, `/api/v2/status`
+(`config.original` digest), `/api/v2/alerts`; Grafana `/api/health`,
+`/api/datasources` + per-datasource health, `/api/search?type=dash-db`
+(digest of the datasource/dashboard binding) with a read-only service-account
+token file; Loki `/ready`, `/config`, `/loki/api/v1/labels` (bounded label
+count) with `X-Scope-OrgID`; Tempo `/ready`, `/status/config`; Alloy
+`/-/ready`, `/api/v0/web/components`; the OTel gateway health extension;
+OpenBao `/v1/sys/health` (sealed/standby recorded, never unsealed); and each
+exporter's `/metrics` sentinel (`node_exporter_build_info`,
+`cadvisor_version_info`, `redis_up`, `pg_up`,
+`blackbox_exporter_build_info`). It then posts one `config` observation per
+(service, component) to `POST /platform/v1/runtime/observations` with
+monotonic per-resource sequences, `Idempotency-Key` and `X-Correlation-ID`
+(a component that could not be read is posted as `status: failed`, never
+omitted), reads `/version` to post `observed_git_sha` /
+`observed_image_digest` / `observed_migration_head` to
+`POST /platform/v1/services/{id}/monitoring-state/observations`, and writes a
+redacted `collector-report.json` plus the Section-10 `target-records.md`
+(expected vs actual endpoint, environment, service_id, authentication
+method, scrape status, last-scrape age, freshness, contract SHA). Tokens come
+only from absolute 0600 files; if Middleware is unreachable or answers 5xx the
+run fails closed without advancing sequence state; a report that would
+contain secret-shaped material is refused (`tests/test_monitoring_collector.py`).
+
+## TEST_SYN certification runner
+
+`python -m scripts.certify_test_syn --output /abs/dir` performs the eight
+fail-closed steps of the TEST_SYN end-to-end certification from environment
+variables whose credentials are `*_FILE` paths: runtime-safety read-back
+(staging profile, exact SHA/digest, every effect control off), one signed
+TEST_SYN event through the public edge (Caddy → Kong → Middleware, 202 then
+200 duplicate, carrying `traceparent` and `X-Correlation-ID`), trace
+propagation in Tempo (caddy/kong/middleware spans sharing the correlation id;
+odoo/n8n reported as observed or planned, span links counted), log
+correlation in Loki (the line for the correlation id carries the trace id and
+no secret-shaped content), metrics freshness in Prometheus (middleware target
+up on 8095, never 8080, scraped within 90 s, request counter moved), alert
+ingestion (an informational synthetic alert posted twice to Alertmanager
+yields exactly one Middleware incident), dashboard read-back (Grafana
+Middleware datasource healthy, required dashboards present, observability
+overview answering the monitoring-readonly token) and no business effect
+(runtime safety and provider-effect counters unchanged). Evidence
+`test-syn-certification.json` carries `TEST_SYN_GO=YES|NO` and is refused if
+it would contain a credential (`tests/test_certify_test_syn.py`).
+
+## Failure modes (source certification)
+
+`tests/test_monitoring_failure_modes.py` proves that Middleware readiness
+never consults a telemetry backend; that a Prometheus/Loki/Tempo outage
+answers 503 and never fabricates data; that no observation, a stale
+observation or a collector-reported failure yields `unknown`/`failed`, never
+`synced`; and that a sealed OpenBao is reported without any unseal attempt.
 
 ## Secret references
 

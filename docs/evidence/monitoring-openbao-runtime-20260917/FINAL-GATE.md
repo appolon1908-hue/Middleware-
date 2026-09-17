@@ -51,4 +51,4 @@ Final status for every repository: **BLOCKED_PENDING_EXACT_SHA_CI**.
 3. Keycloak staging reconciliation (`reconcile_openbao_workload_identity_staging.py --mode apply`).
 4. Staging deployment in the mission order (OpenBao → Keycloak → Middleware → Prometheus → Alertmanager → Alloy/OTel → Loki → Tempo → exporters → Blackbox → Grafana → Superset), Prometheus activation PR, collector run, TEST_SYN run, failure injection — each producing the runtime columns above.
 
-Middleware final exact SHA (this evidence commit): recorded in `docs/evidence/monitoring-openbao-runtime-20260917/README.md` after commit.
+Middleware exact SHA to be CI-tested: the branch head that seals this package — its parent (this package's first commit) is `d6557512f5114885ca130f3e28eaffb4b784a47b`; the sealing commit only fills in this sentence and the README pointer, so the head recorded on PR #279 (`git rev-parse origin/codex/monitoring-openbao-integration-20260916`) is the exact SHA.

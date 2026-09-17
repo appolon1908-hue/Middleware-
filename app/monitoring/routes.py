@@ -459,6 +459,9 @@ async def reconcile_one(store, principal, config, service_id, environment):
     actual = {
         r["payload"].get("component"): r["payload"].get("config_digest") for r in fresh
     }
+    reported = {
+        r["payload"].get("component"): r["payload"].get("status") for r in fresh
+    }
     if desired != approved:
         state = "pending-release-approval"
     elif not desired or not required or not required <= actual.keys():
@@ -473,9 +476,38 @@ async def reconcile_one(store, principal, config, service_id, environment):
         "desired_digest": desired,
         "approved_digest": approved,
         "components": actual,
+        "component_states": {
+            component: component_state(
+                component, desired, approved, actual, reported, required
+            )
+            for component in sorted(required | actual.keys())
+        },
         "missing_components": sorted(required - actual.keys()),
         "state": state,
     }
+
+
+def component_state(component, desired, approved, actual, reported, required):
+    """One of pending, applying, synced, drifted, failed, unknown for a single component.
+
+    ``synced`` needs a fresh read-back of the active configuration whose digest
+    equals the approved desired revision; an HTTP 200 without a digest is
+    ``unknown``. A collector may report ``applying`` or ``failed`` explicitly.
+    """
+    status = reported.get(component)
+    if status == "failed":
+        return "failed"
+    if status == "applying":
+        return "applying"
+    if desired != approved:
+        return "pending"
+    if component not in actual or not actual.get(component):
+        return "unknown"
+    if not desired:
+        return "unknown"
+    if component not in required:
+        return "unknown"
+    return "synced" if actual[component] == desired else "drifted"
 
 
 @router.get("/platform/v1/sync/status", response_model=Envelope)

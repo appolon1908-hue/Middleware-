@@ -96,7 +96,7 @@ class Platform:
         batches = []
         for service in self.trace_services:
             attrs = [
-                {"key": "correlation_id", "value": {"stringValue": self.correlation}},
+                {"key": "correlation.id", "value": {"stringValue": self.correlation}},
                 {"key": "environment", "value": {"stringValue": "staging"}},
             ]
             batches.append(

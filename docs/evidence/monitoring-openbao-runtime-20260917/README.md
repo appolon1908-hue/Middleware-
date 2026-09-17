@@ -8,4 +8,4 @@ Verdicts: SOURCE_INTEGRATION_GO=YES; OPENBAO_IDENTITY_GO=NO; LOCAL_RUNTIME_GO=NO
 
 No file in this package contains a live credential; values are identifiers, paths, digests, statuses and counts only (SECRET-LEAK-SCAN.md).
 
-Middleware final exact SHA (head including this package): __FINAL_SHA__
+Middleware final exact SHA (head including this package): see FINAL-GATE.md (the SHA that records itself cannot be embedded; the final head is the commit that seals this package)

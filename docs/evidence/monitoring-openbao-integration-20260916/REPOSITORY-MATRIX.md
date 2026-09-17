@@ -6,7 +6,7 @@ Every repository below was worked in an isolated worktree on one integration bra
 | --- | --- | --- | --- | --- | --- |
 | Codestra-OpenBao | `remediation/monitoring-openbao-integration-20260916` | `28f009c6852e` | `15d8ded836f4` | https://github.com/appolon1908-hue/Codestra-OpenBao/pull/78 | `development` |
 | Keycloak | `codex/monitoring-openbao-integration-20260916` | `3daa1fa4aa67` | `bd4ca21601bc` | https://github.com/appolon1908-hue/Keycloak/pull/119 | `codex/cross-repo-authority-20260916 (stacked on #118)` |
-| Middleware- | `codex/monitoring-openbao-integration-20260916` | `281bb7a6f153` | `bd6adaf (codex/cross-repo-authority-20260916, stacked on #278)` | opened with this package | `codex/cross-repo-authority-20260916 (stacked on #278)` |
+| Middleware- | `codex/monitoring-openbao-integration-20260916` | `281bb7a6f153` (certified; the evidence commits on top change only `docs/evidence/` and `tests/test_secret_file_fail_closed.py`) | `bd6adaf` (codex/cross-repo-authority-20260916) | https://github.com/appolon1908-hue/Middleware-/pull/279 | `codex/cross-repo-authority-20260916 (stacked on #278)` |
 | Codestra-Prometheus | `codex/monitoring-openbao-integration-20260916` | `7c1e70685453` | `0600406f9eab` | https://github.com/appolon1908-hue/Codestra-Prometheus/pull/70 | `main` |
 | Codestra-Alertmanager | `codex/monitoring-openbao-integration-20260916` | `d5da15851cfc` | `abfd0f551e9a` | https://github.com/appolon1908-hue/Codestra-Alertmanager/pull/29 | `main` |
 | Codestra-Telemetry | `codex/monitoring-openbao-integration-20260916` | `bf48a9c1c410` | `477207d0e858` | https://github.com/appolon1908-hue/Codestra-Telemetry/pull/57 | `development` |

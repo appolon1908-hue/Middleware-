@@ -371,7 +371,11 @@ class Runner:
         correlated = [
             s
             for s in spans
-            if s["attributes"].get("correlation_id") == self.correlation_id
+            if self.correlation_id
+            in (
+                s["attributes"].get("correlation.id"),
+                s["attributes"].get("correlation_id"),
+            )
         ]
         if not any(s["service"] in HOP_SERVICE_NAMES["middleware"] for s in correlated):
             raise AcceptanceError(
@@ -723,6 +727,7 @@ def extract_spans(payload: Any) -> list[dict[str, Any]]:
                             for k, v in attrs.items()
                             if k
                             in {
+                                "correlation.id",
                                 "correlation_id",
                                 "service_id",
                                 "environment",

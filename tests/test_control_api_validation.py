@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from app.api_inputs import authorization_header, optional_header, required_header
-from app.config import Settings
+from app.core.config import Settings
 from app.control_api import (
     MAX_BIGINT,
     _audit_cursor,
@@ -20,7 +20,7 @@ from app.control_api import (
 )
 from app.main import create_app
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.security import RequestValidationError
 from app.storage import MemoryInboxStore
 

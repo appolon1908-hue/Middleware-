@@ -57,6 +57,9 @@ PINNED = ROOT / "deploy/public-api-route-contract.sha256"
 COMPOSE = ROOT / "deploy/compose.runtime.yaml"
 MAIN_SOURCE = ROOT / "app/main.py"
 RUNTIME_SOURCE = ROOT / "app/entrypoints/runtime.py"
+# The single request guard both entry modules install (app.application and
+# app.entrypoints.runtime.add_api_runtime); it owns the route matcher.
+GUARD_SOURCE = ROOT / "app/core/request_guard.py"
 INTEGRATIONS_SOURCE = ROOT / "app/api/v1/integrations.py"
 KEYCLOAK_DESIRED_STATE = ROOT / "deploy/keycloak/campaign-control-service-clients.v1.json"
 
@@ -399,20 +402,24 @@ def static_middleware(report: Report) -> str | None:
     )
     main_src = MAIN_SOURCE.read_text(encoding="utf-8")
     runtime_src = RUNTIME_SOURCE.read_text(encoding="utf-8")
-    shared_call = "route_policy.handler_authenticated(request.method, request.url.path)"
+    guard_src = GUARD_SOURCE.read_text(encoding="utf-8") if GUARD_SOURCE.is_file() else ""
+    shared_call = "route_policy.handler_authenticated(method, path)"
     report.add(
         phase,
         "both_entrypoints_share_route_matcher",
-        all(
-            "from app.core import route_policy" in src and shared_call in src
-            for src in (main_src, runtime_src)
-        )
+        "from app.core import route_policy" in guard_src
+        and shared_call in guard_src
+        and "def install_request_guard(" in guard_src
+        # Both entry modules build on the single guard and keep no matcher.
+        and "from app.application import" in main_src
+        and "install_request_guard(" in runtime_src
         and not any(
             marker in src
-            for src in (main_src, runtime_src)
+            for src in (main_src, runtime_src, guard_src)
             for marker in ("N8N_SERVICE_JWT_ROUTES = ", "INTEGRATION_SERVICE_JWT_ROUTES = ", "CALLBACK_JWT_PATH = ")
-        ),
-        "app.main and app.entrypoints.runtime must import app.core.route_policy and keep no local copy",
+        )
+        and not any("verify_bearer(" in src for src in (main_src, runtime_src)),
+        "app.core.request_guard must be the single guard, import app.core.route_policy and keep no local copy",
     )
     report.add(
         phase,
@@ -551,7 +558,7 @@ def static_kong(report: Report, repo: Path | None, digest: str | None) -> None:
 
     for method, template, scope in CANONICAL_ROUTES:
         entry = declared.get((method, template))
-        ok = bool(entry) and entry.get("scope") == scope
+        ok = entry is not None and entry.get("scope") == scope
         report.add(
             phase,
             f"declares:{method} {template}",

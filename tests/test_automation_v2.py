@@ -27,7 +27,7 @@ from app.commands import CommandPolicyRegistry, CommandService, MemoryCommandSto
 from app.main import create_app
 from app.models import EventEnvelope
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.storage import MemoryInboxStore
 
 

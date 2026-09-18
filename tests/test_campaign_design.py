@@ -464,7 +464,7 @@ def test_real_application_route_requires_own_authorization(
 ):
     from app.main import app as canonical, create_app
     from app.entrypoints.integration_api import app as integration
-    from app.config import Settings
+    from app.core.config import Settings
     from app.core.jwt_auth import JWTAuthError
 
     compatibility = create_app(

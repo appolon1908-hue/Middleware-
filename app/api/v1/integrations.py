@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.automation import canonical_hash, redact
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
     require_provisioning_scope,
@@ -196,12 +196,12 @@ def _authenticate_odoo(authorization: str, required_scope: str) -> dict[str, Any
         raise HTTPException(503, "campaign reader client is not configured")
     try:
         return KeycloakValidator(
-            issuer=settings.keycloak_issuer,
-            audience=settings.keycloak_audience,
-            jwks_url=settings.keycloak_jwks_url,
-            authorized_parties=readers,
-            required_scopes=frozenset({required_scope}),
-            required_environment=settings.environment,
+            **identity_validator_kwargs(
+                settings.identity,
+                authorized_parties=readers,
+                required_scopes=frozenset({required_scope}),
+                required_environment=settings.environment,
+            )
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
         raise HTTPException(_jwt_error_status(exc), str(exc)) from exc

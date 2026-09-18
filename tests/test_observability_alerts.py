@@ -18,7 +18,7 @@ from app.commands import (
     CommandService,
     MemoryCommandStore,
 )
-from app.config import Settings
+from app.core.config import Settings
 from app.observability_alert_contract import (
     AlertmanagerAlert,
     AlertmanagerWebhook,
@@ -31,7 +31,7 @@ from app.observability_incidents import (
     incident_identity,
 )
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.storage import MemoryInboxStore
 
 

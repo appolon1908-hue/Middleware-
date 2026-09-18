@@ -27,7 +27,7 @@ from app.communications import (
 )
 from app.main import create_app
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.security import AuthenticationError, AuthorizationError
 from app.storage import MemoryInboxStore
 

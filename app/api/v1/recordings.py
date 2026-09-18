@@ -20,6 +20,20 @@ from app.recording.service import RecordingService
 from app.recording.storage import MemoryObjectStorage
 
 router = APIRouter(prefix="/api/v1/recordings", tags=["recordings"])
+# Service identity advertised to the recording exporter (formerly an inline
+# monolith route); mounted with the recordings surface.
+service_identity_router = APIRouter(tags=["recordings"])
+
+
+@service_identity_router.get("/.well-known/codestra-service")
+async def service_identity() -> dict[str, object]:
+    return {
+        "service": "codestra-recording-api",
+        "contract_version": "1.0",
+        "hostname": "api.staging.internal.codestra.agency",
+        "tls_sni_required": True,
+    }
+
 
 # Runtime composition must replace both adapters. Defaults perform no network or file IO.
 recording_service = RecordingService(MemoryObjectStorage(), AcknowledgingOdooClient())

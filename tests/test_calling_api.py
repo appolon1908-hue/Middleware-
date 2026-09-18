@@ -158,7 +158,7 @@ class CallingApiTests(unittest.IsolatedAsyncioTestCase):
         return identity
 
     def test_routes_are_mounted_in_canonical_application(self):
-        from app.config import Settings
+        from app.core.config import Settings
         from app.main import create_app
         paths = create_app(settings=Settings.from_env({"APP_ENV": "test", "ALLOW_IN_MEMORY_STORAGE": "true"})).openapi()["paths"]
         for path in ["/v1/telephony/calls/originate", "/v1/calls/originate",

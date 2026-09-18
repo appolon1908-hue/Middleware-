@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTROL = ROOT / "config" / "intake-observability.v1.json"
 METRICS_SOURCE = ROOT / "app" / "intake_observability.py"
 OBSERVABILITY_SOURCE = ROOT / "app" / "observability.py"
-MAIN_SOURCE = ROOT / "app" / "main.py"
+# The authenticated /metrics read and the lead-intake request context live on
+# the control-plane router mounted by the single application factory.
+MAIN_SOURCE = ROOT / "app" / "appolon_routes.py"
 SURVEY_SOURCE = ROOT / "app" / "survey_routes.py"
 TEST_SOURCE = ROOT / "tests" / "test_intake_observability.py"
 DOC = ROOT / "docs" / "INTAKE-OBSERVABILITY.md"
@@ -266,10 +268,7 @@ def validate_http_wiring() -> None:
     survey = require_file(SURVEY_SOURCE)
     observability = require_file(OBSERVABILITY_SOURCE)
 
-    if not (
-        '@app.get("/metrics")' in main
-        or 'app.mount("/metrics", make_asgi_app())' in main
-    ):
+    if '@router.get("/metrics")' not in main:
         fail("Middleware metrics endpoint is missing")
     for fragment in (
         '"channel": submission.source',

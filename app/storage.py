@@ -594,8 +594,10 @@ class PostgresInboxStore:
         "middleware_outbox_attempt_events_immutable",
     }
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, owns_pool: bool = True) -> None:
         self.pool = pool
+        # A pool shared through RuntimeContainer is closed by the container.
+        self.owns_pool = owns_pool
 
     @classmethod
     async def connect(cls, database_url: str) -> "PostgresInboxStore":
@@ -994,7 +996,8 @@ class PostgresInboxStore:
             return False
 
     async def close(self) -> None:
-        await self.pool.close()
+        if self.owns_pool:
+            await self.pool.close()
 
 
 @dataclass(frozen=True)

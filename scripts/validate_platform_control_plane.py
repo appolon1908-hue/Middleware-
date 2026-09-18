@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ast
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,9 +16,11 @@ HMAC_VECTOR_PATH = ROOT / "contracts" / "odoo-hmac-test-vector.v1.json"
 MAIN_PATH = ROOT / "app" / "main.py"
 # Route ownership: the v2 automation router is canonical and the deprecated
 # n8n aliases are a monolith-only group; both are mounted only through the
-# single router registry. The deployed integration entrypoint never mounts
-# the aliases, and the edge contract keeps them denied.
+# single router registry, which the one application factory drives by group.
+# No deployed (non-monolith) profile mounts the aliases, and the edge contract
+# keeps them denied.
 REGISTRY_PATH = ROOT / "app" / "router_registry.py"
+APPLICATION_PATH = ROOT / "app" / "application.py"
 DEPLOYED_ENTRYPOINT_PATH = ROOT / "app" / "entrypoints" / "integration_api.py"
 APP_ROOT = ROOT / "app"
 EDGE_CONTRACT_PATH = ROOT / "deploy" / "public-api-route-contract.json"
@@ -27,6 +31,52 @@ WORKER_PATH = ROOT / "workers" / "run_temporal.py"
 WORKFLOW_PATH = ROOT / "app" / "temporal_workflows.py"
 CAPABILITIES_PATH = ROOT / "config" / "capabilities.v2.json"
 ROUTE_AUTHORITY_PATH = ROOT / "config" / "route-authority.v1.json"
+
+
+def _is_monolith_test(test: ast.expr) -> bool:
+    """``profile is AppProfile.MONOLITH`` (or an ``in {...MONOLITH}`` set)."""
+    if isinstance(test, ast.Compare) and len(test.ops) == 1:
+        left, op, right = test.left, test.ops[0], test.comparators[0]
+        if not (isinstance(left, ast.Name) and left.id == "profile"):
+            return False
+        if isinstance(op, ast.Is):
+            return ast.unparse(right) == "AppProfile.MONOLITH"
+        if isinstance(op, ast.In):
+            members = {ast.unparse(e) for e in getattr(right, "elts", [])}
+            return bool(members) and members <= {"AppProfile.MONOLITH"}
+    return False
+
+
+def _mounted_only_under_monolith_profile(source: str) -> bool:
+    """Every ``mount_legacy_monolith_routers`` call sits under a monolith guard.
+
+    Checked on the parse tree: a substring scan cannot tell whether the call is
+    nested inside the guard or merely printed after it.
+    """
+    tree = ast.parse(source)
+    guarded: list[ast.AST] = []
+    calls: list[ast.AST] = []
+
+    def walk(node: ast.AST, under_guard: bool) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.Call):
+                func = child.func
+                name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+                if name == "mount_legacy_monolith_routers":
+                    calls.append(child)
+                    if under_guard:
+                        guarded.append(child)
+            if isinstance(child, ast.If):
+                monolith = under_guard or _is_monolith_test(child.test)
+                for stmt in child.body:
+                    walk(stmt, monolith)
+                for stmt in child.orelse:
+                    walk(stmt, under_guard)
+                continue
+            walk(child, under_guard)
+
+    walk(tree, False)
+    return bool(calls) and len(calls) == len(guarded)
 
 
 def fail(message: str) -> None:
@@ -42,6 +92,7 @@ def main() -> int:
     route_authority = json.loads(ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8"))
     main_source = MAIN_PATH.read_text(encoding="utf-8")
     registry_source = REGISTRY_PATH.read_text(encoding="utf-8")
+    application_source = APPLICATION_PATH.read_text(encoding="utf-8")
     deployed_source = DEPLOYED_ENTRYPOINT_PATH.read_text(encoding="utf-8")
     edge_contract = json.loads(EDGE_CONTRACT_PATH.read_text(encoding="utf-8"))
     n8n_source = N8N_PATH.read_text(encoding="utf-8")
@@ -139,51 +190,104 @@ def main() -> int:
     registry_markers = (
         "from app.automation_v2 import v2_router as automation_v2_router",
         "from app.n8n_control_plane import router as n8n_control_plane_router",
-        "LEGACY_MONOLITH_ONLY_ROUTERS = (n8n_control_plane_router,)",
+        "from app.domain_api import legacy_n8n_router as domain_legacy_n8n_router",
+        (
+            "LEGACY_MONOLITH_ONLY_ROUTERS: tuple[APIRouter, ...] = (\n"
+            "    n8n_control_plane_router,\n"
+            "    domain_legacy_n8n_router,\n"
+            ")"
+        ),
+        "def _mount(app: FastAPI, routers: Iterable[APIRouter]) -> None:",
         "def mount_canonical_routers(app: FastAPI) -> None:",
         "def mount_legacy_monolith_routers(app: FastAPI) -> None:",
-        "    for router in CANONICAL_ROUTERS:\n        app.include_router(router)",
-        (
-            "    for router in LEGACY_MONOLITH_ONLY_ROUTERS:\n"
-            "        app.include_router(router)"
-        ),
+        "    _mount(app, LEGACY_MONOLITH_ONLY_ROUTERS)",
     )
     missing_registry = [m for m in registry_markers if m not in registry_source]
     if missing_registry:
         fail("router registry drifted: " + ", ".join(missing_registry))
-    canonical_tuple = registry_source.split("CANONICAL_ROUTERS = (", 1)[-1].split(
-        ")", 1
-    )[0]
+    canonical_tuple = registry_source.split(
+        "CANONICAL_ROUTERS: tuple[APIRouter, ...] = (", 1
+    )[-1].split(")", 1)[0]
     if canonical_tuple.count("automation_v2_router,") != 1:
         fail("automation v2 router must be bound exactly once in CANONICAL_ROUTERS")
-    if "n8n_control_plane_router" in canonical_tuple:
-        fail("legacy n8n compatibility router must not be canonical")
+    for alias in ("n8n_control_plane_router", "domain_legacy_n8n_router"):
+        if alias in canonical_tuple:
+            fail(f"legacy n8n compatibility router must not be canonical: {alias}")
     if registry_source.count("automation_v2_router,") != 1:
         fail("automation v2 router is bound more than once by the registry")
-    if registry_source.count("app.include_router(") != 2:
-        fail("router registry mounts outside its two approved loops")
-    # 2./5. Neither router is imported or mounted by any other application
-    # module: the registry is the only owner, so v2 cannot be nested in the
-    # aliases or mounted twice, and the aliases cannot reach another factory.
+    # Every group is mounted through the single ``_mount`` helper, so the
+    # registry holds exactly one ``include_router`` call site.
+    if registry_source.count("app.include_router(") != 1:
+        fail("router registry mounts outside its single approved loop")
+    # 2./5. Neither router is imported or mounted by any application module
+    # other than the one that declares it: the registry is the only owner, so
+    # v2 cannot be nested in the aliases or mounted twice, and the aliases
+    # cannot reach another factory.
+    declaring_modules = {
+        REGISTRY_PATH,
+        N8N_PATH,
+        APP_ROOT / "automation_v2.py",
+        APP_ROOT / "domain_api.py",
+    }
     foreign_owners: list[str] = []
     for module in sorted(APP_ROOT.rglob("*.py")):
-        if module in {REGISTRY_PATH, N8N_PATH, APP_ROOT / "automation_v2.py"}:
+        if module in declaring_modules:
             continue
         source = module.read_text(encoding="utf-8")
-        if "n8n_control_plane" in source or "v2_router" in source:
+        if (
+            "n8n_control_plane" in source
+            or "v2_router" in source
+            or "legacy_n8n_router" in source
+        ):
             foreign_owners.append(module.relative_to(ROOT).as_posix())
     if foreign_owners:
-        fail("n8n/v2 routers are owned outside the registry: " + ", ".join(foreign_owners))
-    # app.main exposes the aliases only through the registry.
-    for marker in ("mount_canonical_routers(app)", "mount_legacy_monolith_routers(app)"):
-        if marker not in main_source:
-            fail(f"monolith application does not call {marker}")
-    if "include_router(n8n_control_plane_router)" in main_source:
-        fail("legacy n8n compatibility router is mounted outside the registry")
-    # 4. The deployed integration API never mounts the aliases.
-    if "mount_canonical_routers(app)" not in deployed_source:
-        fail("deployed entrypoint does not mount the canonical routers")
-    for forbidden in ("mount_legacy_monolith_routers", "LEGACY_MONOLITH_ONLY_ROUTERS"):
+        fail(
+            "n8n/v2 routers are owned outside the registry: "
+            + ", ".join(foreign_owners)
+        )
+    # A module that declares one of these routers must not mount it either.
+    for declaring in sorted(declaring_modules - {REGISTRY_PATH}):
+        source = declaring.read_text(encoding="utf-8")
+        mounted = set(re.findall(r"include_router\(\s*([A-Za-z0-9_]+)", source))
+        illegal = mounted & {
+            "n8n_control_plane_router",
+            "v2_router",
+            "automation_v2_router",
+            "legacy_n8n_router",
+            "domain_legacy_n8n_router",
+        }
+        if illegal:
+            fail(
+                "router is mounted by its declaring module: "
+                f"{declaring.relative_to(ROOT).as_posix()} ({', '.join(sorted(illegal))})"
+            )
+    # The one application factory mounts the aliases exactly once, and only on
+    # the monolith profile; app.main is the monolith entry module.
+    for marker in (
+        "mount_canonical_routers(app)",
+        "if profile is AppProfile.MONOLITH:",
+        "mount_legacy_monolith_routers(app)",
+    ):
+        if marker not in application_source:
+            fail(f"application factory does not call {marker}")
+    if application_source.count("mount_legacy_monolith_routers(app)") != 1:
+        fail("application factory mounts the edge-denied aliases more than once")
+    if not _mounted_only_under_monolith_profile(application_source):
+        fail("edge-denied aliases are mounted outside the monolith profile")
+    if "create_app(profile=AppProfile.MONOLITH)" not in main_source:
+        fail("monolith entry module does not build the monolith profile")
+    if "include_router(" in main_source:
+        fail("monolith entry module mounts routers outside the registry")
+    # 4. The deployed integration API builds a non-monolith profile and mounts
+    # nothing itself, so it can never serve the aliases.
+    if "create_app(profile=AppProfile.INTEGRATION" not in deployed_source:
+        fail("deployed entrypoint does not build the integration profile")
+    for forbidden in (
+        "mount_legacy_monolith_routers",
+        "LEGACY_MONOLITH_ONLY_ROUTERS",
+        "AppProfile.MONOLITH",
+        "include_router(",
+    ):
         if forbidden in deployed_source:
             fail(f"deployed entrypoint mounts edge-denied n8n aliases: {forbidden}")
     # 6. Retired aliases stay denied at the deployed edge; the v2 successor is
@@ -194,6 +298,7 @@ def main() -> int:
     }
     for method, path in (
         ("POST", "/v1/integrations/n8n/commands"),
+        ("GET", "/v1/integrations/n8n/operations"),
         ("GET", "/v1/integrations/n8n/operations/{command_id}"),
     ):
         if edge_classes.get((method, path)) != "denied":
@@ -203,7 +308,9 @@ def main() -> int:
         ("GET", "/v2/automation/commands/{command_id}"),
     ):
         if edge_classes.get((method, path)) != "shared_edge":
-            fail(f"canonical automation route is not a shared edge route: {method} {path}")
+            fail(
+                f"canonical automation route is not a shared edge route: {method} {path}"
+            )
 
     aliases = automation_authority.get("compatibility_aliases")
     if not isinstance(aliases, list) or len(aliases) != 2:

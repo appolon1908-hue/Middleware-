@@ -10,7 +10,7 @@ from app.core.campaign_design import (
 )
 from app.core.campaign_design_contract import CampaignDesignInput, CampaignApprovalInput
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 from app.db.session import get_session
 from app.security import authorize_tenant, AuthorizationError
 
@@ -32,13 +32,13 @@ def authorize(
         raise HTTPException(401, "bearer token required")
     try:
         claims = KeycloakValidator(
-            issuer=settings.keycloak_issuer,
-            audience=settings.keycloak_audience,
-            jwks_url=settings.keycloak_jwks_url,
-            authorized_parties=frozenset({settings.campaign_design_client_id}),
-            required_scopes=frozenset({scope}),
-            required_environment=environment,
-            required_business_unit=unit,
+            **identity_validator_kwargs(
+                settings.identity,
+                authorized_parties=frozenset({settings.campaign_design_client_id}),
+                required_scopes=frozenset({scope}),
+                required_environment=environment,
+                required_business_unit=unit,
+            )
         ).validate(token)
         authorize_tenant(claims, tenant_id)
         units = claims.get("business_units")

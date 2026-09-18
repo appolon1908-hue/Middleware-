@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .commands import CommandEnvelope, CommandNotFound, CommandOperation
-from .config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 
 
 ROOT = Path(__file__).resolve().parents[1]

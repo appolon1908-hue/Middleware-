@@ -364,13 +364,9 @@ def load_grant(environ: Mapping[str, str] | None = None) -> CallingGrant | None:
         fd = os.open(path, flags)
         with os.fdopen(fd, "rb") as stream:
             metadata = os.fstat(stream.fileno())
-            require_root_owned = (
-                hasattr(os, "getuid")
-                and getattr(os, "getuid", lambda: None)() == 0
-            )
             if (
                 not stat.S_ISREG(metadata.st_mode)
-                or (require_root_owned and metadata.st_uid != 0)
+                or metadata.st_uid != 0
                 or metadata.st_mode & 0o027
                 or metadata.st_size > 16_384
             ):

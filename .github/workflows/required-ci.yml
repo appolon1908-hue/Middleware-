@@ -392,7 +392,14 @@ jobs:
           REDIS_URL='redis://127.0.0.1:1/15' audit_case redis-failure \
             'postgresql+asyncpg://middleware_ci:ci-only-password@127.0.0.1:5432/middleware_rehearsal' \
             503 8105
-          KEYCLOAK_JWKS_URL='http://127.0.0.1:1/certs.json' audit_case keycloak-failure \
+
+          # Preserve the approved synthetic-CI identity URL while making its
+          # dependency unavailable. This tests runtime readiness failure
+          # without weakening configuration authority.
+          kill "${jwks_pid}"
+          wait "${jwks_pid}" || true
+
+          audit_case keycloak-failure \
             'postgresql+asyncpg://middleware_ci:ci-only-password@127.0.0.1:5432/middleware_rehearsal' \
             503 8106
           python -m scripts.audit_release_endpoints \

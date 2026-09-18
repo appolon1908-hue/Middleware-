@@ -1,12 +1,211 @@
+"""Canonical Middleware configuration authority.
+
+``from app.core.config import Settings, settings`` is the only configuration
+interface for the primary Middleware process. Environment names are read once
+here (with the temporary compatibility aliases listed in
+``COMPATIBILITY_ENV_ALIASES``); secret files are loaded here; environment
+policy (staging/production strictness, synthetic CI identity only in
+development/test) is validated in ``validate_domain()``, which
+``app.core.bootstrap`` runs at startup and which is fatal there.
+"""
+
 import base64
+import contextvars
 import json
 import os
 import re
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
-from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field, ValidationError, field_validator
+from pydantic_settings import BaseSettings, EnvSettingsSource, SettingsConfigDict
+from pydantic_settings.sources import parse_env_vars
+
+ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_PROFILES_PATH = ROOT / "config" / "runtime-profiles.v1.json"
+SHA40 = re.compile(r"^[0-9a-f]{40}$")
+IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+CANONICAL_SCHEMA_HEAD = "0066_reconcile_odoo_campaign_scope"
+PRODUCTION_ISSUER = "https://auth.codestra.co/realms/codestra"
+STAGING_ISSUER = "https://auth-staging.codestra.co/realms/codestra"
+CANONICAL_AUDIENCE = "middleware-api"
+# The only non-real identity the runtime ever accepts, and only for
+# APP_ENV in {development, test}; staging/production reject it.
+SYNTHETIC_CI_ISSUER = "https://ci-identity.example.invalid/realm"
+SYNTHETIC_CI_JWKS_URL = "http://127.0.0.1:8120/certs.json"
+WEBHOOK_PRODUCERS = (
+    "odoo-integration",
+    "n8n-automation",
+    "vicidial-adapter",
+    "telnexa-gateway",
+    "klyrow-gateway",
+    "kyqra-gateway",
+    "postly-adapter",
+)
+# Effects this runtime actually implements. Anything else must stay off, so a
+# capability cannot be switched on before its handler exists.
+SUPPORTED_EXTERNAL_EFFECTS = frozenset(
+    {
+        "SEND_EVENTS",
+        "ODOO_WRITE",
+        "FORM_ODOO_DELIVERY_ENABLED",
+        "CRAWLER_ODOO_DELIVERY_ENABLED",
+        "SCRAPPER_ODOO_DELIVERY_ENABLED",
+        "SMS_DELIVERY_ENABLED",
+        "EMAIL_DELIVERY_ENABLED",
+        "SOCIAL_DELIVERY_ENABLED",
+    }
+)
+EXTERNAL_DELIVERY_EFFECTS = frozenset(
+    {
+        "ODOO_WRITE",
+        "FORM_ODOO_DELIVERY_ENABLED",
+        "CRAWLER_ODOO_DELIVERY_ENABLED",
+        "SCRAPPER_ODOO_DELIVERY_ENABLED",
+        "SMS_DELIVERY_ENABLED",
+        "EMAIL_DELIVERY_ENABLED",
+    }
+)
+# System-wide kill switches are a separate contract from implementation-level
+# effect gates. They must never be inferred from the lower-level controls.
+UMBRELLA_CONTROL_NAMES = (
+    "LIVE_ADVERTISING_ENABLED",
+    "EXTERNAL_DELIVERY_ENABLED",
+    "SOCIAL_PUBLISHING_ENABLED",
+    "EXTERNAL_MODEL_CALLS_ENABLED",
+    "N8N_EXTERNAL_PROVIDER_WRITES",
+)
+# Environment name -> Settings field carrying that external-effect flag.
+EXTERNAL_EFFECT_FIELDS: dict[str, str] = {
+    "SEND_EVENTS": "send_events",
+    "ENABLE_EXTERNAL_DELIVERY": "enable_external_delivery",
+    "LIVE_WRITE": "live_write",
+    "LIVE_WRITES": "live_writes",
+    "ODOO_WRITE": "odoo_write",
+    "CALLBACK_DISPATCH": "callback_dispatch",
+    "N8N_DELIVERY_ENABLED": "n8n_delivery_enabled",
+    "VICIDIAL_WRITES_ENABLED": "vicidial_writes_enabled",
+    "EXTERNAL_DIAL_ENABLED": "external_dial_enabled",
+    "PRODUCTION_CALLBACKS_ENABLED": "production_callbacks_enabled",
+    "N8N_PRODUCTION_WORKFLOWS_ENABLED": "n8n_production_workflows_enabled",
+    "FORM_ODOO_DELIVERY_ENABLED": "form_odoo_delivery_enabled",
+    "CRAWLER_ODOO_DELIVERY_ENABLED": "crawler_odoo_delivery_enabled",
+    "SCRAPPER_ODOO_DELIVERY_ENABLED": "scrapper_odoo_delivery_enabled",
+    "CRAWLER_EXTERNAL_CONTACT_ENABLED": "crawler_external_contact_enabled",
+    "SCRAPPER_EXTERNAL_CONTACT_ENABLED": "scrapper_external_contact_enabled",
+    "SMS_DELIVERY_ENABLED": "effect_sms_delivery_enabled",
+    "EMAIL_DELIVERY_ENABLED": "effect_email_delivery_enabled",
+    "SOCIAL_DELIVERY_ENABLED": "effect_social_delivery_enabled",
+    "CRAWLER_EXECUTION_ENABLED": "crawler_execution_enabled",
+    "SCRAPPER_EXECUTION_ENABLED": "scrapper_execution_enabled",
+    "LIVE_SMS_DELIVERY": "live_sms_delivery",
+    "LIVE_EMAIL_DELIVERY": "live_email_delivery",
+    "UNRESTRICTED_CRAWLING": "unrestricted_crawling",
+}
+UMBRELLA_CONTROL_FIELDS: dict[str, str] = {
+    "LIVE_ADVERTISING_ENABLED": "umbrella_live_advertising_enabled",
+    "EXTERNAL_DELIVERY_ENABLED": "umbrella_external_delivery_enabled",
+    "SOCIAL_PUBLISHING_ENABLED": "umbrella_social_publishing_enabled",
+    "EXTERNAL_MODEL_CALLS_ENABLED": "umbrella_external_model_calls_enabled",
+    "N8N_EXTERNAL_PROVIDER_WRITES": "umbrella_n8n_external_provider_writes",
+}
+# Legacy environment names still accepted (removed after Mission-2
+# certification). Canonical name -> legacy names.
+COMPATIBILITY_ENV_ALIASES: dict[str, tuple[str, ...]] = {
+    "KEYCLOAK_JWKS_URL": ("KEYCLOAK_JWKS_URI",),
+    "KEYCLOAK_AUDIENCE": ("MIDDLEWARE_AUDIENCE",),
+}
+
+
+class ConfigurationError(ValueError):
+    """Raised when runtime configuration is unsafe or incomplete."""
+
+
+def _secret_env_name(producer_client_id: str) -> str:
+    return "WEBHOOK_SECRET_" + producer_client_id.upper().replace("-", "_").replace(
+        ".", "_"
+    )
+
+
+def _is_absolute_mount_path(path: Path) -> bool:
+    value = str(path)
+    return (
+        path.is_absolute()
+        or value.startswith(("/", "\\"))
+        or re.match(r"^[A-Za-z]:[\\/]", value) is not None
+    )
+
+
+def _runtime_profiles() -> dict[str, dict[str, object]]:
+    try:
+        value = json.loads(RUNTIME_PROFILES_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ConfigurationError("runtime profile registry cannot be loaded") from exc
+    if value.get("schema_version") != "1.0":
+        raise ConfigurationError("runtime profile registry version is unsupported")
+    raw_profiles = value.get("profiles")
+    if not isinstance(raw_profiles, list) or len(raw_profiles) < 2:
+        raise ConfigurationError(
+            "runtime profile registry must declare at least two profiles"
+        )
+    profiles: dict[str, dict[str, object]] = {}
+    for raw in raw_profiles:
+        if not isinstance(raw, dict):
+            raise ConfigurationError("runtime profile must be an object")
+        profile_id = raw.get("profile_id")
+        if not isinstance(profile_id, str) or profile_id in profiles:
+            raise ConfigurationError(
+                "runtime profile identity is invalid or duplicated"
+            )
+        profiles[profile_id] = raw
+    return profiles
+
+
+# ``Settings.from_env(mapping)`` reads exactly the given mapping instead of
+# ``os.environ``; the mapping is installed here for the duration of the build.
+_ENV_OVERRIDE: contextvars.ContextVar[Mapping[str, str] | None] = contextvars.ContextVar(
+    "middleware_settings_env_override", default=None
+)
+
+
+def _validation_summary(exc: ValidationError) -> str:
+    """Name the offending settings without echoing their values."""
+    names = sorted({".".join(str(part) for part in error["loc"]) or "settings" for error in exc.errors()})
+    reasons = sorted({str(error["msg"]) for error in exc.errors()})
+    return "invalid configuration for " + ", ".join(names) + ": " + "; ".join(reasons)
+
+
+class _MappingEnvSource(EnvSettingsSource):
+    def _load_env_vars(self) -> Mapping[str, str | None]:
+        override = _ENV_OVERRIDE.get()
+        source = os.environ if override is None else override
+        return parse_env_vars(
+            source, self.case_sensitive, self.env_ignore_empty, self.env_parse_none_str
+        )
+
+
+@dataclass(frozen=True)
+class IdentitySettings:
+    """The one identity configuration for the Middleware trust boundary.
+
+    ``issuer``/``jwks_url`` always carry a value: the canonical authority for
+    the environment when nothing explicit was configured. ``explicit`` says
+    whether the operator set them; validators that must not fall back to a
+    derived authority (the interactive agent-UI and service-JWT routes)
+    check it and fail closed.
+    """
+
+    issuer: str
+    audience: str
+    jwks_url: str
+    authorized_parties: frozenset[str]
+    jwks_timeout_seconds: int
+    explicit: bool = False
+    max_token_lifetime_seconds: int = 300
+    algorithms: tuple[str, ...] = ("RS256",)
+
 
 VICIDIAL_PRIVATE_HOSTS = frozenset(
     {
@@ -20,7 +219,146 @@ VICIDIAL_SECRET_ROOT = Path("/run/secrets/vicidial-mtls")
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=None, extra="ignore", populate_by_name=True
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        return (init_settings, _MappingEnvSource(settings_cls), file_secret_settings)
+
+    # --- deployment identity (formerly app/config.py) ---------------------------
+    app_env: str = "development"
+    runtime_profile_id: str | None = None
+    app_version: str = "0.1.0"
+    # APP_SOURCE_SHA is what Dockerfile.runtime bakes in; SOURCE_SHA is the name
+    # the former entrypoint /version handlers read.
+    source_sha: str = Field(
+        default="unknown",
+        validation_alias=AliasChoices("APP_SOURCE_SHA", "SOURCE_SHA", "app_source_sha", "source_sha"),
+    )
+    image_digest: str = "unknown"
+    schema_head: str = CANONICAL_SCHEMA_HEAD
+    build_time: str = "unknown"
+    release_id: str = "unknown"
+    configuration_checksum: str = "unknown"
+    jwks_timeout_seconds: int = 3
+    readiness_timeout_seconds: int = 3
+    # Minimum spacing between in-process attempts to rebuild a runtime whose
+    # startup failed; readiness stays closed in between.
+    runtime_rebuild_interval_seconds: int = 30
+    allow_in_memory_storage: bool = False
+    max_request_body_bytes: int = 1_048_576
+    webhook_max_clock_skew_seconds: int = 300
+    webhook_replay_retention_seconds: int = 86_400
+    webhook_secret_odoo_integration: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_ODOO_INTEGRATION", "webhook_secret_odoo_integration")
+    )
+    webhook_secret_n8n_automation: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_N8N_AUTOMATION", "webhook_secret_n8n_automation")
+    )
+    webhook_secret_vicidial_adapter: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_VICIDIAL_ADAPTER", "webhook_secret_vicidial_adapter")
+    )
+    webhook_secret_telnexa_gateway: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_TELNEXA_GATEWAY", "webhook_secret_telnexa_gateway")
+    )
+    webhook_secret_klyrow_gateway: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_KLYROW_GATEWAY", "webhook_secret_klyrow_gateway")
+    )
+    webhook_secret_kyqra_gateway: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_KYQRA_GATEWAY", "webhook_secret_kyqra_gateway")
+    )
+    webhook_secret_postly_adapter: str = Field(
+        default="", validation_alias=AliasChoices("WEBHOOK_SECRET_POSTLY_ADAPTER", "webhook_secret_postly_adapter")
+    )
+    outbox_dispatch_enabled: bool = False
+    # External-effect flags (env name == field name unless aliased); see
+    # EXTERNAL_EFFECT_FIELDS. Every one defaults to false.
+    live_write: bool = False
+    live_writes: bool = False
+    odoo_write: bool = False
+    callback_dispatch: bool = False
+    vicidial_writes_enabled: bool = False
+    production_callbacks_enabled: bool = False
+    form_odoo_delivery_enabled: bool = False
+    crawler_odoo_delivery_enabled: bool = False
+    scrapper_odoo_delivery_enabled: bool = False
+    crawler_external_contact_enabled: bool = False
+    scrapper_external_contact_enabled: bool = False
+    effect_sms_delivery_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("SMS_DELIVERY_ENABLED", "effect_sms_delivery_enabled")
+    )
+    effect_email_delivery_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("EMAIL_DELIVERY_ENABLED", "effect_email_delivery_enabled")
+    )
+    effect_social_delivery_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("SOCIAL_DELIVERY_ENABLED", "effect_social_delivery_enabled")
+    )
+    crawler_execution_enabled: bool = False
+    scrapper_execution_enabled: bool = False
+    live_sms_delivery: bool = False
+    live_email_delivery: bool = False
+    unrestricted_crawling: bool = False
+    # Umbrella kill switches (see UMBRELLA_CONTROL_FIELDS); all default false.
+    umbrella_live_advertising_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("LIVE_ADVERTISING_ENABLED", "umbrella_live_advertising_enabled")
+    )
+    umbrella_external_delivery_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("EXTERNAL_DELIVERY_ENABLED", "umbrella_external_delivery_enabled")
+    )
+    umbrella_social_publishing_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("SOCIAL_PUBLISHING_ENABLED", "umbrella_social_publishing_enabled")
+    )
+    umbrella_external_model_calls_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("EXTERNAL_MODEL_CALLS_ENABLED", "umbrella_external_model_calls_enabled")
+    )
+    umbrella_n8n_external_provider_writes: bool = Field(
+        default=False, validation_alias=AliasChoices("N8N_EXTERNAL_PROVIDER_WRITES", "umbrella_n8n_external_provider_writes")
+    )
+    # Odoo 19 CRM lead delivery (Appolon lineage). Distinct from the registry
+    # backed ``odoo_base_url`` used by the outbox sync worker.
+    odoo_19_base_url: str = Field(
+        default="", validation_alias=AliasChoices("ODOO_19_BASE_URL", "odoo_19_base_url")
+    )
+    odoo_19_hmac_secret: str = Field(
+        default="", validation_alias=AliasChoices("ODOO_19_HMAC_SECRET", "odoo_19_hmac_secret")
+    )
+    odoo_19_tenant_hmac_secrets: str = Field(
+        default="", validation_alias=AliasChoices("ODOO_19_TENANT_HMAC_SECRETS", "odoo_19_tenant_hmac_secrets")
+    )
+    odoo_timeout_seconds: int = Field(
+        default=20, validation_alias=AliasChoices("ODOO_19_TIMEOUT_SECONDS", "odoo_timeout_seconds")
+    )
+    # NATS JetStream
+    nats_url: str | None = None
+    nats_stream: str = "CODESTRA_EVENTS"
+    nats_subject_prefix: str = "codestra.events"
+    nats_credentials_file: Path | None = Field(
+        default=None, validation_alias=AliasChoices("NATS_CREDS_FILE", "nats_credentials_file")
+    )
+    nats_dispatch_mode: str = "disabled"
+    nats_allow_insecure_test_connection: bool = False
+    production_activation_id: str | None = None
+    production_dialing: str = "DISABLED"
+    # Temporal (not deployed; validated so a stray enablement fails closed)
+    temporal_address: str | None = None
+    temporal_namespace: str = "codestra-production"
+    temporal_task_queue: str = "codestra-production-critical"
+    temporal_worker_mode: str = "disabled"
+    temporal_server_root_ca_file: Path | None = None
+    temporal_client_cert_file: Path | None = None
+    temporal_client_key_file: Path | None = None
+    temporal_tls_server_name: str | None = None
+    temporal_allow_insecure_test_connection: bool = False
+
     database_url: str = "postgresql+asyncpg://localhost/codestra_middleware"
     database_url_file: str = ""
     redis_url: str = "redis://localhost:6379/2"
@@ -332,8 +670,15 @@ class Settings(BaseSettings):
     recording_playback_url_ttl_seconds: int = 120
     reconciliation_concurrency: int = 1
     keycloak_issuer: str = ""
-    keycloak_audience: str = ""
-    keycloak_jwks_url: str = ""
+    keycloak_audience: str = Field(
+        default="", validation_alias=AliasChoices("KEYCLOAK_AUDIENCE", "MIDDLEWARE_AUDIENCE", "keycloak_audience")
+    )
+    # KEYCLOAK_JWKS_URL is canonical; KEYCLOAK_JWKS_URI is a temporary alias
+    # (COMPATIBILITY_ENV_ALIASES) so a mid-migration environment cannot lose
+    # its JWKS authority.
+    keycloak_jwks_url: str = Field(
+        default="", validation_alias=AliasChoices("KEYCLOAK_JWKS_URL", "KEYCLOAK_JWKS_URI", "keycloak_jwks_url")
+    )
     keycloak_authorized_parties: str = ""
     # Service clients allowed to read campaign state through Middleware
     # (GET /api/v1/integrations/odoo/campaigns/...). Separate from the
@@ -512,6 +857,689 @@ class Settings(BaseSettings):
     sales_scraper_jwt_required_scope: str = "scraper.events.write"
     sales_scraper_jwt_required_role: str = "scraper-publisher"
     sales_scraper_rate_limit_per_minute: int = 60
+
+    # ------------------------------------------------------------------
+    # Construction
+    # ------------------------------------------------------------------
+    @classmethod
+    def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
+        """Build, load secret files and fully validate a Settings instance.
+
+        With ``env`` given, that mapping is the only configuration source
+        (``os.environ`` is not consulted); without it the process environment
+        is used. Every configuration defect raises ``ConfigurationError``.
+        """
+        token = _ENV_OVERRIDE.set(dict(env) if env is not None else None)
+        try:
+            instance = cls()
+        except ValidationError as exc:
+            raise ConfigurationError(_validation_summary(exc)) from exc
+        finally:
+            _ENV_OVERRIDE.reset(token)
+        if env is not None:
+            present = {key.upper() for key in env}
+            # The Appolon lineage required an explicit DATABASE_URL/REDIS_URL;
+            # keep that contract for callers that build from a mapping.
+            if "DATABASE_URL" not in present and "DATABASE_URL_FILE" not in present:
+                instance.database_url = ""
+            if "REDIS_URL" not in present and "REDIS_URL_FILE" not in present:
+                instance.redis_url = ""
+        try:
+            instance.load_secret_files()
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
+        instance.validate_domain()
+        try:
+            instance.validate_safety()
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
+        return instance
+
+    def replace(self, **changes: object) -> "Settings":
+        """Return a copy with the given *fields* changed (test helper).
+
+        Mirrors ``dataclasses.replace`` for the former frozen dataclass:
+        only declared fields may be changed; derived views such as
+        ``umbrella_controls`` are properties and must be changed through
+        their underlying fields. No validation is re-run.
+        """
+        unknown = sorted(set(changes) - set(type(self).model_fields))
+        if unknown:
+            raise TypeError(f"Settings.replace() got unknown fields: {', '.join(unknown)}")
+        return self.model_copy(update=dict(changes))
+
+    @field_validator(
+        "runtime_profile_id",
+        "production_activation_id",
+        "temporal_address",
+        "temporal_tls_server_name",
+        "nats_url",
+        mode="before",
+    )
+    @classmethod
+    def _empty_string_is_none(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("app_env", "nats_dispatch_mode", "temporal_worker_mode", mode="before")
+    @classmethod
+    def _lowercase_mode(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator(
+        "keycloak_issuer",
+        "app_version",
+        "image_digest",
+        "schema_head",
+        "build_time",
+        "release_id",
+        "configuration_checksum",
+        "keycloak_jwks_url",
+        "keycloak_audience",
+        "nats_stream",
+        "nats_subject_prefix",
+        "temporal_namespace",
+        "temporal_task_queue",
+        "production_dialing",
+        "odoo_19_base_url",
+        mode="before",
+    )
+    @classmethod
+    def _strip(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("keycloak_issuer")
+    @classmethod
+    def _issuer_no_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/")
+
+    @field_validator("jwks_timeout_seconds", "readiness_timeout_seconds")
+    @classmethod
+    def _bounded_timeout(cls, value: int) -> int:
+        if isinstance(value, bool) or not 1 <= value <= 10:
+            raise ValueError("timeout must be between 1 and 10 seconds")
+        return value
+
+    @field_validator("runtime_rebuild_interval_seconds")
+    @classmethod
+    def _bounded_rebuild_interval(cls, value: int) -> int:
+        if isinstance(value, bool) or not 5 <= value <= 600:
+            raise ValueError("runtime rebuild interval must be between 5 and 600 seconds")
+        return value
+
+    @field_validator("max_request_body_bytes")
+    @classmethod
+    def _bounded_body(cls, value: int) -> int:
+        if isinstance(value, bool) or not 1_024 <= value <= 10_485_760:
+            raise ValueError("MAX_REQUEST_BODY_BYTES must be between 1024 and 10485760")
+        return value
+
+    @field_validator("webhook_max_clock_skew_seconds")
+    @classmethod
+    def _bounded_skew(cls, value: int) -> int:
+        if isinstance(value, bool) or not 1 <= value <= 300:
+            raise ValueError("WEBHOOK_MAX_CLOCK_SKEW_SECONDS must be between 1 and 300")
+        return value
+
+    @field_validator("webhook_replay_retention_seconds")
+    @classmethod
+    def _bounded_retention(cls, value: int) -> int:
+        if isinstance(value, bool) or not 86_400 <= value <= 2_592_000:
+            raise ValueError(
+                "WEBHOOK_REPLAY_RETENTION_SECONDS must be between 86400 and 2592000"
+            )
+        return value
+
+    @field_validator("odoo_timeout_seconds")
+    @classmethod
+    def _bounded_odoo_timeout(cls, value: int) -> int:
+        if isinstance(value, bool) or not 1 <= value <= 120:
+            raise ValueError("ODOO_19_TIMEOUT_SECONDS must be between 1 and 120")
+        return value
+
+    # ------------------------------------------------------------------
+    # Identity view (one authority for the Middleware trust boundary)
+    # ------------------------------------------------------------------
+    @property
+    def expected_issuer(self) -> str:
+        return STAGING_ISSUER if self.app_env == "staging" else PRODUCTION_ISSUER
+
+    @property
+    def issuer(self) -> str:
+        return self.keycloak_issuer or self.expected_issuer
+
+    @property
+    def jwks_uri(self) -> str:
+        return self.keycloak_jwks_url or f"{self.issuer}/protocol/openid-connect/certs"
+
+    @property
+    def audience(self) -> str:
+        return self.keycloak_audience or CANONICAL_AUDIENCE
+
+    @property
+    def authorized_parties(self) -> frozenset[str]:
+        return frozenset(
+            value.strip()
+            for value in self.keycloak_authorized_parties.split(",")
+            if value.strip()
+        )
+
+    @property
+    def synthetic_ci_identity(self) -> bool:
+        return (
+            self.app_env in {"development", "test"}
+            and self.issuer == SYNTHETIC_CI_ISSUER
+            and self.jwks_uri == SYNTHETIC_CI_JWKS_URL
+        )
+
+    @property
+    def identity(self) -> IdentitySettings:
+        return IdentitySettings(
+            issuer=self.issuer,
+            audience=self.audience,
+            jwks_url=self.jwks_uri,
+            authorized_parties=self.authorized_parties,
+            jwks_timeout_seconds=self.jwks_timeout_seconds,
+            explicit=bool(
+                self.keycloak_issuer and self.keycloak_audience and self.keycloak_jwks_url
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Effect gates and umbrella controls
+    # ------------------------------------------------------------------
+    @property
+    def external_effects(self) -> dict[str, bool]:
+        return {name: bool(getattr(self, attr)) for name, attr in EXTERNAL_EFFECT_FIELDS.items()}
+
+    @property
+    def umbrella_controls(self) -> dict[str, bool]:
+        return {name: bool(getattr(self, attr)) for name, attr in UMBRELLA_CONTROL_FIELDS.items()}
+
+    @property
+    def webhook_secrets(self) -> dict[str, bytes]:
+        return {
+            producer: getattr(
+                self, _secret_env_name(producer).lower()
+            ).encode("utf-8")
+            for producer in WEBHOOK_PRODUCERS
+        }
+
+    def webhook_secret(self, producer_client_id: str) -> bytes:
+        if producer_client_id not in WEBHOOK_PRODUCERS:
+            raise ConfigurationError(f"unknown webhook producer: {producer_client_id}")
+        secret = self.webhook_secrets.get(producer_client_id, b"")
+        if len(secret) < 32:
+            raise ConfigurationError(
+                f"{_secret_env_name(producer_client_id)} must contain at least 32 bytes"
+            )
+        return secret
+
+    def validate_all_webhook_secrets(self) -> None:
+        for producer in WEBHOOK_PRODUCERS:
+            if len(self.webhook_secrets.get(producer, b"")) < 32:
+                raise ConfigurationError(
+                    f"{_secret_env_name(producer)} must be configured with at least 32 bytes"
+                )
+
+    @property
+    def odoo_default_hmac_secret(self) -> bytes:
+        return self.odoo_19_hmac_secret.encode("utf-8")
+
+    @property
+    def odoo_tenant_hmac_secrets(self) -> dict[str, bytes]:
+        raw = self.odoo_19_tenant_hmac_secrets.strip()
+        if not raw:
+            return {}
+        try:
+            decoded = json.loads(raw)
+        except ValueError as exc:
+            raise ConfigurationError(
+                "ODOO_19_TENANT_HMAC_SECRETS must be a JSON object"
+            ) from exc
+        if not isinstance(decoded, dict) or not all(
+            isinstance(key, str) and isinstance(value, str) and key and value
+            for key, value in decoded.items()
+        ):
+            raise ConfigurationError(
+                "ODOO_19_TENANT_HMAC_SECRETS must map tenant IDs to secrets"
+            )
+        return {key: value.encode("utf-8") for key, value in decoded.items()}
+
+    def odoo_secret_for(self, tenant_id: str) -> bytes:
+        return self.odoo_tenant_hmac_secrets.get(tenant_id, self.odoo_default_hmac_secret)
+
+    @property
+    def odoo_19_delivery_enabled(self) -> bool:
+        """Odoo 19 lead delivery: umbrella switch and the ODOO_WRITE effect."""
+        return self.umbrella_external_delivery_enabled and self.odoo_write
+
+    def odoo_source_delivery_enabled(self, provenance_method: str) -> bool:
+        gate = {
+            "submitted_by_person": "form_odoo_delivery_enabled",
+            "crawler_discovery": "crawler_odoo_delivery_enabled",
+            "scraper_import": "scrapper_odoo_delivery_enabled",
+        }.get(provenance_method)
+        if gate is None:
+            return False
+        return self.odoo_19_delivery_enabled and bool(getattr(self, gate))
+
+    @property
+    def social_publishing_enabled(self) -> bool:
+        """Effect gate plus its own umbrella switch (not EXTERNAL_DELIVERY_ENABLED)."""
+        return self.effect_social_delivery_enabled and self.umbrella_social_publishing_enabled
+
+    @property
+    def email_delivery_enabled(self) -> bool:
+        return self.effect_email_delivery_enabled and self.umbrella_external_delivery_enabled
+
+    @property
+    def sms_delivery_enabled(self) -> bool:
+        return self.effect_sms_delivery_enabled and self.umbrella_external_delivery_enabled
+
+    # ------------------------------------------------------------------
+    # Environment policy (formerly app/config.py Settings.validate)
+    # ------------------------------------------------------------------
+    def validate_domain(self) -> None:
+        if self.app_env not in {"development", "test", "staging", "production"}:
+            raise ConfigurationError("APP_ENV is not recognized")
+        if self.app_env in {"staging", "production"} and self.environment not in {
+            self.app_env,
+            "preproduction",
+        }:
+            raise ConfigurationError("ENVIRONMENT must match APP_ENV in staging/production")
+        synthetic = self.synthetic_ci_identity
+        if not synthetic and self.issuer != self.expected_issuer:
+            raise ConfigurationError(
+                f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
+            )
+        if not synthetic and self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
+            raise ConfigurationError("KEYCLOAK_JWKS_URL must match the canonical issuer")
+        if self.audience != CANONICAL_AUDIENCE:
+            raise ConfigurationError("KEYCLOAK_AUDIENCE must be middleware-api")
+        if self.telnexa_event_ingress_enabled:
+            if not self.sms_delivery:
+                raise ConfigurationError(
+                    "SMS_DELIVERY must be true before enabling Telnexa event ingress"
+                )
+            if not (self.telnexa_event_api_key or self.telnexa_event_api_key_file):
+                raise ConfigurationError(
+                    "TELNEXA_EVENT_API_KEY or TELNEXA_EVENT_API_KEY_FILE is required"
+                )
+            if not (self.telnexa_event_hmac_secret or self.telnexa_event_hmac_secret_file):
+                raise ConfigurationError(
+                    "TELNEXA_EVENT_HMAC_SECRET or TELNEXA_EVENT_HMAC_SECRET_FILE is required"
+                )
+        if self.klyrow_event_ingress_enabled:
+            if not (self.klyrow_event_api_key or self.klyrow_event_api_key_file):
+                raise ConfigurationError(
+                    "KLYROW_EVENT_API_KEY or KLYROW_EVENT_API_KEY_FILE is required"
+                )
+            if not (self.klyrow_event_hmac_secret or self.klyrow_event_hmac_secret_file):
+                raise ConfigurationError(
+                    "KLYROW_EVENT_HMAC_SECRET or KLYROW_EVENT_HMAC_SECRET_FILE is required"
+                )
+        if self.klyrow_odoo_projection_enabled and not self.odoo_19_delivery_enabled:
+            raise ConfigurationError(
+                "Klyrow Odoo projection requires EXTERNAL_DELIVERY_ENABLED and ODOO_WRITE"
+            )
+        self._validate_environment_profile()
+        effects = self.external_effects
+        enabled = {name for name, value in effects.items() if value}
+        unsupported_enabled = sorted(enabled - SUPPORTED_EXTERNAL_EFFECTS)
+        if unsupported_enabled:
+            raise ConfigurationError(
+                "provider and business effects are not implemented by this runtime: "
+                + ", ".join(unsupported_enabled)
+            )
+        umbrella = self.umbrella_controls
+        enabled_umbrella_controls = sorted(name for name, value in umbrella.items() if value)
+        if self.app_env == "staging" and enabled_umbrella_controls:
+            raise ConfigurationError(
+                "staging umbrella controls must remain disabled: "
+                + ", ".join(enabled_umbrella_controls)
+            )
+        enabled_delivery_effects = sorted(enabled & EXTERNAL_DELIVERY_EFFECTS)
+        if enabled_delivery_effects and umbrella["EXTERNAL_DELIVERY_ENABLED"] is not True:
+            raise ConfigurationError(
+                "EXTERNAL_DELIVERY_ENABLED must be true before enabling: "
+                + ", ".join(enabled_delivery_effects)
+            )
+        self._validate_odoo_transport(enabled)
+        if "SOCIAL_DELIVERY_ENABLED" in enabled and umbrella["SOCIAL_PUBLISHING_ENABLED"] is not True:
+            raise ConfigurationError(
+                "SOCIAL_PUBLISHING_ENABLED must be true before enabling: "
+                "SOCIAL_DELIVERY_ENABLED"
+            )
+        if self.production_dialing != "DISABLED":
+            raise ConfigurationError("PRODUCTION_DIALING must remain DISABLED")
+        self._validate_nats(enabled)
+        self._validate_temporal()
+        if self.allow_in_memory_storage:
+            if self.app_env not in {"test", "development"}:
+                raise ConfigurationError(
+                    "ALLOW_IN_MEMORY_STORAGE is allowed only in test/development"
+                )
+        elif not self.database_url or not self.redis_url:
+            raise ConfigurationError(
+                "DATABASE_URL and REDIS_URL are required unless explicitly using "
+                "in-memory storage in test/development"
+            )
+        if self.schema_head != CANONICAL_SCHEMA_HEAD:
+            raise ConfigurationError(f"SCHEMA_HEAD must be {CANONICAL_SCHEMA_HEAD}")
+        if self.app_env in {"staging", "production"}:
+            if not SHA40.fullmatch(self.source_sha):
+                raise ConfigurationError(
+                    "APP_SOURCE_SHA must be an exact 40-character SHA"
+                )
+            if not IMAGE_DIGEST.fullmatch(self.image_digest):
+                raise ConfigurationError(
+                    "IMAGE_DIGEST must be an immutable sha256 digest"
+                )
+            if self.build_time in {"", "unknown"}:
+                raise ConfigurationError("BUILD_TIME is required in staging/production")
+            self.validate_all_webhook_secrets()
+
+    def _validate_nats(self, enabled: set[str]) -> None:
+        if self.nats_dispatch_mode not in {"disabled", "isolated", "production"}:
+            raise ConfigurationError(
+                "NATS_DISPATCH_MODE must be disabled, isolated, or production"
+            )
+        send_events = "SEND_EVENTS" in enabled
+        dispatch_configured = self.nats_dispatch_mode != "disabled"
+        if not (self.outbox_dispatch_enabled == send_events == dispatch_configured):
+            raise ConfigurationError(
+                "OUTBOX_DISPATCH_ENABLED, SEND_EVENTS, and NATS_DISPATCH_MODE "
+                "must be enabled or disabled together"
+            )
+        if not self.outbox_dispatch_enabled:
+            if self.nats_allow_insecure_test_connection:
+                raise ConfigurationError(
+                    "NATS_ALLOW_INSECURE_TEST_CONNECTION requires isolated dispatch"
+                )
+            return
+        if self.nats_dispatch_mode == "production" and self.app_env != "production":
+            raise ConfigurationError(
+                "production JetStream dispatch requires APP_ENV=production"
+            )
+        if self.nats_dispatch_mode == "isolated" and self.app_env == "production":
+            raise ConfigurationError(
+                "isolated JetStream dispatch is forbidden in production"
+            )
+        parsed_nats = urlparse(self.nats_url or "")
+        insecure_local_test = (
+            self.nats_allow_insecure_test_connection
+            and self.app_env in {"test", "development"}
+            and parsed_nats.scheme == "nats"
+            and parsed_nats.hostname in {"127.0.0.1", "localhost"}
+        )
+        if not insecure_local_test and (parsed_nats.scheme != "tls" or not parsed_nats.hostname):
+            raise ConfigurationError(
+                "NATS_URL must use tls:// with a hostname outside disposable tests"
+            )
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", self.nats_stream):
+            raise ConfigurationError("NATS_STREAM is invalid")
+        if not re.fullmatch(r"[a-z0-9]+(?:\.[a-z0-9_-]+)+", self.nats_subject_prefix):
+            raise ConfigurationError("NATS_SUBJECT_PREFIX is invalid")
+        if not insecure_local_test and (
+            self.nats_credentials_file is None
+            or not _is_absolute_mount_path(self.nats_credentials_file)
+        ):
+            raise ConfigurationError(
+                "NATS_CREDS_FILE must be an absolute mounted credential path"
+            )
+        if self.nats_dispatch_mode == "isolated":
+            expected_environment = "staging" if self.app_env == "staging" else "test"
+            expected_stream = f"CODESTRA_{expected_environment.upper()}_EVENTS"
+            expected_prefix = f"codestra.{expected_environment}.events"
+            if self.nats_stream != expected_stream:
+                raise ConfigurationError(
+                    f"isolated JetStream must use NATS_STREAM={expected_stream}"
+                )
+            if self.nats_subject_prefix != expected_prefix:
+                raise ConfigurationError(
+                    "isolated JetStream subject prefix does not match the environment"
+                )
+        else:
+            if self.nats_stream != "CODESTRA_EVENTS":
+                raise ConfigurationError(
+                    "production JetStream must use NATS_STREAM=CODESTRA_EVENTS"
+                )
+            if self.nats_subject_prefix != "codestra.events":
+                raise ConfigurationError(
+                    "production JetStream must use NATS_SUBJECT_PREFIX=codestra.events"
+                )
+            if not self.production_activation_id or not re.fullmatch(
+                r"[A-Z0-9][A-Z0-9._/-]{7,127}", self.production_activation_id
+            ):
+                raise ConfigurationError(
+                    "PRODUCTION_ACTIVATION_ID must identify the approved activation"
+                )
+
+    def _validate_temporal(self) -> None:
+        if self.temporal_worker_mode not in {"disabled", "isolated", "production"}:
+            raise ConfigurationError(
+                "TEMPORAL_WORKER_MODE must be disabled, isolated, or production"
+            )
+        if self.temporal_worker_mode == "disabled":
+            if self.temporal_allow_insecure_test_connection:
+                raise ConfigurationError(
+                    "TEMPORAL_ALLOW_INSECURE_TEST_CONNECTION requires isolated mode"
+                )
+            return
+        if not self.temporal_address:
+            raise ConfigurationError(
+                "TEMPORAL_ADDRESS is required when the worker is enabled"
+            )
+        insecure_temporal_test = (
+            self.temporal_allow_insecure_test_connection
+            and self.app_env in {"test", "development"}
+            and self.temporal_address.startswith(("127.0.0.1:", "localhost:"))
+        )
+        if self.temporal_worker_mode == "production":
+            if self.app_env != "production":
+                raise ConfigurationError(
+                    "production Temporal mode requires APP_ENV=production"
+                )
+            expected_namespace = "codestra-production"
+            expected_task_queue = "codestra-production-critical"
+            if not self.production_activation_id or not re.fullmatch(
+                r"[A-Z0-9][A-Z0-9._/-]{7,127}", self.production_activation_id
+            ):
+                raise ConfigurationError(
+                    "production Temporal mode requires PRODUCTION_ACTIVATION_ID"
+                )
+        else:
+            if self.app_env == "production":
+                raise ConfigurationError(
+                    "isolated Temporal mode is forbidden in production"
+                )
+            environment = "staging" if self.app_env == "staging" else "test"
+            expected_namespace = f"codestra-{environment}"
+            expected_task_queue = f"codestra-{environment}-critical"
+        if self.temporal_namespace != expected_namespace:
+            raise ConfigurationError(
+                "Temporal namespace does not match the selected environment"
+            )
+        if self.temporal_task_queue != expected_task_queue:
+            raise ConfigurationError(
+                "Temporal task queue does not match the selected environment"
+            )
+        tls_paths = (
+            self.temporal_server_root_ca_file,
+            self.temporal_client_cert_file,
+            self.temporal_client_key_file,
+        )
+        if not insecure_temporal_test and any(
+            path is None or not _is_absolute_mount_path(path) for path in tls_paths
+        ):
+            raise ConfigurationError(
+                "Temporal requires absolute mounted CA, client certificate, "
+                "and client key paths"
+            )
+        if not insecure_temporal_test and not self.temporal_tls_server_name:
+            raise ConfigurationError("TEMPORAL_TLS_SERVER_NAME is required with TLS")
+
+    def _validate_odoo_transport(self, enabled: set[str]) -> None:
+        source_scoped = {name for name in enabled if name.endswith("_ODOO_DELIVERY_ENABLED")}
+        if source_scoped and "ODOO_WRITE" not in enabled:
+            raise ConfigurationError(
+                "source-scoped Odoo delivery requires ODOO_WRITE: "
+                + ", ".join(sorted(source_scoped))
+            )
+        # A malformed tenant secret map is a defect even while writes are off.
+        self.odoo_tenant_hmac_secrets
+        if "ODOO_WRITE" not in enabled:
+            return
+        if not self.odoo_19_base_url:
+            raise ConfigurationError("ODOO_19_BASE_URL is required to write to Odoo")
+        if not self.odoo_19_base_url.startswith("https://"):
+            raise ConfigurationError("ODOO_19_BASE_URL must be an HTTPS endpoint")
+        secrets = [self.odoo_default_hmac_secret, *self.odoo_tenant_hmac_secrets.values()]
+        if not any(secrets):
+            raise ConfigurationError(
+                "ODOO_19_HMAC_SECRET or ODOO_19_TENANT_HMAC_SECRETS is required "
+                "to write to Odoo"
+            )
+        if any(secret and len(secret) < 32 for secret in secrets):
+            raise ConfigurationError("Odoo signing secrets must be at least 32 bytes")
+
+    def _validate_environment_profile(self) -> None:
+        if self.app_env not in {"staging", "production"}:
+            if self.runtime_profile_id is not None:
+                raise ConfigurationError(
+                    "RUNTIME_PROFILE_ID is reserved for staging/production"
+                )
+            return
+        profiles = _runtime_profiles()
+        profile = profiles.get(self.runtime_profile_id or "")
+        if profile is None:
+            raise ConfigurationError(
+                "RUNTIME_PROFILE_ID must select a registered runtime profile"
+            )
+        if profile.get("environment") != self.app_env:
+            raise ConfigurationError("runtime profile does not match APP_ENV")
+        self._validate_database_profile(profile["database"])
+        self._validate_redis_profile(profile["redis"])
+        nats_profile = profile["nats"]
+        assert isinstance(nats_profile, dict)
+        if self.nats_stream != nats_profile["stream"]:
+            raise ConfigurationError("NATS_STREAM does not match the runtime profile")
+        if self.nats_subject_prefix != nats_profile["subject_prefix"]:
+            raise ConfigurationError(
+                "NATS_SUBJECT_PREFIX does not match the runtime profile"
+            )
+        if self.nats_url is not None:
+            try:
+                parsed_nats = urlparse(self.nats_url)
+                nats_port = parsed_nats.port
+            except ValueError as exc:
+                raise ConfigurationError("NATS_URL is malformed") from exc
+            if (
+                parsed_nats.scheme != "tls"
+                or parsed_nats.hostname != nats_profile["host"]
+                or nats_port != nats_profile["port"]
+                or parsed_nats.username is not None
+                or parsed_nats.password is not None
+                or parsed_nats.path not in {"", "/"}
+                or parsed_nats.query
+                or parsed_nats.fragment
+            ):
+                raise ConfigurationError("NATS_URL does not match the runtime profile")
+        temporal_profile = profile["temporal"]
+        assert isinstance(temporal_profile, dict)
+        if self.temporal_namespace != temporal_profile["namespace"]:
+            raise ConfigurationError(
+                "TEMPORAL_NAMESPACE does not match the runtime profile"
+            )
+        if self.temporal_task_queue != temporal_profile["task_queue"]:
+            raise ConfigurationError(
+                "TEMPORAL_TASK_QUEUE does not match the runtime profile"
+            )
+        if (
+            self.temporal_address is not None
+            and self.temporal_address != temporal_profile["address"]
+        ):
+            raise ConfigurationError(
+                "TEMPORAL_ADDRESS does not match the runtime profile"
+            )
+        temporal_host = str(temporal_profile["address"]).rsplit(":", 1)[0]
+        if (
+            self.temporal_tls_server_name is not None
+            and self.temporal_tls_server_name != temporal_host
+        ):
+            raise ConfigurationError(
+                "TEMPORAL_TLS_SERVER_NAME does not match the runtime profile"
+            )
+        secret_prefix = profile["secret_path_prefix"]
+        assert isinstance(secret_prefix, str)
+        for credential in (
+            self.nats_credentials_file,
+            self.temporal_server_root_ca_file,
+            self.temporal_client_cert_file,
+            self.temporal_client_key_file,
+        ):
+            normalized = str(credential).replace("\\", "/") if credential is not None else None
+            if normalized is not None and not normalized.startswith(secret_prefix):
+                raise ConfigurationError(
+                    "mounted credential path does not match the runtime profile"
+                )
+        if (
+            profile["production_activation_allowed"] is not True
+            and self.production_activation_id is not None
+        ):
+            raise ConfigurationError(
+                "PRODUCTION_ACTIVATION_ID is forbidden by the runtime profile"
+            )
+
+    def _validate_database_profile(self, raw_profile: object) -> None:
+        assert isinstance(raw_profile, dict)
+        try:
+            parsed = urlparse(self.database_url or "")
+            port = parsed.port
+            query = parse_qs(parsed.query, strict_parsing=True) if parsed.query else {}
+        except ValueError as exc:
+            raise ConfigurationError("DATABASE_URL is malformed") from exc
+        if (
+            parsed.scheme != raw_profile["scheme"]
+            or parsed.hostname != raw_profile["host"]
+            or port != raw_profile["port"]
+            or unquote(parsed.path.lstrip("/")) != raw_profile["name"]
+            or unquote(parsed.username or "") != raw_profile["username"]
+            or not parsed.password
+            or query
+            != ({"sslmode": [raw_profile["sslmode"]]} if raw_profile.get("sslmode") else {})
+            or parsed.params
+            or parsed.fragment
+        ):
+            raise ConfigurationError(
+                "DATABASE_URL does not match the locked runtime profile"
+            )
+
+    def _validate_redis_profile(self, raw_profile: object) -> None:
+        assert isinstance(raw_profile, dict)
+        try:
+            parsed = urlparse(self.redis_url or "")
+            port = parsed.port
+            database = int(unquote(parsed.path.lstrip("/")))
+        except ValueError as exc:
+            raise ConfigurationError("REDIS_URL is malformed") from exc
+        if (
+            parsed.scheme != raw_profile["scheme"]
+            or parsed.hostname != raw_profile["host"]
+            or port != raw_profile["port"]
+            or unquote(parsed.username or "") != raw_profile["username"]
+            or not parsed.password
+            or database != raw_profile["database"]
+            or parsed.query
+            or parsed.params
+            or parsed.fragment
+        ):
+            raise ConfigurationError(
+                "REDIS_URL does not match the locked runtime profile"
+            )
 
     def validate_safety(self) -> None:
         if self.telnexa_event_ingress_enabled:

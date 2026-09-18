@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from jsonschema import Draft202012Validator
 from app.contracts import ROUTE_BY_PATH, WEBHOOK_ROUTES
 from app.main import create_app
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime, _asyncpg_dsn
+from app.core.runtime import RuntimeContainer as Runtime, _asyncpg_dsn
 from app.runtime_safety import runtime_safety_readback
 from app.storage import MemoryInboxStore
 
@@ -303,7 +302,7 @@ def test_actor_schema_fails_closed(test_settings, runtime) -> None:
 
 
 def test_oversized_body_is_rejected_before_buffering(test_settings, runtime) -> None:
-    limited = replace(test_settings, max_request_body_bytes=1024)
+    limited = test_settings.replace(max_request_body_bytes=1024)
     runtime.settings = limited
     path = "/api/v1/postly/events"
     route = ROUTE_BY_PATH[path]
@@ -415,8 +414,7 @@ def test_runtime_safety_readback_proves_fail_closed_staging(
     test_settings,
     runtime,
 ) -> None:
-    staging = replace(
-        test_settings,
+    staging = test_settings.replace(
         app_env="staging",
         runtime_profile_id="codestra-middleware-staging-v1",
         source_sha="a" * 40,
@@ -448,13 +446,7 @@ def test_runtime_safety_readback_proves_fail_closed_staging(
 def test_runtime_safety_aggregate_summaries_include_umbrella_controls(
     test_settings,
 ) -> None:
-    enabled = replace(
-        test_settings,
-        umbrella_controls={
-            **test_settings.umbrella_controls,
-            "EXTERNAL_DELIVERY_ENABLED": True,
-        },
-    )
+    enabled = test_settings.replace(umbrella_external_delivery_enabled=True)
 
     value = runtime_safety_readback(enabled)
 
@@ -498,9 +490,13 @@ def test_readiness_reports_named_failure_without_dependency_details(
 
     assert response.status_code == 503
     value = response.json()
-    assert value["status"] == "not_ready"
+    assert value["status"] == "not-ready"
     assert value["components"]["replay_guard"] == "not_ready"
-    assert "redis" not in response.text.lower()
+    assert value["dependencies"]["redis"] == "unavailable"
+    assert value["reason"] == "components_not_ready:replay_guard"
+    # Dependency *states* are named; addresses and credentials never are.
+    assert "localhost" not in response.text.lower()
+    assert "://" not in response.text
 
 
 def test_asyncpg_dsn_normalizes_sqlalchemy_asyncpg_scheme() -> None:

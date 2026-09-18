@@ -12,7 +12,7 @@ from typing import Any, Protocol
 import jwt
 from jwt import PyJWKClient
 
-from .config import Settings
+from app.core.config import Settings
 
 
 class SecurityError(RuntimeError):

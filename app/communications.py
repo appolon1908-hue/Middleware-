@@ -396,9 +396,11 @@ class MemoryCommunicationsStore:
 class PostgresCommunicationsStore(MemoryCommunicationsStore):
     """Durable communications projection; the command ledger remains authoritative."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, owns_pool: bool = True) -> None:
         super().__init__()
         self.pool = pool
+        # A pool shared through RuntimeContainer is closed by the container.
+        self.owns_pool = owns_pool
 
     def synchronize_durable_message(self, message: CommunicationMessage) -> None:
         super().synchronize_durable_message(message)
@@ -584,7 +586,8 @@ class PostgresCommunicationsStore(MemoryCommunicationsStore):
         return await self.pool.fetchval("SELECT to_regclass('middleware_communication_messages') IS NOT NULL") is True
 
     async def close(self) -> None:
-        await self.pool.close()
+        if self.owns_pool:
+            await self.pool.close()
 
 
 class CommunicationsProviderReadAdapter(Protocol):

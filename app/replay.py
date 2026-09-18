@@ -56,9 +56,13 @@ class RedisReplayGuard:
     return 0
     """
 
-    def __init__(self, client: Redis, *, lock_seconds: int = 30) -> None:
+    def __init__(
+        self, client: Redis, *, lock_seconds: int = 30, owns_client: bool = True
+    ) -> None:
         self.client = client
         self.lock_seconds = lock_seconds
+        # A client shared through RuntimeContainer is closed by the container.
+        self.owns_client = owns_client
 
     @classmethod
     async def connect(cls, redis_url: str) -> "RedisReplayGuard":
@@ -108,4 +112,5 @@ class RedisReplayGuard:
             return False
 
     async def close(self) -> None:
-        await self.client.aclose()
+        if self.owns_client:
+            await self.client.aclose()

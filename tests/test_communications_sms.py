@@ -22,7 +22,7 @@ from app.commands import (
 from app.communications import CommunicationsService, MemoryCommunicationsStore
 from app.main import create_app
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.security import AuthenticationError, AuthorizationError
 from app.sms import sms_segments
 from app.storage import MemoryInboxStore

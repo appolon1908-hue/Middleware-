@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import ConfigurationError, Settings, WEBHOOK_PRODUCERS
+from app.core.config import ConfigurationError, Settings, WEBHOOK_PRODUCERS
 from app.security import (
     AuthorizationError,
     RequestValidationError,
@@ -156,7 +156,8 @@ def test_jetstream_dispatch_requires_matching_gate_and_authorization() -> None:
         )
 
 
-def test_production_jetstream_dispatch_requires_approved_identity() -> None:
+def production_jetstream_env() -> dict[str, str]:
+    """A JetStream activation that satisfies every transport-level rule."""
     env = {
         "APP_ENV": "production",
         "RUNTIME_PROFILE_ID": "codestra-middleware-production-v1",
@@ -186,11 +187,60 @@ def test_production_jetstream_dispatch_requires_approved_identity() -> None:
             "WEBHOOK_SECRET_"
             + producer.upper().replace("-", "_").replace(".", "_")
         ] = "x" * 32
+    return env
 
-    settings = Settings.from_env(env)
 
-    assert settings.outbox_dispatch_enabled is True
-    assert settings.production_activation_id == "CHG-20260828-EVENTS"
+# The canonical authority owns a single SEND_EVENTS gate. Enabling it needs the
+# JetStream transport rules (OUTBOX_DISPATCH_ENABLED / NATS_DISPATCH_MODE /
+# approved activation identity) *and* every broad-event gate with a bounded
+# scope. One of those gates, N8N_PRODUCTION_WORKFLOWS_ENABLED, is an effect
+# this runtime declares unimplemented, so outbound event dispatch cannot be
+# switched on by configuration alone until that effect is promoted to
+# SUPPORTED_EXTERNAL_EFFECTS by an explicit approval.
+BROAD_EVENT_GATES = {
+    "BROAD_EVENT_DELIVERY_ENABLED": "true",
+    "PRODUCTION_N8N_ENABLED": "true",
+    "N8N_PRODUCTION_WORKFLOWS_ENABLED": "true",
+    "CONTROLLED_BROAD_EVENT_ACTIVATION": "true",
+    "BROAD_EVENT_BUSINESS_UNIT_ALLOWLIST": "BU-TEST",
+    "BROAD_EVENT_CAMPAIGN_ALLOWLIST": "TEST_SYN",
+    "BROAD_EVENT_WORKFLOW_ALLOWLIST": "wf-test",
+    "BROAD_EVENT_TYPE_ALLOWLIST": "lead.created",
+    "BROAD_EVENT_ACTIVATION_HIGH_WATER_MARK": "2026-08-28T12:00:00Z",
+    "BROAD_EVENT_SUBMISSION_LIMIT": "1",
+}
+
+
+def test_production_jetstream_dispatch_requires_approved_identity() -> None:
+    without_activation = production_jetstream_env()
+    del without_activation["PRODUCTION_ACTIVATION_ID"]
+    with pytest.raises(ConfigurationError, match="PRODUCTION_ACTIVATION_ID"):
+        Settings.from_env(without_activation)
+
+    wrong_stream = {**production_jetstream_env(), "NATS_STREAM": "CODESTRA_STAGING_EVENTS"}
+    with pytest.raises(ConfigurationError, match="NATS_STREAM"):
+        Settings.from_env(wrong_stream)
+
+    plaintext = {
+        **production_jetstream_env(),
+        "NATS_URL": "nats://nats.middleware-production.svc.cluster.local:4222",
+    }
+    with pytest.raises(ConfigurationError, match="NATS_URL"):
+        Settings.from_env(plaintext)
+
+
+def test_production_jetstream_dispatch_requires_every_broad_event_gate() -> None:
+    # Transport rules satisfied; the broad-event conjunction still fails closed.
+    with pytest.raises(ConfigurationError, match="broad-event activation"):
+        Settings.from_env(production_jetstream_env())
+
+    # Even with every broad-event gate, the runtime refuses the unimplemented
+    # n8n production-workflow effect: no configuration alone activates dispatch.
+    with pytest.raises(
+        ConfigurationError,
+        match="not implemented by this runtime: N8N_PRODUCTION_WORKFLOWS_ENABLED",
+    ):
+        Settings.from_env({**production_jetstream_env(), **BROAD_EVENT_GATES})
 
 
 def test_staging_uses_an_isolated_jetstream_namespace() -> None:
@@ -212,10 +262,13 @@ def test_staging_uses_an_isolated_jetstream_namespace() -> None:
             + producer.upper().replace("-", "_").replace(".", "_")
         ] = "x" * 32
 
-    settings = Settings.from_env(env)
+    # The isolated namespace passes every transport rule; only the canonical
+    # broad-event conjunction stops the activation.
+    with pytest.raises(ConfigurationError, match="broad-event activation"):
+        Settings.from_env(env)
 
-    assert settings.nats_dispatch_mode == "isolated"
-    assert settings.nats_subject_prefix == "codestra.staging.events"
+    with pytest.raises(ConfigurationError, match="NATS_STREAM"):
+        Settings.from_env({**env, "NATS_STREAM": "CODESTRA_EVENTS"})
 
 
 def test_staging_rejects_production_jetstream_namespace() -> None:

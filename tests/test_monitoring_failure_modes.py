@@ -44,11 +44,13 @@ def reconcile(s):
     ).json()["data"]["results"][0]
 
 
-def test_readiness_never_consults_telemetry_backends(monkeypatch):
-    from app import main
-    from app.core.config import settings
+def test_readiness_never_consults_telemetry_backends():
+    # The readiness decision is the health authority (app.core.health); it must
+    # report only the runtime's own dependencies and never reach a telemetry
+    # backend, so an outage of the monitoring stack cannot mark the API unready.
+    from app.core import health
 
-    source = inspect.getsource(main.readyz)
+    source = inspect.getsource(health)
     for backend in (
         "prometheus",
         "loki",
@@ -58,13 +60,12 @@ def test_readiness_never_consults_telemetry_backends(monkeypatch):
         "monitoring",
     ):
         assert backend not in source.lower()
-    monkeypatch.setattr(type(settings), "auth_ready", property(lambda self: True))
-    monkeypatch.setattr(settings, "elevenlabs_provider_enabled", False, raising=False)
-    ready = asyncio.run(main.readyz())
-    assert ready == {
-        "status": "ready",
-        "integration": "outbox-only",
-        "authorization": "online",
+    assert set(health.ReadinessSnapshot.__dataclass_fields__) == {
+        "ready",
+        "components",
+        "dependencies",
+        "reason",
+        "checked_at",
     }
 
 

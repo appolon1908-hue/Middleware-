@@ -16,7 +16,6 @@ from fastapi.testclient import TestClient
 from app.api.v1 import readiness_challenge as challenge
 from app.core.config import settings
 from app.entrypoints.event_gateway import app
-from app.entrypoints.runtime import _RATE_WINDOWS
 
 PATH = "/api/v1/readiness/server-a/challenge"
 KEY_ID = "vicidial-server-b-readiness"
@@ -87,9 +86,9 @@ def configured(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(challenge, "Redis", FakeRedis)
     FakeRedis.seen.clear()
     FakeRedis.unavailable = False
-    _RATE_WINDOWS.clear()
+    app.state.request_guard.reset_rate_limits()
     yield der
-    _RATE_WINDOWS.clear()
+    app.state.request_guard.reset_rate_limits()
 
 
 def headers(der, *, nonce="nonce-0123456789abcdef", timestamp=None, source="10.40.0.2", key_id=KEY_ID):

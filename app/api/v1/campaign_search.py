@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.campaign_search import normalize_alias
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 from app.db.session import get_session
 
 
@@ -55,16 +55,7 @@ async def exact_campaign_identity_search(
 ):
     try:
         token = _bearer(authorization)
-        claims = KeycloakValidator(
-            issuer=settings.keycloak_issuer,
-            audience=settings.keycloak_audience,
-            jwks_url=settings.keycloak_jwks_url,
-            authorized_parties=frozenset(
-                value.strip()
-                for value in settings.keycloak_authorized_parties.split(",")
-                if value.strip()
-            ),
-        ).validate(token)
+        claims = KeycloakValidator(**identity_validator_kwargs(settings.identity)).validate(token)
         allowed = campaign_scope_from_claims(claims)
         alias = normalize_alias(q)
     except (JWTAuthError, ValueError) as exc:

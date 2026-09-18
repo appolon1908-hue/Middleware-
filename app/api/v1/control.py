@@ -19,6 +19,10 @@ from app.db.models import (
 from app.core.reliability import authorize_transfer, redact, sanitize_for_storage
 
 router = APIRouter(prefix="/api/v1", tags=["control-plane"])
+# TEST_SYN-only synthetic event aliases. They are served by the in-process
+# monolith only (behind its bearer guard); the deployed application serves
+# provider events through the signed ingress routes instead.
+legacy_events_router = APIRouter(prefix="/api/v1", tags=["control-plane-legacy-events"])
 
 
 class Envelope(BaseModel):
@@ -98,8 +102,9 @@ async def persist(
     await db.flush()
 
 
-@router.post("/events/odoo", status_code=202)
-@router.post("/events/vicidial", status_code=202)
+# /events/vicidial is owned by the signed HMAC ingress (app.api.v1.events);
+# the former alias here was always shadowed by it and is not registered.
+@legacy_events_router.post("/events/odoo", status_code=202)
 async def event(
     request: Request,
     body: Envelope,
@@ -149,7 +154,7 @@ async def event(
     return response
 
 
-@router.get("/events/{event_id}")
+@legacy_events_router.get("/events/{event_id}")
 async def event_status(event_id: str, db: AsyncSession = Depends(get_session)):
     row = await db.scalar(select(EventInbox).where(EventInbox.event_id == event_id))
     if not row:

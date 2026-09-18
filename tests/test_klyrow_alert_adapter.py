@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from app.commands import CommandEnvelope
-from app.config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from app.klyrow_alert_adapter import KlyrowAlertAdapter, KlyrowAlertAdapterError
 from app.temporal_workflows import ActivityResult, CommandExecutionRequest
 

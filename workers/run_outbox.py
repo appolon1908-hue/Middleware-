@@ -6,7 +6,7 @@ import asyncio
 import asyncpg
 import httpx
 
-from app.config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from app.commands import ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
 from app.klyrow_odoo_projection import KlyrowOdooProjectionDispatcher
@@ -54,7 +54,7 @@ async def _load_reconciliation_command_id(
 async def main() -> None:
     settings = Settings.from_env()
     temporal_enabled = settings.temporal_worker_mode != "disabled"
-    odoo_enabled = settings.odoo_delivery_enabled
+    odoo_enabled = settings.odoo_19_delivery_enabled
     klyrow_odoo_enabled = settings.klyrow_odoo_projection_enabled
     if (
         not settings.outbox_dispatch_enabled
@@ -102,7 +102,7 @@ async def main() -> None:
             )
             handlers[ODOO_COMMAND_DESTINATION] = OdooCommandDispatcher(
                 client=odoo_client,
-                base_url=settings.odoo_base_url or "",
+                base_url=settings.odoo_19_base_url or "",
                 secrets=dict(settings.odoo_tenant_hmac_secrets),
                 source_delivery_enabled=settings.odoo_source_delivery_enabled,
                 default_secret=settings.odoo_default_hmac_secret or None,
@@ -115,7 +115,7 @@ async def main() -> None:
             handlers[KLYROW_ODOO_PROJECTION_DESTINATION] = (
                 KlyrowOdooProjectionDispatcher(
                     client=odoo_client,
-                    base_url=settings.odoo_base_url or "",
+                    base_url=settings.odoo_19_base_url or "",
                     secrets=dict(settings.odoo_tenant_hmac_secrets),
                     default_secret=settings.odoo_default_hmac_secret or None,
                 ).dispatch

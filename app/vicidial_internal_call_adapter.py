@@ -29,7 +29,7 @@ from .calling_contract import (
     OriginateRequest,
     load_grant,
 )
-from .config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 

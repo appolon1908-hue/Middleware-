@@ -480,7 +480,31 @@ operations:
 - domain: health
   method: GET
   path: /health
-  canonical_operation_id: health_health_get
+  canonical_operation_id: liveness_health_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: health
+  method: GET
+  path: /health/dependencies
+  canonical_operation_id: dependencies_health_dependencies_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: health
+  method: GET
+  path: /health/live
+  canonical_operation_id: liveness_health_live_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: health
+  method: GET
+  path: /health/ready
+  canonical_operation_id: readiness_health_ready_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: healthz
+  method: GET
+  path: /healthz
+  canonical_operation_id: liveness_healthz_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: metrics
@@ -846,13 +870,19 @@ operations:
 - domain: readiness
   method: GET
   path: /readiness
-  canonical_operation_id: ready_readiness_get
+  canonical_operation_id: readiness_readiness_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: ready
   method: GET
   path: /ready
-  canonical_operation_id: ready_ready_get
+  canonical_operation_id: readiness_ready_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: readyz
+  method: GET
+  path: /readyz
+  canonical_operation_id: readiness_readyz_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: ai
@@ -1101,36 +1131,6 @@ operations:
   canonical_operation_id: submit_survey_response_v1_intake_surveys_responses_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
-- domain: integrations
-  method: POST
-  path: /v1/integrations/n8n/commands
-  canonical_operation_id: submit_n8n_command_v1_integrations_n8n_commands_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
-- domain: integrations
-  method: GET
-  path: /v1/integrations/n8n/operations
-  canonical_operation_id: n8n_operations_v1_integrations_n8n_operations_get
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
-- domain: integrations
-  method: GET
-  path: /v1/integrations/n8n/operations/{command_id}
-  canonical_operation_id: get_n8n_operation_v1_integrations_n8n_operations__command_id__get
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
-- domain: integrations
-  method: POST
-  path: /v1/integrations/n8n/operations/{operation_id}/cancel
-  canonical_operation_id: n8n_cancel_v1_integrations_n8n_operations__operation_id__cancel_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
-- domain: integrations
-  method: POST
-  path: /v1/integrations/n8n/operations/{operation_id}/reconcile
-  canonical_operation_id: n8n_reconcile_v1_integrations_n8n_operations__operation_id__reconcile_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
 - domain: marketing
   method: POST
   path: /v1/marketing/commands

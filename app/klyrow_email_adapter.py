@@ -16,7 +16,7 @@ import httpx
 from pydantic import TypeAdapter, ValidationError
 from pydantic.networks import EmailStr
 
-from .config import ConfigurationError
+from app.core.config import ConfigurationError
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 EMAIL_ADDRESS = TypeAdapter(EmailStr)

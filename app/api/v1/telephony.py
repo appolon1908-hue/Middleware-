@@ -472,12 +472,20 @@ def _load_call_policy() -> Policy:
     return Policy.from_file(Path(settings.webrtc_production_policy_path))
 
 
-@router.post("/calls/originate", status_code=200)
 async def originate_call(
     payload: OriginateCallRequest,
     session: AsyncSession = Depends(get_session),
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
 ):
+    """Agent-UI originate admission on the ORM lifecycle ledger.
+
+    Not routed: ``POST /v1/telephony/calls/originate`` is owned by the
+    documented Odoo calling contract (``app.telephony_api``, service-JWT
+    ``telephony.calls.originate``), which the single application factory
+    mounts. Registering this handler on the same operation would shadow one
+    of the two silently. The handler stays callable for the lifecycle tests
+    and for a future explicitly routed agent-UI surface.
+    """
     correlation_id = x_correlation_id or str(uuid4())
 
     # Idempotent replay short-circuits everything else -- the caller

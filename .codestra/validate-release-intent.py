@@ -58,7 +58,7 @@ CANDIDATE_SAFETY_KEYS = (SAFETY_KEYS - {"external_effects_default"}) | {
 CATALOG_REPOSITORIES = {
     "appolon1908-hue/Infustruction-repo",
     "appolon1908-hue/Keycloak",
-    "appolon1908-hue/Middleware-",
+    "ingtrader21-spec/Middleware-",
     "appolon1908-hue/codestra",
     "appolon1908-hue/beyvra-backend",
     "appolon1908-hue/backend2",
@@ -71,7 +71,7 @@ CATALOG_REPOSITORIES = {
 }
 PR_ONLY_REQUIRED_CHECKS = {
     "appolon1908-hue/Keycloak": frozenset({"bootstrap"}),
-    "appolon1908-hue/Middleware-": frozenset(
+    "ingtrader21-spec/Middleware-": frozenset(
         {
             "Validate middleware merge result",
             "Validate middleware source head",
@@ -91,7 +91,7 @@ EXPECTED_CHECK_WORKFLOWS = {
         "validate-source": ".github/workflows/validate.yml",
         "validate-merge-result": ".github/workflows/validate.yml",
     },
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         "orchestrator-contract": ".github/workflows/production-orchestrator-contract.yml",
         "validate": ".github/workflows/middleware-ci.yml",
         "connector-runtime-build": ".github/workflows/middleware-ci.yml",
@@ -169,7 +169,7 @@ EXPECTED_CHECK_WORKFLOW_SHA256 = {
         ".github/workflows/production-orchestrator-contract.yml": ORCHESTRATOR_CONTRACT_WORKFLOW_SHA256,
         ".github/workflows/validate.yml": "34e8692d93f3a30949e1e3de0543d4db93c508ce026538f6b5a8442d1a800f1a",
     },
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         ".github/workflows/production-orchestrator-contract.yml": ORCHESTRATOR_CONTRACT_WORKFLOW_SHA256,
         ".github/workflows/middleware-ci.yml": "8cec813feb267b63f4f27807606237dbe518f2fb94379062e447a6636fea2f16",
     },
@@ -221,7 +221,7 @@ KEYCLOAK_PRODUCTION_VALIDATOR_SHA256 = (
     "83d2fce102104543b871530f11115f20"
 )
 MIDDLEWARE_PRODUCTION_VALIDATOR_SHA256 = (
-    "086760b165e43963672da51ba7e22ddc37b1a6680ed7571e15b954ac48789ba3"
+    "c42c2edcbf83370e009c0c02927f0d467ada5a698de6daee3fa0c418c4f2e08d"
 )
 BACKEND_PRODUCTION_VALIDATOR_SHA256 = (
     "6006bbc7850ce7666de926b6cad2585b"
@@ -264,7 +264,7 @@ EXPECTED_CHECK_WORKFLOW_EXECUTABLE_SHA256 = {
             ),
         },
     },
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         ".github/workflows/production-orchestrator-contract.yml": {
             ".codestra/validate-production-orchestrator-contract.py": MIDDLEWARE_PRODUCTION_VALIDATOR_SHA256,
         },
@@ -380,7 +380,7 @@ EXPECTED_REQUIRED_CHECK_SOURCE_CLOSURE_SHA256 = {
         "0a409c1c9cc8c6f43d2d83d5347b9433"
         "fcdd0d5c3832479b10deda8c6a6afca6"
     ),
-    "appolon1908-hue/Middleware-": (
+    "ingtrader21-spec/Middleware-": (
         "f9f17c3a6e29d29c0666647107322c39"
         "f59329644c8e1ae86179bb0696e69055"
     ),
@@ -2383,7 +2383,7 @@ def self_test() -> int:
         raise PolicyError("negative stale required-check contract regression passed")
     require(
         head_applicable_required_checks(
-            "appolon1908-hue/Middleware-",
+            "ingtrader21-spec/Middleware-",
             [
                 "Validate middleware merge result",
                 "Validate middleware source head",

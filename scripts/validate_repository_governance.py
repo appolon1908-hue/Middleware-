@@ -243,7 +243,7 @@ def validate_source_policy() -> dict[str, Any]:
     policy = load_json(POLICY_PATH)
     require(policy.get("schema_version") == "1.0", "unsupported governance schema")
     require(
-        policy.get("repository") == "appolon1908-hue/Middleware-",
+        policy.get("repository") == "ingtrader21-spec/Middleware-",
         "repository authority drift",
     )
 
@@ -439,7 +439,7 @@ def validate_live_ruleset(
     require(ruleset.get("target") == "branch", "live ruleset does not target branches")
     require(ruleset.get("source_type") == "Repository", "live ruleset is not repository-owned")
     require(
-        ruleset.get("source") == "appolon1908-hue/Middleware-",
+        ruleset.get("source") == "ingtrader21-spec/Middleware-",
         "live ruleset source drift",
     )
     require(
@@ -552,7 +552,7 @@ def validate_live_ruleset(
 def validate_live(policy: dict[str, Any]) -> None:
     token = os.environ.get("CODESTRA_REPOSITORY_ADMIN_TOKEN", "")
     require(bool(token), "CODESTRA_REPOSITORY_ADMIN_TOKEN is required for --live")
-    base = "https://api.github.com/repos/appolon1908-hue/Middleware-"
+    base = "https://api.github.com/repos/ingtrader21-spec/Middleware-"
     repo = require_mapping(api_get(base, token), "live repository response is invalid")
     merge = require_mapping(policy["merge_policy"], "merge policy is missing")
     for key, expected in merge.items():

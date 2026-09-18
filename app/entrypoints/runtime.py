@@ -291,7 +291,13 @@ def add_api_runtime(app: FastAPI, service: str) -> None:
     async def readiness() -> dict[str, str] | JSONResponse:
         if service == "middleware-integration-api":
             states = await integration_dependency_states()
-            ready = all(value == "online" for value in states.values())
+            domain_runtime_failed = bool(
+                getattr(app.state, "domain_runtime_startup_failed", False)
+            )
+            ready = (
+                all(value == "online" for value in states.values())
+                and not domain_runtime_failed
+            )
             return JSONResponse({
                 "status": "ready" if ready else "not-ready", "service": service,
                 "authorization": states["keycloak"], "database": states["postgres"],

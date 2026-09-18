@@ -1,5 +1,6 @@
 """Authenticated integration and control surface."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -32,18 +33,34 @@ from app.router_registry import mount_canonical_routers
 from app.runtime import build_runtime as build_domain_runtime
 
 SERVICE = "middleware-integration-api"
+logger = logging.getLogger("codestra.integration_api")
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-    """Own the canonical API runtime for exactly this deployed process."""
+    """Own the canonical API runtime while keeping dependency failures unready."""
 
-    runtime = await build_domain_runtime(DomainSettings.from_env())
-    application.state.runtime = runtime
+    # Configuration errors remain fatal. Only runtime dependency initialization
+    # is allowed to degrade into a live-but-not-ready process.
+    resolved = DomainSettings.from_env()
+    runtime = None
+    application.state.domain_runtime_startup_failed = False
+
+    try:
+        runtime = await build_domain_runtime(resolved)
+        application.state.runtime = runtime
+    except Exception:
+        application.state.runtime = None
+        application.state.domain_runtime_startup_failed = True
+        logger.warning(
+            "domain runtime unavailable during startup; readiness remains closed"
+        )
+
     try:
         yield
     finally:
-        await runtime.close()
+        if runtime is not None:
+            await runtime.close()
 
 
 routers = (

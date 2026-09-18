@@ -10,7 +10,7 @@ from jsonschema import Draft202012Validator
 from app.contracts import ROUTE_BY_PATH, WEBHOOK_ROUTES
 from app.main import create_app
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.runtime import Runtime, _asyncpg_dsn
 from app.runtime_safety import runtime_safety_readback
 from app.storage import MemoryInboxStore
 
@@ -501,3 +501,14 @@ def test_readiness_reports_named_failure_without_dependency_details(
     assert value["status"] == "not_ready"
     assert value["components"]["replay_guard"] == "not_ready"
     assert "redis" not in response.text.lower()
+
+
+def test_asyncpg_dsn_normalizes_sqlalchemy_asyncpg_scheme() -> None:
+    assert (
+        _asyncpg_dsn("postgresql+asyncpg://user:secret@db:5432/middleware")
+        == "postgresql://user:secret@db:5432/middleware"
+    )
+    assert (
+        _asyncpg_dsn("postgresql://user:secret@db:5432/middleware")
+        == "postgresql://user:secret@db:5432/middleware"
+    )

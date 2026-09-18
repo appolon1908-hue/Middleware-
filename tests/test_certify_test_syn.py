@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -26,8 +25,7 @@ TOKENS = {
 
 @pytest.fixture
 def safety(test_settings) -> dict:
-    staging = replace(
-        test_settings,
+    staging = test_settings.replace(
         app_env="staging",
         runtime_profile_id="codestra-middleware-staging-v1",
         source_sha=SOURCE_SHA,

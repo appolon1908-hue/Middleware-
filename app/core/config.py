@@ -21,7 +21,6 @@ from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 from pydantic import AliasChoices, Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, EnvSettingsSource, SettingsConfigDict
-from pydantic_settings.sources import parse_env_vars
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PROFILES_PATH = ROOT / "config" / "runtime-profiles.v1.json"
@@ -178,12 +177,29 @@ def _validation_summary(exc: ValidationError) -> str:
 
 
 class _MappingEnvSource(EnvSettingsSource):
+    """The environment source, redirected to an explicit mapping by ``from_env``.
+
+    The mapping is normalized the way pydantic-settings normalizes
+    ``os.environ`` (case folding, empty-value skipping, none-string parsing)
+    without importing its private helper, which moved between the 2.7 and
+    2.10 releases pinned in the two locked environments.
+    """
+
     def _load_env_vars(self) -> Mapping[str, str | None]:
         override = _ENV_OVERRIDE.get()
-        source = os.environ if override is None else override
-        return parse_env_vars(
-            source, self.case_sensitive, self.env_ignore_empty, self.env_parse_none_str
-        )
+        if override is None:
+            return super()._load_env_vars()
+        loaded: dict[str, str | None] = {}
+        for key, value in override.items():
+            if self.env_ignore_empty and value == "":
+                continue
+            name = key if self.case_sensitive else key.lower()
+            loaded[name] = (
+                None
+                if self.env_parse_none_str is not None and value == self.env_parse_none_str
+                else value
+            )
+        return loaded
 
 
 @dataclass(frozen=True)

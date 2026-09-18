@@ -532,3 +532,30 @@ def test_jwks_uri_is_pinned_to_canonical_issuer() -> None:
                 "KEYCLOAK_JWKS_URI": "http://attacker.invalid/jwks",
             }
         )
+
+
+def test_ci_readiness_identity_uses_canonical_jwks_url_alias() -> None:
+    settings = Settings.from_env(
+        {
+            "APP_ENV": "test",
+            "ALLOW_IN_MEMORY_STORAGE": "true",
+            "KEYCLOAK_ISSUER": "https://ci-identity.example.invalid/realm",
+            "KEYCLOAK_JWKS_URL": "http://127.0.0.1:8120/certs.json",
+        }
+    )
+    assert settings.issuer == "https://ci-identity.example.invalid/realm"
+    assert settings.jwks_uri == "http://127.0.0.1:8120/certs.json"
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_synthetic_ci_identity_is_forbidden_in_deployable_environments(
+    environment: str,
+) -> None:
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(
+            {
+                "APP_ENV": environment,
+                "KEYCLOAK_ISSUER": "https://ci-identity.example.invalid/realm",
+                "KEYCLOAK_JWKS_URL": "http://127.0.0.1:8120/certs.json",
+            }
+        )

@@ -194,8 +194,13 @@ def test_repaired_candidate_requires_independent_protected_trust_transition(monk
         with pytest.raises(launcher.TrustError, match="not an approved generation"):
             launcher.validate_candidate(ROOT)
     # Simulate only the final approved policy to verify the repaired pair;
-    # this does not change the production launcher's approval table.
-    monkeypatch.setattr(launcher, "APPROVED_VALIDATOR_TRANSITIONS", {
-        repaired: {repaired: ("security-fingerprint", launcher.SUCCESSOR_RELEASE_SECURITY_FINGERPRINT)},
-    })
+    # this does not change the production launcher's approval table. Once
+    # protected main lists this generation, verify it under its own
+    # steady-state policy; until then only the successor policy can apply.
+    steady_state = launcher.APPROVED_VALIDATOR_TRANSITIONS.get(repaired, {}).get(repaired)
+    policy = steady_state or (
+        "security-fingerprint",
+        launcher.SUCCESSOR_RELEASE_SECURITY_FINGERPRINT,
+    )
+    monkeypatch.setattr(launcher, "APPROVED_VALIDATOR_TRANSITIONS", {repaired: {repaired: policy}})
     assert launcher.validate_candidate(ROOT) == ORCHESTRATOR

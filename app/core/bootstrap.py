@@ -49,6 +49,7 @@ SERVICE_CANONICAL_API = "middleware-api"
 
 CANONICAL_FLAGS = (
     "send_events",
+    "broad_event_send_enabled",
     "broad_event_delivery_enabled",
     "production_n8n_enabled",
     "n8n_production_workflows_enabled",

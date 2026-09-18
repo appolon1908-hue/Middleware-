@@ -304,6 +304,7 @@ def dependencies_payload(
         "odoo_delivery_enabled": settings.odoo_delivery_enabled,
         "n8n_delivery_enabled": settings.n8n_delivery_enabled,
         "send_events": settings.send_events,
+        "broad_event_send_enabled": settings.broad_event_send_enabled,
         "broad_event_delivery_enabled": settings.broad_event_delivery_enabled,
         "production_n8n_enabled": settings.production_n8n_enabled,
         "n8n_production_workflows_enabled": settings.n8n_production_workflows_enabled,

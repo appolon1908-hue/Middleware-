@@ -529,7 +529,12 @@ class Settings(BaseSettings):
     controller_private_enabled: bool = False
     server_a_agent_enabled: bool = False
     server_a_agent_bind: str = "10.40.0.1:9443"
+    # SEND_EVENTS gates the NATS JetStream outbox transport (with
+    # OUTBOX_DISPATCH_ENABLED and NATS_DISPATCH_MODE). The n8n broad-event
+    # pipeline has its own first switch below; the two lineages used to share
+    # the SEND_EVENTS name for both, which made either unusable.
     send_events: bool = False
+    broad_event_send_enabled: bool = False
     broad_event_delivery_enabled: bool = False
     production_n8n_enabled: bool = False
     enable_external_delivery: bool = False
@@ -1167,12 +1172,22 @@ class Settings(BaseSettings):
         }:
             raise ConfigurationError("ENVIRONMENT must match APP_ENV in staging/production")
         synthetic = self.synthetic_ci_identity
-        if not synthetic and self.issuer != self.expected_issuer:
-            raise ConfigurationError(
-                f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
-            )
-        if not synthetic and self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
-            raise ConfigurationError("KEYCLOAK_JWKS_URL must match the canonical issuer")
+        if self.app_env in {"staging", "production"}:
+            # Deployed environments trust exactly one authority each.
+            if self.issuer != self.expected_issuer:
+                raise ConfigurationError(
+                    f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
+                )
+            if self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
+                raise ConfigurationError("KEYCLOAK_JWKS_URL must match the canonical issuer")
+        elif not synthetic:
+            # Development/test may point at any TLS authority (a developer's or
+            # a disposable CI Keycloak) but never at a plaintext one; the only
+            # http:// exception is the approved synthetic CI JWKS fixture.
+            if not self.issuer.startswith("https://"):
+                raise ConfigurationError("KEYCLOAK_ISSUER must be an https:// authority")
+            if not self.jwks_uri.startswith("https://"):
+                raise ConfigurationError("KEYCLOAK_JWKS_URL must be an https:// authority")
         if self.audience != CANONICAL_AUDIENCE:
             raise ConfigurationError("KEYCLOAK_AUDIENCE must be middleware-api")
         if self.telnexa_event_ingress_enabled:
@@ -1607,7 +1622,7 @@ class Settings(BaseSettings):
                 "social worker concurrency must remain 1 in controlled staging"
             )
         broad_event_switches = (
-            self.send_events,
+            self.broad_event_send_enabled,
             self.broad_event_delivery_enabled,
             self.production_n8n_enabled,
             self.n8n_production_workflows_enabled,
@@ -1755,7 +1770,7 @@ class Settings(BaseSettings):
         """Require every internal broad-event gate; external delivery is separate."""
         return all(
             (
-                self.send_events,
+                self.broad_event_send_enabled,
                 self.broad_event_delivery_enabled,
                 self.production_n8n_enabled,
                 self.n8n_production_workflows_enabled,

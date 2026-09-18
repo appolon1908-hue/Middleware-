@@ -127,7 +127,7 @@ EXPECTED_REGISTRY_ROUTERS = {
     "quarantine_router": ("api.v1.quarantine", "router"),
     "queues_router": ("api.v1.queues", "router"),
     "recordings_router": ("api.v1.recordings", "router"),
-    "recording_identity_router": ("api.v1.recordings", "service_identity_router"),
+    "recording_identity_router": ("api.v1.service_identity", "router"),
     "registry_router": ("api.v1.registry", "router"),
     "reports_router": ("api.v1.reports", "router"),
     "sales_router": ("api.v1.sales", "router"),

@@ -4,7 +4,10 @@ Findings raised during the implementation review (all resolved unless marked res
 
 | # | Finding | Severity | Resolution |
 | --- | --- | --- | --- |
-| 1 | `SEND_EVENTS` semantics differed between lineages; a naive merge would have either weakened the broad-event conjunction or silently made JetStream dispatch impossible without saying so | high | union of both rules kept; documented in `docs/RUNTIME-INTAKE-V1.md` and the migration doc; test asserts the exact refusal messages |
+| 1 | `SEND_EVENTS` semantics differed between lineages (JetStream outbox gate vs first switch of the n8n broad-event conjunction). The first attempt (a union of both rules) was rejected by CI round 2: the required "Disposable NATS JetStream integration" job enables `SEND_EVENTS` for the isolated transport and was refused with "broad-event activation requires every canonical gate" | high | the two pipelines get two switches: `SEND_EVENTS` (JetStream, unchanged Appolon rules) and the new `BROAD_EVENT_SEND_ENABLED` (broad-event conjunction, unchanged core rules); neither implies the other; documented in `docs/RUNTIME-INTAKE-V1.md` and the migration doc |
+| 1b | Every process now ran `validate_domain()` at start, whose former Appolon rule required the production issuer even in development/test; the integrated-monitoring CI job and every test fixture use disposable `https://identity.example.invalid` issuers and failed at import (`KEYCLOAK_ISSUER must match the development identity authority`) | high | staging/production keep exact authority matching; development/test accept any explicit `https://` authority or the synthetic pair, plaintext refused |
+| 1c | The `lead-automation-v1` workflow (triggered because `app/api/v1/lead_automation.py` changed) forbids touching files named `recording|asterisk|vicidial` and any whitespace error | medium | `app/api/v1/recordings.py` and `app/vicidial_internal_call_adapter.py` restored to base; the service-identity route lives in the new `app/api/v1/service_identity.py`; the adapter's shim import is an explicit, documented governance exemption for one release; trailing whitespace removed |
+| 1d | `tests/test_campaign_design.py::test_preview_and_approval_api_persist_verified_tenant` (PostgreSQL-backed, skipped locally) faked `KeycloakValidator` with an implicit identity and got 403 from the new fail-closed rule | medium | the campaign-design tests configure an explicit staging identity; a new test proves the implicit identity is refused before any validator is built |
 | 2 | First factory draft returned 503 for every `/api/*` route when the container was absent, breaking ORM routes that never needed it | high | removed; only control-plane routes depend on the container (via `app.core.providers`, 503 envelope) |
 | 3 | First factory draft resolved settings with a fresh `Settings.from_env()` instead of the process-wide instance, so tests (and any operator tooling) mutating `app.core.config.settings` were ignored | high | factory binds to the process-wide instance after `validate_configuration()` |
 | 4 | Two live implementations of `POST /v1/telephony/calls/originate` (Appolon calling contract vs ORM agent-UI) would have been resolved by registration order | high | documented contract wins; ORM handler unrouted; decision recorded (needs product confirmation, see residual) |
@@ -31,8 +34,9 @@ Findings raised during the implementation review (all resolved unless marked res
 3. **Integration API surface**: `/metrics` is now authenticated; correlation ids are echoed when well-formed.
    If an external Prometheus scrape of the integration API exists outside this repository it needs the
    `monitoring-readonly` bearer (the compose healthchecks use `/healthz` and `/readyz`).
-4. **JetStream dispatch** cannot be enabled by configuration until `N8N_PRODUCTION_WORKFLOWS_ENABLED` is
-   promoted (or the broad-event conjunction is re-scoped) by an explicit approval.
+4. **n8n broad-event pipeline** cannot be enabled by configuration until `N8N_PRODUCTION_WORKFLOWS_ENABLED` is
+   promoted (or the conjunction is re-scoped) by an explicit approval; JetStream dispatch keeps its own,
+   unchanged activation rules.
 5. **Per-process validation** now includes `validate_domain()` for the narrow entrypoints; any deployment
    whose environment file violates the domain policy (e.g. a non-canonical audience) will refuse to start
    instead of running degraded — intended, but it must be checked in staging before production promotion.

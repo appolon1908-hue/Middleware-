@@ -2,7 +2,7 @@
 
 | Item | State after Mission 2 |
 | --- | --- |
-| `app/config.py` | deprecated shim: re-exports `Settings`, `ConfigurationError`, `EXTERNAL_DELIVERY_EFFECTS`, `RUNTIME_PROFILES_PATH`, `SUPPORTED_EXTERNAL_EFFECTS`, `UMBRELLA_CONTROL_NAMES`, `WEBHOOK_PRODUCERS`; `DeprecationWarning`; zero importers |
+| `app/config.py` | deprecated shim: re-exports `Settings`, `ConfigurationError`, `EXTERNAL_DELIVERY_EFFECTS`, `RUNTIME_PROFILES_PATH`, `SUPPORTED_EXTERNAL_EFFECTS`, `UMBRELLA_CONTROL_NAMES`, `WEBHOOK_PRODUCERS`; `DeprecationWarning`; one documented importer left (`app/vicidial_internal_call_adapter.py`, blocked by the lead-automation workflow gate on vicidial-named files; governance allowlist `LEGACY_SHIM_IMPORTERS_PENDING`) |
 | `app/runtime.py` | deprecated shim (`Runtime`, `build_runtime`, `ReadinessReport`, `_asyncpg_dsn`); zero importers |
 | `app/appolon_factory.py` | deprecated shim (`create_app`); inline routes moved to `app/appolon_routes.py`; zero importers |
 | `app/main.py` | 40 lines: `app = create_app(profile=AppProfile.MONOLITH)`, re-exports; the 320-line inline guard/health/version/capabilities module is gone |

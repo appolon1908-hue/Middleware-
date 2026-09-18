@@ -152,6 +152,7 @@ def test_startup_reports_flags_without_secrets() -> None:
     report = validate_startup("middleware-policy-engine", settings=settings, environ={})
     assert report.canonical_flags == {
         "send_events": False,
+        "broad_event_send_enabled": False,
         "broad_event_delivery_enabled": False,
         "production_n8n_enabled": False,
         "n8n_production_workflows_enabled": False,

@@ -232,6 +232,14 @@ jobs:
             python tests/integration/campaign_identity_concurrency.py \
             | tee campaign-identity-concurrency.txt
 
+          # Re-establish and certify every runtime migration authority after
+          # tests that intentionally create/drop isolated runtime tables.
+          python -m scripts.migrate_runtime \
+            | tee runtime-migration.txt
+
+          python -m scripts.migrate_runtime --verify-only \
+            | tee runtime-migration-verify.txt
+
       - name: Verify rollback by isolated restoration
         shell: bash
         env:
@@ -407,6 +415,8 @@ jobs:
             pytest-full.txt \
             campaign-extension-concurrency.txt \
             campaign-identity-concurrency.txt \
+            runtime-migration.txt \
+            runtime-migration-verify.txt \
             middleware-rehearsal.dump \
             restoration.sha256 \
             application-startup.txt \
@@ -441,6 +451,8 @@ jobs:
             pytest-full.txt
             campaign-extension-concurrency.txt
             campaign-identity-concurrency.txt
+            runtime-migration.txt
+            runtime-migration-verify.txt
             middleware-rehearsal.dump
             restoration.sha256
             application-startup.txt

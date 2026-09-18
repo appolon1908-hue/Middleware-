@@ -217,7 +217,7 @@ def test_canonical_broad_event_flags_default_closed_and_require_conjunction(
     monkeypatch,
 ):
     canonical = (
-        "send_events",
+        "broad_event_send_enabled",
         "broad_event_delivery_enabled",
         "production_n8n_enabled",
         "n8n_production_workflows_enabled",
@@ -236,7 +236,7 @@ def test_broad_event_activation_fails_closed_without_exact_bounded_scope(
     monkeypatch,
 ):
     canonical = (
-        "send_events",
+        "broad_event_send_enabled",
         "broad_event_delivery_enabled",
         "production_n8n_enabled",
         "n8n_production_workflows_enabled",
@@ -254,7 +254,7 @@ def test_broad_event_activation_fails_closed_without_exact_bounded_scope(
 
 def test_broad_event_activation_accepts_only_bounded_internal_scope(monkeypatch):
     canonical = (
-        "send_events",
+        "broad_event_send_enabled",
         "broad_event_delivery_enabled",
         "production_n8n_enabled",
         "n8n_production_workflows_enabled",

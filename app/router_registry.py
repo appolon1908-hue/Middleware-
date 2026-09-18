@@ -81,10 +81,10 @@ from app.api.v1.publisher import router as publisher_router
 from app.api.v1.quarantine import router as quarantine_router
 from app.api.v1.queues import router as queues_router
 from app.api.v1.recordings import router as recordings_router
-from app.api.v1.recordings import service_identity_router as recording_identity_router
 from app.api.v1.registry import router as registry_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.sales import router as sales_router
+from app.api.v1.service_identity import router as recording_identity_router
 from app.api.v1.session_context import router as session_context_router
 from app.api.v1.social import router as social_router
 from app.api.v1.telephony import router as telephony_router

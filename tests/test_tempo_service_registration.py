@@ -41,4 +41,3 @@ def test_tempo_registration_is_in_monitoring_registry() -> None:
     registry = _load(REGISTRY_PATH)
 
     assert registry["service_ids"] == [registration["service_id"]]
-

@@ -153,6 +153,17 @@ def _insert_routes(environment, base_url, credential, audience, tls_profile, ver
 
 
 def upgrade() -> None:
+    # This revision id is 34 characters; Alembic creates
+    # public.alembic_version.version_num as VARCHAR(32) and stamps the id after
+    # upgrade() returns, in the same transaction. Widen the column first so the
+    # stamp fits. Idempotent, never shrunk on downgrade, touches no business
+    # table. Every earlier revision id fits either width.
+    op.execute(
+        """
+        ALTER TABLE public.alembic_version
+        ALTER COLUMN version_num TYPE VARCHAR(64)
+        """
+    )
     # Retire, never rewrite: the 0054 campaign-actions route is kill-switched.
     op.execute(
         f"""

@@ -11,7 +11,7 @@ only, exact issuer, exact audience, bounded lifetime).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 from fastapi import Request
@@ -23,6 +23,25 @@ from app.security import AuthorizationError
 MAX_TENANTS = 64
 MAX_ROLES = 64
 MAX_SCOPES = 128
+# The synthetic TEST_SYN family is a kernel construct (policy registered at
+# runtime outside production, no connector manifest). Its caller authority is
+# granted here to the platform's own workload identity, never through the
+# static caller registry and never in production.
+SYNTHETIC_CALLERS = frozenset({"middleware-api"})
+SYNTHETIC_ENVIRONMENTS = frozenset({"development", "test", "staging", "preproduction"})
+SYNTHETIC_PREFIX = "test.syn."
+SYNTHETIC_TARGET = "test-syn"
+
+
+def with_synthetic_authority(caller: ControlPlaneCaller, environment: str) -> ControlPlaneCaller:
+    if environment not in SYNTHETIC_ENVIRONMENTS or caller.client_id not in SYNTHETIC_CALLERS:
+        return caller
+    return replace(
+        caller,
+        allowed_command_prefixes=tuple(dict.fromkeys((*caller.allowed_command_prefixes, SYNTHETIC_PREFIX))),
+        allowed_targets=frozenset(caller.allowed_targets | {SYNTHETIC_TARGET}),
+        connector_commands_allowed=True,
+    )
 
 
 @dataclass(frozen=True)
@@ -83,7 +102,9 @@ def tenants_from_claims(claims: Mapping[str, Any]) -> tuple[str, ...]:
     return unique
 
 
-def principal_from_claims(claims: Mapping[str, Any], caller: ControlPlaneCaller) -> KernelPrincipal:
+def principal_from_claims(claims: Mapping[str, Any], caller: ControlPlaneCaller, *, environment: str | None = None) -> KernelPrincipal:
+    if environment is not None:
+        caller = with_synthetic_authority(caller, environment)
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject.strip():
         raise AuthorizationError("token subject is required")
@@ -111,4 +132,4 @@ async def authenticate(request: Request, *, required_scope: str) -> KernelPrinci
         expected_client_id=caller.client_id,
         required_scope=required_scope,
     )
-    return principal_from_claims(claims, caller)
+    return principal_from_claims(claims, caller, environment=request.app.state.runtime.settings.app_env)

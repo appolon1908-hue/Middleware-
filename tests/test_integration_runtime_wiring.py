@@ -79,7 +79,7 @@ def test_exact_odoo_event_dispatches_to_durable_webhook_intake(monkeypatch) -> N
     ]
     assert len(accepted) == 1
     route, path, raw_body, headers = accepted[0]
-    assert route.path == "/api/v1/odoo/events"
+    assert getattr(route, "path", None) == "/api/v1/odoo/events"
     assert path == "/api/v1/odoo/events"
     assert raw_body == b'{"event_id":"TEST_SYN_EVENT_001"}'
     assert headers["authorization"] == "Bearer synthetic"
@@ -90,7 +90,9 @@ def test_exact_odoo_event_dispatches_to_durable_webhook_intake(monkeypatch) -> N
 async def test_integration_entrypoint_owns_canonical_runtime_lifecycle(
     monkeypatch,
 ) -> None:
-    configured = object()
+    """The lifespan builds the container from the application's settings,
+    publishes it as ``app.state.runtime`` and closes it on shutdown."""
+    from app.core import health
 
     class Runtime:
         closed = False
@@ -99,29 +101,45 @@ async def test_integration_entrypoint_owns_canonical_runtime_lifecycle(
             self.closed = True
 
     runtime = Runtime()
-
-    def fake_settings_from_env():
-        return configured
+    state = integration_api.app.state.runtime_state
+    configured = state.settings
 
     async def fake_build_runtime(settings):
         assert settings is configured
         return runtime
 
-    monkeypatch.setattr(
-        integration_api.DomainSettings,
-        "from_env",
-        fake_settings_from_env,
-    )
-    monkeypatch.setattr(
-        integration_api,
-        "build_domain_runtime",
-        fake_build_runtime,
-    )
+    monkeypatch.setattr(health, "build_runtime_container", fake_build_runtime)
+    monkeypatch.setattr(state, "runtime", None)
+    monkeypatch.setattr(state, "owns_runtime", False)
+    monkeypatch.setattr(state, "startup_failed", False)
 
-    async with integration_api.app.router.lifespan_context(
-        integration_api.app
-    ):
+    async with integration_api.app.router.lifespan_context(integration_api.app):
         assert integration_api.app.state.runtime is runtime
+        assert state.owns_runtime is True
         assert runtime.closed is False
 
     assert runtime.closed is True
+    assert integration_api.app.state.runtime is None
+
+
+@pytest.mark.asyncio
+async def test_integration_entrypoint_stays_live_but_unready_when_startup_fails(
+    monkeypatch,
+) -> None:
+    from app.core import health
+    from app.core.runtime import RuntimeStartupError
+
+    state = integration_api.app.state.runtime_state
+
+    async def failing_build(settings):
+        raise RuntimeStartupError("runtime dependency unavailable: ConnectionRefusedError")
+
+    monkeypatch.setattr(health, "build_runtime_container", failing_build)
+    monkeypatch.setattr(state, "runtime", None)
+    monkeypatch.setattr(state, "owns_runtime", False)
+    monkeypatch.setattr(state, "startup_failed", False)
+
+    async with integration_api.app.router.lifespan_context(integration_api.app):
+        assert integration_api.app.state.runtime is None
+        assert state.startup_failed is True
+        assert state.startup_error == "RuntimeStartupError"

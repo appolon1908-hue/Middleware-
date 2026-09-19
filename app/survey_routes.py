@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -36,7 +36,7 @@ async def _read_limited_body(request: Request, maximum: int) -> bytes:
     return bytes(body)
 
 
-def register_survey_routes(app: FastAPI) -> None:
+def register_survey_routes(app: FastAPI | APIRouter) -> None:
     @app.post("/v1/intake/surveys/responses")
     async def submit_survey_response(request: Request) -> JSONResponse:
         from .security import RequestValidationError, authorize_tenant

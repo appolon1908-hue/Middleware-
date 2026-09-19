@@ -50,10 +50,16 @@ def _unique_callback_headers(request: Request) -> dict[str, str]:
     return {name: request.headers.get(name, "") for name in CALLBACK_AUTH_HEADERS}
 
 
-@router.post("/api/v1/events/odoo", status_code=202)
 def receive_odoo_event(
     body: dict, idempotency_key: str = Header("", alias="Idempotency-Key")
 ):
+    """Unauthenticated Odoo event receiver; deliberately not routed.
+
+    Its former ``POST /api/v1/events/odoo`` registration was shadowed by the
+    control-plane alias on every application and never served. It stays
+    importable for callers of the service layer; the HTTP path is owned by the
+    signed ingress routes.
+    """
     if body.get("idempotency_key") != idempotency_key:
         raise HTTPException(409, "idempotency binding mismatch")
     try:

@@ -159,9 +159,43 @@ def test_api_disabled_without_database_access(monkeypatch):
     asyncio.run(run())
 
 
+def _explicit_identity(monkeypatch) -> None:
+    """The route only binds a validator to an explicitly configured identity."""
+    monkeypatch.setattr(api.settings, "keycloak_issuer", "https://auth-staging.codestra.co/realms/codestra")
+    monkeypatch.setattr(api.settings, "keycloak_audience", "middleware-api")
+    monkeypatch.setattr(
+        api.settings,
+        "keycloak_jwks_url",
+        "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
+    )
+
+
+def test_scope_auth_refuses_an_implicit_identity(monkeypatch):
+    monkeypatch.setattr(api.settings, "campaign_design_enabled", True)
+    monkeypatch.setattr(api.settings, "campaign_design_environments", "staging")
+    monkeypatch.setattr(api.settings, "keycloak_issuer", "")
+    monkeypatch.setattr(api.settings, "keycloak_jwks_url", "")
+
+    class NeverCalled:
+        def __init__(self, **kwargs):
+            raise AssertionError("validator must not be built for an implicit identity")
+
+    monkeypatch.setattr(api, "KeycloakValidator", NeverCalled)
+    with pytest.raises(api.HTTPException) as exc:
+        api.authorize(
+            "Bearer synthetic",
+            unit="TEST",
+            environment="staging",
+            scope="campaign.design.preview",
+            tenant_id="campaign-design-test",
+        )
+    assert exc.value.status_code == 403
+
+
 def test_scope_auth_requires_verified_unit_and_subject(monkeypatch):
     monkeypatch.setattr(api.settings, "campaign_design_enabled", True)
     monkeypatch.setattr(api.settings, "campaign_design_environments", "staging")
+    _explicit_identity(monkeypatch)
 
     class Validator:
         def __init__(self, **kwargs):
@@ -464,7 +498,7 @@ def test_real_application_route_requires_own_authorization(
 ):
     from app.main import app as canonical, create_app
     from app.entrypoints.integration_api import app as integration
-    from app.config import Settings
+    from app.core.config import Settings
     from app.core.jwt_auth import JWTAuthError
 
     compatibility = create_app(
@@ -479,6 +513,7 @@ def test_real_application_route_requires_own_authorization(
     }[entrypoint]
     monkeypatch.setattr(api.settings, "campaign_design_enabled", enabled)
     monkeypatch.setattr(api.settings, "campaign_design_environments", "test,staging")
+    _explicit_identity(monkeypatch)
 
     class DeniedValidator:
         def __init__(self, **kwargs):
@@ -533,6 +568,7 @@ def test_postgres_tenant_binding_is_immutable(database):
 def test_verified_business_unit_does_not_replace_tenant_authority(monkeypatch):
     monkeypatch.setattr(api.settings, "campaign_design_enabled", True)
     monkeypatch.setattr(api.settings, "campaign_design_environments", "staging")
+    _explicit_identity(monkeypatch)
 
     class Validator:
         def __init__(self, **kwargs):
@@ -560,9 +596,11 @@ def test_verified_business_unit_does_not_replace_tenant_authority(monkeypatch):
 def test_preview_and_approval_api_persist_verified_tenant(database, monkeypatch):
     monkeypatch.setattr(api.settings, "campaign_design_enabled", True)
     monkeypatch.setattr(api.settings, "campaign_design_environments", "staging,test")
+    _explicit_identity(monkeypatch)
 
     class Validator:
         def __init__(self, **kwargs):
+            assert kwargs["issuer"] == "https://auth-staging.codestra.co/realms/codestra"
             assert kwargs["required_scopes"] in (
                 frozenset({"campaign.design.preview"}),
                 frozenset({"campaign.design.approve"}),

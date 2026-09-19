@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 
 BEARER = HTTPBearer(auto_error=False)
 PLATFORM_ROLES = frozenset({"platform_admin", "platform_reviewer", "platform_operator"})
@@ -33,16 +33,10 @@ def require_platform_scope(
     ) -> PlatformPrincipal:
         if credential is None or credential.scheme.lower() != "bearer":
             raise HTTPException(401, "verified platform bearer required", headers={"WWW-Authenticate": "Bearer"})
-        parties = frozenset(item.strip() for item in settings.keycloak_authorized_parties.split(",") if item.strip())
-        if not all((settings.keycloak_issuer, settings.keycloak_audience, settings.keycloak_jwks_url, parties)):
+        identity = settings.identity
+        if not identity.explicit or not identity.authorized_parties:
             raise HTTPException(503, "platform identity authority is not configured")
-        validator = KeycloakValidator(
-            issuer=settings.keycloak_issuer,
-            audience=settings.keycloak_audience,
-            jwks_url=settings.keycloak_jwks_url,
-            authorized_parties=parties,
-            required_scopes=frozenset({scope}),
-        )
+        validator = KeycloakValidator(**identity_validator_kwargs(identity, required_scopes=frozenset({scope})))
         try:
             claims = validator.validate(credential.credentials)
             subject = claims.get("sub")

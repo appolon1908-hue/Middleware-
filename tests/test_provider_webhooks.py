@@ -55,18 +55,26 @@ class Session:
         self.rollbacks += 1
 
 
-NOW = str(int(time.time()))
-
-
-def signature(request, secret, ts=NOW):
-    # Provider contract: HMAC-SHA256 over "{timestamp}." + raw body.
-    return hmac.new(
-        secret.encode(), f"{ts}.".encode() + request.raw, hashlib.sha256
-    ).hexdigest()
+_STAMP: dict[str, object] = {"value": None, "at": 0.0}
 
 
 def timestamp():
-    return NOW
+    # Refreshed at most once a minute: an import-time timestamp goes stale
+    # (beyond the 300-second signature window) in a long full-suite run, while
+    # the signature and the header of one request must agree.
+    now = time.time()
+    if _STAMP["value"] is None or now - float(_STAMP["at"]) > 60:
+        _STAMP["value"] = str(int(now))
+        _STAMP["at"] = now
+    return str(_STAMP["value"])
+
+
+def signature(request, secret, ts=None):
+    # Provider contract: HMAC-SHA256 over "{timestamp}." + raw body.
+    ts = timestamp() if ts is None else ts
+    return hmac.new(
+        secret.encode(), f"{ts}.".encode() + request.raw, hashlib.sha256
+    ).hexdigest()
 
 
 @pytest.mark.asyncio

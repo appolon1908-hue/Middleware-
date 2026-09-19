@@ -12,6 +12,7 @@ drifts.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ import pytest
 from app.automation_v2 import v2_router
 from app.entrypoints.integration_api import app as integration_app
 from app.main import app as monolith_app
+from app.domain_api import legacy_n8n_router as domain_alias_router
 from app.n8n_control_plane import router as n8n_alias_router
 from app.router_registry import (
     CANONICAL_ROUTERS,
@@ -43,6 +45,18 @@ DEPRECATED_ALIASES = {
     ("POST", "/v1/integrations/n8n/commands"),
     ("GET", "/v1/integrations/n8n/operations/{command_id}"),
 }
+# The canonical core moved the remaining ``/v1/integrations/n8n/*`` reads out
+# of the domain API into the same deprecated group; the edge denies all of it.
+DOMAIN_DEPRECATED_ALIASES = {
+    ("GET", "/v1/integrations/n8n/operations"),
+    ("POST", "/v1/integrations/n8n/operations/{operation_id}/cancel"),
+    ("POST", "/v1/integrations/n8n/operations/{operation_id}/reconcile"),
+}
+
+
+def template_shape(path: str) -> str:
+    """Edge matching ignores the template parameter *name*, only its position."""
+    return re.sub(r"\{[^}]+\}", "{}", path)
 
 
 def iter_routes(routes, prefix=""):
@@ -72,8 +86,23 @@ def route_table(application) -> list[tuple[str, str, object]]:
 def test_v2_automation_router_is_canonical_and_the_aliases_are_monolith_only():
     assert v2_router in CANONICAL_ROUTERS
     assert CANONICAL_ROUTERS.count(v2_router) == 1
-    assert LEGACY_MONOLITH_ONLY_ROUTERS == (n8n_alias_router,)
+    assert LEGACY_MONOLITH_ONLY_ROUTERS == (n8n_alias_router, domain_alias_router)
     assert n8n_alias_router not in CANONICAL_ROUTERS
+    assert domain_alias_router not in CANONICAL_ROUTERS
+    # Whatever the group holds, the edge denies every route it serves: the
+    # group cannot grow a publicly reachable path.
+    denied = {
+        (row["method"], template_shape(row["path"]))
+        for row in EDGE_CONTRACT["routes"]
+        if row["classification"] == "denied"
+    }
+    group_routes = {
+        (method, path)
+        for router in LEGACY_MONOLITH_ONLY_ROUTERS
+        for method, path, _endpoint in iter_routes(router.routes)
+    }
+    assert group_routes == DEPRECATED_ALIASES | DOMAIN_DEPRECATED_ALIASES
+    assert {(m, template_shape(p)) for m, p in group_routes} <= denied
 
 
 def test_v2_routes_are_not_nested_under_the_deprecated_alias_router():
@@ -240,6 +269,35 @@ def second_owner_of_v2(tree: Path) -> None:
     )
 
 
+# The exact factory block the mutations rewrite: aliases mounted only under
+# the monolith profile.
+MONOLITH_ONLY_MOUNT = (
+    "    if profile is AppProfile.MONOLITH:\n"
+    "        mount_monolith_routers(app)\n"
+    "        mount_legacy_monolith_routers(app)\n"
+)
+
+
+def mount_aliases_unconditionally(tree: Path) -> None:
+    """The factory mounts the edge-denied aliases for every profile."""
+    replace_once(
+        tree,
+        "app/application.py",
+        MONOLITH_ONLY_MOUNT,
+        "    if profile is AppProfile.MONOLITH:\n        mount_monolith_routers(app)\n    mount_legacy_monolith_routers(app)\n",
+    )
+
+
+def mount_aliases_on_the_control_plane_profile(tree: Path) -> None:
+    """The deployed control-plane canary would serve the retired aliases."""
+    replace_once(
+        tree,
+        "app/application.py",
+        MONOLITH_ONLY_MOUNT,
+        "    if profile is AppProfile.MONOLITH:\n        mount_monolith_routers(app)\n    if profile in {AppProfile.CONTROL_PLANE, AppProfile.MONOLITH}:\n        mount_legacy_monolith_routers(app)\n",
+    )
+
+
 def expose_an_alias_at_the_edge(tree: Path) -> None:
     contract_path = tree / "deploy" / "public-api-route-contract.json"
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -274,6 +332,8 @@ def test_committed_source_passes_the_validator(tmp_path):
         (bind_v2_twice, "exactly once in CANONICAL_ROUTERS"),
         (mount_aliases_directly_in_main, "owned outside the registry"),
         (second_owner_of_v2, "owned outside the registry"),
+        (mount_aliases_unconditionally, "outside the monolith profile"),
+        (mount_aliases_on_the_control_plane_profile, "outside the monolith profile"),
         (expose_an_alias_at_the_edge, "not denied at the edge"),
         (demote_v2_at_the_edge, "not a shared edge route"),
     ],

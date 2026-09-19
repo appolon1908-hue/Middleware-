@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 
 bearer = HTTPBearer(auto_error=False)
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
@@ -43,27 +43,12 @@ def require(scope: str, roles: frozenset[str] = READ_ROLES):
                 "verified monitoring bearer required",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        parties = frozenset(
-            x.strip()
-            for x in settings.keycloak_authorized_parties.split(",")
-            if x.strip()
-        )
-        if not all(
-            (
-                parties,
-                settings.keycloak_issuer,
-                settings.keycloak_audience,
-                settings.keycloak_jwks_url,
-            )
-        ):
+        identity = settings.identity
+        if not identity.explicit or not identity.authorized_parties:
             raise HTTPException(503, "monitoring identity authority is not configured")
         try:
             claims = KeycloakValidator(
-                issuer=settings.keycloak_issuer,
-                audience=settings.keycloak_audience,
-                jwks_url=settings.keycloak_jwks_url,
-                authorized_parties=parties,
-                required_scopes=frozenset({scope}),
+                **identity_validator_kwargs(identity, required_scopes=frozenset({scope}))
             ).validate(credential.credentials)
             subject, tenant = claims.get("sub"), claims.get("tenant_id")
             raw_roles = claims.get("realm_access", {}).get("roles", [])

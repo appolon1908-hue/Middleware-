@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from .contracts import WebhookRoute
 from .models import EventEnvelope, IngressResult
 from .replay import ReplayBusy
-from .runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from .security import RequestValidationError, authorize_tenant, verify_signed_request
 from .storage import ReplayConflict, canonical_payload_sha256
 

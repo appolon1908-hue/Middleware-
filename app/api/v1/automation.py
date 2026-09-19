@@ -33,6 +33,13 @@ def _claim_values(claims: dict[str, Any], plural: str, singular: str) -> set[str
 
 
 def _authenticate_campaign_policy(authorization: str) -> dict[str, Any]:
+    """n8n service JWT, pinned to the deployment's own environment claim.
+
+    The token's ``environment`` must equal ``settings.environment``: a token
+    minted for another environment is rejected even when every other claim
+    is valid (previously this route accepted production tokens only, which
+    made it unreachable from a staging n8n).
+    """
     if not authorization.startswith("Bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bearer token required")
     try:
@@ -42,7 +49,7 @@ def _authenticate_campaign_policy(authorization: str) -> dict[str, Any]:
             jwks_url=settings.n8n_service_jwks_url,
             authorized_parties=frozenset({settings.n8n_campaign_service_client_id}),
             required_scopes=frozenset({"n8n.policy.check"}),
-            required_environment="production",
+            required_environment=settings.environment,
         ).validate(authorization.removeprefix("Bearer ").strip())
     except JWTAuthError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc

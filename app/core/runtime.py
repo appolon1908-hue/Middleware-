@@ -29,7 +29,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import asyncpg
 import httpx
@@ -306,7 +306,7 @@ def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeConta
         store=MemoryCommandStore(),
         policies=command_policies(settings),
     )
-    http = _open_http()
+    http, http_provisioning = _open_http_clients(settings)
     automation = AutomationService(
         store=MemoryAutomationStore(),
         policy=AutomationPolicy.from_path(),
@@ -361,24 +361,35 @@ async def _open_redis(redis_url: str) -> Redis:
     return client
 
 
+ProcessRole = Literal["api", "worker"]
+
+
 async def build_runtime_container(
     settings: Settings,
     *,
     engine: AsyncEngine | None = None,
     tokens: TokenVerifier | None = None,
+    role: ProcessRole = "api",
+    service_id: str = SERVICE_INTEGRATION_API,
 ) -> RuntimeContainer:
     """Open the shared resources and assemble every store and service.
 
     ``engine`` defaults to the process-wide engine of :mod:`app.db.session`;
     it is disposed by :meth:`RuntimeContainer.close`. Any failure releases what
     was opened and raises :class:`RuntimeStartupError`.
+
+    ``role="worker"`` builds the same container for the worker, scheduler and
+    reconciler processes: the same pool, kernel, policy/safety gates, adapter
+    registry and schema checks, but no Redis replay guard and no identity
+    probe — those processes verify no bearer tokens and ingest no webhooks,
+    so an identity or Redis outage must not stop command execution.
     """
     verifier = tokens or KeycloakJwtVerifier(settings)
 
     if settings.allow_in_memory_storage:
         return _memory_container(settings, verifier)
 
-    if not settings.database_url or not settings.redis_url:
+    if not settings.database_url or (role == "api" and not settings.redis_url):
         raise RuntimeStartupError("DATABASE_URL and REDIS_URL are required")
 
     pool: asyncpg.Pool | None = None
@@ -386,7 +397,7 @@ async def build_runtime_container(
     container: RuntimeContainer | None = None
     try:
         pool = await _open_pool(settings.database_url)
-        redis = await _open_redis(settings.redis_url)
+        redis = await _open_redis(settings.redis_url) if role == "api" else None
 
         inbox = PostgresInboxStore(pool, owns_pool=False)
         await inbox.verify_schema()
@@ -408,11 +419,11 @@ async def build_runtime_container(
         container = RuntimeContainer(
             settings=settings,
             inbox=inbox,
-            replay=RedisReplayGuard(redis, owns_client=False),
+            replay=RedisReplayGuard(redis, owns_client=False) if redis is not None else MemoryReplayGuard(),
             tokens=verifier,
             commands=commands,
             platform=build_platform_runtime(
-                settings, commands=commands, http=http, pool=pool, service_id=SERVICE_INTEGRATION_API
+                settings, commands=commands, http=http, pool=pool, service_id=service_id
             ),
             http=http,
             http_provisioning=http_provisioning,
@@ -437,7 +448,7 @@ async def build_runtime_container(
             pool=pool,
             redis=redis,
             engine=engine if engine is not None else _process_engine(),
-            probe_identity=_probe_identity(settings),
+            probe_identity=_probe_identity(settings) if role == "api" else False,
         )
         report = await container.readiness()
         if not report.ready:

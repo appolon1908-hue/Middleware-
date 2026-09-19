@@ -7,7 +7,8 @@ import asyncpg
 import httpx
 
 from app.core.config import ConfigurationError, Settings
-from app.commands import ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
+from app.core.runtime import build_runtime_container
+from app.commands import ADAPTER_COMMAND_DESTINATION, ODOO_COMMAND_DESTINATION, TEMPORAL_COMMAND_DESTINATION
 from app.nats_transport import NatsJetStreamPublisher
 from app.klyrow_odoo_projection import KlyrowOdooProjectionDispatcher
 from app.odoo_transport import OdooCommandDispatcher
@@ -20,6 +21,8 @@ from app.storage import (
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
 from app.worker import OutboxWorker
+
+SERVICE_MIDDLEWARE_WORKER = "middleware-worker"
 
 
 async def _load_reconciliation_command_id(
@@ -69,16 +72,19 @@ async def main() -> None:
     if settings.database_url is None:
         raise ConfigurationError("DATABASE_URL is required for the outbox worker")
 
-    pool = await asyncpg.create_pool(
-        settings.database_url,
-        min_size=1,
-        max_size=8,
-        command_timeout=10,
-    )
+    # The worker is the same RuntimeContainer as the API (one pool, one
+    # kernel, one policy/safety/adapter registry, one schema check) in the
+    # worker role; the container owns the pool and closes it.
+    runtime = await build_runtime_container(settings, role="worker", service_id=SERVICE_MIDDLEWARE_WORKER)
+    pool = runtime.pool
+    assert pool is not None and runtime.platform is not None
     publisher: NatsJetStreamPublisher | None = None
     odoo_client: httpx.AsyncClient | None = None
     try:
         handlers = {}
+        # V3: commands owned by a registered adapter execute through the
+        # ExecutionBus (lease, quarantine-before-provider, readback, fencing).
+        handlers[ADAPTER_COMMAND_DESTINATION] = runtime.platform.dispatch
         if settings.outbox_dispatch_enabled:
             publisher = await NatsJetStreamPublisher.connect(settings)
             handlers[NATS_JETSTREAM_DESTINATION] = publisher.publish
@@ -130,7 +136,7 @@ async def main() -> None:
             await publisher.close()
         if odoo_client is not None:
             await odoo_client.aclose()
-        await pool.close()
+        await runtime.close()
 
 
 if __name__ == "__main__":

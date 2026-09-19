@@ -58,6 +58,14 @@ CMD ["-m", "uvicorn", "app.entrypoints.integration_api:app", "--host", "0.0.0.0"
 FROM runtime-common AS worker
 CMD ["-m", "workers.run_outbox"]
 
+# The scheduler and reconciler are the same immutable runtime artifact with a
+# different process command (one image digest for api/worker/scheduler/reconciler).
+FROM runtime-common AS scheduler
+CMD ["-m", "app.entrypoints.scheduler"]
+
+FROM runtime-common AS reconciler
+CMD ["-m", "app.entrypoints.reconciliation_worker"]
+
 FROM ${RUNTIME_BASE} AS connector-dependencies
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build

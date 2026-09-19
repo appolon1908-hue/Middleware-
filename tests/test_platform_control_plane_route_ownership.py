@@ -269,6 +269,35 @@ def second_owner_of_v2(tree: Path) -> None:
     )
 
 
+# The exact factory block the mutations rewrite: aliases mounted only under
+# the monolith profile.
+MONOLITH_ONLY_MOUNT = (
+    "    if profile is AppProfile.MONOLITH:\n"
+    "        mount_monolith_routers(app)\n"
+    "        mount_legacy_monolith_routers(app)\n"
+)
+
+
+def mount_aliases_unconditionally(tree: Path) -> None:
+    """The factory mounts the edge-denied aliases for every profile."""
+    replace_once(
+        tree,
+        "app/application.py",
+        MONOLITH_ONLY_MOUNT,
+        "    if profile is AppProfile.MONOLITH:\n        mount_monolith_routers(app)\n    mount_legacy_monolith_routers(app)\n",
+    )
+
+
+def mount_aliases_on_the_control_plane_profile(tree: Path) -> None:
+    """The deployed control-plane canary would serve the retired aliases."""
+    replace_once(
+        tree,
+        "app/application.py",
+        MONOLITH_ONLY_MOUNT,
+        "    if profile is AppProfile.MONOLITH:\n        mount_monolith_routers(app)\n    if profile in {AppProfile.CONTROL_PLANE, AppProfile.MONOLITH}:\n        mount_legacy_monolith_routers(app)\n",
+    )
+
+
 def expose_an_alias_at_the_edge(tree: Path) -> None:
     contract_path = tree / "deploy" / "public-api-route-contract.json"
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -303,6 +332,8 @@ def test_committed_source_passes_the_validator(tmp_path):
         (bind_v2_twice, "exactly once in CANONICAL_ROUTERS"),
         (mount_aliases_directly_in_main, "owned outside the registry"),
         (second_owner_of_v2, "owned outside the registry"),
+        (mount_aliases_unconditionally, "outside the monolith profile"),
+        (mount_aliases_on_the_control_plane_profile, "outside the monolith profile"),
         (expose_an_alias_at_the_edge, "not denied at the edge"),
         (demote_v2_at_the_edge, "not a shared edge route"),
     ],

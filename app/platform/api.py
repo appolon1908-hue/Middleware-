@@ -22,10 +22,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api_inputs import optional_header, required_header
-from app.commands import API_OPERATION_STATES, CommandEnvelope, CommandNotFound, CommandOperation, OperationEvent, redact_metadata
+from app.commands import API_OPERATION_STATES, CommandCapabilityDisabled, CommandEnvelope, CommandNotFound, CommandOperation, OperationEvent, redact_metadata
 from app.platform.kernel import SCOPE_COMMAND, SCOPE_COMMAND_READ, SCOPE_COMMAND_REPLAY
 from app.platform.principal import KernelPrincipal, authenticate
 from app.platform.resilience import ReplayMode
@@ -37,6 +37,49 @@ router = APIRouter(prefix="/platform/v1", tags=["platform-command-kernel"])
 COMMAND_CONTRACT_VERSION = "command-envelope.v1"
 _SAFE_ERROR_CODE = re.compile(r"[^a-z0-9_.:-]+")
 TRACE_HEADERS = ("traceparent", "tracestate")
+
+
+class CommandRequest(BaseModel):
+    """The public, provider-blind submit body.
+
+    Same fields and bounds as the durable :class:`~app.commands.CommandEnvelope`;
+    ``target`` (the connector id) and ``capability`` may be omitted — the
+    command registry binds both to the command family — and must match the
+    registry when supplied. Authentication-derived fields (tenant, actor) are
+    verified against the token, never trusted from the body.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: UUID
+    command_type: str = Field(pattern=r"^[a-z0-9]+(?:[.-][a-z0-9]+)+$", max_length=180)
+    command_version: Literal["1.0"] = "1.0"
+    target: str | None = Field(default=None, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
+    tenant_id: str = Field(min_length=1, max_length=128)
+    requested_by: str = Field(min_length=1, max_length=300)
+    correlation_id: str = Field(min_length=1, max_length=180)
+    idempotency_key: str = Field(min_length=8, max_length=180)
+    capability: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,100}$")
+    payload: dict[str, Any]
+
+    @field_validator("payload")
+    @classmethod
+    def bound_payload(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return CommandEnvelope.bound_payload(value)
+
+    def envelope(self, *, target: str, capability: str) -> CommandEnvelope:
+        return CommandEnvelope(
+            command_id=self.command_id,
+            command_type=self.command_type,
+            command_version=self.command_version,
+            target=target,
+            tenant_id=self.tenant_id,
+            requested_by=self.requested_by,
+            correlation_id=self.correlation_id,
+            idempotency_key=self.idempotency_key,
+            capability=capability,
+            payload=self.payload,
+        )
 
 
 class OperationAccepted(BaseModel):
@@ -77,10 +120,14 @@ class TimelineEvent(BaseModel):
 
     event_id: int
     operation_id: UUID
+    event_type: str
     previous_state: str | None
     new_state: str
     actor_id: str
     reason: str
+    correlation_id: str
+    causation_id: int | None
+    attempt: int
     safe_metadata: dict[str, Any]
     created_at: datetime
 
@@ -176,17 +223,46 @@ def _status(operation: CommandOperation) -> OperationStatus:
     )
 
 
-def _event(event: OperationEvent) -> TimelineEvent:
-    return TimelineEvent(
-        event_id=event.event_id,
-        operation_id=event.operation_id,
-        previous_state=API_OPERATION_STATES.get(event.previous_state, event.previous_state) if event.previous_state else None,
-        new_state=API_OPERATION_STATES.get(event.new_state, event.new_state),
-        actor_id=event.actor_id,
-        reason=event.reason,
-        safe_metadata=redact_metadata(event.safe_metadata),
-        created_at=event.created_at,
-    )
+def _event_type(event: OperationEvent) -> str:
+    metadata = event.safe_metadata or {}
+    if event.previous_state is None:
+        return "operation.accepted"
+    if "reconciliation_status" in metadata:
+        return "operation.reconciliation"
+    if "action" in metadata:
+        return f"operation.mutation.{metadata['action']}"
+    if "replay_mode" in metadata:
+        return "operation.replay"
+    return "operation.transition"
+
+
+def _timeline(operation: CommandOperation, events: list[OperationEvent]) -> list[TimelineEvent]:
+    """Stable, append-only ordering; ``causation_id`` is the preceding event,
+    ``attempt`` counts the dispatch attempts opened so far."""
+    rows: list[TimelineEvent] = []
+    attempt = 0
+    previous_id: int | None = None
+    for event in events:
+        if event.new_state == "dispatching":
+            attempt += 1
+        rows.append(
+            TimelineEvent(
+                event_id=event.event_id,
+                operation_id=event.operation_id,
+                event_type=_event_type(event),
+                previous_state=API_OPERATION_STATES.get(event.previous_state, event.previous_state) if event.previous_state else None,
+                new_state=API_OPERATION_STATES.get(event.new_state, event.new_state),
+                actor_id=event.actor_id,
+                reason=event.reason,
+                correlation_id=operation.correlation_id,
+                causation_id=previous_id,
+                attempt=attempt,
+                safe_metadata=redact_metadata(event.safe_metadata),
+                created_at=event.created_at,
+            )
+        )
+        previous_id = event.event_id
+    return rows
 
 
 def _respond(status_code: int, model: BaseModel, *, correlation_id: str, location: str | None = None) -> JSONResponse:
@@ -214,10 +290,20 @@ def _trace(request: Request) -> dict[str, str]:
     response_model=OperationAccepted,
     responses={200: {"model": OperationAccepted, "description": "Exact replay of an existing operation"}, 202: {"model": OperationAccepted, "description": "Command accepted"}},
 )
-async def submit_command(command: CommandEnvelope, request: Request) -> JSONResponse:
+async def submit_command(body: CommandRequest, request: Request) -> JSONResponse:
     principal = await authenticate(request, required_scope=SCOPE_COMMAND)
     runtime, platform = _runtime(request)
-    # Authentication-derived facts are never trusted from the body (Phase 6).
+    # Provider-blind body: the registry binds the command family to its
+    # connector and capability; a supplied value must agree with the registry.
+    policy = runtime.commands.policies.resolve(body.command_type)
+    if policy is None:
+        raise CommandCapabilityDisabled("command type does not have exactly one owning policy")
+    if body.target is not None and body.target != policy.target:
+        raise CommandCapabilityDisabled("command target does not own the command type")
+    if body.capability is not None and body.capability != policy.capability:
+        raise CommandCapabilityDisabled("command capability does not match the owning policy")
+    command = body.envelope(target=policy.target, capability=policy.capability)
+    # Authentication-derived facts are never trusted from the body.
     if not principal.authorized_for(command.tenant_id):
         raise AuthorizationError("token is not authorized for the command tenant")
     tenant_header = optional_header(request, "X-Tenant-ID", minimum=1, maximum=128)
@@ -272,7 +358,7 @@ async def get_timeline(operation_id: UUID, request: Request) -> JSONResponse:
     tenant_id = _tenant_for_read(request, principal)
     operation = await platform.kernel.get(tenant_id, operation_id)
     events = await platform.kernel.timeline(tenant_id, operation_id)
-    return _respond(200, Timeline(operation_id=operation_id, items=[_event(item) for item in events]), correlation_id=operation.correlation_id)
+    return _respond(200, Timeline(operation_id=operation_id, items=_timeline(operation, events)), correlation_id=operation.correlation_id)
 
 
 # ----------------------------------------------------------------------

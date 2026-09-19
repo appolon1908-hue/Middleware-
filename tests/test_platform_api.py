@@ -267,3 +267,18 @@ def test_persistence_outage_is_a_safe_503(stack: Stack) -> None:
         response, _ = submit(client)
         assert response.status_code == 503
         assert response.json()["error"]["retryable"] is True
+
+
+def test_chaos_a_persistence_failure_before_acceptance_is_never_a_202(stack: Stack) -> None:
+    """Chaos A: the ledger fails before acceptance -> safe 503, no operation, no intent."""
+    from app.storage import StorageError
+
+    async def failing_submit(*_args, **_kwargs):
+        raise StorageError("database unavailable")
+
+    stack.runtime.commands.store.submit = failing_submit  # type: ignore[method-assign]
+    with TestClient(stack.app) as client:
+        response, body = submit(client)
+        assert response.status_code == 503
+        assert response.json()["error"]["retryable"] is True
+        assert stack.store._outbox == [] and stack.store._commands == {}

@@ -283,12 +283,15 @@ async def test_readiness_execute_success_and_matched_readback(index: int) -> Non
         assert kwargs["idempotency_key"] == command.idempotency_key
 
 
+BRIDGE_INDEXES = [index for index, subject in enumerate(SUBJECTS) if subject.legacy is not None or subject.crm is not None]
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("index", range(len(SUBJECTS)), ids=IDS)
+@pytest.mark.parametrize("index", BRIDGE_INDEXES, ids=[IDS[index] for index in BRIDGE_INDEXES])
 async def test_execute_validation_failure_is_explicit(index: int) -> None:
+    """Provider bridges refuse a command type they do not implement (the
+    no-effect fixtures accept every command of their family by design)."""
     subject = fresh(index)
-    if subject.legacy is None and subject.crm is None:
-        pytest.skip("fixtures accept every command of their family")
     command = envelope(subject, command_type=subject.command_type.rsplit(".", 1)[0] + ".unsupported-operation.v9")
     result = await subject.adapter.execute(command, context(command))
     assert result.outcome in {Outcome.UNSUPPORTED, Outcome.REJECTED}

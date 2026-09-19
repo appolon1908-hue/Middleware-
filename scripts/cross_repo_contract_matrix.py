@@ -326,7 +326,7 @@ def read_odoo_paths(path: Path) -> dict[str, dict[str, Any]]:
             url_keys.setdefault(normalised, set()).update(keys)
     result: dict[str, dict[str, Any]] = {}
     for k, v in hits.items():
-        keys = sorted(url_keys.get(k, ()))
+        config_keys = sorted(url_keys.get(k, ()))
         joined = "\n".join(
             (path / f).read_text(encoding="utf-8", errors="ignore") for f in sorted(v)
         )
@@ -335,7 +335,7 @@ def read_odoo_paths(path: Path) -> dict[str, dict[str, Any]]:
             "direction": "inbound"
             if all("/controllers/" in f for f in v)
             else "outbound",
-            "url_config_keys": keys,
+            "url_config_keys": config_keys,
             # How the referencing modules authenticate and which edge headers they send.
             "auth": (
                 "keycloak-client-credentials"
@@ -374,10 +374,10 @@ def read_odoo_paths(path: Path) -> dict[str, dict[str, Any]]:
             ),
             "target_service": (
                 "provisioning-service"
-                if keys
+                if config_keys
                 and all(
                     "PROVISIONING" in x.upper() and "MIDDLEWARE" not in x.upper()
-                    for x in keys
+                    for x in config_keys
                 )
                 else "middleware"
             ),

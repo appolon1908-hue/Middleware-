@@ -11,21 +11,14 @@ nothing activatable binds Middleware on 8080.
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
-from tests.cross_repo.conftest import ROOT, load_json
-
-if str(ROOT / "scripts") not in sys.path:
-    sys.path.insert(0, str(ROOT / "scripts"))
+from tests.cross_repo.conftest import _root, load_json
 
 
 @pytest.fixture(scope="module")
 def port_report(repos):
-    from cross_repo_port_contract import scan
-
-    from tests.cross_repo.conftest import _root
+    from scripts.cross_repo_port_contract import scan
 
     return scan(_root())
 

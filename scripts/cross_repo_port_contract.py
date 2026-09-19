@@ -22,9 +22,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from cross_repo_contract_matrix import REPOSITORIES, default_root, resolve
-
 MIDDLEWARE_ROOT = Path(__file__).resolve().parents[1]
+if str(MIDDLEWARE_ROOT) not in sys.path:
+    sys.path.insert(0, str(MIDDLEWARE_ROOT))
+
+from scripts.cross_repo_contract_matrix import (  # noqa: E402
+    REPOSITORIES,
+    default_root,
+    resolve,
+)
+
 PORT_PATTERN = re.compile(r"(?<![0-9])(8095|8080|8000|8069|5678)(?![0-9])")
 CANONICAL = {
     "8095": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
@@ -237,11 +244,11 @@ def scan(root: Path) -> dict[str, Any]:
                 except ValueError:
                     document = None
                 if document is not None:
-                    for context in json_port_bindings(document):
-                        port = context["port"]
+                    for binding in json_port_bindings(document):
+                        port = binding["port"]
                         if port not in CANONICAL and port != "8080":
                             continue
-                        described = f"{relative}:{context['description']}"
+                        described = f"{relative}:{binding['description']}"
                         label = (
                             classify_8080(name, described)
                             if port == "8080"
@@ -254,7 +261,7 @@ def scan(root: Path) -> dict[str, Any]:
                                 "line": "json",
                                 "port": port,
                                 "classification": label,
-                                "context": context["description"][:140],
+                                "context": binding["description"][:140],
                             }
                         )
                     continue

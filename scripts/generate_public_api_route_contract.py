@@ -50,7 +50,24 @@ def _schema(operation_id: str, operation: dict[str, Any], *, request: bool) -> s
     return f"openapi:inline:{operation_id}:{side}"
 
 
+KERNEL_ROUTE_SCOPES = {
+    ("POST", "/platform/v1/commands"): "platform.command",
+    ("GET", "/platform/v1/operations/{operation_id}"): "platform.command.read",
+    ("GET", "/platform/v1/operations/{operation_id}/timeline"): "platform.command.read",
+    ("POST", "/platform/v1/operations/{operation_id}/cancel"): "platform.command",
+    ("POST", "/platform/v1/operations/{operation_id}/replay"): "platform.command.replay",
+    ("GET", "/platform/v1/kernel/describe"): "platform.command.read",
+}
+# The registered workload callers (config/control-plane-callers.v1.json) that
+# hold the platform.command* scopes; Kong verifies issuer/audience/scope, the
+# kernel re-authorizes the client, tenant and (for replay) the platform-operator role.
+KERNEL_CALLING_CLIENT = "platform-command-client"
+
+
 def _platform_scope(path: str, method: str) -> tuple[str, str]:
+    kernel_scope = KERNEL_ROUTE_SCOPES.get((method, path))
+    if kernel_scope is not None:
+        return KERNEL_CALLING_CLIENT, kernel_scope
     if path.startswith("/platform/v1/email/production/"):
         return "production-operator", (
             "email.production.read" if method == "GET" else "email.production.write"

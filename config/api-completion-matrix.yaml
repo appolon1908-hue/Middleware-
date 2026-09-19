@@ -616,6 +616,12 @@ operations:
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
+  method: POST
+  path: /platform/v1/commands
+  canonical_operation_id: submit_command_platform_v1_commands_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
   method: GET
   path: /platform/v1/contacts
   canonical_operation_id: list_contacts_platform_v1_contacts_get
@@ -743,8 +749,38 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: platform
   method: GET
+  path: /platform/v1/kernel/describe
+  canonical_operation_id: describe_kernel_platform_v1_kernel_describe_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
   path: /platform/v1/me/presence
   canonical_operation_id: get_my_presence_platform_v1_me_presence_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/operations/{operation_id}
+  canonical_operation_id: get_operation_platform_v1_operations__operation_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/operations/{operation_id}/cancel
+  canonical_operation_id: cancel_operation_platform_v1_operations__operation_id__cancel_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/operations/{operation_id}/replay
+  canonical_operation_id: replay_operation_platform_v1_operations__operation_id__replay_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/operations/{operation_id}/timeline
+  canonical_operation_id: get_timeline_platform_v1_operations__operation_id__timeline_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform

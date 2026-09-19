@@ -19,12 +19,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, Request
+from redis.asyncio import Redis
 
 from app.automation_v2 import AutomationService
 from app.commands import CommandService
 from app.communications import CommunicationsService
 from app.core.config import Settings
+from app.core.config import settings as process_settings
 from app.core.runtime import RuntimeContainer
 from app.db.session import get_session
 from app.realtime import RealtimeStore
@@ -33,6 +36,12 @@ from app.security import TokenVerifier
 from app.storage import InboxStore, StorageError
 
 __all__ = [
+    "HttpClientDep",
+    "ProvisioningHttpClientDep",
+    "RedisDep",
+    "get_http_client",
+    "get_provisioning_http_client",
+    "get_redis_client",
     "AutomationDep",
     "CommandsDep",
     "CommunicationsDep",
@@ -76,6 +85,57 @@ def get_token_verifier(request: Request) -> TokenVerifier:
     return get_runtime(request).tokens
 
 
+def _process_http(app) -> httpx.AsyncClient:
+    """One outbound client for a narrow deployed process that runs without a
+    RuntimeContainer (the standalone entrypoints); closed at shutdown."""
+    client = getattr(app.state, "http", None)
+    if client is None:
+        # Process lifetime: released when the process exits (these narrow
+        # entrypoints have no lifespan of their own).
+        client = httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=False)
+        app.state.http = client
+    return client
+
+
+def get_http_client(request: Request) -> httpx.AsyncClient:
+    """The process-wide outbound HTTP client. Handlers never open their own.
+
+    Typed ``Request`` for FastAPI's dependency introspection; a WebSocket (same
+    ``.app``) may be passed by direct callers (``cast(Request, websocket)``)."""
+    runtime = getattr(request.app.state, "runtime", None)
+    client = getattr(runtime, "http", None)
+    if client is not None:
+        return client
+    return _process_http(request.app)
+
+
+def get_provisioning_http_client(request: Request) -> httpx.AsyncClient:
+    """The client that trusts the provisioning service's CA bundle."""
+    runtime = getattr(request.app.state, "runtime", None)
+    client = getattr(runtime, "http_provisioning", None)
+    if client is not None:
+        return client
+    return get_http_client(request)
+
+
+def get_redis_client(request: Request) -> Redis:
+    """The RuntimeContainer's Redis client; a process without one (in-memory
+    runtime, standalone entrypoint, router-only app) gets one shared client per
+    process, built from the process settings the handlers used to read."""
+    runtime = getattr(request.app.state, "runtime", None)
+    client = getattr(runtime, "redis", None)
+    if client is not None:
+        return client
+    client = getattr(request.app.state, "redis", None)
+    if client is None:
+        settings = getattr(request.app.state, "settings", None) or process_settings
+        if not settings.redis_url:
+            raise StorageError("Redis is not configured")
+        client = Redis.from_url(settings.redis_url, decode_responses=True)
+        request.app.state.redis = client
+    return client
+
+
 def get_inbox_store(request: Request) -> InboxStore:
     return get_runtime(request).inbox
 
@@ -114,6 +174,9 @@ def get_realtime_store(request: Request) -> RealtimeStore:
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 RuntimeDep = Annotated[RuntimeContainer, Depends(get_runtime)]
+HttpClientDep = Annotated[httpx.AsyncClient, Depends(get_http_client)]
+ProvisioningHttpClientDep = Annotated[httpx.AsyncClient, Depends(get_provisioning_http_client)]
+RedisDep = Annotated[Redis, Depends(get_redis_client)]
 TokenVerifierDep = Annotated[TokenVerifier, Depends(get_token_verifier)]
 InboxDep = Annotated[InboxStore, Depends(get_inbox_store)]
 ReplayDep = Annotated[ReplayGuard, Depends(get_replay_guard)]

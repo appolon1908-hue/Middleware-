@@ -19,6 +19,13 @@ from .provider_canary import provider_evidence_digest
 ROOT = Path(__file__).resolve().parents[1]
 TEMPORAL_COMMAND_DESTINATION = "temporal-command"
 ODOO_COMMAND_DESTINATION = "odoo-command"
+# V3: commands executed in-process by a registered adapter through the
+# ExecutionBus (app.platform.bus) instead of a Temporal workflow.
+ADAPTER_COMMAND_DESTINATION = "adapter-command"
+COMMAND_DESTINATIONS = frozenset(
+    {TEMPORAL_COMMAND_DESTINATION, ODOO_COMMAND_DESTINATION, ADAPTER_COMMAND_DESTINATION}
+)
+ACTIVE_COMMAND_STATES = ("persisted", "queued", "dispatching", "accepted", "readback_pending")
 AUTHENTICATED_CLIENT_ID_KEY = "_authenticated_client_id"
 CommandState = Literal[
     "persisted",
@@ -239,6 +246,32 @@ class CommandPolicyRegistry:
             raise ValueError("capability registry must contain boolean values")
         return cls(policies, capabilities)
 
+    def resolve(self, command_type: str) -> CommandPolicy | None:
+        """The one policy whose prefix owns ``command_type``; ``None`` when no
+        policy or more than one policy matches (a registry defect)."""
+        matching = [
+            policy for policy in self.policies if command_type.startswith(policy.prefix)
+        ]
+        return matching[0] if len(matching) == 1 else None
+
+    def extended(
+        self,
+        policies: tuple[CommandPolicy, ...],
+        capabilities: Mapping[str, bool],
+    ) -> "CommandPolicyRegistry":
+        """A registry with additional (synthetic) policies. The file-backed
+        capabilities are never overridden and no existing prefix may be re-owned."""
+        for name in capabilities:
+            if name in self.capabilities:
+                raise ValueError(f"capability {name} is owned by config/capabilities.v2.json")
+        owned = {policy.prefix for policy in self.policies}
+        for policy in policies:
+            if policy.prefix in owned:
+                raise ValueError(f"command prefix {policy.prefix} already has an owner")
+        return CommandPolicyRegistry(
+            self.policies + tuple(policies), {**self.capabilities, **capabilities}
+        )
+
     def authorize(self, command: CommandEnvelope) -> CommandPolicy:
         matching = [
             policy
@@ -344,12 +377,44 @@ def redact_metadata(value: object) -> dict[str, Any]:
     return cleaned
 
 
+@dataclass
+class MemoryOutboxIntent:
+    """The in-memory twin of a ``middleware_outbox`` row (one per submission)."""
+
+    id: int
+    tenant_id: str
+    command_id: str
+    destination: str
+    event_type: str
+    idempotency_key: str
+    payload: dict[str, Any]
+    attempt_count: int = 0
+    next_attempt_at: float = 0.0
+    lease_owner: str | None = None
+    lease_until: float | None = None
+    completed_at: float | None = None
+    dead_lettered_at: float | None = None
+    cancelled_at: float | None = None
+    reconciliation_required_at: float | None = None
+    reconciliation_attempts: int = 0
+    last_error: str | None = None
+
+
+def command_envelope_from_payload(payload: Mapping[str, Any]) -> CommandEnvelope:
+    """Rebuild the public envelope from the persisted authenticated payload."""
+    public = {key: value for key, value in payload.items() if key != AUTHENTICATED_CLIENT_ID_KEY}
+    return CommandEnvelope.model_validate(public)
+
+
 class CommandStore(Protocol):
     async def submit(
         self,
         command: CommandEnvelope,
         *,
         authenticated_client_id: str,
+        destination: str = TEMPORAL_COMMAND_DESTINATION,
+        decision_evidence: Mapping[str, Any] | None = None,
+        trace: Mapping[str, str] | None = None,
     ) -> CommandOperation:
         ...
 
@@ -374,7 +439,30 @@ class CommandStore(Protocol):
         reason: str,
         provider_operation_id: str | None = None,
         readback_evidence: Mapping[str, Any] | None = None,
+        expected_attempt: int | None = None,
     ) -> CommandOperation:
+        ...
+
+    async def reconcile(
+        self,
+        tenant_id: str,
+        command_id: UUID,
+        *,
+        matched: bool,
+        actor_id: str,
+        reason: str,
+        provider_operation_id: str | None,
+        evidence: Mapping[str, Any],
+    ) -> CommandOperation:
+        ...
+
+    async def latest_attempt(self, tenant_id: str, command_id: UUID) -> int:
+        ...
+
+    async def load_envelope(self, tenant_id: str, command_id: UUID) -> CommandEnvelope:
+        ...
+
+    async def backlog(self, tenant_id: str) -> tuple[int, int]:
         ...
 
     async def close(self) -> None:
@@ -388,13 +476,20 @@ class MemoryCommandStore:
         self._events: dict[tuple[str, UUID], list[OperationEvent]] = {}
         self._attempts: dict[tuple[str, UUID], list[OperationAttempt]] = {}
         self._mutations: dict[tuple[str, UUID, str, str, str], tuple[str, CommandOperation]] = {}
+        self._payloads: dict[tuple[str, UUID], dict[str, Any]] = {}
+        self._outbox: list[MemoryOutboxIntent] = []
 
     async def submit(
         self,
         command: CommandEnvelope,
         *,
         authenticated_client_id: str,
+        destination: str = TEMPORAL_COMMAND_DESTINATION,
+        decision_evidence: Mapping[str, Any] | None = None,
+        trace: Mapping[str, str] | None = None,
     ) -> CommandOperation:
+        if destination not in COMMAND_DESTINATIONS:
+            raise CommandConflict(f"unsupported command destination {destination}")
         digest = authenticated_command_digest(command, authenticated_client_id)
         command_key = (command.tenant_id, command.command_id)
         idempotency_key = (command.tenant_id, command.idempotency_key)
@@ -428,9 +523,82 @@ class MemoryCommandStore:
         entry = (digest, operation)
         self._commands[command_key] = entry
         self._idempotency[idempotency_key] = entry
-        self._events[command_key] = [OperationEvent(event_id=1, operation_id=command.command_id, previous_state=None, new_state="persisted", actor_id=command.requested_by, reason="validated command and persisted delivery intent", safe_metadata={"authenticated_client_id": authenticated_client_id}, created_at=now)]
+        self._events[command_key] = [OperationEvent(event_id=1, operation_id=command.command_id, previous_state=None, new_state="persisted", actor_id=command.requested_by, reason="validated command and persisted delivery intent", safe_metadata={"authenticated_client_id": authenticated_client_id, **redact_metadata(dict(decision_evidence or {}))}, created_at=now)]
         self._attempts[command_key] = []
+        payload = authenticated_command_payload(command, authenticated_client_id)
+        self._payloads[command_key] = payload
+        intent_payload = dict(payload)
+        if trace:
+            intent_payload["_trace"] = dict(trace)
+        self._outbox.append(
+            MemoryOutboxIntent(
+                id=len(self._outbox) + 1,
+                tenant_id=command.tenant_id,
+                command_id=str(command.command_id),
+                destination=destination,
+                event_type=command.command_type,
+                idempotency_key=command.idempotency_key,
+                payload=intent_payload,
+            )
+        )
         return operation
+
+    def _adapter_intents(self, tenant_id: str, command_id: UUID) -> list[MemoryOutboxIntent]:
+        return [item for item in self._outbox if item.tenant_id == tenant_id and item.command_id == str(command_id)]
+
+    async def latest_attempt(self, tenant_id: str, command_id: UUID) -> int:
+        await self.get(tenant_id, command_id)
+        return len(self._attempts.get((tenant_id, command_id), []))
+
+    async def load_envelope(self, tenant_id: str, command_id: UUID) -> CommandEnvelope:
+        await self.get(tenant_id, command_id)
+        return command_envelope_from_payload(self._payloads[(tenant_id, command_id)])
+
+    async def backlog(self, tenant_id: str) -> tuple[int, int]:
+        active = [entry[1] for entry in self._commands.values() if entry[1].state in ACTIVE_COMMAND_STATES]
+        return sum(1 for row in active if row.tenant_id == tenant_id), len(active)
+
+    async def reconcile(
+        self,
+        tenant_id: str,
+        command_id: UUID,
+        *,
+        matched: bool,
+        actor_id: str,
+        reason: str,
+        provider_operation_id: str | None,
+        evidence: Mapping[str, Any],
+    ) -> CommandOperation:
+        key = (tenant_id, command_id)
+        entry = self._commands.get(key)
+        if entry is None:
+            raise CommandNotFound("command operation was not found")
+        digest, operation = entry
+        if operation.state != "reconciliation_required":
+            raise CommandConflict("operation is no longer awaiting reconciliation")
+        now = datetime.now().astimezone()
+        safe_evidence = dict(evidence)
+        evidence_digest = provider_evidence_digest(safe_evidence)
+        updated = operation.model_copy(
+            update={
+                "state": "completed" if matched else "reconciliation_required",
+                "provider_operation_id": provider_operation_id or operation.provider_operation_id,
+                "readback_evidence": safe_evidence,
+                "readback_evidence_sha256": evidence_digest,
+                "last_error": None if matched else reason[:2048],
+                "reconciliation_reason": operation.reconciliation_reason if matched else reason[:2048],
+                "resource_version": operation.resource_version + 1,
+                "updated_at": now,
+            }
+        )
+        self._commands[key] = (digest, updated)
+        self._idempotency[(tenant_id, updated.idempotency_key)] = (digest, updated)
+        events = self._events[key]
+        events.append(OperationEvent(event_id=len(events) + 1, operation_id=command_id, previous_state="reconciliation_required", new_state=updated.state, actor_id=actor_id, reason=reason[:2048], safe_metadata={"provider_operation_id": provider_operation_id, "readback_evidence_sha256": evidence_digest, "reconciliation_status": "matched" if matched else "mismatch"}, created_at=now))
+        attempts = self._attempts[key]
+        if attempts:
+            attempts[-1] = attempts[-1].model_copy(update={"state": updated.state, "provider_operation_id": provider_operation_id or attempts[-1].provider_operation_id, "safe_error_code": None if matched else "provider_readback_mismatch", "finished_at": now})
+        return updated
 
     async def get(self, tenant_id: str, command_id: UUID) -> CommandOperation:
         entry = self._commands.get((tenant_id, command_id))
@@ -486,16 +654,23 @@ class MemoryCommandStore:
         digest, operation = entry
         if operation.resource_version != expected_version:
             raise CommandConflict("expected_version is stale")
+        intents = self._adapter_intents(tenant_id, command_id)
         if action == "cancel":
             if operation.state in {
                 "completed",
                 "failed",
                 "reconciliation_required",
                 "dead_lettered",
+                "cancelled",
             }:
                 raise CommandConflict("operation is not cancellable")
-            state = "cancelled" if operation.state in {"persisted", "queued"} else "reconciliation_required"
+            active_lease = any(item.lease_owner is not None and item.completed_at is None for item in intents)
+            state = "cancelled" if operation.state in {"persisted", "queued"} and not active_lease else "reconciliation_required"
             updates = {"state": state, "cancelled_at": datetime.now().astimezone() if state == "cancelled" else None, "cancellation_reason": reason}
+            if state == "cancelled":
+                for item in intents:
+                    if item.completed_at is None and item.lease_owner is None and item.cancelled_at is None:
+                        item.cancelled_at = 0.0
         elif action == "reconcile":
             if operation.state not in {
                 "dispatching",
@@ -505,10 +680,28 @@ class MemoryCommandStore:
             }:
                 raise CommandConflict("operation is not reconcilable")
             updates = {"state": "reconciliation_required", "reconciliation_requested_at": datetime.now().astimezone(), "reconciliation_reason": reason}
+            for item in intents:
+                if item.completed_at is None and item.dead_lettered_at is None and item.cancelled_at is None:
+                    if item.reconciliation_required_at is None:
+                        item.reconciliation_required_at = 0.0
+                    item.lease_owner = None
+                    item.lease_until = None
         else:
             if operation.state != "failed":
                 raise CommandConflict("operation is not safely retryable")
             updates = {"state": "queued", "last_error": None}
+            source = intents[-1] if intents else None
+            self._outbox.append(
+                MemoryOutboxIntent(
+                    id=len(self._outbox) + 1,
+                    tenant_id=tenant_id,
+                    command_id=str(command_id),
+                    destination=source.destination if source is not None else TEMPORAL_COMMAND_DESTINATION,
+                    event_type=operation.command_type,
+                    idempotency_key="operation-retry:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest(),
+                    payload=dict(source.payload) if source is not None else {"command_id": str(command_id)},
+                )
+            )
         now = datetime.now().astimezone()
         updated = operation.model_copy(update={**updates, "resource_version": operation.resource_version + 1, "updated_at": now})
         self._commands[key] = (digest, updated)
@@ -530,6 +723,7 @@ class MemoryCommandStore:
         reason: str,
         provider_operation_id: str | None = None,
         readback_evidence: Mapping[str, Any] | None = None,
+        expected_attempt: int | None = None,
     ) -> CommandOperation:
         if readback_evidence is not None and new_state not in {
             "completed", "reconciliation_required",
@@ -542,6 +736,9 @@ class MemoryCommandStore:
         if entry is None:
             raise CommandNotFound("command operation was not found")
         digest, operation = entry
+        if expected_attempt is not None and new_state != "dispatching":
+            if len(self._attempts.get(key, [])) != expected_attempt:
+                raise CommandConflict("stale attempt fencing token")
         if new_state not in ALLOWED_COMMAND_TRANSITIONS[operation.state]:
             raise CommandConflict(
                 f"invalid command transition {operation.state} -> {new_state}"
@@ -717,6 +914,9 @@ class PostgresCommandStore:
         command: CommandEnvelope,
         *,
         authenticated_client_id: str,
+        destination: str = TEMPORAL_COMMAND_DESTINATION,
+        decision_evidence: Mapping[str, Any] | None = None,
+        trace: Mapping[str, str] | None = None,
     ) -> CommandOperation:
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -724,6 +924,9 @@ class PostgresCommandStore:
                     conn,
                     command,
                     authenticated_client_id=authenticated_client_id,
+                    destination=destination,
+                    decision_evidence=decision_evidence,
+                    trace=trace,
                 )
 
     async def submit_on_connection(
@@ -733,6 +936,9 @@ class PostgresCommandStore:
         *,
         authenticated_client_id: str,
         next_attempt_at: datetime | None = None,
+        destination: str = TEMPORAL_COMMAND_DESTINATION,
+        decision_evidence: Mapping[str, Any] | None = None,
+        trace: Mapping[str, str] | None = None,
     ) -> CommandOperation:
         """Persist a command using the caller's transaction.
 
@@ -741,8 +947,13 @@ class PostgresCommandStore:
         roll back together.
         """
 
+        if destination not in COMMAND_DESTINATIONS:
+            raise CommandConflict(f"unsupported command destination {destination}")
         digest = authenticated_command_digest(command, authenticated_client_id)
         payload = authenticated_command_payload(command, authenticated_client_id)
+        intent_payload = dict(payload)
+        if trace:
+            intent_payload["_trace"] = {str(key): str(value) for key, value in trace.items()}
         row = await conn.fetchrow(
             """
             INSERT INTO middleware_commands (
@@ -778,9 +989,13 @@ class PostgresCommandStore:
                 command.requested_by,
                 "validated command and persisted delivery intent",
                 json.dumps(
-                    {"authenticated_client_id": authenticated_client_id},
+                    {
+                        "authenticated_client_id": authenticated_client_id,
+                        **redact_metadata(dict(decision_evidence or {})),
+                    },
                     separators=(",", ":"),
                     sort_keys=True,
+                    default=str,
                 ),
             )
             await conn.execute(
@@ -792,9 +1007,9 @@ class PostgresCommandStore:
                 """,
                 command.tenant_id,
                 str(command.command_id),
-                TEMPORAL_COMMAND_DESTINATION,
+                destination,
                 command.command_type,
-                json.dumps(payload, separators=(",", ":"), sort_keys=True),
+                json.dumps(intent_payload, separators=(",", ":"), sort_keys=True),
                 command.idempotency_key,
                 next_attempt_at,
             )
@@ -952,9 +1167,19 @@ class PostgresCommandStore:
                     row = await conn.fetchrow("""UPDATE middleware_commands SET state=$3, resource_version=resource_version+1,
                         reconciliation_requested_at=now(), reconciliation_reason=$4, updated_at=now()
                         WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id), new_state, reason)
-                    work_key = "operation-reconcile:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
-                    await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
-                        VALUES ($1,$2,$3,'operation.reconcile.v1',$4::jsonb,$5) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, json.dumps({"command_id": str(command_id), "action": "reconcile", "reason": reason}), work_key)
+                    # An adapter-executed command is reconciled from its own outbox row
+                    # (quarantined for the reconciler); Temporal families keep the
+                    # dedicated reconcile intent.
+                    adapter_rows = await conn.execute("""UPDATE middleware_outbox
+                        SET reconciliation_required_at=COALESCE(reconciliation_required_at, now()),
+                            lease_owner=CASE WHEN lease_until IS NOT NULL AND lease_until > now() THEN lease_owner ELSE NULL END,
+                            lease_until=CASE WHEN lease_until IS NOT NULL AND lease_until > now() THEN lease_until ELSE NULL END
+                        WHERE tenant_id=$1 AND command_id=$2 AND destination=$3
+                          AND completed_at IS NULL AND dead_lettered_at IS NULL AND cancelled_at IS NULL""", tenant_id, str(command_id), ADAPTER_COMMAND_DESTINATION)
+                    if adapter_rows == "UPDATE 0":
+                        work_key = "operation-reconcile:" + hashlib.sha256(f"{tenant_id}:{command_id}:{actor_id}:{idempotency_key}".encode()).hexdigest()
+                        await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
+                            VALUES ($1,$2,$3,'operation.reconcile.v1',$4::jsonb,$5) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, json.dumps({"command_id": str(command_id), "action": "reconcile", "reason": reason}), work_key)
                 else:
                     if previous != "failed":
                         raise CommandConflict("operation is not safely retryable")
@@ -964,8 +1189,10 @@ class PostgresCommandStore:
                     retry_envelope["idempotency_key"] = work_key
                     row = await conn.fetchrow("""UPDATE middleware_commands SET state='queued', resource_version=resource_version+1,
                         last_error=NULL, queued_at=now(), updated_at=now() WHERE tenant_id=$1 AND command_id=$2 RETURNING *""", tenant_id, str(command_id))
+                    retry_destination = await conn.fetchval("""SELECT destination FROM middleware_outbox WHERE tenant_id=$1 AND command_id=$2
+                        AND destination = ANY($3::text[]) ORDER BY id DESC LIMIT 1""", tenant_id, str(command_id), [TEMPORAL_COMMAND_DESTINATION, ADAPTER_COMMAND_DESTINATION])
                     await conn.execute("""INSERT INTO middleware_outbox (tenant_id, command_id, destination, event_type, payload, idempotency_key)
-                        VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), TEMPORAL_COMMAND_DESTINATION, current["command_type"], json.dumps(retry_envelope), work_key)
+                        VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING""", tenant_id, str(command_id), retry_destination or TEMPORAL_COMMAND_DESTINATION, current["command_type"], json.dumps(retry_envelope), work_key)
                 assert row is not None
                 await conn.execute("""INSERT INTO middleware_command_audit (tenant_id, command_id, previous_state, new_state, actor_id, reason, metadata)
                     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)""", tenant_id, str(command_id), previous, new_state, actor_id, reason, json.dumps({"action": action, "resource_version": row["resource_version"]}))
@@ -986,6 +1213,7 @@ class PostgresCommandStore:
         reason: str,
         provider_operation_id: str | None = None,
         readback_evidence: Mapping[str, Any] | None = None,
+        expected_attempt: int | None = None,
     ) -> CommandOperation:
         if readback_evidence is not None and new_state not in {
             "completed", "reconciliation_required",
@@ -1016,6 +1244,18 @@ class PostgresCommandStore:
                 if current is None:
                     raise CommandNotFound("command operation was not found")
                 previous_state = current["state"]
+                if expected_attempt is not None and new_state != "dispatching":
+                    newest = await conn.fetchval(
+                        """
+                        SELECT COALESCE(max(attempt_number), 0)
+                        FROM middleware_command_attempts
+                        WHERE tenant_id=$1 AND command_id=$2
+                        """,
+                        tenant_id,
+                        str(command_id),
+                    )
+                    if int(newest or 0) != expected_attempt:
+                        raise CommandConflict("stale attempt fencing token")
                 if new_state not in ALLOWED_COMMAND_TRANSITIONS[previous_state]:
                     raise CommandConflict(
                         f"invalid command transition {previous_state} -> {new_state}"
@@ -1158,6 +1398,166 @@ class PostgresCommandStore:
             readback_evidence_sha256=safe_readback_digest,
         )
 
+    async def latest_attempt(self, tenant_id: str, command_id: UUID) -> int:
+        async with self.pool.acquire() as conn:
+            exists = await conn.fetchval(
+                "SELECT 1 FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+                tenant_id,
+                str(command_id),
+            )
+            if exists is None:
+                raise CommandNotFound("command operation was not found")
+            newest = await conn.fetchval(
+                """
+                SELECT COALESCE(max(attempt_number), 0)
+                FROM middleware_command_attempts
+                WHERE tenant_id=$1 AND command_id=$2
+                """,
+                tenant_id,
+                str(command_id),
+            )
+        return int(newest or 0)
+
+    async def load_envelope(self, tenant_id: str, command_id: UUID) -> CommandEnvelope:
+        async with self.pool.acquire() as conn:
+            raw = await conn.fetchval(
+                "SELECT payload FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2",
+                tenant_id,
+                str(command_id),
+            )
+        if raw is None:
+            raise CommandNotFound("command operation was not found")
+        payload = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        return command_envelope_from_payload(payload)
+
+    async def backlog(self, tenant_id: str) -> tuple[int, int]:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT count(*) FILTER (WHERE tenant_id=$1) AS tenant_active,
+                       count(*) AS global_active
+                FROM middleware_commands
+                WHERE state = ANY($2::text[])
+                """,
+                tenant_id,
+                list(ACTIVE_COMMAND_STATES),
+            )
+        return int(row["tenant_active"] or 0), int(row["global_active"] or 0)
+
+    async def reconcile(
+        self,
+        tenant_id: str,
+        command_id: UUID,
+        *,
+        matched: bool,
+        actor_id: str,
+        reason: str,
+        provider_operation_id: str | None,
+        evidence: Mapping[str, Any],
+    ) -> CommandOperation:
+        """Close (or keep parked) an operation awaiting reconciliation.
+
+        ``matched`` moves ``reconciliation_required`` to ``completed`` with the
+        read-back evidence — the same durable outcome the Temporal reconciliation
+        activity records; a mismatch keeps the operation parked with the reason
+        and the evidence so an operator (or the bounded reconciler budget) decides.
+        """
+        safe_reason = reason[:2048]
+        safe_evidence = dict(evidence)
+        evidence_digest = provider_evidence_digest(safe_evidence)
+        next_state = "completed" if matched else "reconciliation_required"
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                current = await conn.fetchrow(
+                    "SELECT state FROM middleware_commands WHERE tenant_id=$1 AND command_id=$2 FOR UPDATE",
+                    tenant_id,
+                    str(command_id),
+                )
+                if current is None:
+                    raise CommandNotFound("command operation was not found")
+                if current["state"] != "reconciliation_required":
+                    raise CommandConflict("operation is no longer awaiting reconciliation")
+                if matched:
+                    row = await conn.fetchrow(
+                        """
+                        UPDATE middleware_commands
+                        SET state='completed',
+                            provider_operation_id=COALESCE($3, provider_operation_id),
+                            last_error=NULL,
+                            completed_at=now(),
+                            updated_at=now(),
+                            resource_version=resource_version+1
+                        WHERE tenant_id=$1 AND command_id=$2
+                        RETURNING *
+                        """,
+                        tenant_id,
+                        str(command_id),
+                        provider_operation_id,
+                    )
+                else:
+                    row = await conn.fetchrow(
+                        """
+                        UPDATE middleware_commands
+                        SET provider_operation_id=COALESCE($3, provider_operation_id),
+                            last_error=$4,
+                            reconciliation_reason=$4,
+                            updated_at=now(),
+                            resource_version=resource_version+1
+                        WHERE tenant_id=$1 AND command_id=$2
+                        RETURNING *
+                        """,
+                        tenant_id,
+                        str(command_id),
+                        provider_operation_id,
+                        safe_reason,
+                    )
+                assert row is not None
+                await conn.execute(
+                    """
+                    INSERT INTO middleware_command_audit (
+                        tenant_id, command_id, previous_state, new_state,
+                        actor_id, reason, metadata
+                    ) VALUES ($1,$2,'reconciliation_required',$3,$4,$5,$6::jsonb)
+                    """,
+                    tenant_id,
+                    str(command_id),
+                    next_state,
+                    actor_id,
+                    safe_reason,
+                    json.dumps(
+                        {
+                            "provider_operation_id": provider_operation_id,
+                            "readback_evidence_sha256": evidence_digest,
+                            "reconciliation_status": "matched" if matched else "mismatch",
+                        },
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ),
+                )
+                await conn.execute(
+                    """
+                    UPDATE middleware_command_attempts
+                    SET state=$3,
+                        provider_operation_id=COALESCE($4, provider_operation_id),
+                        result_payload=$5::jsonb,
+                        error_code=CASE WHEN $3='reconciliation_required' THEN 'provider_readback_mismatch' ELSE NULL END,
+                        error_detail=CASE WHEN $3='reconciliation_required' THEN $6 ELSE NULL END,
+                        finished_at=now()
+                    WHERE id=(
+                        SELECT id FROM middleware_command_attempts
+                        WHERE tenant_id=$1 AND command_id=$2
+                        ORDER BY attempt_number DESC LIMIT 1
+                    )
+                    """,
+                    tenant_id,
+                    str(command_id),
+                    next_state,
+                    provider_operation_id,
+                    json.dumps(safe_evidence, separators=(",", ":"), sort_keys=True),
+                    safe_reason,
+                )
+        return self._operation(row, readback_evidence=safe_evidence, readback_evidence_sha256=evidence_digest)
+
     async def ready(self) -> bool:
         try:
             async with self.pool.acquire() as conn:
@@ -1247,6 +1647,9 @@ class CommandService:
         *,
         authenticated_subject: str,
         authenticated_client_id: str,
+        destination: str = TEMPORAL_COMMAND_DESTINATION,
+        decision_evidence: Mapping[str, Any] | None = None,
+        trace: Mapping[str, str] | None = None,
     ) -> CommandOperation:
         self.validate_submission(
             command,
@@ -1256,6 +1659,9 @@ class CommandService:
         return await self.store.submit(
             command,
             authenticated_client_id=authenticated_client_id,
+            destination=destination,
+            decision_evidence=decision_evidence,
+            trace=trace,
         )
 
     def validate_submission(
@@ -1285,3 +1691,8 @@ class CommandService:
     async def list_events(self, *args: Any, **kwargs: Any) -> list[OperationEvent]: return await self.store.list_events(*args, **kwargs)
     async def list_attempts(self, *args: Any, **kwargs: Any) -> list[OperationAttempt]: return await self.store.list_attempts(*args, **kwargs)
     async def mutate_operation(self, *args: Any, **kwargs: Any) -> CommandOperation: return await self.store.mutate_operation(*args, **kwargs)
+    async def transition(self, *args: Any, **kwargs: Any) -> CommandOperation: return await self.store.transition(*args, **kwargs)
+    async def reconcile(self, *args: Any, **kwargs: Any) -> CommandOperation: return await self.store.reconcile(*args, **kwargs)
+    async def latest_attempt(self, tenant_id: str, command_id: UUID) -> int: return await self.store.latest_attempt(tenant_id, command_id)
+    async def load_envelope(self, tenant_id: str, command_id: UUID) -> CommandEnvelope: return await self.store.load_envelope(tenant_id, command_id)
+    async def backlog(self, tenant_id: str) -> tuple[int, int]: return await self.store.backlog(tenant_id)

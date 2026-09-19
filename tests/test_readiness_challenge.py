@@ -13,7 +13,6 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.x509.oid import NameOID
 from fastapi.testclient import TestClient
 
-from app.api.v1 import readiness_challenge as challenge
 from app.core.config import settings
 from app.entrypoints.event_gateway import app
 
@@ -83,7 +82,9 @@ def configured(monkeypatch, tmp_path: Path):
     )
     monkeypatch.setattr(settings, "deployed_source_sha", "a" * 40)
     monkeypatch.setattr(settings, "runtime_artifact_checksum", "sha256:" + "b" * 64)
-    monkeypatch.setattr(challenge, "Redis", FakeRedis)
+    # The handler borrows the process-wide Redis client from the application
+    # state (app.core.providers.get_redis_client); inject the fake there.
+    monkeypatch.setattr(app.state, "redis", FakeRedis(), raising=False)
     FakeRedis.seen.clear()
     FakeRedis.unavailable = False
     app.state.request_guard.reset_rate_limits()

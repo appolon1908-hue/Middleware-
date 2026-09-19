@@ -24,7 +24,7 @@ from app.api.v1.crm_common import (
     call_bridge,
     correlation_id,
     ensure_bridge_tenant,
-    idempotency_key,
+    submit_crm_command,
 )
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
@@ -56,13 +56,13 @@ async def create_opportunity(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.create_opportunity(payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid))
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.opportunity.create.v1",
+        payload={"record": payload},
     )
 
 
@@ -87,13 +87,11 @@ async def update_opportunity(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.update_opportunity(
-            opportunity_id, payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid)
-        )
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.opportunity.update.v1",
+        payload={"external_id": opportunity_id, "record": payload},
     )

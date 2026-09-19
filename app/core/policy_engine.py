@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -198,4 +198,126 @@ def evaluate(request: PolicyRequest) -> PolicyResult:
         data_freshness=freshness,
         evaluated_at=now,
         expiration=now + timedelta(minutes=5),
+    )
+#
+# ``evaluate`` above decides channel-level compliance (consent, DNC, calling
+# windows, ...). ``evaluate_command`` below decides whether a verified
+# principal may submit a given command through the V3 kernel. Both are the
+# one Policy Engine: same module, same fail-closed posture, one version line
+# per rule set, and the kernel persists every decision with the operation.
+# Kong authenticates; it never makes this decision.
+
+COMMAND_POLICY_VERSION = "2026-09-19.1"
+EffectClassification = Literal["external_effect", "internal", "read", "synthetic"]
+
+
+class CommandPolicyRequest(BaseModel):
+    """Verified facts only: nothing here comes from the request body."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    correlation_id: str = Field(min_length=1, max_length=180)
+    principal: str = Field(min_length=1, max_length=300)
+    client_id: str = Field(min_length=1, max_length=100)
+    tenant_id: str = Field(min_length=1, max_length=128)
+    authorized_tenants: tuple[str, ...] = ()
+    roles: tuple[str, ...] = ()
+    scopes: tuple[str, ...] = ()
+    required_scope: str = Field(min_length=1, max_length=120)
+    command_type: str = Field(min_length=3, max_length=180)
+    target: str = Field(min_length=1, max_length=100)
+    capability: str = Field(min_length=3, max_length=100)
+    resource_scope: str | None = Field(default=None, max_length=180)
+    campaign_id: str | None = Field(default=None, max_length=128)
+    environment: Literal["development", "test", "staging", "preproduction", "production"]
+    effect_classification: EffectClassification
+    # The caller's registered connector authority (config/control-plane-callers.v1.json).
+    caller_command_prefixes: tuple[str, ...] = ()
+    caller_targets: tuple[str, ...] = ()
+    caller_connector_commands_allowed: bool = False
+    # Capabilities whose commands are meaningful only inside a campaign.
+    campaign_scoped: bool = False
+    # Operator-only command families (replay/REEXECUTE, capability changes).
+    operator_required: bool = False
+    evaluated_at: datetime | None = None
+
+
+class CommandPolicyDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    decision_id: str
+    policy_version: str
+    correlation_id: str
+    allow: bool
+    reason_code: str
+    reason_codes: list[str]
+    evaluated_at: datetime
+    safe_metadata: dict[str, str | bool]
+
+    def evidence(self) -> dict[str, Any]:
+        """What the kernel persists in the operation audit. No principal
+        secrets, no token, no payload."""
+        return {
+            "policy_decision_id": self.decision_id,
+            "policy_version": self.policy_version,
+            "policy_allow": self.allow,
+            "policy_reason_code": self.reason_code,
+        }
+
+
+PLATFORM_OPERATOR_ROLE = "platform-operator"
+
+
+def evaluate_command(request: CommandPolicyRequest) -> CommandPolicyDecision:
+    """Deny by default; every rule appends a reason code, allow means none."""
+    now = request.evaluated_at or datetime.now(timezone.utc)
+    if not _aware(now):
+        now = now.replace(tzinfo=timezone.utc)
+    reasons: list[str] = []
+
+    if request.required_scope not in request.scopes:
+        reasons.append("scope_missing")
+    if "*" in request.authorized_tenants:
+        reasons.append("wildcard_tenant_prohibited")
+    elif request.tenant_id not in request.authorized_tenants:
+        reasons.append("tenant_not_authorized")
+
+    if request.effect_classification != "read":
+        if not request.caller_connector_commands_allowed:
+            reasons.append("client_without_command_authority")
+        else:
+            if request.target not in request.caller_targets:
+                reasons.append("target_not_authorized_for_client")
+            if not any(
+                request.command_type.startswith(prefix)
+                for prefix in request.caller_command_prefixes
+            ):
+                reasons.append("command_namespace_not_authorized")
+
+    if request.campaign_scoped and not request.campaign_id:
+        reasons.append("campaign_scope_required")
+    if request.operator_required and PLATFORM_OPERATOR_ROLE not in request.roles:
+        reasons.append("operator_role_required")
+    if (
+        request.environment == "production"
+        and request.effect_classification == "synthetic"
+    ):
+        reasons.append("synthetic_command_in_production")
+
+    allow = not reasons
+    return CommandPolicyDecision(
+        decision_id=str(uuid4()),
+        policy_version=COMMAND_POLICY_VERSION,
+        correlation_id=request.correlation_id,
+        allow=allow,
+        reason_code=reasons[0] if reasons else "allowed",
+        reason_codes=reasons or ["allowed"],
+        evaluated_at=now,
+        safe_metadata={
+            "client_id": request.client_id,
+            "environment": request.environment,
+            "effect_classification": request.effect_classification,
+            "capability": request.capability,
+            "operator": PLATFORM_OPERATOR_ROLE in request.roles,
+        },
     )

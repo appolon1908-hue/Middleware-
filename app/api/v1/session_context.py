@@ -45,6 +45,7 @@ from app.adapters.foundation.client import (
 )
 from app.api.v1.agent_provisioning import AgentProvisioningRequest
 from app.core.config import settings
+from app.core.providers import get_http_client
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
     require_provisioning_scope,
@@ -86,32 +87,31 @@ def _products_for(request: AgentProvisioningRequest) -> dict[str, dict[str, bool
 
 
 async def _resolve_context(
-    session: AsyncSession, principal: ProvisioningPrincipal, tenant_id: str,
+    session: AsyncSession, principal: ProvisioningPrincipal, tenant_id: str, http: httpx.AsyncClient,
 ) -> dict[str, Any]:
     require_tenant_match(principal, tenant_id)
 
     foundation = FoundationClient(settings)
     tenant_status = "UNKNOWN"
     entitlements: list[dict[str, Any]] = []
-    async with httpx.AsyncClient() as http:
-        try:
-            tenant = await foundation.get_tenant(http, tenant_id)
-            tenant_status = tenant.status
-            entitlement_records = await foundation.list_entitlements(http, tenant_id)
-            entitlements = [
-                {"key": item.entitlement_key, "enabled": item.enabled}
-                for item in entitlement_records
-            ]
-        except FoundationTenantNotFound:
-            raise HTTPException(404, "tenant not found in codestra-foundation") from None
-        except FoundationUnavailable:
-            # Fail closed on entitlement resolution, not on the whole
-            # endpoint - a foundation outage should not take down every
-            # other Codestra UI's login, but it must not fabricate
-            # entitlement state either. tenant_status stays "UNKNOWN" and
-            # entitlements stays empty (deny-by-default), which callers
-            # must treat as "resolve again", not "no entitlements".
-            tenant_status = "UNAVAILABLE"
+    try:
+        tenant = await foundation.get_tenant(http, tenant_id)
+        tenant_status = tenant.status
+        entitlement_records = await foundation.list_entitlements(http, tenant_id)
+        entitlements = [
+            {"key": item.entitlement_key, "enabled": item.enabled}
+            for item in entitlement_records
+        ]
+    except FoundationTenantNotFound:
+        raise HTTPException(404, "tenant not found in codestra-foundation") from None
+    except FoundationUnavailable:
+        # Fail closed on entitlement resolution, not on the whole
+        # endpoint - a foundation outage should not take down every
+        # other Codestra UI's login, but it must not fabricate
+        # entitlement state either. tenant_status stays "UNKNOWN" and
+        # entitlements stays empty (deny-by-default), which callers
+        # must treat as "resolve again", not "no entitlements".
+        tenant_status = "UNAVAILABLE"
 
     requests_for_tenant = await _latest_requests_for_tenant(session, tenant_id)
     campaigns: dict[str, dict[str, Any]] = {}
@@ -148,8 +148,9 @@ async def get_session_context(
         require_provisioning_scope("identity.request")
     ),
     session: AsyncSession = Depends(get_session),
+    http: httpx.AsyncClient = Depends(get_http_client),
 ) -> dict[str, Any]:
-    return await _resolve_context(session, principal, tenant_id)
+    return await _resolve_context(session, principal, tenant_id, http)
 
 
 @router.post("/context/select")
@@ -159,8 +160,9 @@ async def select_session_context(
         require_provisioning_scope("identity.request")
     ),
     session: AsyncSession = Depends(get_session),
+    http: httpx.AsyncClient = Depends(get_http_client),
 ) -> dict[str, Any]:
-    context = await _resolve_context(session, principal, payload.tenant_id)
+    context = await _resolve_context(session, principal, payload.tenant_id, http)
     if payload.campaign_id is not None:
         matching = [c for c in context["campaigns"] if c["campaign_id"] == payload.campaign_id]
         if not matching:

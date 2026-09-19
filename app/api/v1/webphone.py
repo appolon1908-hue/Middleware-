@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import asyncio
 import hashlib
 import hmac
@@ -23,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
+from app.core.providers import get_http_client, get_provisioning_http_client
 from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 
 
@@ -120,41 +123,40 @@ def _attribute(attributes: dict, name: str) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-async def _keycloak_user(subject: str) -> dict:
+async def _keycloak_user(subject: str, client: httpx.AsyncClient) -> dict:
     secret_path = Path(settings.provisioning_service_client_secret_file)
     try:
         secret = secret_path.read_text().strip()
     except OSError as exc:
         raise HTTPException(503, "identity service unavailable") from exc
-    async with httpx.AsyncClient(
-        verify=settings.provisioning_service_ca_file, timeout=8
-    ) as client:
-        try:
-            token_response = await client.post(
-                settings.provisioning_service_token_url,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": settings.provisioning_service_client_id,
-                    "client_secret": secret,
-                },
-            )
-            token_response.raise_for_status()
-            service_token = token_response.json()["access_token"]
-            user_response = await client.get(
-                settings.keycloak_userinfo_url.format(subject=subject),
-                headers={"Authorization": f"Bearer {service_token}"},
-            )
-            user_response.raise_for_status()
-            user = user_response.json()
-        except (httpx.HTTPError, KeyError, ValueError) as exc:
-            raise HTTPException(503, "identity service unavailable") from exc
+    try:
+        token_response = await client.post(
+            settings.provisioning_service_token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": settings.provisioning_service_client_id,
+                "client_secret": secret,
+            },
+            timeout=8,
+        )
+        token_response.raise_for_status()
+        service_token = token_response.json()["access_token"]
+        user_response = await client.get(
+            settings.keycloak_userinfo_url.format(subject=subject),
+            headers={"Authorization": f"Bearer {service_token}"},
+            timeout=8,
+        )
+        user_response.raise_for_status()
+        user = user_response.json()
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        raise HTTPException(503, "identity service unavailable") from exc
     if not isinstance(user, dict):
         raise HTTPException(503, "identity service unavailable")
     return user
 
 
 async def _odoo_identity(
-    employee_id: str, campaign_id: str | None = None, endpoint: int | None = None
+    employee_id: str, client: httpx.AsyncClient, campaign_id: str | None = None, endpoint: int | None = None
 ) -> dict:
     if (
         not settings.odoo_identity_lookup_url
@@ -187,20 +189,20 @@ async def _odoo_identity(
         secret.encode(), canonical.encode(), hashlib.sha256
     ).hexdigest()
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            response = await client.get(
-                url,
-                headers={
-                    "X-Codestra-Identity-Timestamp": timestamp,
-                    "X-Codestra-Identity-Signature": f"sha256={signature}",
-                },
+        response = await client.get(
+            url,
+            headers={
+                "X-Codestra-Identity-Timestamp": timestamp,
+                "X-Codestra-Identity-Signature": f"sha256={signature}",
+            },
+            timeout=8,
+        )
+        if response.status_code >= 400:
+            raise HTTPException(
+                response.status_code if response.status_code in {401, 403} else 503,
+                "employee identity not authorized",
             )
-            if response.status_code >= 400:
-                raise HTTPException(
-                    response.status_code if response.status_code in {401, 403} else 503,
-                    "employee identity not authorized",
-                )
-            payload = response.json()
+        payload = response.json()
     except HTTPException:
         raise
     except (httpx.HTTPError, ValueError) as exc:
@@ -291,7 +293,7 @@ async def browser_identity(
                 subject = proxy_subject
         if not isinstance(subject, str) or not subject:
             raise HTTPException(401, "identity subject missing")
-        user = await _keycloak_user(subject)
+        user = await _keycloak_user(subject, get_provisioning_http_client(cast(Request, request)))
         attributes = user.get("attributes")
         if not isinstance(attributes, dict) or user.get("enabled") is not True:
             raise HTTPException(403, "active employee identity required")
@@ -331,6 +333,7 @@ async def browser_identity(
         )
         authoritative = await _odoo_identity(
             employee_id,
+            get_http_client(cast(Request, request)),
             campaign_id or (campaigns[0] if campaigns else None),
             requested_endpoint
             if requested_endpoint is not None
@@ -393,35 +396,36 @@ async def browser_identity(
 
 
 async def _provisioning_call(
+    request: Request,
     method: str,
     path: str,
     body: dict | None = None,
     query: dict[str, str] | None = None,
 ) -> dict:
     secret = Path(settings.provisioning_service_client_secret_file).read_text().strip()
-    async with httpx.AsyncClient(
-        verify=settings.provisioning_service_ca_file, timeout=12
-    ) as client:
-        try:
-            token_response = await client.post(
-                settings.provisioning_service_token_url,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": settings.provisioning_service_client_id,
-                    "client_secret": secret,
-                },
-            )
-            token_response.raise_for_status()
-            service_token = token_response.json()["access_token"]
-            response = await client.request(
-                method,
-                f"{settings.provisioning_service_url.rstrip('/')}/{path.lstrip('/')}",
-                params=query,
-                json=body,
-                headers={"Authorization": f"Bearer {service_token}"},
-            )
-        except (OSError, httpx.HTTPError, KeyError, ValueError) as exc:
-            raise HTTPException(503, "provisioning service unavailable") from exc
+    client = get_provisioning_http_client(request)
+    try:
+        token_response = await client.post(
+            settings.provisioning_service_token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": settings.provisioning_service_client_id,
+                "client_secret": secret,
+            },
+            timeout=12,
+        )
+        token_response.raise_for_status()
+        service_token = token_response.json()["access_token"]
+        response = await client.request(
+            method,
+            f"{settings.provisioning_service_url.rstrip('/')}/{path.lstrip('/')}",
+            params=query,
+            json=body,
+            headers={"Authorization": f"Bearer {service_token}"},
+            timeout=12,
+        )
+    except (OSError, httpx.HTTPError, KeyError, ValueError) as exc:
+        raise HTTPException(503, "provisioning service unavailable") from exc
     if response.status_code >= 400:
         detail = "provisioning request denied"
         try:
@@ -686,6 +690,7 @@ async def create_session(value: ProvisionRequest, request: Request) -> dict:
     if identity.endpoint is not None and identity.endpoint != int(value.endpoint):
         raise HTTPException(403, "endpoint denied")
     payload = await _provisioning_call(
+        request,
         "POST",
         "/session",
         {
@@ -707,7 +712,7 @@ async def create_session(value: ProvisionRequest, request: Request) -> dict:
 @router.post("/renew")
 async def renew_session(value: SessionAction, request: Request) -> dict:
     await browser_identity(request)
-    payload = await _provisioning_call("POST", "/renew", value.model_dump())
+    payload = await _provisioning_call(request, "POST", "/renew", value.model_dump())
     return _desktop_response(payload)
 
 
@@ -717,6 +722,7 @@ async def session_config(
 ) -> dict:
     await browser_identity(request)
     return await _provisioning_call(
+        request,
         "GET",
         "/config",
         query={
@@ -729,4 +735,4 @@ async def session_config(
 @router.post("/revoke")
 async def revoke_session(value: SessionAction, request: Request) -> dict:
     await browser_identity(request)
-    return await _provisioning_call("POST", "/revoke", value.model_dump())
+    return await _provisioning_call(request, "POST", "/revoke", value.model_dump())

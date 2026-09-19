@@ -87,12 +87,14 @@ class CapturingCommandStore(MemoryCommandStore):
         command: CommandEnvelope,
         *,
         authenticated_client_id: str,
+        **kernel_kwargs,
     ):
         self.submitted.append(command.model_copy(deep=True))
         self.authenticated_client_ids.append(authenticated_client_id)
         return await super().submit(
             command,
             authenticated_client_id=authenticated_client_id,
+            **kernel_kwargs,
         )
 
 

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.vicidial.mtls_client import VicidialMtlsClient, VicidialMtlsError
 from app.core.config import settings
+from app.core.providers import get_http_client
 from app.core.telephony import AUTHORITATIVE_SOURCES, ExtensionState, audit_extension
 from app.core.webrtc_production_policy import (
     E164,
@@ -415,7 +416,7 @@ def _rate_limit_originate(key: str) -> None:
     bucket.append(now)
 
 
-async def _lookup_agent_assignment(employee_id: str, campaign: str) -> dict:
+async def _lookup_agent_assignment(employee_id: str, campaign: str, http: httpx.AsyncClient) -> dict:
     """Authoritative Odoo-side lookup of the agent's permitted VICIdial identity.
 
     Deliberately independent of app.api.v1.webphone._odoo_identity (that
@@ -445,20 +446,20 @@ async def _lookup_agent_assignment(employee_id: str, campaign: str) -> dict:
         secret.encode(), canonical.encode(), hashlib.sha256
     ).hexdigest()
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            response = await client.get(
-                url,
-                headers={
-                    "X-Codestra-Identity-Timestamp": timestamp,
-                    "X-Codestra-Identity-Signature": f"sha256={signature}",
-                },
+        response = await http.get(
+            url,
+            headers={
+                "X-Codestra-Identity-Timestamp": timestamp,
+                "X-Codestra-Identity-Signature": f"sha256={signature}",
+            },
+            timeout=8,
+        )
+        if response.status_code >= 400:
+            raise HTTPException(
+                response.status_code if response.status_code in {401, 403} else 503,
+                "employee identity not authorized",
             )
-            if response.status_code >= 400:
-                raise HTTPException(
-                    response.status_code if response.status_code in {401, 403} else 503,
-                    "employee identity not authorized",
-                )
-            payload = response.json()
+        payload = response.json()
     except HTTPException:
         raise
     except (httpx.HTTPError, ValueError) as exc:
@@ -476,6 +477,7 @@ async def originate_call(
     payload: OriginateCallRequest,
     session: AsyncSession = Depends(get_session),
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
+    http: httpx.AsyncClient = Depends(get_http_client),
 ):
     """Agent-UI originate admission on the ORM lifecycle ledger.
 
@@ -570,7 +572,7 @@ async def originate_call(
         # The request body's campaign/business_unit/caller_id are claims from
         # Odoo; only the identity service's answer is trusted for
         # authorization.
-        identity = await _lookup_agent_assignment(payload.employee_id, payload.campaign)
+        identity = await _lookup_agent_assignment(payload.employee_id, payload.campaign, http)
         campaigns = identity.get("campaign_ids")
         endpoint = identity.get("endpoint")
         vicidial_username = identity.get("vicidial_username")

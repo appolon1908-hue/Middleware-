@@ -6,7 +6,11 @@
 * one Redis client (the replay guard shares it, ``owns_client=False``),
 * the process-wide SQLAlchemy engine from :mod:`app.db.session`,
 * one :class:`~app.security.KeycloakJwtVerifier` built from the canonical
-  identity settings.
+  identity settings,
+* one outbound ``httpx.AsyncClient`` (every adapter and domain handler that
+  calls another service borrows it; nothing opens one per request),
+* the :class:`~app.platform.runtime.PlatformRuntime`: the command kernel,
+  policy gate, safety gate, adapter registry, execution bus and reconciler.
 
 Application code never opens a pool, client or engine of its own; it asks the
 container (``request.app.state.runtime``) or the providers in
@@ -25,9 +29,10 @@ import asyncio
 import logging
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import asyncpg
+import httpx
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -40,7 +45,6 @@ from app.automation_v2 import (
     WorkflowRouter,
 )
 from app.commands import (
-    CommandPolicyRegistry,
     CommandService,
     MemoryCommandStore,
     PostgresCommandStore,
@@ -50,6 +54,7 @@ from app.communications import (
     MemoryCommunicationsStore,
     PostgresCommunicationsStore,
 )
+from app.core.bootstrap import SERVICE_INTEGRATION_API
 from app.core.config import Settings
 from app.email_production_control import (
     EmailProductionControlService,
@@ -59,6 +64,7 @@ from app.email_production_control import (
 )
 from app.realtime import MemoryRealtimeStore, PostgresRealtimeStore, RealtimeStore
 from app.replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
+from app.platform.runtime import PlatformRuntime, build_platform_runtime, command_policies
 from app.security import KeycloakJwtVerifier, TokenVerifier
 from app.storage import InboxStore, MemoryInboxStore, PostgresInboxStore
 
@@ -72,6 +78,9 @@ logger = logging.getLogger("codestra.runtime")
 SHARED_POOL_MIN_SIZE = 1
 SHARED_POOL_MAX_SIZE = 20
 SHARED_POOL_COMMAND_TIMEOUT_SECONDS = 10
+# One outbound HTTP client per process; adapters and handlers borrow it.
+SHARED_HTTP_TIMEOUT_SECONDS = 10.0
+SHARED_HTTP_MAX_CONNECTIONS = 64
 
 
 class RuntimeStartupError(RuntimeError):
@@ -111,11 +120,18 @@ class RuntimeContainer:
     incidents: IncidentService | None = None
     automation: AutomationService | None = None
     realtime: RealtimeStore | None = None
+    # The V3 command kernel of this process (kernel, policy/safety gates,
+    # adapter registry, execution bus handler, reconciler, metrics).
+    platform: PlatformRuntime | None = None
     # Owned infrastructure. ``None`` for in-memory (test/development) runtimes
     # and for containers assembled by tests from fakes.
     pool: asyncpg.Pool | None = None
     redis: Redis | None = None
     engine: AsyncEngine | None = None
+    http: httpx.AsyncClient | None = None
+    # Outbound client for the provisioning service (its own CA bundle when
+    # configured); otherwise the same object as ``http``.
+    http_provisioning: httpx.AsyncClient | None = None
     # Whether readiness probes the identity authority. False only when the
     # identity is implicit (derived, not configured) in development/test, so a
     # local process never reports the production authority as a dependency.
@@ -168,6 +184,9 @@ class RuntimeContainer:
         }
         if self.realtime is not None:
             checks["realtime_store"] = self.realtime.ready()
+        if self.platform is not None:
+            checks["adapter_registry"] = self.platform.registry_ready()
+            checks["platform_adapters"] = self.platform.adapters_ready()
         if self.engine is not None:
             checks["sql_engine"] = self._engine_ready()
         if self.pool is not None:
@@ -237,6 +256,11 @@ class RuntimeContainer:
                 await self.engine.dispose()
             except Exception:
                 logger.warning("runtime_engine_dispose_failed", exc_info=True)
+        for client in {id(c): c for c in (self.http, self.http_provisioning) if c is not None}.values():
+            try:
+                await client.aclose()
+            except Exception:
+                logger.warning("runtime_http_close_failed", exc_info=True)
 
 
 # ----------------------------------------------------------------------
@@ -255,11 +279,34 @@ def identity_probe_required(settings: Settings) -> bool:
 _probe_identity = identity_probe_required
 
 
+def _open_http(verify: bool | str = True) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(SHARED_HTTP_TIMEOUT_SECONDS),
+        limits=httpx.Limits(max_connections=SHARED_HTTP_MAX_CONNECTIONS),
+        follow_redirects=False,
+        verify=verify,
+    )
+
+
+def _open_http_clients(settings: Settings) -> tuple[httpx.AsyncClient, httpx.AsyncClient]:
+    """The shared outbound client and the provisioning-service client (which
+    trusts the configured CA bundle when one is set)."""
+    http = _open_http()
+    ca_file = getattr(settings, "provisioning_service_ca_file", None)
+    if isinstance(ca_file, str) and ca_file.strip():
+        try:
+            return http, _open_http(verify=ca_file)
+        except (OSError, ValueError):
+            logger.warning("provisioning_ca_bundle_unusable", extra={"path": ca_file})
+    return http, http
+
+
 def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeContainer:
     commands = CommandService(
         store=MemoryCommandStore(),
-        policies=CommandPolicyRegistry.load(),
+        policies=command_policies(settings),
     )
+    http, http_provisioning = _open_http_clients(settings)
     automation = AutomationService(
         store=MemoryAutomationStore(),
         policy=AutomationPolicy.from_path(),
@@ -273,6 +320,11 @@ def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeConta
         replay=MemoryReplayGuard(),
         tokens=tokens,
         commands=commands,
+        platform=build_platform_runtime(
+            settings, commands=commands, http=http, pool=None, service_id=SERVICE_INTEGRATION_API
+        ),
+        http=http,
+        http_provisioning=http_provisioning,
         communications=ProductionGatedCommunicationsService(
             store=MemoryCommunicationsStore(),
             commands=commands,
@@ -309,24 +361,35 @@ async def _open_redis(redis_url: str) -> Redis:
     return client
 
 
+ProcessRole = Literal["api", "worker"]
+
+
 async def build_runtime_container(
     settings: Settings,
     *,
     engine: AsyncEngine | None = None,
     tokens: TokenVerifier | None = None,
+    role: ProcessRole = "api",
+    service_id: str = SERVICE_INTEGRATION_API,
 ) -> RuntimeContainer:
     """Open the shared resources and assemble every store and service.
 
     ``engine`` defaults to the process-wide engine of :mod:`app.db.session`;
     it is disposed by :meth:`RuntimeContainer.close`. Any failure releases what
     was opened and raises :class:`RuntimeStartupError`.
+
+    ``role="worker"`` builds the same container for the worker, scheduler and
+    reconciler processes: the same pool, kernel, policy/safety gates, adapter
+    registry and schema checks, but no Redis replay guard and no identity
+    probe — those processes verify no bearer tokens and ingest no webhooks,
+    so an identity or Redis outage must not stop command execution.
     """
     verifier = tokens or KeycloakJwtVerifier(settings)
 
     if settings.allow_in_memory_storage:
         return _memory_container(settings, verifier)
 
-    if not settings.database_url or not settings.redis_url:
+    if not settings.database_url or (role == "api" and not settings.redis_url):
         raise RuntimeStartupError("DATABASE_URL and REDIS_URL are required")
 
     pool: asyncpg.Pool | None = None
@@ -334,7 +397,7 @@ async def build_runtime_container(
     container: RuntimeContainer | None = None
     try:
         pool = await _open_pool(settings.database_url)
-        redis = await _open_redis(settings.redis_url)
+        redis = await _open_redis(settings.redis_url) if role == "api" else None
 
         inbox = PostgresInboxStore(pool, owns_pool=False)
         await inbox.verify_schema()
@@ -350,14 +413,20 @@ async def build_runtime_container(
 
         commands = CommandService(
             store=command_store,
-            policies=CommandPolicyRegistry.load(),
+            policies=command_policies(settings),
         )
+        http, http_provisioning = _open_http_clients(settings)
         container = RuntimeContainer(
             settings=settings,
             inbox=inbox,
-            replay=RedisReplayGuard(redis, owns_client=False),
+            replay=RedisReplayGuard(redis, owns_client=False) if redis is not None else MemoryReplayGuard(),
             tokens=verifier,
             commands=commands,
+            platform=build_platform_runtime(
+                settings, commands=commands, http=http, pool=pool, service_id=service_id
+            ),
+            http=http,
+            http_provisioning=http_provisioning,
             communications=ProductionGatedCommunicationsService(
                 store=communications_store,
                 commands=commands,
@@ -379,7 +448,7 @@ async def build_runtime_container(
             pool=pool,
             redis=redis,
             engine=engine if engine is not None else _process_engine(),
-            probe_identity=_probe_identity(settings),
+            probe_identity=_probe_identity(settings) if role == "api" else False,
         )
         report = await container.readiness()
         if not report.ready:

@@ -323,6 +323,273 @@ paths:
           description: Required durable dependency unavailable
       security:
       - bearerAuth: []
+  /platform/v1/commands:
+    post:
+      tags:
+      - platform-command-kernel
+      summary: Submit Command
+      operationId: submit_command_platform_v1_commands_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KernelCommandRequest'
+        required: true
+      responses:
+        '202':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '200':
+          description: Exact replay of an existing operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: &id001
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: object
+                    required:
+                    - code
+                    - message
+                    - correlation_id
+                    - retryable
+                    - details
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      correlation_id:
+                        type: string
+                      retryable:
+                        type: boolean
+                      details:
+                        type: object
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/operations/{operation_id}:
+    get:
+      tags:
+      - platform-command-kernel
+      summary: Get Operation
+      operationId: get_operation_platform_v1_operations__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationStatus'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/operations/{operation_id}/timeline:
+    get:
+      tags:
+      - platform-command-kernel
+      summary: Get Timeline
+      operationId: get_timeline_platform_v1_operations__operation_id__timeline_get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Timeline'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - platform-command-kernel
+      summary: Cancel Operation
+      operationId: cancel_operation_platform_v1_operations__operation_id__cancel_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationStatus'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/operations/{operation_id}/replay:
+    post:
+      tags:
+      - platform-command-kernel
+      summary: Replay Operation
+      operationId: replay_operation_platform_v1_operations__operation_id__replay_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Operation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplayRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationStatus'
+        '400':
+          description: Invalid canonical request
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
+  /platform/v1/kernel/describe:
+    get:
+      tags:
+      - platform-command-kernel
+      summary: Describe Kernel
+      operationId: describe_kernel_platform_v1_kernel_describe_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: Invalid canonical request
+        '401':
+          description: Authentication failed
+        '403':
+          description: Scope or tenant denied
+        '404':
+          description: Resource not found
+        '409':
+          description: Version, state, or idempotency conflict
+        '429':
+          description: Rate limited
+        '503':
+          description: Required durable dependency unavailable
+      security:
+      - bearerAuth: []
   /v2/automation/jobs/claim:
     post:
       tags:
@@ -934,7 +1201,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - &id001
+      - &id002
         name: X-Tenant-ID
         in: header
         required: true
@@ -942,7 +1209,7 @@ paths:
           type: string
           minLength: 1
           maxLength: 128
-      - &id002
+      - &id003
         name: X-Correlation-ID
         in: header
         required: true
@@ -950,7 +1217,7 @@ paths:
           type: string
           minLength: 1
           maxLength: 180
-      - &id003
+      - &id004
         name: Idempotency-Key
         in: header
         required: true
@@ -1002,9 +1269,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/automation/events:
     post:
       tags:
@@ -1036,9 +1303,9 @@ paths:
         schema:
           type: string
           title: X-Codestra-Signature
-      - *id001
       - *id002
       - *id003
+      - *id004
       responses:
         '202':
           description: Successful Response
@@ -1082,9 +1349,9 @@ paths:
         schema:
           type: string
           title: Authorization
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1140,9 +1407,9 @@ paths:
           - retry
           type: string
           title: Transition
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1222,9 +1489,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/automation/events/{event_id}:
     get:
       tags:
@@ -1238,7 +1505,7 @@ paths:
         schema:
           type: string
           title: Event Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1290,7 +1557,7 @@ paths:
         schema:
           type: string
           title: Identifier
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1337,7 +1604,7 @@ paths:
           - overdue
           type: string
           title: State
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1399,7 +1666,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /api/v1/automation/actions/{action}:
     post:
       tags:
@@ -1413,9 +1680,9 @@ paths:
         schema:
           type: string
           title: Action
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1481,7 +1748,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -1530,7 +1797,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1573,7 +1840,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1616,7 +1883,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1666,7 +1933,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1727,7 +1994,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -1791,7 +2058,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -1847,9 +2114,9 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -1919,7 +2186,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -1989,7 +2256,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -2059,7 +2326,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -2129,7 +2396,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -2199,7 +2466,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -2269,7 +2536,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -2339,7 +2606,7 @@ paths:
           type: string
           default: ''
           title: Authorization
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -6304,7 +6571,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/observability/services/{service_id}/health:
     get:
       tags:
@@ -6327,7 +6594,7 @@ paths:
           type: string
           default: production
           title: Environment
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6385,7 +6652,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/observability/metrics/query:
     post:
       tags:
@@ -6428,9 +6695,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/observability/metrics/query-range:
     post:
       tags:
@@ -6473,9 +6740,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/observability/logs/query:
     post:
       tags:
@@ -6518,9 +6785,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/observability/traces/search:
     post:
       tags:
@@ -6563,9 +6830,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/observability/traces/{trace_id}:
     get:
       tags:
@@ -6581,7 +6848,7 @@ paths:
         schema:
           type: string
           title: Trace Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6635,7 +6902,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6689,7 +6956,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6743,7 +7010,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6797,7 +7064,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6855,7 +7122,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/observability/integrations:
     get:
       tags:
@@ -6886,7 +7153,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/observability/integrations/{integration_id}:
     get:
       tags:
@@ -6919,7 +7186,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -6981,7 +7248,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7024,7 +7291,7 @@ paths:
         schema:
           type: string
           title: Campaign Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7068,7 +7335,7 @@ paths:
           type: string
           default: '0'
           title: Last-Event-Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7137,9 +7404,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/observability/probe-runs/{probe_run_id}:
     get:
       tags:
@@ -7155,7 +7422,7 @@ paths:
         schema:
           type: string
           title: Probe Run Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7225,9 +7492,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/observability/kpis:
     post:
       tags:
@@ -7251,7 +7518,7 @@ paths:
           type: string
           minLength: 1
           maxLength: 180
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -7331,7 +7598,7 @@ paths:
           minimum: 1
           default: 100
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7381,7 +7648,7 @@ paths:
           type: string
           minLength: 1
           maxLength: 180
-      - *id001
+      - *id002
       requestBody:
         required: true
         content:
@@ -7429,7 +7696,7 @@ paths:
         schema:
           type: string
           title: Event Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7485,7 +7752,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /api/v1/integrations/runtime:
     get:
       tags:
@@ -7525,7 +7792,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /api/v1/integrations/odoo/health:
     get:
       tags:
@@ -7559,7 +7826,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /api/v1/integrations/odoo/readiness:
     get:
       tags:
@@ -7594,7 +7861,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /api/v1/integrations/odoo/campaigns/{campaign_id}:
     get:
       tags:
@@ -7630,7 +7897,7 @@ paths:
         schema:
           type: string
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7697,7 +7964,7 @@ paths:
         schema:
           type: string
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7760,9 +8027,9 @@ paths:
           - type: string
           - type: 'null'
           title: X-Signature
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -7814,7 +8081,7 @@ paths:
         schema:
           type: string
           title: Command Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7880,7 +8147,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /api/v1/integrations/odoo/sync-status:
     get:
       tags:
@@ -7910,7 +8177,7 @@ paths:
           type: string
           default: staging
           title: Environment
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -7986,7 +8253,7 @@ paths:
           minimum: 0
           default: 0
           title: Offset
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -8047,9 +8314,9 @@ paths:
           - type: string
           - type: 'null'
           title: X-Signature
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -8108,8 +8375,8 @@ paths:
           type: string
           minLength: 8
           maxLength: 180
-      - *id001
       - *id002
+      - *id003
       requestBody:
         required: true
         content:
@@ -8177,7 +8444,7 @@ paths:
         schema:
           type: string
           title: Authorization
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -8254,9 +8521,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/integrations/n8n/dead-letter:
     post:
       tags:
@@ -8303,9 +8570,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/integrations/n8n/errors:
     post:
       tags:
@@ -8351,9 +8618,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/integrations/n8n/reconciliation:
     post:
       tags:
@@ -8400,9 +8667,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/odoo/events:
     post:
       tags:
@@ -8461,9 +8728,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/campaign-designs/preview:
     post:
       tags:
@@ -9325,7 +9592,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/auth-gateway:
     get:
       tags:
@@ -9355,7 +9622,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/routes:
     get:
       tags:
@@ -9385,7 +9652,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/providers:
     get:
       tags:
@@ -9415,7 +9682,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/messages/lifecycle:
     get:
       tags:
@@ -9445,7 +9712,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/webhooks:
     get:
       tags:
@@ -9487,7 +9754,7 @@ paths:
         schema:
           type: string
           title: Tenant Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -9498,30 +9765,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: &id004
-                type: object
-                required:
-                - error
-                properties:
-                  error:
-                    type: object
-                    required:
-                    - code
-                    - message
-                    - correlation_id
-                    - retryable
-                    - details
-                    properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
-                      correlation_id:
-                        type: string
-                      retryable:
-                        type: boolean
-                      details:
-                        type: object
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9565,7 +9809,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/release-gates:
     get:
       tags:
@@ -9595,7 +9839,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations-dashboard/canaries:
     get:
       tags:
@@ -9625,7 +9869,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/operations:
     get:
       tags:
@@ -9679,7 +9923,7 @@ paths:
             maxLength: 180
           - type: 'null'
           title: Command Type
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -9691,7 +9935,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9720,7 +9964,7 @@ paths:
           type: string
           format: uuid
           title: Command Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -9732,7 +9976,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9778,7 +10022,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -9790,7 +10034,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9836,7 +10080,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -9848,7 +10092,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9877,9 +10121,9 @@ paths:
           type: string
           format: uuid
           title: Command Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -9897,7 +10141,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9926,9 +10170,9 @@ paths:
           type: string
           format: uuid
           title: Command Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -9946,7 +10190,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -9985,7 +10229,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -9996,7 +10240,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10035,7 +10279,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10046,7 +10290,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10074,7 +10318,7 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10085,7 +10329,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10113,7 +10357,7 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10124,7 +10368,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10152,7 +10396,7 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10163,7 +10407,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10191,7 +10435,7 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10202,7 +10446,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10230,9 +10474,9 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10249,7 +10493,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10277,9 +10521,9 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10296,7 +10540,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10324,9 +10568,9 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10343,7 +10587,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10371,9 +10615,9 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10390,7 +10634,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10418,9 +10662,9 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10437,7 +10681,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10465,9 +10709,9 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10484,7 +10728,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10512,9 +10756,9 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10531,7 +10775,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10559,9 +10803,9 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -10578,7 +10822,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10622,7 +10866,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/system/safety-state:
     get:
       tags:
@@ -10652,7 +10896,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/system/readiness:
     get:
       tags:
@@ -10682,7 +10926,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/policy/effective:
     get:
       tags:
@@ -10712,7 +10956,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/policy/decisions:
     post:
       tags:
@@ -10735,7 +10979,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10751,9 +10995,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/reconciliation/operations:
     get:
       tags:
@@ -10770,7 +11014,7 @@ paths:
           minimum: 1
           default: 50
           title: Limit
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10781,7 +11025,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10820,7 +11064,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -10831,7 +11075,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10868,7 +11112,7 @@ paths:
           type: string
           format: uuid
           title: Probe Id
-      - *id001
+      - *id002
       responses:
         '404':
           description: Identity and tenant authorization succeeded; the random probe
@@ -10880,7 +11124,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10923,7 +11167,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10939,9 +11183,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/control/communications/email:
     post:
       tags:
@@ -10972,7 +11216,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -10988,9 +11232,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/control/communications/sms:
     post:
       tags:
@@ -11021,7 +11265,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11037,9 +11281,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/control/marketing/campaigns:
     post:
       tags:
@@ -11070,7 +11314,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11086,9 +11330,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/control/social/publications:
     post:
       tags:
@@ -11119,7 +11363,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11135,9 +11379,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/operations:
     get:
       tags:
@@ -11191,7 +11435,7 @@ paths:
             maxLength: 180
           - type: 'null'
           title: Command Type
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11202,7 +11446,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11231,7 +11475,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11242,7 +11486,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11271,9 +11515,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -11290,7 +11534,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11319,9 +11563,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -11338,7 +11582,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11377,7 +11621,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11388,7 +11632,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11416,7 +11660,7 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11427,7 +11671,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11466,7 +11710,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11477,7 +11721,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11505,7 +11749,7 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11516,7 +11760,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11553,7 +11797,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11569,9 +11813,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/reconciliation/operations:
     get:
       tags:
@@ -11596,7 +11840,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11607,7 +11851,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11635,7 +11879,7 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11646,7 +11890,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11674,9 +11918,9 @@ paths:
         schema:
           type: integer
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -11693,7 +11937,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11732,7 +11976,7 @@ paths:
           - type: string
           - type: 'null'
           title: Cursor
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11743,7 +11987,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11771,7 +12015,7 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11782,7 +12026,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11810,9 +12054,9 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -11829,7 +12073,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11857,9 +12101,9 @@ paths:
         schema:
           type: string
           title: Record Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -11876,7 +12120,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11921,7 +12165,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11937,9 +12181,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/telephony/calls/requests/{operation_id}:
     get:
       tags:
@@ -11955,7 +12199,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -11967,7 +12211,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -11997,9 +12241,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -12023,7 +12267,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12053,9 +12297,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -12079,7 +12323,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12124,7 +12368,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12140,9 +12384,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/odoo/commands:
     post:
       tags:
@@ -12172,7 +12416,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12188,9 +12432,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/crm/commands:
     post:
       tags:
@@ -12220,7 +12464,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12236,9 +12480,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/email/commands:
     post:
       tags:
@@ -12268,7 +12512,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12284,9 +12528,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/sms/commands:
     post:
       tags:
@@ -12316,7 +12560,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12332,9 +12576,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/telephony/commands:
     post:
       tags:
@@ -12364,7 +12608,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12380,9 +12624,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/social/commands:
     post:
       tags:
@@ -12412,7 +12656,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12428,9 +12672,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/marketing/commands:
     post:
       tags:
@@ -12460,7 +12704,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12476,9 +12720,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/ai/commands:
     post:
       tags:
@@ -12508,7 +12752,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12524,9 +12768,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/odoo/operations/{operation_id}:
     get:
       tags:
@@ -12541,7 +12785,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12552,7 +12796,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12581,7 +12825,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12592,7 +12836,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12621,7 +12865,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12632,7 +12876,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12661,7 +12905,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12672,7 +12916,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12701,7 +12945,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12712,7 +12956,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12741,7 +12985,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12752,7 +12996,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12781,7 +13025,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12792,7 +13036,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12821,7 +13065,7 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -12832,7 +13076,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -12876,7 +13120,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/crm/operations:
     get:
       tags:
@@ -12906,7 +13150,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/email/operations:
     get:
       tags:
@@ -12936,7 +13180,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/sms/operations:
     get:
       tags:
@@ -12966,7 +13210,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/telephony/operations:
     get:
       tags:
@@ -12996,7 +13240,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/social/operations:
     get:
       tags:
@@ -13026,7 +13270,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/marketing/operations:
     get:
       tags:
@@ -13056,7 +13300,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/ai/operations:
     get:
       tags:
@@ -13086,7 +13330,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/odoo/operations/{operation_id}/cancel:
     post:
       tags:
@@ -13101,9 +13345,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13120,7 +13364,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13149,9 +13393,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13168,7 +13412,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13197,9 +13441,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13216,7 +13460,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13245,9 +13489,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13264,7 +13508,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13293,9 +13537,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13312,7 +13556,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13341,9 +13585,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13360,7 +13604,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13389,9 +13633,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13408,7 +13652,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13437,9 +13681,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13456,7 +13700,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13485,9 +13729,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13504,7 +13748,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13533,9 +13777,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13552,7 +13796,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13581,9 +13825,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13600,7 +13844,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13629,9 +13873,9 @@ paths:
           type: string
           format: uuid
           title: Operation Id
-      - *id001
       - *id002
       - *id003
+      - *id004
       requestBody:
         required: true
         content:
@@ -13648,7 +13892,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13692,7 +13936,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/ai/provider-health:
     get:
       tags:
@@ -13722,7 +13966,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/providers/status:
     get:
       tags:
@@ -13752,7 +13996,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/crm/mappings/validate:
     post:
       tags:
@@ -13776,7 +14020,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13792,9 +14036,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/odoo/mappings/validate:
     post:
       tags:
@@ -13818,7 +14062,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -13834,9 +14078,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/webhooks/{connector_id}/{endpoint_key}/{webhook_id}:
     post:
       tags:
@@ -14188,7 +14432,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
     post:
       tags:
       - appolon-control-plane
@@ -14217,7 +14461,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14233,9 +14477,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/communication/messages:
     post:
       tags:
@@ -14265,7 +14509,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14281,9 +14525,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/communications/messages/by-idempotency:
     get:
       tags:
@@ -14314,8 +14558,8 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
-      - *id003
+      - *id002
+      - *id004
   /v1/communications/messages/{messageId}:
     get:
       tags:
@@ -14330,7 +14574,7 @@ paths:
           type: string
           format: uuid
           title: Messageid
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -14342,7 +14586,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14371,7 +14615,7 @@ paths:
           type: string
           format: uuid
           title: Messageid
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -14383,7 +14627,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14412,7 +14656,7 @@ paths:
           type: string
           format: uuid
           title: Messageid
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -14424,7 +14668,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14453,9 +14697,9 @@ paths:
           type: string
           format: uuid
           title: Messageid
-      - *id001
       - *id002
       - *id003
+      - *id004
       responses:
         '200':
           description: Successful Response
@@ -14473,7 +14717,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14518,7 +14762,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/communications/provider-health:
     get:
       tags:
@@ -14549,7 +14793,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/communications/reputation:
     get:
       tags:
@@ -14580,7 +14824,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
+      - *id002
   /v1/communications/usage:
     get:
       tags:
@@ -14606,7 +14850,7 @@ paths:
             format: date-time
           - type: 'null'
           title: To
-      - *id001
+      - *id002
       responses:
         '200':
           description: Successful Response
@@ -14618,7 +14862,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14662,9 +14906,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/intake/surveys/responses:
     post:
       tags:
@@ -14694,9 +14938,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /v1/commands:
     post:
       tags:
@@ -14726,7 +14970,7 @@ paths:
           description: Invalid canonical request
           content:
             application/json:
-              schema: *id004
+              schema: *id001
         '401':
           description: Authentication failed
         '403':
@@ -14742,9 +14986,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/n8n/results:
     post:
       tags:
@@ -14802,9 +15046,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/vicidial/events:
     post:
       tags:
@@ -14862,9 +15106,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/telnexa/events:
     post:
       tags:
@@ -14922,9 +15166,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/klyrow/events:
     post:
       tags:
@@ -14982,9 +15226,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/kyqra/results:
     post:
       tags:
@@ -15042,9 +15286,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/kyqra/progress:
     post:
       tags:
@@ -15102,9 +15346,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
   /api/v1/postly/events:
     post:
       tags:
@@ -15162,9 +15406,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - *id001
       - *id002
       - *id003
+      - *id004
 components:
   schemas:
     ApprovalRequest:
@@ -16011,6 +16255,24 @@ components:
       - design_configuration
       - feature_flags
       title: CampaignDesignInput
+    CancelRequest:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+          title: Expected Version
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - reason
+      title: CancelRequest
     Change:
       properties:
         expected_version:
@@ -17368,6 +17630,81 @@ components:
       - workflow_version
       - execution_id
       title: JobClaimRequest
+    KernelCommandRequest:
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          title: Command Id
+        command_type:
+          type: string
+          maxLength: 180
+          pattern: ^[a-z0-9]+(?:[.-][a-z0-9]+)+$
+          title: Command Type
+        command_version:
+          type: string
+          const: '1.0'
+          title: Command Version
+          default: '1.0'
+        target:
+          anyOf:
+          - type: string
+            maxLength: 100
+            pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          - type: 'null'
+          title: Target
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        requested_by:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Requested By
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        capability:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z][A-Z0-9_]{2,100}$
+          - type: 'null'
+          title: Capability
+        payload:
+          type: object
+          title: Payload
+      additionalProperties: false
+      type: object
+      required:
+      - command_id
+      - command_type
+      - tenant_id
+      - requested_by
+      - correlation_id
+      - idempotency_key
+      - payload
+      title: KernelCommandRequest
+      description: 'The public, provider-blind submit body.
+
+
+        Same fields and bounds as the durable :class:`~app.commands.CommandEnvelope`;
+
+        ``target`` (the connector id) and ``capability`` may be omitted — the
+
+        command registry binds both to the command family — and must match the
+
+        registry when supplied. Authentication-derived fields (tenant, actor) are
+
+        verified against the token, never trusted from the body.'
     KillSwitchMutation:
       properties:
         expectedVersion:
@@ -17737,6 +18074,34 @@ components:
       - observed_at
       - data
       title: Observation
+    OperationAccepted:
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          title: Operation Id
+        command_id:
+          type: string
+          format: uuid
+          title: Command Id
+        state:
+          type: string
+          title: State
+        correlation_id:
+          type: string
+          title: Correlation Id
+        duplicate:
+          type: boolean
+          title: Duplicate
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      - command_id
+      - state
+      - correlation_id
+      - duplicate
+      title: OperationAccepted
     OperationAttemptListResponse:
       properties:
         items:
@@ -18038,6 +18403,96 @@ components:
       - updated_at
       - duplicate
       title: OperationResponse
+    OperationStatus:
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          title: Operation Id
+        command_id:
+          type: string
+          format: uuid
+          title: Command Id
+        tenant_id:
+          type: string
+          title: Tenant Id
+        command_type:
+          type: string
+          title: Command Type
+        target:
+          type: string
+          title: Target
+        capability:
+          type: string
+          title: Capability
+        state:
+          type: string
+          title: State
+        resource_version:
+          type: integer
+          title: Resource Version
+        correlation_id:
+          type: string
+          title: Correlation Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        provider_operation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider Operation Id
+        readback_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Readback Status
+        readback_evidence_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Readback Evidence Sha256
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        cancelled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Cancelled At
+        cancellation_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cancellation Reason
+        reconciliation:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Reconciliation
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      - command_id
+      - tenant_id
+      - command_type
+      - target
+      - capability
+      - state
+      - resource_version
+      - correlation_id
+      - created_at
+      - updated_at
+      title: OperationStatus
     OriginateRequest:
       properties:
         employee_id:
@@ -18631,6 +19086,38 @@ components:
       - action
       - reason
       title: ReconciliationResolution
+    ReplayRequest:
+      properties:
+        mode:
+          type: string
+          enum:
+          - REPROCESS
+          - REEXECUTE
+          title: Mode
+        expected_version:
+          type: integer
+          minimum: 1
+          title: Expected Version
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.: -]*$'
+          title: Reason
+        new_idempotency_key:
+          anyOf:
+          - type: string
+            maxLength: 180
+            minLength: 8
+          - type: 'null'
+          title: New Idempotency Key
+      additionalProperties: false
+      type: object
+      required:
+      - mode
+      - expected_version
+      - reason
+      title: ReplayRequest
     RuntimeIntegrationStatus:
       properties:
         status:
@@ -19012,6 +19499,83 @@ components:
       - execution_id
       - result_code
       title: TerminalResult
+    Timeline:
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          title: Operation Id
+        items:
+          items:
+            $ref: '#/components/schemas/TimelineEvent'
+          type: array
+          title: Items
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      - items
+      title: Timeline
+    TimelineEvent:
+      properties:
+        event_id:
+          type: integer
+          title: Event Id
+        operation_id:
+          type: string
+          format: uuid
+          title: Operation Id
+        event_type:
+          type: string
+          title: Event Type
+        previous_state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Previous State
+        new_state:
+          type: string
+          title: New State
+        actor_id:
+          type: string
+          title: Actor Id
+        reason:
+          type: string
+          title: Reason
+        correlation_id:
+          type: string
+          title: Correlation Id
+        causation_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Causation Id
+        attempt:
+          type: integer
+          title: Attempt
+        safe_metadata:
+          type: object
+          title: Safe Metadata
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      additionalProperties: false
+      type: object
+      required:
+      - event_id
+      - operation_id
+      - event_type
+      - previous_state
+      - new_state
+      - actor_id
+      - reason
+      - correlation_id
+      - causation_id
+      - attempt
+      - safe_metadata
+      - created_at
+      title: TimelineEvent
     TransitionRequest:
       properties:
         reason:

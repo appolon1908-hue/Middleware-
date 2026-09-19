@@ -24,7 +24,7 @@ from app.api.v1.crm_common import (
     call_bridge,
     correlation_id,
     ensure_bridge_tenant,
-    idempotency_key,
+    submit_crm_command,
 )
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
@@ -70,13 +70,13 @@ async def create_contact(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.create_contact(payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid))
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.contact.create.v1",
+        payload={"record": payload},
     )
 
 
@@ -87,15 +87,13 @@ async def update_contact(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.update_contact(
-            contact_id, payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid)
-        )
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.contact.update.v1",
+        payload={"contact_id": contact_id, "record": payload},
     )
 
 
@@ -120,15 +118,13 @@ async def create_note(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.create_note(
-            contact_id, payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid)
-        )
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.note.create.v1",
+        payload={"contact_id": contact_id, "record": payload},
     )
 
 
@@ -140,18 +136,16 @@ async def update_note(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
     # contact_id is accepted (and required by the route shape given in the
     # directive) for URL symmetry with the read side; the bridge scopes notes
     # by note_id alone, same as codestra_middleware_bridge's own routing.
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.update_note(
-            note_id, payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid)
-        )
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.note.update.v1",
+        payload={"contact_id": contact_id, "note_id": note_id, "record": payload},
     )
 
 
@@ -176,15 +170,13 @@ async def create_task(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.create_task(
-            contact_id, payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid)
-        )
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.task.create.v1",
+        payload={"contact_id": contact_id, "record": payload},
     )
 
 
@@ -195,15 +187,13 @@ async def update_task(
     payload: dict[str, Any],
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.update_task(
-            task_id, payload, correlation_id=cid, idempotency_key=idempotency_key(request, cid)
-        )
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.task.update.v1",
+        payload={"task_id": task_id, "record": payload},
     )
 
 
@@ -213,11 +203,11 @@ async def complete_task(
     task_id: int,
     tenant_id: str = Query(...),
     principal: ProvisioningPrincipal = Depends(require_provisioning_scope("identity.request")),
-    client: OdooCrmBridgeClient = Depends(get_crm_bridge_client),
 ) -> JSONResponse:
-    require_tenant_match(principal, tenant_id)
-    ensure_bridge_tenant(client, tenant_id)
-    cid = correlation_id(request)
-    return await call_bridge(
-        client.complete_task(task_id, {}, correlation_id=cid, idempotency_key=idempotency_key(request, cid))
+    return await submit_crm_command(
+        request,
+        principal=principal,
+        tenant_id=tenant_id,
+        command_type="crm.task.complete.v1",
+        payload={"task_id": task_id, "record": {}},
     )

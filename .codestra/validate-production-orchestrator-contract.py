@@ -37,8 +37,8 @@ STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "8d8f21260babfae5eaedbdd46472b1ec"
 )
 MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
-    "8b82663492fa67f6e0432bfc7dbc67f5e"
-    "cd355d9edd50cdbb3b6c17bb03a72b4"
+    "d403a62826d4a4ceea1db68c6a1e5b5aa"
+    "996b03ef2b29eaf382cef4cb9d1dac9"
 )
 BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256 = (
     "15dbaa6d571a1d1e72c09ca417cc9419"
@@ -51,7 +51,7 @@ MONEYBEE_RELEASE_VALIDATOR_SECURITY_SHA256 = (
 EXPECTED_RELEASE_VALIDATOR_SECURITY_SHA256 = {
     "appolon1908-hue/Infustruction-repo": STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256,
     "appolon1908-hue/Keycloak": STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256,
-    "appolon1908-hue/Middleware-": MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256,
+    "ingtrader21-spec/Middleware-": MIDDLEWARE_RELEASE_VALIDATOR_SECURITY_SHA256,
     "appolon1908-hue/codestra": STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256,
     "appolon1908-hue/beyvra-backend": BACKEND_RELEASE_VALIDATOR_SECURITY_SHA256,
     "appolon1908-hue/backend2": STANDARD_RELEASE_VALIDATOR_SECURITY_SHA256,
@@ -359,7 +359,7 @@ SAFE_NATIVE_ACTION_PREFIXES = {
 EXPECTED_IDENTITIES: dict[str, tuple[int, str, bool, bool]] = {
     "appolon1908-hue/Infustruction-repo": (1350724865, "infrastructure", True, True),
     "appolon1908-hue/Keycloak": (1347523366, "identity", True, False),
-    "appolon1908-hue/Middleware-": (1347559071, "canonical-middleware", False, False),
+    "ingtrader21-spec/Middleware-": (1347559071, "canonical-middleware", False, False),
     "appolon1908-hue/codestra": (1319808791, "application", True, False),
     "appolon1908-hue/beyvra-backend": (1319831182, "application", True, False),
     "appolon1908-hue/backend2": (1319903950, "application", True, False),
@@ -375,7 +375,7 @@ EXPECTED_ARTIFACT_POLICIES: dict[
 ] = {
     "appolon1908-hue/Infustruction-repo": ((), False, False, False, None, None),
     "appolon1908-hue/Keycloak": ((), False, False, False, None, None),
-    "appolon1908-hue/Middleware-": (
+    "ingtrader21-spec/Middleware-": (
         ("ghcr.io/appolon1908-hue/codestra-middleware",),
         True,
         True,
@@ -476,7 +476,7 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
         ),
         "scripts/validate.sh": "3783706062b23eb83b6323aae3be9d5b568de57eac81e3d557cca8c13bba2ace",
     },
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         "scripts/apply_portfolio_release_reviewer_access.py": (
             "f34213e61c3eba4ac1a9191883421ad3e408c35cba4c91f9fda09e09ffe75d10"
         ),
@@ -646,7 +646,7 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
     "appolon1908-hue/Keycloak": frozenset(
         {"scripts/review-plan.sh", "scripts/validate.sh"}
     ),
-    "appolon1908-hue/Middleware-": frozenset({"scripts/run_ci.sh"}),
+    "ingtrader21-spec/Middleware-": frozenset({"scripts/run_ci.sh"}),
     "appolon1908-hue/codestra": frozenset(
         {
             "scripts/ci/test-runtime-discovery-fixture.sh",
@@ -655,7 +655,7 @@ APPROVED_COMPLEX_SCRIPT_DEPENDENCY_SCAN: dict[str, frozenset[str]] = {
     ),
 }
 APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         ".github/workflows/portfolio-production-ruleset-apply.yml": (
             "7cb2d9269f490623385689c712e520ae"
             "33f7ce7fc1bf901f4005b8c22a6c76b8"
@@ -688,7 +688,7 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
             "cb89cb69636dc79a6a03e5df98abeb798"
             "6a823e30c2d52b1d03980dddac58cca"
         ),
-        ".github/workflows/required-ci.yml": "5b135f1eec36d3baa8d605ecddf3d37aa1fbfa7bd9d58e61ba58a5324a087d5e",
+        ".github/workflows/required-ci.yml": "e4a66dac0fab5ad51e6093067761a14fb489136fdc6871ae73e519ffe898e168",
         ".github/workflows/production-route-contract.yml": (
             "21595e66413a34de195d914405373b84"
             "2c8f631d053973910e6b78f63c269c7c"
@@ -734,7 +734,7 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
     },
 }
 APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         ".github/workflows/connector-runtime-api-ci.yml": "917ab06febf30f0d81146fc147794dace9510f7bb0a6fb903dd69b2244d4e1d0",
         ".github/workflows/connector-storage-ci.yml": "eada698e8756b76431a43f8d54d1aa192b9d964bca9a5e76d90476f35135bc7a",
         ".github/workflows/lead-automation-v1.yml": "9cdf5b9ce21f528bb8d0cb29b170586d212f5dfeb0e4ad237bb531a41bd89274",
@@ -763,7 +763,7 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
     },
 }
 APPROVED_OFFLINE_RUN_SHA256: dict[str, dict[str, frozenset[str]]] = {
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         ".github/workflows/trusted-production-orchestrator-gate.yml": frozenset(
             {"6ceced166ce773d56bb54f544dee4508a60803465987e93cb8d719ee96df6df3"}
         ),
@@ -778,7 +778,7 @@ APPROVED_OFFLINE_RUN_SHA256: dict[str, dict[str, frozenset[str]]] = {
     },
 }
 APPROVED_DEFAULT_TEST_DISCOVERY_SOURCE_SHA256 = {
-    "appolon1908-hue/Middleware-": (
+    "ingtrader21-spec/Middleware-": (
         "4bc320b1ae18cb4e0d97a1a3d5710638"
         "37476f3bcafde2086100687d89ea7954"
     ),
@@ -786,7 +786,7 @@ APPROVED_DEFAULT_TEST_DISCOVERY_SOURCE_SHA256 = {
 APPROVED_CONTROL_PLANE_DEPENDENCY_SHA256: dict[
     str, dict[str, dict[str, str]]
 ] = {
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         ".github/workflows/portfolio-production-ruleset-apply.yml": {
             "config/ai-production-branch-ruleset.v1.json": "52db5e583b88edb069ba1d7b829d1f49ad820d0bb90e41bcf5b94e4074403ae1",
             "config/portfolio-repositories.v1.json": "bcd65e22c20ee01812d0269af659fc09f81e0fdec78500437eebac937ae72fdf",
@@ -867,7 +867,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({(), ("--live",)}),
         ),
     },
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         "scripts/run_ci.sh": (
             "64d7c92279dd442144c7e1f74c3e48f0ab5d5db105238a534dcf8ccd99e93138",
             frozenset({()}),
@@ -901,7 +901,7 @@ APPROVED_READ_ONLY_SCRIPT_INVOCATIONS: dict[
             frozenset({("--mode", "validate")}),
         ),
         "scripts/apply_repository_governance.py": (
-            "0d87e311b2225aae48e11c727c21b2a7ffb03c26fc988025275c4b94f682ef82",
+            "dc875b6bf0223fb2d99ff70dfb99b075724ec6bf2b5aa3ef0e389b983c45fafc",
             frozenset({(), ("--apply",), ("--verify-live",)}),
         ),
     },
@@ -926,7 +926,7 @@ REQUIRED_NATIVE_WORKFLOWS: dict[str, dict[str, str]] = {
         "plan_apply": ".github/workflows/deploy.yml",
         "drift_review": ".github/workflows/drift-review.yml",
     },
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         "signed_release": ".github/workflows/release.yml",
         "runtime_certification": ".github/workflows/production-runtime-certification.yml",
     },
@@ -5092,7 +5092,7 @@ def step_has_runtime_mutation(
         if "shell" in step:
             allowed_step_keys.add("shell")
         allowed_job_environment: dict[str, object] = {}
-        if repository == "appolon1908-hue/Middleware-" and path in {
+        if repository == "ingtrader21-spec/Middleware-" and path in {
             ".github/workflows/trusted-production-orchestrator-gate.yml",
             ".github/workflows/production-orchestrator-contract.yml",
         }:
@@ -7656,7 +7656,7 @@ def validate_intent_negative_regressions(contract: dict[str, Any]) -> None:
             ),
             "read-only governance verification was treated as runtime mutation",
         )
-    repository = "appolon1908-hue/Middleware-"
+    repository = "ingtrader21-spec/Middleware-"
     control_plane_paths: tuple[str, ...] = (
         ".github/workflows/integration-main-release-authorities.yml",
         ".github/workflows/production-reviewer-access.yml",
@@ -9292,7 +9292,7 @@ subprocess.run(["docker", "buildx", "build", "--push", "."], check=True)
 # remain counted as mutating; only the two global disable requirements are
 # skipped when the repository/path/job content matches an approved hash.
 APPROVED_NARROW_MUTATION_SHA256: dict[str, dict[str, str]] = {
-    "appolon1908-hue/Middleware-": {
+    "ingtrader21-spec/Middleware-": {
         # Read-only release verification writes only runner-local evidence and
         # job outputs. Its workflow grants actions:read and contents:read only.
         ".github/workflows/automated-production-promotion.yml:verify-release": (
@@ -9302,8 +9302,8 @@ APPROVED_NARROW_MUTATION_SHA256: dict[str, dict[str, str]] = {
         # The only external mutation is the required job posting its own exact
         # commit status through checks:write.
         ".github/workflows/required-ci.yml:test": (
-            "7a085e87d05b0a9848f57438efa27b84"
-            "d8aa6f7d4d1f9435bc3e3608b71f9ad7"
+            "4d4e71b5b13e40a1b1b35a3502c7d3d8"
+            "d02f30c8692a398670c0cbb1ed9fc8c0"
         ),
     },
 }
@@ -9388,7 +9388,7 @@ def require_image_publishing_jobs_disabled(workflow: str, path: str) -> None:
 
 
 def validate_portfolio_control_plane_bindings() -> None:
-    repository = "appolon1908-hue/Middleware-"
+    repository = "ingtrader21-spec/Middleware-"
     path = ".github/workflows/portfolio-production-ruleset-apply.yml"
     if not (ROOT / path).is_file():
         return

@@ -1,71 +1,20 @@
-"""Authenticated integration and control surface."""
+"""Authenticated integration and control surface (deployed process).
 
-from fastapi import FastAPI
+The process serves the single canonical application from
+:mod:`app.application` in its integration profile; this module only names
+the service and starts uvicorn. Route groups, guard, health and runtime
+ownership are defined once in the core.
+"""
 
-from app.api.v1.automation import router as automation_router
-from app.api.v1.commands import router as commands_router
-from app.api.v1.control import router as control_router
-from app.api.v1.lead_reconciliation import router as lead_reconciliation_router
-from app.api.v1.lead_automation import router as lead_automation_router
-from app.api.v1.integrations import router as integrations_router
-from app.api.v1.mappings import router as mappings_router
-from app.api.v1.n8n_staging import router as n8n_staging_router
-from app.api.v1.n8n_transport import router as n8n_transport_router
-from app.api.v1.n8n_runtime import router as n8n_runtime_router
-from app.api.v1.operations import router as operations_router
-from app.api.v1.orchestration import router as orchestration_router
-from app.api.v1.provider_webhooks import router as provider_webhooks_router
-from app.api.v1.quarantine import router as quarantine_router
-from app.api.v1.reports import router as reports_router
-from app.api.v1.telephony import router as telephony_router
-from app.api.v1.sales import router as sales_router
-from app.api.v1.booking import router as booking_router
-from app.api.v1.platform import router as platform_router
-from app.api.v1.agent_provisioning import router as agent_provisioning_router
-from app.monitoring.routes import router as monitoring_router
-from app.api.v1.webphone import router as webphone_router
-from app.api.v1.observability_sync import router as observability_sync_router
-from app.api.v1.callbacks import router as callbacks_router
-from app.entrypoints.runtime import add_api_runtime, run_api
+from __future__ import annotations
 
-SERVICE = "middleware-integration-api"
-routers = (
-    commands_router,
-    callbacks_router,
-    control_router,
-    automation_router,
-    reports_router,
-    operations_router,
-    lead_reconciliation_router,
-    lead_automation_router,
-    integrations_router,
-    orchestration_router,
-    provider_webhooks_router,
-    mappings_router,
-    webphone_router,
-    n8n_staging_router,
-    n8n_transport_router,
-    n8n_runtime_router,
-    quarantine_router,
-    telephony_router,
-    sales_router,
-    booking_router,
-    platform_router,
-    agent_provisioning_router,
-    observability_sync_router,
-)
-app = FastAPI(
-    title="Codestra Integration API",
-    version="1.0.0",
-    routes=[
-        route
-        for router in routers
-        for route in router.routes
-        if not (getattr(route, "path", "") or "").startswith("/api/v1/events/")
-    ],
-)
-app.include_router(monitoring_router)
-add_api_runtime(app, SERVICE)
+from app.application import AppProfile, create_app
+from app.core.bootstrap import SERVICE_INTEGRATION_API
+from app.entrypoints.runtime import run_api
+
+SERVICE = SERVICE_INTEGRATION_API
+
+app = create_app(profile=AppProfile.INTEGRATION, service=SERVICE)
 
 
 if __name__ == "__main__":

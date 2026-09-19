@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.commands import CommandPolicyRegistry, CommandService, MemoryCommandStore
-from app.config import Settings
+from app.core.config import Settings
 from app.main import create_app
 from app.operations import (
     MAX_BIGINT,
@@ -22,7 +22,7 @@ from app.operations import (
     _operation_position,
 )
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.security import AuthenticationError, RequestValidationError
 from app.storage import MemoryInboxStore
 
@@ -68,7 +68,8 @@ def _app(settings: Settings):
         tokens=_ControlTokenVerifier(),
         commands=commands,
     )
-    return create_app(settings=settings, runtime=runtime)
+    # Includes the deprecated /v1/integrations/n8n/* aliases (monolith only).
+    return create_app(settings=settings, runtime=runtime, legacy_monolith=True)
 
 
 def _raw_cursor(value: object) -> str:

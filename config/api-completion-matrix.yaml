@@ -3,10 +3,172 @@ inventory_base_sha: 8e3534e0271371e0fee057331a9a24f391356e5e
 classification_complete: true
 unknown_endpoints: 0
 operations:
+- domain: automation
+  method: POST
+  path: /api/v1/automation/actions/{action}
+  canonical_operation_id: authorized_action_api_v1_automation_actions__action__post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: POST
+  path: /api/v1/automation/audit/result
+  canonical_operation_id: record_audit_result_api_v1_automation_audit_result_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: GET
+  path: /api/v1/automation/callbacks/{state}
+  canonical_operation_id: callbacks_api_v1_automation_callbacks__state__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: GET
+  path: /api/v1/automation/context/{resource}/{identifier}
+  canonical_operation_id: context_api_v1_automation_context__resource___identifier__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: POST
+  path: /api/v1/automation/events
+  canonical_operation_id: receive_event_api_v1_automation_events_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: POST
+  path: /api/v1/automation/events/dead-letter
+  canonical_operation_id: dead_letter_api_v1_automation_events_dead_letter_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: GET
+  path: /api/v1/automation/events/{event_id}
+  canonical_operation_id: event_status_api_v1_automation_events__event_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: POST
+  path: /api/v1/automation/executions/{transition}
+  canonical_operation_id: execution_transition_api_v1_automation_executions__transition__post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: POST
+  path: /api/v1/automation/idempotency/check
+  canonical_operation_id: reserve_idempotency_api_v1_automation_idempotency_check_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: POST
+  path: /api/v1/automation/policy-check
+  canonical_operation_id: policy_check_api_v1_automation_policy_check_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: automation
+  method: GET
+  path: /api/v1/automation/queues/status
+  canonical_operation_id: queue_status_api_v1_automation_queues_status_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: callbacks
+  method: GET
+  path: /api/v1/callbacks
+  canonical_operation_id: queue_api_v1_callbacks_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: callbacks
+  method: GET
+  path: /api/v1/callbacks/dashboard/campaigns
+  canonical_operation_id: campaign_dashboard_api_v1_callbacks_dashboard_campaigns_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: callbacks
+  method: GET
+  path: /api/v1/callbacks/dashboard/supervisor
+  canonical_operation_id: supervisor_dashboard_api_v1_callbacks_dashboard_supervisor_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: callbacks
+  method: GET
+  path: /api/v1/callbacks/due
+  canonical_operation_id: due_callbacks_api_v1_callbacks_due_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: callbacks
+  method: GET
+  path: /api/v1/callbacks/{callback_id}
+  canonical_operation_id: get_api_v1_callbacks__callback_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: campaign-designs
+  method: POST
+  path: /api/v1/campaign-designs/approvals
+  canonical_operation_id: approve_api_v1_campaign_designs_approvals_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: campaign-designs
+  method: POST
+  path: /api/v1/campaign-designs/preview
+  canonical_operation_id: preview_api_v1_campaign_designs_preview_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: control
   method: POST
   path: /api/v1/control/ai/inference-requests
   canonical_operation_id: provider_control_ai_inference_request_api_v1_control_ai_inference_requests_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks
+  canonical_operation_id: create_api_v1_control_callbacks_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: PATCH
+  path: /api/v1/control/callbacks/{callback_id}
+  canonical_operation_id: patch_callback_api_v1_control_callbacks__callback_id__patch
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/call-now
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__call_now_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/cancel
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__cancel_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/complete
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__complete_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/reassign
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__reassign_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/reschedule
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__reschedule_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/snooze
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__snooze_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: control
+  method: POST
+  path: /api/v1/control/callbacks/{callback_id}/start
+  canonical_operation_id: handler_api_v1_control_callbacks__callback_id__start_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: control
@@ -39,6 +201,18 @@ operations:
   canonical_operation_id: provider_control_social_publish_request_api_v1_control_social_publications_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: events
+  method: POST
+  path: /api/v1/events/klyrow
+  canonical_operation_id: receive_klyrow_event_api_v1_events_klyrow_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: events
+  method: POST
+  path: /api/v1/events/telnexa
+  canonical_operation_id: receive_telnexa_event_api_v1_events_telnexa_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: inbox
   method: GET
   path: /api/v1/inbox
@@ -49,6 +223,108 @@ operations:
   method: GET
   path: /api/v1/inbox/{record_id}
   canonical_operation_id: inbox_detail_api_v1_inbox__record_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/n8n/dead-letter
+  canonical_operation_id: n8n_dead_letter_api_v1_integrations_n8n_dead_letter_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/n8n/dispatch
+  canonical_operation_id: n8n_dispatch_api_v1_integrations_n8n_dispatch_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/n8n/errors
+  canonical_operation_id: n8n_error_api_v1_integrations_n8n_errors_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/n8n/progress
+  canonical_operation_id: n8n_progress_api_v1_integrations_n8n_progress_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/n8n/reconciliation
+  canonical_operation_id: n8n_reconciliation_api_v1_integrations_n8n_reconciliation_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/n8n/results
+  canonical_operation_id: n8n_result_api_v1_integrations_n8n_results_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/n8n/results/{event_id}
+  canonical_operation_id: n8n_result_status_api_v1_integrations_n8n_results__event_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/campaigns/{campaign_id}
+  canonical_operation_id: odoo_campaign_read_api_v1_integrations_odoo_campaigns__campaign_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/campaigns/{campaign_id}/desired-state
+  canonical_operation_id: odoo_campaign_desired_state_api_v1_integrations_odoo_campaigns__campaign_id__desired_state_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: POST
+  path: /api/v1/integrations/odoo/commands
+  canonical_operation_id: odoo_command_api_v1_integrations_odoo_commands_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/commands/{command_id}
+  canonical_operation_id: odoo_command_status_api_v1_integrations_odoo_commands__command_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/health
+  canonical_operation_id: odoo_health_api_v1_integrations_odoo_health_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/readiness
+  canonical_operation_id: odoo_readiness_api_v1_integrations_odoo_readiness_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/status
+  canonical_operation_id: odoo_integration_status_api_v1_integrations_odoo_status_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/sync-errors
+  canonical_operation_id: odoo_sync_errors_api_v1_integrations_odoo_sync_errors_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/odoo/sync-status
+  canonical_operation_id: odoo_sync_status_api_v1_integrations_odoo_sync_status_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: integrations
+  method: GET
+  path: /api/v1/integrations/runtime
+  canonical_operation_id: runtime_integration_status_api_v1_integrations_runtime_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: klyrow
@@ -78,7 +354,7 @@ operations:
 - domain: odoo
   method: POST
   path: /api/v1/odoo/events
-  canonical_operation_id: ingress_odoo_integration_events_api_v1_odoo_events_post
+  canonical_operation_id: ingress_odoo_event
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: operations
@@ -171,6 +447,12 @@ operations:
   canonical_operation_id: reconciliation_resolve_api_v1_reconciliation_operations__record_id__resolve_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: results
+  method: POST
+  path: /api/v1/results/callbacks/{callback_id}
+  canonical_operation_id: callback_result_api_v1_results_callbacks__callback_id__post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: telnexa
   method: POST
   path: /api/v1/telnexa/events
@@ -198,13 +480,139 @@ operations:
 - domain: health
   method: GET
   path: /health
-  canonical_operation_id: health_health_get
+  canonical_operation_id: liveness_health_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: health
+  method: GET
+  path: /health/dependencies
+  canonical_operation_id: dependencies_health_dependencies_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: health
+  method: GET
+  path: /health/live
+  canonical_operation_id: liveness_health_live_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: health
+  method: GET
+  path: /health/ready
+  canonical_operation_id: readiness_health_ready_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: healthz
+  method: GET
+  path: /healthz
+  canonical_operation_id: liveness_healthz_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: metrics
   method: GET
   path: /metrics
   canonical_operation_id: metrics_metrics_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/activity
+  canonical_operation_id: list_activity_platform_v1_activity_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/activity/{activity_id}
+  canonical_operation_id: get_activity_platform_v1_activity__activity_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/agent-provisioning/requests
+  canonical_operation_id: create_provisioning_request_platform_v1_agent_provisioning_requests_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/agent-provisioning/requests/{request_id}
+  canonical_operation_id: get_provisioning_request_platform_v1_agent_provisioning_requests__request_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/agent-provisioning/requests/{request_id}/reactivate
+  canonical_operation_id: reactivate_provisioning_request_platform_v1_agent_provisioning_requests__request_id__reactivate_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/agent-provisioning/requests/{request_id}/reconcile
+  canonical_operation_id: reconcile_provisioning_request_platform_v1_agent_provisioning_requests__request_id__reconcile_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/agent-provisioning/requests/{request_id}/revoke
+  canonical_operation_id: revoke_provisioning_request_platform_v1_agent_provisioning_requests__request_id__revoke_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/agent-provisioning/requests/{request_id}/suspend
+  canonical_operation_id: suspend_provisioning_request_platform_v1_agent_provisioning_requests__request_id__suspend_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/agents/presence
+  canonical_operation_id: list_agents_presence_platform_v1_agents_presence_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/agents/{user_id}/presence
+  canonical_operation_id: get_agent_presence_platform_v1_agents__user_id__presence_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/calls
+  canonical_operation_id: list_calls_platform_v1_calls_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/calls/{call_id}
+  canonical_operation_id: get_call_platform_v1_calls__call_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/campaigns
+  canonical_operation_id: list_campaigns_platform_v1_campaigns_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/campaigns/{campaign_id}
+  canonical_operation_id: get_campaign_platform_v1_campaigns__campaign_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/campaigns/{campaign_id}/channels
+  canonical_operation_id: get_campaign_channels_platform_v1_campaigns__campaign_id__channels_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/campaigns/{campaign_id}/health
+  canonical_operation_id: get_campaign_health_platform_v1_campaigns__campaign_id__health_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/campaigns/{campaign_id}/members
+  canonical_operation_id: list_campaign_members_platform_v1_campaigns__campaign_id__members_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
@@ -259,6 +667,12 @@ operations:
   method: POST
   path: /platform/v1/contacts/{contact_id}/tasks
   canonical_operation_id: create_task_platform_v1_contacts__contact_id__tasks_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/email/identities
+  canonical_operation_id: list_email_identities_platform_v1_email_identities_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
@@ -329,6 +743,12 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: platform
   method: GET
+  path: /platform/v1/me/presence
+  canonical_operation_id: get_my_presence_platform_v1_me_presence_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
   path: /platform/v1/opportunities
   canonical_operation_id: list_opportunities_platform_v1_opportunities_get
   implementation_file: registered FastAPI runtime
@@ -349,6 +769,36 @@ operations:
   method: PATCH
   path: /platform/v1/opportunities/{opportunity_id}
   canonical_operation_id: update_opportunity_platform_v1_opportunities__opportunity_id__patch
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/queues
+  canonical_operation_id: list_queues_platform_v1_queues_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/queues/{queue_id}
+  canonical_operation_id: get_queue_platform_v1_queues__queue_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/queues/{queue_id}/calls
+  canonical_operation_id: list_queue_calls_platform_v1_queues__queue_id__calls_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/queues/{queue_id}/members
+  canonical_operation_id: list_queue_members_platform_v1_queues__queue_id__members_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/queues/{queue_id}/metrics
+  canonical_operation_id: get_queue_metrics_platform_v1_queues__queue_id__metrics_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
@@ -400,6 +850,24 @@ operations:
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
+  method: GET
+  path: /platform/v1/session/context
+  canonical_operation_id: get_session_context_platform_v1_session_context_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/session/context/select
+  canonical_operation_id: select_session_context_platform_v1_session_context_select_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/sms/identities
+  canonical_operation_id: list_sms_identities_platform_v1_sms_identities_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
   method: POST
   path: /platform/v1/sync/reconciliations
   canonical_operation_id: reconcile_platform_v1_sync_reconciliations_post
@@ -437,6 +905,42 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: platform
   method: GET
+  path: /platform/v1/telephony/assignments
+  canonical_operation_id: list_telephony_assignments_platform_v1_telephony_assignments_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tenants
+  canonical_operation_id: list_tenants_platform_v1_tenants_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tenants/authorized
+  canonical_operation_id: list_authorized_tenants_platform_v1_tenants_authorized_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tenants/{tenant_id}
+  canonical_operation_id: get_tenant_platform_v1_tenants__tenant_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tenants/{tenant_id}/campaigns
+  canonical_operation_id: list_tenant_campaigns_platform_v1_tenants__tenant_id__campaigns_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tenants/{tenant_id}/health
+  canonical_operation_id: get_tenant_health_platform_v1_tenants__tenant_id__health_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
   path: /platform/v1/tickets
   canonical_operation_id: list_tickets_platform_v1_tickets_get
   implementation_file: registered FastAPI runtime
@@ -459,16 +963,40 @@ operations:
   canonical_operation_id: update_ticket_platform_v1_tickets__ticket_id__patch
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/users/{employee_id}
+  canonical_operation_id: get_user_platform_v1_users__employee_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/users/{employee_id}/campaigns
+  canonical_operation_id: get_user_campaigns_platform_v1_users__employee_id__campaigns_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/users/{employee_id}/entitlements
+  canonical_operation_id: get_user_entitlements_platform_v1_users__employee_id__entitlements_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
 - domain: readiness
   method: GET
   path: /readiness
-  canonical_operation_id: ready_readiness_get
+  canonical_operation_id: readiness_readiness_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: ready
   method: GET
   path: /ready
-  canonical_operation_id: ready_ready_get
+  canonical_operation_id: readiness_ready_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: readyz
+  method: GET
+  path: /readyz
+  canonical_operation_id: readiness_readyz_get
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: ai
@@ -715,36 +1243,6 @@ operations:
   method: POST
   path: /v1/intake/surveys/responses
   canonical_operation_id: submit_survey_response_v1_intake_surveys_responses_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
-- domain: integrations
-  method: POST
-  path: /v1/integrations/n8n/commands
-  canonical_operation_id: submit_n8n_command_v1_integrations_n8n_commands_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
-- domain: integrations
-  method: GET
-  path: /v1/integrations/n8n/operations
-  canonical_operation_id: n8n_operations_v1_integrations_n8n_operations_get
-  implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
-- domain: integrations
-  method: GET
-  path: /v1/integrations/n8n/operations/{command_id}
-  canonical_operation_id: get_n8n_operation_v1_integrations_n8n_operations__command_id__get
-  implementation_file: registered FastAPI runtime
-  runtime_state: DEPRECATED
-- domain: integrations
-  method: POST
-  path: /v1/integrations/n8n/operations/{operation_id}/cancel
-  canonical_operation_id: n8n_cancel_v1_integrations_n8n_operations__operation_id__cancel_post
-  implementation_file: registered FastAPI runtime
-  runtime_state: IMPLEMENTED
-- domain: integrations
-  method: POST
-  path: /v1/integrations/n8n/operations/{operation_id}/reconcile
-  canonical_operation_id: n8n_reconcile_v1_integrations_n8n_operations__operation_id__reconcile_post
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: marketing

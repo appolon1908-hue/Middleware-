@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ VALIDATOR = ROOT / "scripts/validate_security_owner_authority.py"
 
 def validate(path: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["python3", str(VALIDATOR), "--authority", str(path)],
+        [sys.executable, str(VALIDATOR), "--authority", str(path)],
         check=False,
         capture_output=True,
         text=True,

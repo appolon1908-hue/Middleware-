@@ -82,6 +82,8 @@ The same PostgreSQL transaction that accepts a new inbox event now creates its `
 
 `workers/run_outbox.py` registers only the NATS JetStream transport. Provider, Odoo, n8n, telephony, SMS, email, social, and crawler writes are not registered. Dispatch requires `SEND_EVENTS=true`, `OUTBOX_DISPATCH_ENABLED=true`, and a non-disabled `NATS_DISPATCH_MODE` together. Production additionally requires `PRODUCTION_ACTIVATION_ID`, an exact immutable release identity, TLS, and a mounted NATS service credential.
 
+Since the canonical configuration authority (`app/core/config.py`) merged both settings lineages, `SEND_EVENTS` gates only this JetStream outbox transport. The separate n8n broad-event pipeline is gated by its own first switch `BROAD_EVENT_SEND_ENABLED` together with `BROAD_EVENT_DELIVERY_ENABLED`, `PRODUCTION_N8N_ENABLED`, `N8N_PRODUCTION_WORKFLOWS_ENABLED` and a bounded `CONTROLLED_BROAD_EVENT_ACTIVATION` scope; the two gates never imply each other. Every deployed profile keeps all of them disabled. See `docs/architecture/canonical-core-migration.md`.
+
 Staging may exercise the event plane only with `NATS_DISPATCH_MODE=isolated`, stream `CODESTRA_STAGING_EVENTS`, and subjects below `codestra.staging.events.*`. It cannot use the production stream or subject namespace, and provider/business delivery flags remain disabled. `NATS_ALLOW_INSECURE_TEST_CONNECTION` exists only for a disposable localhost server in test/development; staging and production require TLS and a mounted service credential.
 
 ## Fail-closed runtime

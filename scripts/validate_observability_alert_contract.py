@@ -37,9 +37,9 @@ POLICY_LISTS = {
     "state_only_severities": ["info"],
 }
 CALLER_CONTRACTS: dict[str, dict[str, object]] = {
-    "alertmanager-service": {
-        "command_scope": "observability.alerts.write",
-        "status_scope": "observability.alerts.read",
+    "alertmanager": {
+        "command_scope": "alerts.write",
+        "status_scope": "alerts.read",
         "allowed_command_prefixes": ["observability.alert."],
         "allowed_targets": ["klyrow-alert-email"],
         "compatibility_only": False,
@@ -104,8 +104,11 @@ ADAPTER_CONTRACT: dict[str, object] = {
 REQUIRED_PATHS = {
     "/health",
     "/readiness",
+    "/platform/v1/health",
+    "/platform/v1/readiness",
     "/version",
     "/capabilities",
+    "/internal/v1/alerts/alertmanager",
     "/v1/integrations/alertmanager/events",
     "/v1/integrations/alertmanager/status-events",
     "/v1/observability/alerts",

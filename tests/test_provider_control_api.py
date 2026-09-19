@@ -16,7 +16,7 @@ from app.provider_control_api import (
     normalize_payload_key,
 )
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.security import AuthenticationError
 from app.storage import MemoryInboxStore
 from middleware.connector_sdk.standards import is_secret_key_name

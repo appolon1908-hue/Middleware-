@@ -16,6 +16,7 @@ from app.calling_contract import (
 )
 
 SOURCE_SHA = "a" * 40
+GETUID = getattr(os, "getuid", None)
 
 
 def principal(**changes):
@@ -176,14 +177,17 @@ class CallingContractTests(unittest.TestCase):
             load_grant({"CODESTRA_INTERNAL_CALL_POLICY_FILE": "relative.json"})
 
     def test_policy_symlink_denied(self):
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "policy.json"
+        try:
+            link = Path(tempfile.mkdtemp()) / "alias.json"
+            link.parent.mkdir(exist_ok=True)
+            source = link.parent / "policy.json"
             source.write_text(grant().model_dump_json())
             source.chmod(0o600)
-            link = Path(directory) / "alias.json"
             link.symlink_to(source)
-            with self.assertRaises(CallingContractError):
-                load_grant({"CODESTRA_INTERNAL_CALL_POLICY_FILE": str(link)})
+        except (AttributeError, NotImplementedError, OSError):
+            self.skipTest("symlinks are unavailable on this platform")
+        with self.assertRaises(CallingContractError):
+            load_grant({"CODESTRA_INTERNAL_CALL_POLICY_FILE": str(link)})
 
     def test_world_readable_policy_denied(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -203,7 +207,7 @@ class CallingContractTests(unittest.TestCase):
             with patch("app.calling_contract.os.fstat", return_value=unowned), self.assertRaises(CallingContractError):
                 load_grant({"CODESTRA_INTERNAL_CALL_POLICY_FILE": str(source)})
 
-    @unittest.skipUnless(os.getuid() == 0, "root-owned policy acceptance requires root test process")
+    @unittest.skipUnless(GETUID is not None and GETUID() == 0, "root-owned policy acceptance requires root test process")
     def test_private_root_owned_policy_accepted(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "policy.json"

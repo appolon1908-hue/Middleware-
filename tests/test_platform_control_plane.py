@@ -5,7 +5,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
-from app.config import Settings
+from app.core.config import Settings
 from typing import Any
 from uuid import uuid4
 
@@ -17,7 +17,7 @@ from app.commands import CommandPolicy, CommandPolicyRegistry, CommandService, M
 from app.main import create_app
 from app.odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.storage import MemoryInboxStore
 from app.temporal_workflows import ActivityResult, CommandExecutionRequest
 
@@ -127,13 +127,7 @@ def _body() -> dict[str, Any]:
 def test_legacy_n8n_control_plane_submit_and_status_remain_tenant_scoped(
     test_settings,
 ) -> None:
-    settings = replace(
-        test_settings,
-        umbrella_controls={
-            **test_settings.umbrella_controls,
-            "N8N_EXTERNAL_PROVIDER_WRITES": True,
-        },
-    )
+    settings = test_settings.replace(umbrella_n8n_external_provider_writes=True)
     runtime = Runtime(
         settings=settings,
         inbox=MemoryInboxStore(),
@@ -142,7 +136,8 @@ def test_legacy_n8n_control_plane_submit_and_status_remain_tenant_scoped(
         commands=CommandService(MemoryCommandStore(), _policy()),
     )
     body = _body()
-    app = create_app(settings=settings, runtime=runtime)
+    # The deprecated /v1/integrations/n8n/* aliases exist only on the monolith.
+    app = create_app(settings=settings, runtime=runtime, legacy_monolith=True)
     with TestClient(app) as client:
         submitted = client.post(
             "/v1/integrations/n8n/commands",

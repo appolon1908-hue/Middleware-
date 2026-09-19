@@ -20,7 +20,7 @@ from .communications import (
     CommunicationsService,
     CreateMessageRequest,
 )
-from .config import Settings
+from app.core.config import Settings
 from .security import AuthorizationError, RequestValidationError
 from .storage import ZERO_LEDGER_HASH, canonical_payload_sha256, event_ledger_hash
 

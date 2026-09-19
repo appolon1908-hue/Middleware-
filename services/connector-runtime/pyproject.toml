@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "codestra-connector-runtime"
 version = "1.0.0"
 description = "Production runtime for the Codestra Connector SDK"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.15"
 dependencies = [
   "alembic==1.18.4",
   "fastapi==0.141.1",

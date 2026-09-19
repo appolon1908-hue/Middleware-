@@ -1,26 +1,19 @@
-ARG RUNTIME_BASE=python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
-ARG TEST_BASE=python:3.13.15-bookworm@sha256:62eafe52c91cad83c2c74e630bfde917da8c253673e695665d454def84fc9a13
-ARG FINAL_BASE=python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1
+ARG RUNTIME_BASE=python:3.14.7-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56
+ARG TEST_BASE=python:3.14.7-bookworm@sha256:4121f1893084fd19c71df52b7a48565d47f5bf36173d2c2ce8bca626512ef3db
+ARG FINAL_BASE=python:3.14.7-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56
 
 FROM ${FINAL_BASE} AS patched-final-base
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libpcre2-8-0=10.42-1+deb12u1 \
  && rm -rf /var/lib/apt/lists/*
-# CPython 3.13.15 ships the tarfile hard-link-to-symlink filter bypass
-# (CVE-2026-82049); the correction is on the 3.13 branch but unreleased.
-# The applier is digest-pinned to the 3.13.15 stdlib and fails the build
-# on any other base, so it expires together with the .grype.yaml entry.
-COPY security/python313/apply_cve_2026_82049.py /tmp/apply_cve_2026_82049.py
-RUN python3 /tmp/apply_cve_2026_82049.py \
- && rm /tmp/apply_cve_2026_82049.py
 
 FROM ${RUNTIME_BASE} AS runtime-dependencies
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY requirements-runtime.txt ./
 RUN python -m pip install --require-hashes --prefix=/opt/runtime -r requirements-runtime.txt \
- && PYTHONPATH=/opt/runtime/lib/python3.13/site-packages python -m pip check
+ && PYTHONPATH=/opt/runtime/lib/python3.14/site-packages python -m pip check
 
 FROM patched-final-base AS runtime-common
 ARG SOURCE_REPOSITORY=https://github.com/appolon1908-hue/Middleware-
@@ -34,7 +27,7 @@ LABEL org.opencontainers.image.source="${SOURCE_REPOSITORY}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.title="Codestra Middleware" \
       org.opencontainers.image.vendor="Codestra"
-ENV PYTHONPATH=/opt/runtime/lib/python3.13/site-packages \
+ENV PYTHONPATH=/opt/runtime/lib/python3.14/site-packages \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_SOURCE_SHA=${SOURCE_REVISION} \
@@ -54,12 +47,12 @@ COPY --chown=65532:65532 scripts/migrate_runtime.py ./scripts/migrate_runtime.py
 COPY --chown=65532:65532 scripts/production_migration_authority.py ./scripts/production_migration_authority.py
 COPY --chown=65532:65532 scripts/runtime_sql_schema.py ./scripts/runtime_sql_schema.py
 USER 65532:65532
-ENTRYPOINT ["/usr/local/bin/python3.13"]
+ENTRYPOINT ["/usr/local/bin/python3.14"]
 
 FROM runtime-common AS runtime
 EXPOSE 8095
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["/usr/local/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/health', timeout=2)"]
+  CMD ["/usr/local/bin/python3.14", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/health', timeout=2)"]
 CMD ["-m", "uvicorn", "app.entrypoints.integration_api:app", "--host", "0.0.0.0", "--port", "8095", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1"]
 
 FROM runtime-common AS worker
@@ -76,7 +69,7 @@ RUN python -m pip install --no-deps --prefix=/opt/connector ./connector-sdk
 COPY services/connector-runtime/pyproject.toml ./runtime/pyproject.toml
 COPY services/connector-runtime/src ./runtime/src
 RUN python -m pip install --no-deps --prefix=/opt/connector ./runtime \
- && PYTHONPATH=/opt/connector/lib/python3.13/site-packages python -m pip check
+ && PYTHONPATH=/opt/connector/lib/python3.14/site-packages python -m pip check
 
 FROM patched-final-base AS connector-runtime
 ARG SOURCE_REPOSITORY=https://github.com/appolon1908-hue/Middleware-
@@ -89,7 +82,7 @@ LABEL org.opencontainers.image.source="${SOURCE_REPOSITORY}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.title="Codestra Connector Runtime" \
       org.opencontainers.image.vendor="Codestra"
-ENV PYTHONPATH=/opt/connector/lib/python3.13/site-packages \
+ENV PYTHONPATH=/opt/connector/lib/python3.14/site-packages \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CONNECTOR_RUNTIME_RELEASE_SHA=${SOURCE_REVISION}
@@ -98,10 +91,10 @@ WORKDIR /app
 COPY --chown=65532:65532 services/connector-runtime/alembic.ini ./alembic.ini
 COPY --chown=65532:65532 services/connector-runtime/migrations ./migrations
 USER 65532:65532
-ENTRYPOINT ["/usr/local/bin/python3.13"]
+ENTRYPOINT ["/usr/local/bin/python3.14"]
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["/usr/local/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+  CMD ["/usr/local/bin/python3.14", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
 CMD ["-m", "uvicorn", "codestra_connector_runtime.main:app", "--host", "0.0.0.0", "--port", "8081", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1"]
 
 FROM ${TEST_BASE} AS test
@@ -123,11 +116,6 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 \
     PYTEST_ADDOPTS="-p no:cacheprovider"
 RUN groupadd --system --gid 10001 middleware \
  && useradd --system --uid 10001 --gid middleware --home-dir /nonexistent middleware
-# Same CVE-2026-82049 correction as patched-final-base so tests run on the
-# stdlib the runtime ships.
-COPY security/python313/apply_cve_2026_82049.py /tmp/apply_cve_2026_82049.py
-RUN python3 /tmp/apply_cve_2026_82049.py \
- && rm /tmp/apply_cve_2026_82049.py
 WORKDIR /app
 COPY requirements-test.txt ./
 RUN python -m pip install --require-hashes -r requirements-test.txt \

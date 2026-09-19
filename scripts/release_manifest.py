@@ -27,7 +27,7 @@ REPOSITORY = "appolon1908-hue/Middleware-"
 SOURCE_REF = "refs/heads/main"
 IMAGE_REPOSITORY = "ghcr.io/appolon1908-hue/codestra-middleware"
 PLATFORMS = ["linux/amd64"]
-BASE_IMAGE = "python:3.13.15-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"
+BASE_IMAGE = "python:3.14.7-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56"
 WORKFLOW_PATH = ".github/workflows/release.yml"
 CERTIFICATE_IDENTITY = (
     "https://github.com/appolon1908-hue/Middleware-/"

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "codestra-middleware-connector-sdk"
 version = "1.0.0"
 description = "Codestra Middleware connector SDK"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.15"
 dependencies = []
 
 [tool.setuptools.packages.find]

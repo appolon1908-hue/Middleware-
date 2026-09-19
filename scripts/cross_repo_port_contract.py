@@ -116,6 +116,9 @@ EXCLUDED_DIRS = (
     "__pycache__",
     ".worktrees/",
     "evidence/",
+    # the scanner, its tests and its generated reports describe ports; they are not bindings
+    "scripts/cross_repo_",
+    "tests/cross_repo/",
 )
 TEXT_SUFFIXES = {
     ".py",

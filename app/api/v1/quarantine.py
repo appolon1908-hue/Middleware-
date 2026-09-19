@@ -139,7 +139,7 @@ async def list_records(
     return {"items": [_view(record) for record in records]}
 
 
-@router.get("/{record_id}")
+@router.get("/{record_id:uuid}")
 async def detail(
     record_id: UUID,
     scopes: str = Header(default="", alias="X-Codestra-Scopes"),
@@ -162,7 +162,7 @@ async def detail(
     return _view(record)
 
 
-@router.post("/{record_id}/review")
+@router.post("/{record_id:uuid}/review")
 async def review(
     record_id: UUID,
     target_state: str,
@@ -218,7 +218,7 @@ async def review(
     return _view(record)
 
 
-@router.post("/{record_id}/corrections")
+@router.post("/{record_id:uuid}/corrections")
 async def create_correction(
     record_id: UUID,
     corrected_payload: dict = Body(...),
@@ -307,7 +307,7 @@ async def create_correction(
     }
 
 
-@router.post("/{record_id}/reprocess")
+@router.post("/{record_id:uuid}/reprocess")
 async def reprocess(
     record_id: UUID,
     scopes: str = Header(default="", alias="X-Codestra-Scopes"),

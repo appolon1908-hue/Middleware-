@@ -11,9 +11,12 @@ An operation whose provider outcome is unknown sits in
 5. transitions the ledger — ``MATCHED`` → ``completed``; ``NOT_FOUND`` (the
    effect provably never happened) → ``queued`` + a bounded retry of the same
    outbox row; ``MISMATCH`` → stays parked with the evidence, dead-lettered
-   after the bounded reconciliation budget; ``UNAVAILABLE``/``UNSUPPORTED`` →
-   stays parked and is retried on the next cycle, dead-lettered after the
-   budget,
+   after the bounded reconciliation budget; ``UNAVAILABLE`` → stays parked
+   and is retried on the next cycle, dead-lettered after the budget;
+   ``UNSUPPORTED`` (the adapter has no read surface for this command — a
+   deterministic answer that no retry changes) → dead-lettered at once with
+   the reason recorded, so an acknowledged but unverifiable write never sits
+   in the backlog burning the budget,
 6. appends the immutable audit rows (command audit + outbox reconciliation audit).
 
 It never issues a provider write merely because a readback failed.
@@ -167,7 +170,7 @@ class Reconciler:
         }
         actor = self.reconciler_id
         family = operation.command_type.split(".", 1)[0]
-        exhausted = claim.reconciliation_attempts >= self.budget
+        exhausted = claim.reconciliation_attempts >= self.budget or readback.status is ReadbackStatus.UNSUPPORTED
 
         if readback.status is ReadbackStatus.MATCHED:
             await self.commands.reconcile(
@@ -199,11 +202,12 @@ class Reconciler:
             self.metrics.reconciliation_decisions.labels(adapter=adapter.adapter_id, result=readback.status.value.lower()).inc()
 
         if exhausted:
-            await self.commands.transition(
-                claim.tenant_id, claim.command_id, new_state="dead_lettered", actor_id=actor,
-                reason=f"reconciliation budget exhausted after {readback.status.value.lower()}",
-            )
-            await self.source.resolve(claim, reconciler_id=actor, action="dead_letter", reason="reconciliation budget exhausted")
+            if readback.status is ReadbackStatus.UNSUPPORTED:
+                reason = f"provider read-back unsupported ({readback.safe_error_code or 'no read surface'}); operator verification required"
+            else:
+                reason = f"reconciliation budget exhausted after {readback.status.value.lower()}"
+            await self.commands.transition(claim.tenant_id, claim.command_id, new_state="dead_lettered", actor_id=actor, reason=reason)
+            await self.source.resolve(claim, reconciler_id=actor, action="dead_letter", reason=reason)
             self.metrics.commands_failed.labels(command_family=family, adapter=adapter.adapter_id, result="dead_lettered").inc()
             return ReconciliationDecision(claim.command_id, adapter.adapter_id, readback, "dead_letter", "dead_lettered")
 

@@ -609,6 +609,27 @@ async def test_reconciler_dead_letters_after_bounded_mismatches(harness: Harness
     assert await harness.reconciler.source.backlog() == 0
 
 
+@pytest.mark.asyncio
+async def test_reconciler_dead_letters_an_unsupported_readback_at_once(harness: Harness) -> None:
+    """An adapter with no read surface for a command answers UNSUPPORTED
+    deterministically: the reconciler records the reason and dead-letters in
+    one cycle instead of burning the budget; the effect is never re-sent."""
+    command = envelope(payload={"fixture": "unknown"})
+    await harness.submit(command)
+    await harness.bus.run_once()
+    harness.test_syn.reconcile_as[str(command.command_id)] = ReadbackStatus.UNSUPPORTED
+    harness.reconciler.budget = 6
+    harness.bus.expire_leases()
+    decision = await harness.reconciler.run_once()
+    assert decision.action == "dead_letter" and decision.final_state == "dead_lettered"
+    operation = await harness.commands.get(TENANT, command.command_id)
+    assert operation.state == "dead_lettered"
+    events = await harness.commands.list_events(TENANT, command.command_id, limit=50)
+    assert any("read-back unsupported" in (event.reason or "") for event in events)
+    assert harness.test_syn.provider_effects == 1
+    assert await harness.reconciler.source.backlog() == 0
+
+
 # ----------------------------------------------------------------------------
 # cancellation and replay
 # ----------------------------------------------------------------------------

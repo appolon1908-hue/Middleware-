@@ -20,7 +20,7 @@ from app.storage import (
 )
 from app.temporal_runtime import connect_temporal
 from app.temporal_transport import TemporalCommandDispatcher
-from app.worker import OutboxWorker
+from app.worker import Handler, OutboxWorker
 
 SERVICE_MIDDLEWARE_WORKER = "middleware-worker"
 
@@ -59,16 +59,6 @@ async def main() -> None:
     temporal_enabled = settings.temporal_worker_mode != "disabled"
     odoo_enabled = settings.odoo_19_delivery_enabled
     klyrow_odoo_enabled = settings.klyrow_odoo_projection_enabled
-    if (
-        not settings.outbox_dispatch_enabled
-        and not temporal_enabled
-        and not odoo_enabled
-        and not klyrow_odoo_enabled
-    ):
-        raise ConfigurationError(
-            "JetStream, Temporal, and Odoo outbox dispatch are all intentionally "
-            "disabled"
-        )
     if settings.database_url is None:
         raise ConfigurationError("DATABASE_URL is required for the outbox worker")
 
@@ -78,12 +68,30 @@ async def main() -> None:
     runtime = await build_runtime_container(settings, role="worker", service_id=SERVICE_MIDDLEWARE_WORKER)
     pool = runtime.pool
     assert pool is not None and runtime.platform is not None
+    # V3: adapter dispatch is a worker mode of its own — a process whose only
+    # enabled capability is owned by a kernel adapter (staging TEST_SYN, or
+    # ODOO_WRITE for the CRM wrappers) must drain its adapter-command rows.
+    adapter_dispatch_enabled = bool(runtime.platform.registry.enabled_adapter_ids())
+    if (
+        not settings.outbox_dispatch_enabled
+        and not temporal_enabled
+        and not odoo_enabled
+        and not klyrow_odoo_enabled
+        and not adapter_dispatch_enabled
+    ):
+        await runtime.close()
+        raise ConfigurationError(
+            "JetStream, Temporal, Odoo and adapter outbox dispatch are all "
+            "intentionally disabled"
+        )
     publisher: NatsJetStreamPublisher | None = None
     odoo_client: httpx.AsyncClient | None = None
     try:
-        handlers = {}
+        handlers: dict[str, Handler] = {}
         # V3: commands owned by a registered adapter execute through the
-        # ExecutionBus (lease, quarantine-before-provider, readback, fencing).
+        # ExecutionBus (lease, quarantine-before-provider, readback, fencing);
+        # the bus re-evaluates the Safety Gate per attempt, so a row for a
+        # capability closed after enqueue fails closed instead of executing.
         handlers[ADAPTER_COMMAND_DESTINATION] = runtime.platform.dispatch
         if settings.outbox_dispatch_enabled:
             publisher = await NatsJetStreamPublisher.connect(settings)

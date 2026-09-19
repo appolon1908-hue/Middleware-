@@ -92,6 +92,7 @@ class FakeCrmBridge:
         self.status_code = 201
         self.raise_error: Exception | None = None
         self.records: dict[int, dict[str, Any]] = {}
+        self.children: dict[str, list[dict[str, Any]]] = {}
 
     def __getattr__(self, name: str):
         async def method(*args: Any, **kwargs: Any):
@@ -107,7 +108,34 @@ class FakeCrmBridge:
                 from app.adapters.odoo.crm_bridge_client import CrmBridgeNotFound
 
                 raise CrmBridgeNotFound(str(identifier))
-            body = {"profile_id": 5} if "contact" in name else {"ticket_id": 7} if "ticket" in name else {"external_id": "opp-1"} if "opportunity" in name else {"note_id": 3}
+            if name in {"list_notes", "list_tasks"}:
+                items = [row for row in self.children.get(name.split("_", 1)[1], []) if row["profile_id"] == args[0]]
+                return BridgeResponse(200, {"items": [{k: v for k, v in row.items() if k != "profile_id"} for row in items]})
+            body: dict[str, Any]
+            if "contact" in name:
+                body = {"profile_id": 5}
+            elif "ticket" in name:
+                body = {"ticket_id": 7}
+            elif "opportunity" in name:
+                body = {"external_id": "opp-1"}
+            elif name == "create_note":  # {note_id, profile_id}, like the bridge
+                body = {"note_id": 3, "profile_id": args[0]}
+                self.children.setdefault("notes", []).append({"note_id": 3, "profile_id": args[0], **args[1]})
+            elif name == "update_note":  # {note_id, body}: no parent in the answer
+                for row in self.children.get("notes", []):
+                    if row["note_id"] == args[0]:
+                        row.update(args[1])
+                body = {"note_id": args[0], "body": args[1].get("body")}
+            elif name == "create_task":  # {task_id, profile_id, status}
+                body = {"task_id": 9, "profile_id": args[0], "status": "scheduled"}
+                self.children.setdefault("tasks", []).append({"task_id": 9, "profile_id": args[0], **args[1]})
+            elif name == "update_task":  # {task_id, summary}: no parent in the answer
+                body = {"task_id": args[0], "summary": args[1].get("summary")}
+            elif name == "complete_task":  # the activity is unlinked once completed
+                self.children["tasks"] = [row for row in self.children.get("tasks", []) if row["task_id"] != args[0]]
+                body = {"task_id": args[0], "profile_id": 5, "status": "completed"}
+            else:
+                body = {"note_id": 3}
             if name.startswith("create_contact"):
                 self.records[5] = {"profile_id": 5, **(args[0] if args else {})}
             if name.startswith("create_ticket"):
@@ -357,6 +385,58 @@ async def test_odoo_bridge_readback_tenant_binding_and_ambiguity() -> None:
     crm.raise_error = None
     missing = await adapter.execute(note, context(note))
     assert missing.outcome is Outcome.REJECTED and missing.safe_error_code == "missing_contact_id"
+
+
+@pytest.mark.asyncio
+async def test_odoo_notes_and_tasks_read_back_through_the_parent_profile_list() -> None:
+    """Notes/tasks have no GET-by-id on the bridge: create/update read back as
+    'listed under the parent profile with the requested fields'; a completed
+    task reads back as 'gone' (Odoo unlinks completed activities)."""
+    adapter, crm = odoo_bridge()
+    note = envelope(SUBJECTS[-1], command_type="crm.note.create.v1", payload={"contact_id": 5, "record": {"body": "hello"}})
+    created = await adapter.execute(note, context(note))
+    assert created.outcome is Outcome.ACCEPTED and created.provider_operation_id == "note_id:3@profile_id:5"
+    listed = await adapter.readback(operation(note, provider_operation_id=created.provider_operation_id), context(note))
+    assert listed.status is ReadbackStatus.MATCHED and listed.evidence == {"note_id": "3", "profile_id": "5", "listed": True}
+
+    # update: the answer carries no parent, the payload's contact_id does; the
+    # list's body must agree with the requested record
+    update = envelope(SUBJECTS[-1], command_type="crm.note.update.v1", payload={"contact_id": 5, "note_id": 3, "record": {"body": "edited"}})
+    updated = await adapter.execute(update, context(update))
+    assert updated.provider_operation_id == "note_id:3"
+    assert (await adapter.readback(operation(update, provider_operation_id="note_id:3"), context(update))).status is ReadbackStatus.MATCHED
+    crm.children["notes"][0]["body"] = "another edit"
+    drifted = await adapter.readback(operation(update, provider_operation_id="note_id:3"), context(update))
+    assert drifted.status is ReadbackStatus.MISMATCH and drifted.evidence["drift"] == ["body"]
+
+    task = envelope(SUBJECTS[-1], command_type="crm.task.create.v1", payload={"contact_id": 5, "record": {"summary": "call back"}})
+    created_task = await adapter.execute(task, context(task))
+    assert created_task.provider_operation_id == "task_id:9@profile_id:5"
+    assert (await adapter.readback(operation(task, provider_operation_id=created_task.provider_operation_id), context(task))).status is ReadbackStatus.MATCHED
+
+    # task.update carries no parent at all today: explicit UNSUPPORTED, never a silent completion
+    task_update = envelope(SUBJECTS[-1], command_type="crm.task.update.v1", payload={"task_id": 9, "record": {"summary": "call back today"}})
+    assert (await adapter.execute(task_update, context(task_update))).provider_operation_id == "task_id:9"
+    unsupported = await adapter.readback(operation(task_update, provider_operation_id="task_id:9"), context(task_update))
+    assert unsupported.status is ReadbackStatus.UNSUPPORTED and unsupported.safe_error_code == "crm_parent_profile_unknown"
+
+    # complete: the bridge takes the (empty) feedback record; readback = the activity is gone
+    complete = envelope(SUBJECTS[-1], command_type="crm.task.complete.v1", payload={"task_id": 9, "record": {}})
+    completed = await adapter.execute(complete, context(complete))
+    assert completed.outcome is Outcome.ACCEPTED and completed.provider_operation_id == "task_id:9@profile_id:5"
+    assert crm.calls[-1][0] == "complete_task" and crm.calls[-1][1] == (9, {})
+    gone = await adapter.readback(operation(complete, provider_operation_id=completed.provider_operation_id), context(complete))
+    assert gone.status is ReadbackStatus.MATCHED and gone.evidence["listed"] is False
+    crm.children.setdefault("tasks", []).append({"task_id": 9, "profile_id": 5, "summary": "still open"})
+    assert (await adapter.readback(operation(complete, provider_operation_id=completed.provider_operation_id), context(complete))).status is ReadbackStatus.MISMATCH
+
+    # a note that vanished from the parent list is NOT_FOUND (safe to re-execute), a bridge outage is UNAVAILABLE
+    crm.children["notes"].clear()
+    assert (await adapter.readback(operation(note, provider_operation_id=created.provider_operation_id), context(note))).status is ReadbackStatus.NOT_FOUND
+    from app.adapters.odoo.crm_bridge_client import CrmBridgeUnavailable
+
+    crm.raise_error = CrmBridgeUnavailable("503")
+    assert (await adapter.readback(operation(note, provider_operation_id=created.provider_operation_id), context(note))).status is ReadbackStatus.UNAVAILABLE
 
 
 @pytest.mark.asyncio

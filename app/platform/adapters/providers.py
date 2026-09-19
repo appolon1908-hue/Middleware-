@@ -233,6 +233,13 @@ CRM_READBACK = {
     "opportunity": ("get_opportunity", "external_id", str),
     "ticket": ("get_ticket", "ticket_id", int),
 }
+# Notes and tasks have no GET-by-id on the bridge: the parent profile's list
+# is the read surface. (reader, id key, list fields the readback compares.)
+CRM_LIST_READBACK = {
+    "note": ("list_notes", "note_id", ("body",)),
+    "task": ("list_tasks", "task_id", ("summary", "due_date")),
+}
+PARENT_REFERENCE_SEPARATOR = "@"
 
 
 @dataclass
@@ -280,8 +287,7 @@ class OdooAdapter(LegacyBridge):
             if identifier is None:
                 return AdapterResult(Outcome.REJECTED, error_class=ErrorClass.NON_RETRYABLE, safe_error_code=f"missing_{key}")
             args.append(identifier)
-        if method_name != "complete_task":
-            args.append(record)
+        args.append(record)  # complete_task takes the (empty) feedback record too
         from app.adapters.odoo.crm_bridge_client import CrmBridgeNotFound, CrmBridgeUnavailable
 
         try:
@@ -304,10 +310,15 @@ class OdooAdapter(LegacyBridge):
             raw_body = raw.get("body")
             body: Mapping[str, Any] = raw_body if isinstance(raw_body, Mapping) else {}
             reference = None
-            for key in ("profile_id", "external_id", "ticket_id", "note_id", "task_id", "id"):
+            for key in ("note_id", "task_id", "external_id", "ticket_id", "profile_id", "id"):
                 if body.get(key) is not None:
                     reference = f"{key}:{body[key]}"
                     break
+            if reference is not None and reference.split(":", 1)[0] in {"note_id", "task_id"} and body.get("profile_id") is not None:
+                # The parent profile is the only read surface for notes/tasks;
+                # persist it with the reference so a later readback (or a
+                # reconciler in another process) does not depend on the payload.
+                reference = f"{reference}{PARENT_REFERENCE_SEPARATOR}profile_id:{body['profile_id']}"
             outcome = classify_status(status_code)
             if outcome is Outcome.COMPLETED:
                 outcome = Outcome.ACCEPTED  # completion is decided by readback
@@ -321,20 +332,20 @@ class OdooAdapter(LegacyBridge):
 
     async def readback(self, operation: CommandOperation, context: AdapterContext) -> ReadbackResult:
         if operation.command_type in CRM_BRIDGE_COMMANDS:
-            return await self._readback_crm(operation)
+            return await self._readback_crm(operation, context)
         if self.legacy is None:
             return ReadbackResult(ReadbackStatus.UNSUPPORTED, safe_error_code="readback_unsupported")
         return await LegacyBridge.readback(self, operation, context)
 
-    async def _readback_crm(self, operation: CommandOperation) -> ReadbackResult:
+    async def _readback_crm(self, operation: CommandOperation, context: AdapterContext) -> ReadbackResult:
         if self.crm_bridge is None:
             return ReadbackResult(ReadbackStatus.UNAVAILABLE, safe_error_code="crm_bridge_not_configured")
         entity = operation.command_type.split(".")[1]
-        reader = CRM_READBACK.get(entity)
         reference = operation.provider_operation_id or ""
+        if entity in CRM_LIST_READBACK:
+            return await self._readback_crm_list(operation, context, reference)
+        reader = CRM_READBACK.get(entity)
         if reader is None or ":" not in reference:
-            # Notes and tasks have no GET-by-id on the bridge: the parent
-            # contact's list is the evidence, which the reconciler reads.
             return ReadbackResult(ReadbackStatus.UNSUPPORTED, safe_error_code="crm_readback_unsupported")
         method_name, key, cast = reader
         ref_key, _, ref_value = reference.partition(":")
@@ -355,6 +366,64 @@ class OdooAdapter(LegacyBridge):
         if response.status_code == 200 and observed is not None and str(observed) == ref_value:
             return ReadbackResult(ReadbackStatus.MATCHED, provider_operation_id=reference, evidence={key: str(observed)})
         return ReadbackResult(ReadbackStatus.MISMATCH, provider_operation_id=reference, evidence={"status_code": response.status_code})
+
+    async def _readback_crm_list(self, operation: CommandOperation, context: AdapterContext, reference: str) -> ReadbackResult:
+        """Notes and tasks: the parent profile's list is the read surface.
+
+        The parent comes from the persisted reference (``note_id:N@profile_id:P``
+        when the bridge returned it) or from the command payload's
+        ``contact_id``; ``crm.task.update`` carries neither today, which is an
+        explicit UNSUPPORTED (recorded, never a silent completion). A create or
+        update matches when the record is listed and the fields the list
+        exposes agree with the requested record; ``crm.task.complete`` matches
+        when the activity is gone, since Odoo unlinks a completed activity.
+        """
+        entity = operation.command_type.split(".")[1]
+        action = operation.command_type.split(".")[2]
+        method_name, key, compared = CRM_LIST_READBACK[entity]
+        own, _, parent = reference.partition(PARENT_REFERENCE_SEPARATOR)
+        ref_key, _, ref_value = own.partition(":")
+        if ref_key != key or not ref_value:
+            return ReadbackResult(ReadbackStatus.MISMATCH, safe_error_code="crm_reference_mismatch")
+        parent_value: Any = None
+        if parent.startswith("profile_id:"):
+            parent_value = parent.partition(":")[2]
+        elif context.payload is not None:
+            parent_value = context.payload.get("contact_id")
+        try:
+            profile_id = int(parent_value)
+        except (TypeError, ValueError):
+            return ReadbackResult(
+                ReadbackStatus.UNSUPPORTED,
+                provider_operation_id=reference,
+                safe_error_code="crm_parent_profile_unknown",
+                evidence={"reason": "the bridge lists notes/tasks by profile only and this command carries no profile"},
+            )
+        from app.adapters.odoo.crm_bridge_client import CrmBridgeNotFound, CrmBridgeUnavailable
+
+        try:
+            response = await getattr(self.crm_bridge, method_name)(profile_id, correlation_id=operation.correlation_id)
+        except CrmBridgeNotFound:
+            return ReadbackResult(ReadbackStatus.NOT_FOUND, safe_error_code="crm_parent_profile_not_found")
+        except (CrmBridgeUnavailable, httpx.HTTPError) as exc:
+            return ReadbackResult(ReadbackStatus.UNAVAILABLE, safe_error_code=type(exc).__name__)
+        body = response.body if isinstance(response.body, Mapping) else {}
+        items = body.get("items") if response.status_code == 200 else None
+        if not isinstance(items, list):
+            return ReadbackResult(ReadbackStatus.UNAVAILABLE, provider_operation_id=reference, safe_error_code=f"odoo_http_{response.status_code}")
+        listed = next((item for item in items if isinstance(item, Mapping) and str(item.get(key)) == ref_value), None)
+        evidence: dict[str, Any] = {key: ref_value, "profile_id": str(profile_id), "listed": listed is not None}
+        if action == "complete":
+            status = ReadbackStatus.MATCHED if listed is None else ReadbackStatus.MISMATCH
+            return ReadbackResult(status, provider_operation_id=reference, evidence=evidence)
+        if listed is None:
+            return ReadbackResult(ReadbackStatus.NOT_FOUND, provider_operation_id=reference, evidence=evidence)
+        record = dict((context.payload or {}).get("record") or {})
+        drift = sorted(field for field in compared if field in record and str(record[field]) != str(listed.get(field)))
+        if drift:
+            evidence["drift"] = drift
+            return ReadbackResult(ReadbackStatus.MISMATCH, provider_operation_id=reference, evidence=evidence)
+        return ReadbackResult(ReadbackStatus.MATCHED, provider_operation_id=reference, evidence=evidence)
 
 
 # --- factories --------------------------------------------------------------------------

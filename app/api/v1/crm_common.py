@@ -56,6 +56,27 @@ def idempotency_key(request: Request, correlation: str) -> str:
     return request.headers.get("Idempotency-Key", "").strip() or correlation
 
 
+def command_identity(request: Request, *, tenant_id: str, command_type: str) -> tuple[str, str]:
+    """``(correlation_id, idempotency_key)`` for a kernel-wrapped CRM write.
+
+    The ledger binds the idempotency key to the whole envelope, correlation
+    id included, so a retry that repeats the ``Idempotency-Key`` but omits
+    ``X-Correlation-ID`` must derive the same correlation id — otherwise the
+    identical retry would read as identity reuse with different content (409)
+    instead of the documented ``200 duplicate=true``. With neither header the
+    request claims no idempotency and both values are fresh.
+    """
+    supplied_key = request.headers.get("Idempotency-Key", "").strip()
+    supplied_cid = request.headers.get("X-Correlation-ID", "").strip()
+    if supplied_cid:
+        cid = supplied_cid
+    elif supplied_key:
+        cid = str(uuid5(CRM_COMMAND_NAMESPACE, f"correlation\x1f{tenant_id}\x1f{command_type}\x1f{supplied_key}"))
+    else:
+        cid = str(uuid4())
+    return cid, supplied_key or cid
+
+
 def as_response(result: BridgeResponse) -> JSONResponse:
     return JSONResponse(result.body, status_code=result.status_code)
 
@@ -135,8 +156,7 @@ async def submit_crm_command(
 ) -> JSONResponse:
     """Normalize a CRM write into the kernel and answer 202 + Location."""
     require_tenant_match(principal, tenant_id)
-    cid = correlation_id(request)
-    key = idempotency_key(request, cid)
+    cid, key = command_identity(request, tenant_id=tenant_id, command_type=command_type)
     if not 8 <= len(key) <= 180:
         raise HTTPException(400, "Idempotency-Key must contain 8 to 180 characters")
     envelope = CommandEnvelope(

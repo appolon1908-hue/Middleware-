@@ -260,6 +260,32 @@ async def test_create_contact_is_a_kernel_command_not_a_bridge_call(client, auth
 
 
 @pytest.mark.asyncio
+async def test_retry_with_the_same_key_and_no_correlation_header_is_the_same_command(client, authority, bridge_client, kernel_stack):
+    """The ledger binds the key to the whole envelope, correlation id
+    included: a retry that repeats the Idempotency-Key but omits
+    X-Correlation-ID must derive the same correlation id (200 duplicate),
+    while a different payload under the same key is still identity reuse (409)."""
+    kernel_stack.enable_odoo_write()
+    headers = {**_headers(authority(tenant_ids=("COD",))), "Idempotency-Key": "abc-123-000002"}
+    body = {"name": "Jane Doe", "partner_id": 1, "campaign_id": 2, "integration_key": "k"}
+    first = await client.post("/platform/v1/contacts", params={"tenant_id": "COD"}, headers=headers, json=body)
+    assert first.status_code == 202, first.text
+    derived = first.json()["correlation_id"]
+    UUID(derived)  # derived deterministically from (tenant, command type, key)
+    retry = await client.post("/platform/v1/contacts", params={"tenant_id": "COD"}, headers=headers, json=body)
+    assert retry.status_code == 200 and retry.json()["duplicate"] is True
+    assert retry.json()["correlation_id"] == derived
+    conflict = await client.post("/platform/v1/contacts", params={"tenant_id": "COD"}, headers=headers, json={**body, "name": "Janet"})
+    assert conflict.status_code == 409
+    # without either header nothing is claimed: every request is a new command
+    bare = _headers(authority(tenant_ids=("COD",)))
+    one = await client.post("/platform/v1/contacts", params={"tenant_id": "COD"}, headers=bare, json=body)
+    two = await client.post("/platform/v1/contacts", params={"tenant_id": "COD"}, headers=bare, json=body)
+    assert one.status_code == 202 and two.status_code == 202
+    assert one.json()["operation_id"] != two.json()["operation_id"]
+
+
+@pytest.mark.asyncio
 async def test_get_contact_not_found_maps_to_404(client, authority, bridge_client):
     bridge_client.raise_error = CrmBridgeNotFound("/customer-profiles/9")
     response = await client.get(

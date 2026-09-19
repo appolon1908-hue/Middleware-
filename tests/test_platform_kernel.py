@@ -6,7 +6,7 @@ kernel code the PostgreSQL processes run."""
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -38,6 +38,7 @@ from app.platform.kernel import (
 from app.platform.memory import MemoryExecutionBus
 from app.platform.metrics import KernelMetrics
 from app.platform.principal import KernelPrincipal
+from app.platform.reconciler import Reconciler
 from app.platform.registry import AdapterRegistry, AdapterRegistryError
 from app.platform.resilience import ReplayMode
 from app.platform.runtime import build_platform_runtime, command_policies
@@ -104,8 +105,7 @@ class Harness:
         self.kernel = self.platform.kernel
         self.dispatch = self.platform.dispatch
         self.bus = MemoryExecutionBus(self.store, self.dispatch)
-        self.reconciler = self.platform.reconciler
-        assert self.reconciler is not None
+        self.reconciler: Reconciler = cast(Reconciler, self.platform.reconciler)
 
     @property
     def test_syn(self) -> FixtureAdapter:
@@ -164,7 +164,8 @@ def test_registry_validation_fails_when_an_enabled_capability_has_no_adapter(tes
         registry.validate()
     registry.register(synthetic_adapter())
     registry.validate()
-    assert registry.ownership("test.syn.execute.v1").adapter_id == "test-syn"
+    ownership = registry.ownership("test.syn.execute.v1")
+    assert ownership is not None and ownership.adapter_id == "test-syn"
     assert registry.ownership("crm.contact.create.v1") is None
     assert "crm." in registry.unowned_prefixes()
 
@@ -395,7 +396,9 @@ async def test_bus_completes_only_after_matched_readback(harness: Harness) -> No
     assert await harness.bus.run_once() is True
     operation = await harness.commands.get(TENANT, command.command_id)
     assert operation.state == "completed"
+    assert operation.provider_operation_id is not None
     assert operation.provider_operation_id.startswith("test-syn:")
+    assert operation.readback_evidence is not None
     assert operation.readback_evidence["status"] == "matched"
     assert operation.readback_evidence_sha256
     states = [event.new_state for event in await harness.commands.list_events(TENANT, command.command_id, limit=20)]
@@ -436,6 +439,7 @@ async def test_bus_times_out_into_reconciliation_not_success(test_settings: Sett
     await harness.bus.run_once()
     operation = await harness.commands.get(TENANT, command.command_id)
     assert operation.state == "reconciliation_required"
+    assert operation.last_error is not None
     assert operation.last_error.startswith("adapter_timeout")
 
 
@@ -576,6 +580,7 @@ async def test_reconciler_completes_matched_and_requeues_not_found(harness: Harn
     decision = await harness.reconciler.run_once()
     assert decision is not None and decision.action == "complete"
     operation = await harness.commands.get(TENANT, unknown.command_id)
+    assert operation.readback_evidence is not None
     assert operation.state == "completed" and operation.readback_evidence["reconciled"] is True
     assert harness.test_syn.provider_effects == 1  # never re-sent
 
@@ -586,6 +591,7 @@ async def test_reconciler_completes_matched_and_requeues_not_found(harness: Harn
     harness.test_syn.effects.pop(str(lost.command_id), None)  # the provider has no trace of it
     harness.bus.expire_leases()
     decision = await harness.reconciler.run_once()
+    assert decision is not None
     assert decision.action == "retry" and decision.final_state == "queued"
     await harness.bus.run_once()
     assert (await harness.commands.get(TENANT, lost.command_id)).state == "completed"
@@ -600,9 +606,11 @@ async def test_reconciler_dead_letters_after_bounded_mismatches(harness: Harness
     harness.reconciler.budget = 2
     harness.bus.expire_leases()
     first = await harness.reconciler.run_once()
+    assert first is not None
     assert first.action == "release" and first.final_state == "reconciliation_required"
     harness.bus.expire_leases()
     second = await harness.reconciler.run_once()
+    assert second is not None
     assert second.action == "dead_letter"
     assert (await harness.commands.get(TENANT, command.command_id)).state == "dead_lettered"
     assert harness.test_syn.provider_effects == 1
@@ -621,6 +629,7 @@ async def test_reconciler_dead_letters_an_unsupported_readback_at_once(harness: 
     harness.reconciler.budget = 6
     harness.bus.expire_leases()
     decision = await harness.reconciler.run_once()
+    assert decision is not None
     assert decision.action == "dead_letter" and decision.final_state == "dead_lettered"
     operation = await harness.commands.get(TENANT, command.command_id)
     assert operation.state == "dead_lettered"

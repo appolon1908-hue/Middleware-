@@ -617,6 +617,60 @@ operations:
   runtime_state: IMPLEMENTED
 - domain: platform
   method: GET
+  path: /platform/v1/contacts
+  canonical_operation_id: list_contacts_platform_v1_contacts_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/contacts
+  canonical_operation_id: create_contact_platform_v1_contacts_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/contacts/{contact_id}
+  canonical_operation_id: get_contact_platform_v1_contacts__contact_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: PATCH
+  path: /platform/v1/contacts/{contact_id}
+  canonical_operation_id: update_contact_platform_v1_contacts__contact_id__patch
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/contacts/{contact_id}/notes
+  canonical_operation_id: list_notes_platform_v1_contacts__contact_id__notes_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/contacts/{contact_id}/notes
+  canonical_operation_id: create_note_platform_v1_contacts__contact_id__notes_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: PATCH
+  path: /platform/v1/contacts/{contact_id}/notes/{note_id}
+  canonical_operation_id: update_note_platform_v1_contacts__contact_id__notes__note_id__patch
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/contacts/{contact_id}/tasks
+  canonical_operation_id: list_tasks_platform_v1_contacts__contact_id__tasks_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/contacts/{contact_id}/tasks
+  canonical_operation_id: create_task_platform_v1_contacts__contact_id__tasks_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
   path: /platform/v1/email/identities
   canonical_operation_id: list_email_identities_platform_v1_email_identities_get
   implementation_file: registered FastAPI runtime
@@ -691,6 +745,30 @@ operations:
   method: GET
   path: /platform/v1/me/presence
   canonical_operation_id: get_my_presence_platform_v1_me_presence_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/opportunities
+  canonical_operation_id: list_opportunities_platform_v1_opportunities_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/opportunities
+  canonical_operation_id: create_opportunity_platform_v1_opportunities_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/opportunities/{opportunity_id}
+  canonical_operation_id: get_opportunity_platform_v1_opportunities__opportunity_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: PATCH
+  path: /platform/v1/opportunities/{opportunity_id}
+  canonical_operation_id: update_opportunity_platform_v1_opportunities__opportunity_id__patch
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
@@ -808,6 +886,18 @@ operations:
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform
+  method: PATCH
+  path: /platform/v1/tasks/{task_id}
+  canonical_operation_id: update_task_platform_v1_tasks__task_id__patch
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/tasks/{task_id}/complete
+  canonical_operation_id: complete_task_platform_v1_tasks__task_id__complete_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
   method: POST
   path: /platform/v1/telemetry/heartbeats
   canonical_operation_id: heartbeat_platform_v1_telemetry_heartbeats_post
@@ -847,6 +937,30 @@ operations:
   method: GET
   path: /platform/v1/tenants/{tenant_id}/health
   canonical_operation_id: get_tenant_health_platform_v1_tenants__tenant_id__health_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tickets
+  canonical_operation_id: list_tickets_platform_v1_tickets_get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: POST
+  path: /platform/v1/tickets
+  canonical_operation_id: create_ticket_platform_v1_tickets_post
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: GET
+  path: /platform/v1/tickets/{ticket_id}
+  canonical_operation_id: get_ticket_platform_v1_tickets__ticket_id__get
+  implementation_file: registered FastAPI runtime
+  runtime_state: IMPLEMENTED
+- domain: platform
+  method: PATCH
+  path: /platform/v1/tickets/{ticket_id}
+  canonical_operation_id: update_ticket_platform_v1_tickets__ticket_id__patch
   implementation_file: registered FastAPI runtime
   runtime_state: IMPLEMENTED
 - domain: platform

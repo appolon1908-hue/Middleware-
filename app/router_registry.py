@@ -58,6 +58,7 @@ from app.api.v1.calls import router as calls_router
 from app.api.v1.campaign_search import router as campaign_search_router
 from app.api.v1.campaigns import router as campaigns_router
 from app.api.v1.commands import router as commands_router
+from app.api.v1.contacts import router as contacts_router
 from app.api.v1.control import legacy_events_router as control_legacy_events_router
 from app.api.v1.control import router as control_router
 from app.api.v1.events import router as events_router
@@ -70,6 +71,7 @@ from app.api.v1.n8n_staging import router as n8n_staging_router
 from app.api.v1.n8n_target import router as n8n_target_router
 from app.api.v1.n8n_transport import router as n8n_transport_router
 from app.api.v1.observability_sync import router as observability_sync_router
+from app.api.v1.opportunities import router as opportunities_router
 from app.api.v1.operations import router as operations_router
 from app.api.v1.orchestration import router as orchestration_router
 from app.api.v1.orders import router as orders_router
@@ -89,6 +91,7 @@ from app.api.v1.session_context import router as session_context_router
 from app.api.v1.social import router as social_router
 from app.api.v1.telephony import router as telephony_router
 from app.api.v1.tenants import router as tenants_router
+from app.api.v1.tickets import router as tickets_router
 from app.api.v1.tts import router as tts_router
 from app.api.v1.webphone import router as webphone_router
 from app.appolon_routes import router as appolon_control_plane_router
@@ -130,6 +133,9 @@ CANONICAL_ROUTERS: tuple[APIRouter, ...] = (
     activity_router,
     presence_router,
     queues_router,
+    contacts_router,
+    opportunities_router,
+    tickets_router,
     tenants_router,
     campaigns_router,
     monitoring_router,

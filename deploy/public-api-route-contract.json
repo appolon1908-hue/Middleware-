@@ -1329,7 +1329,7 @@
       "audience": "middleware-api",
       "scope": "platform.command",
       "auth": "service-or-user-jwt",
-      "request_schema": "#/components/schemas/CommandEnvelope",
+      "request_schema": "#/components/schemas/KernelCommandRequest",
       "response_schema": "#/components/schemas/OperationAccepted",
       "idempotency": {
         "required": true,

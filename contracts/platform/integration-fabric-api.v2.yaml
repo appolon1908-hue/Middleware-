@@ -333,7 +333,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CommandEnvelope'
+              $ref: '#/components/schemas/KernelCommandRequest'
         required: true
       responses:
         '202':
@@ -17630,6 +17630,81 @@ components:
       - workflow_version
       - execution_id
       title: JobClaimRequest
+    KernelCommandRequest:
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          title: Command Id
+        command_type:
+          type: string
+          maxLength: 180
+          pattern: ^[a-z0-9]+(?:[.-][a-z0-9]+)+$
+          title: Command Type
+        command_version:
+          type: string
+          const: '1.0'
+          title: Command Version
+          default: '1.0'
+        target:
+          anyOf:
+          - type: string
+            maxLength: 100
+            pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          - type: 'null'
+          title: Target
+        tenant_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Tenant Id
+        requested_by:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Requested By
+        correlation_id:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Correlation Id
+        idempotency_key:
+          type: string
+          maxLength: 180
+          minLength: 8
+          title: Idempotency Key
+        capability:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z][A-Z0-9_]{2,100}$
+          - type: 'null'
+          title: Capability
+        payload:
+          type: object
+          title: Payload
+      additionalProperties: false
+      type: object
+      required:
+      - command_id
+      - command_type
+      - tenant_id
+      - requested_by
+      - correlation_id
+      - idempotency_key
+      - payload
+      title: KernelCommandRequest
+      description: 'The public, provider-blind submit body.
+
+
+        Same fields and bounds as the durable :class:`~app.commands.CommandEnvelope`;
+
+        ``target`` (the connector id) and ``capability`` may be omitted — the
+
+        command registry binds both to the command family — and must match the
+
+        registry when supplied. Authentication-derived fields (tenant, actor) are
+
+        verified against the token, never trusted from the body.'
     KillSwitchMutation:
       properties:
         expectedVersion:
@@ -19450,6 +19525,9 @@ components:
           type: string
           format: uuid
           title: Operation Id
+        event_type:
+          type: string
+          title: Event Type
         previous_state:
           anyOf:
           - type: string
@@ -19464,6 +19542,17 @@ components:
         reason:
           type: string
           title: Reason
+        correlation_id:
+          type: string
+          title: Correlation Id
+        causation_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Causation Id
+        attempt:
+          type: integer
+          title: Attempt
         safe_metadata:
           type: object
           title: Safe Metadata
@@ -19476,10 +19565,14 @@ components:
       required:
       - event_id
       - operation_id
+      - event_type
       - previous_state
       - new_state
       - actor_id
       - reason
+      - correlation_id
+      - causation_id
+      - attempt
       - safe_metadata
       - created_at
       title: TimelineEvent

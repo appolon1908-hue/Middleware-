@@ -39,7 +39,7 @@ _SAFE_ERROR_CODE = re.compile(r"[^a-z0-9_.:-]+")
 TRACE_HEADERS = ("traceparent", "tracestate")
 
 
-class CommandRequest(BaseModel):
+class KernelCommandRequest(BaseModel):
     """The public, provider-blind submit body.
 
     Same fields and bounds as the durable :class:`~app.commands.CommandEnvelope`;
@@ -290,7 +290,7 @@ def _trace(request: Request) -> dict[str, str]:
     response_model=OperationAccepted,
     responses={200: {"model": OperationAccepted, "description": "Exact replay of an existing operation"}, 202: {"model": OperationAccepted, "description": "Command accepted"}},
 )
-async def submit_command(body: CommandRequest, request: Request) -> JSONResponse:
+async def submit_command(body: KernelCommandRequest, request: Request) -> JSONResponse:
     principal = await authenticate(request, required_scope=SCOPE_COMMAND)
     runtime, platform = _runtime(request)
     # Provider-blind body: the registry binds the command family to its

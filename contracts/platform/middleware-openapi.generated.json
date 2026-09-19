@@ -3141,6 +3141,93 @@
         "title": "JobClaimRequest",
         "type": "object"
       },
+      "KernelCommandRequest": {
+        "additionalProperties": false,
+        "description": "The public, provider-blind submit body.\n\nSame fields and bounds as the durable :class:`~app.commands.CommandEnvelope`;\n``target`` (the connector id) and ``capability`` may be omitted \u2014 the\ncommand registry binds both to the command family \u2014 and must match the\nregistry when supplied. Authentication-derived fields (tenant, actor) are\nverified against the token, never trusted from the body.",
+        "properties": {
+          "capability": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z][A-Z0-9_]{2,100}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability"
+          },
+          "command_id": {
+            "format": "uuid",
+            "title": "Command Id",
+            "type": "string"
+          },
+          "command_type": {
+            "maxLength": 180,
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$",
+            "title": "Command Type",
+            "type": "string"
+          },
+          "command_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Command Version",
+            "type": "string"
+          },
+          "correlation_id": {
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 180,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "payload": {
+            "title": "Payload",
+            "type": "object"
+          },
+          "requested_by": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Requested By",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "tenant_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id",
+          "command_type",
+          "tenant_id",
+          "requested_by",
+          "correlation_id",
+          "idempotency_key",
+          "payload"
+        ],
+        "title": "KernelCommandRequest",
+        "type": "object"
+      },
       "KillSwitchMutation": {
         "additionalProperties": false,
         "properties": {
@@ -5626,6 +5713,25 @@
             "title": "Actor Id",
             "type": "string"
           },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -5634,6 +5740,10 @@
           "event_id": {
             "title": "Event Id",
             "type": "integer"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
           },
           "new_state": {
             "title": "New State",
@@ -5667,10 +5777,14 @@
         "required": [
           "event_id",
           "operation_id",
+          "event_type",
           "previous_state",
           "new_state",
           "actor_id",
           "reason",
+          "correlation_id",
+          "causation_id",
+          "attempt",
           "safe_metadata",
           "created_at"
         ],
@@ -16969,7 +17083,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CommandEnvelope"
+                "$ref": "#/components/schemas/KernelCommandRequest"
               }
             }
           },

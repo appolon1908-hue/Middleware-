@@ -165,7 +165,7 @@ def test_authority_repository_name_drift_is_rejected(
 ) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     authority(authorities, "n8n")["principal_repository"] = (
-        "appolon1908-hue/Middleware-"
+        "ingtrader21-spec/Middleware-"
     )
     assert_rejected(
         validator, registry, authorities, aliases, "authority repository mismatch: n8n"
@@ -238,7 +238,7 @@ def test_alias_target_cannot_collide_with_current_repository(
 ) -> None:
     registry, authorities, aliases = copy.deepcopy(documents)
     repository_id = 1350724356
-    target = "appolon1908-hue/Middleware-"
+    target = "ingtrader21-spec/Middleware-"
     alias = next(
         item
         for item in aliases["mappings"]

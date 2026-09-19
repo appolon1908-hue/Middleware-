@@ -10,14 +10,14 @@ from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = "appolon1908-hue/codestra-production-platform"
-MIDDLEWARE = "appolon1908-hue/Middleware-"
+MIDDLEWARE = "ingtrader21-spec/Middleware-"
 REFERENCE_CANONICAL = REFERENCE.casefold()
 FORBIDDEN_ADAPTER_REPOSITORIES = {
     REFERENCE_CANONICAL,
     MIDDLEWARE.casefold(),
 }
 IDENTIFIER_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
-REPOSITORY_PATTERN = re.compile(r"appolon1908-hue/[A-Za-z0-9_.-]+\Z")
+REPOSITORY_PATTERN = re.compile(r"(?:ingtrader21-spec|appolon1908-hue)/[A-Za-z0-9_.-]+\Z")
 EXPECTED = {
     "ai": "appolon1908-hue/Codestra-AI",
     "caddy": "appolon1908-hue/Caddy",
@@ -27,7 +27,7 @@ EXPECTED = {
     "kong": "appolon1908-hue/Kong",
     "kyqra-crawler": "appolon1908-hue/kyqra-crawler",
     "marketing": "appolon1908-hue/Codestra-Marketing-",
-    "middleware": "appolon1908-hue/Middleware-",
+    "middleware": "ingtrader21-spec/Middleware-",
     "n8n": "appolon1908-hue/N8N",
     "odoo": "appolon1908-hue/Odoo",
     "provisioning": "appolon1908-hue/codestra-provisioning-service",
@@ -144,7 +144,7 @@ def validate(root: Path = ROOT) -> tuple[int, int]:
             fail(f"duplicate_principal_repository:{repository}")
         if canonical_repository == REFERENCE_CANONICAL:
             fail(f"reference_repo_cannot_be_principal:{component}")
-        if not repository.startswith("appolon1908-hue/"):
+        if not repository.startswith(("ingtrader21-spec/", "appolon1908-hue/")):
             fail(f"non_codestra_principal:{component}")
         by_component[component] = repository
         principal_repositories.add(repository)

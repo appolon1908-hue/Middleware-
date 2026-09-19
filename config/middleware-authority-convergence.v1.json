@@ -15,7 +15,7 @@
   },
   "forwardAuthority": {
     "source": {
-      "repository": "appolon1908-hue/Middleware-",
+      "repository": "ingtrader21-spec/Middleware-",
       "protectedRef": "refs/heads/main",
       "resolution": "exact protected-main GitHub event SHA at release execution",
       "staticShaIsAuthority": false,
@@ -468,7 +468,7 @@
     }
   ],
   "convergencePolicy": {
-    "singleForwardRepository": "appolon1908-hue/Middleware-",
+    "singleForwardRepository": "ingtrader21-spec/Middleware-",
     "singleForwardImageRepository": "ghcr.io/appolon1908-hue/codestra-middleware",
     "legacyBackupImageRepository": "ghcr.io/appolon1908-hue/codestra-middleware-legacy",
     "blindWholeFleetReplacementAllowed": false,

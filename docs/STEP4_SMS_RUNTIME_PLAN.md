@@ -5,7 +5,7 @@ this branch on 2026-08-30. Production provider activation remains gated.
 
 ## Authority
 
-Repository: `appolon1908-hue/Middleware-`
+Repository: `ingtrader21-spec/Middleware-`
 
 Branch: `feat/communications-api-v1-sms-runtime`
 

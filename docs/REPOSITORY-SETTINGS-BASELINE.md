@@ -1,7 +1,7 @@
 # Middleware repository settings baseline
 
 This document is the exact target state for
-`https://github.com/appolon1908-hue/Middleware-/settings`.
+`https://github.com/ingtrader21-spec/Middleware-/settings`.
 
 ## Current verified drift on 2026-08-30
 

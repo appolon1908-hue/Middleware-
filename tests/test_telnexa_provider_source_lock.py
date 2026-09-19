@@ -27,7 +27,7 @@ def test_source_authorities_are_exact_reviewed_and_merged() -> None:
         assert FULL_SHA.fullmatch(authority[field]), field
 
     assert authority["sdkRepository"] == "appolon1908-hue/SDK-repository"
-    assert authority["middlewareRepository"] == "appolon1908-hue/Middleware-"
+    assert authority["middlewareRepository"] == "ingtrader21-spec/Middleware-"
     assert authority["telnexaRepository"] == "appolon1908-hue/telnexa"
     assert authority["telnexaSourceBranch"] == "feat/communications-api-v1-sms-provider"
     assert authority["telnexaProtectedBranch"] == "main"

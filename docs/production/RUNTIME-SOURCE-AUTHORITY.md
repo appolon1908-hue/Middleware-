@@ -3,7 +3,7 @@
 ## Canonical rule
 
 The only forward-looking source authority is protected `main` in
-`appolon1908-hue/Middleware-`. A static SHA stored in repository metadata is not
+`ingtrader21-spec/Middleware-`. A static SHA stored in repository metadata is not
 an authority because it becomes stale as soon as another protected merge lands.
 Every release or certification workflow must resolve the exact protected-main
 GitHub event SHA and bind that immutable source to the release manifest, source

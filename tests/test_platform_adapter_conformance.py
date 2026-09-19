@@ -160,6 +160,7 @@ def subjects() -> list[Subject]:
         "crawler-fixture": ("crawler.job.start.v1", "kyqra-crawler", "CRAWLER_EXECUTION"),
         "social-fixture": ("social.publication.publish.v1", "postly-social", "SOCIAL_PUBLISH"),
         "provisioning-fixture": ("provisioning.identity.create.v1", "provisioning-service", "PROVISIONING_WRITE"),
+        "n8n-fixture": ("automation.workflow.submit.v1", "n8n-automation", "N8N_WORKFLOW_DISPATCH"),
     }
     for adapter in development_fixtures():
         command_type, target, capability = prefixes[adapter.adapter_id]

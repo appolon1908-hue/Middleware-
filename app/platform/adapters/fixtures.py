@@ -164,4 +164,5 @@ def development_fixtures() -> tuple[FixtureAdapter, ...]:
         FixtureAdapter(adapter_id="crawler-fixture", provider_family="crawler", connector_ids=("kyqra-crawler",), served_capabilities=("CRAWLER_EXECUTION",)),
         FixtureAdapter(adapter_id="social-fixture", provider_family="social", connector_ids=("postly-social",), served_capabilities=("SOCIAL_PUBLISH",)),
         FixtureAdapter(adapter_id="provisioning-fixture", provider_family="provisioning", connector_ids=("provisioning-service",), served_capabilities=("PROVISIONING_WRITE",)),
+        FixtureAdapter(adapter_id="n8n-fixture", provider_family="n8n", connector_ids=("n8n-automation",), served_capabilities=("N8N_WORKFLOW_DISPATCH",)),
     )

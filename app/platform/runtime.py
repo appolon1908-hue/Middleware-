@@ -51,8 +51,12 @@ def synthetic_policy() -> CommandPolicy:
 
 def command_policies(settings: Settings, base: CommandPolicyRegistry | None = None) -> CommandPolicyRegistry:
     """The one capability registry of the process: the file-backed registry,
-    plus the synthetic TEST_SYN family outside production."""
+    the N8N executor family (capability off, no connector manifest), plus the
+    synthetic TEST_SYN family outside production."""
+    from app.platform.adapters.n8n import N8N_CAPABILITY, n8n_policy
+
     registry = base or CommandPolicyRegistry.load()
+    registry = registry.extended((n8n_policy(),), {N8N_CAPABILITY: False})
     if settings.app_env in SYNTHETIC_ENVIRONMENTS:
         return registry.extended((synthetic_policy(),), {TEST_SYN_CAPABILITY: True})
     return registry
@@ -99,9 +103,18 @@ def default_adapters(settings: Settings, *, http: httpx.AsyncClient | None) -> t
     if settings.app_env in {"development", "test"}:
         return development_fixtures()
     if settings.app_env in {"staging", "preproduction"}:
+        from app.platform.adapters.n8n import n8n_adapter
         from app.platform.adapters.providers import provider_adapters
 
-        return (test_syn_adapter(), *provider_adapters(settings, http=http))
+        adapters: list[object] = [test_syn_adapter(), *provider_adapters(settings, http=http)]
+        # The N8N executor wraps the reservation transport, which is written
+        # against the ORM session factory of app.db.session.
+        from app.db.session import SessionFactory
+
+        n8n = n8n_adapter(settings, SessionFactory)
+        if n8n is not None:
+            adapters.append(n8n)
+        return tuple(adapters)
     return ()
 
 

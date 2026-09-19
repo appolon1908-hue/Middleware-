@@ -10,6 +10,7 @@
     "klyrow-email": false,
     "kyqra-crawler": false,
     "marketing-provider": false,
+    "n8n-automation": false,
     "odoo-19": false,
     "postly-social": false,
     "provisioning-service": false,
@@ -97,6 +98,21 @@
         "production"
       ],
       "campaign_scoped": true
+    },
+    "N8N_WORKFLOW_DISPATCH": {
+      "classification": "external_effect",
+      "effect_flags": [
+        "N8N_DELIVERY_ENABLED",
+        "N8N_PRODUCTION_WORKFLOWS_ENABLED"
+      ],
+      "umbrella_controls": [
+        "N8N_EXTERNAL_PROVIDER_WRITES"
+      ],
+      "environments": [
+        "staging",
+        "production"
+      ],
+      "campaign_scoped": false
     },
     "OBSERVABILITY_ALERT_EMAIL_DELIVERY": {
       "classification": "external_effect",

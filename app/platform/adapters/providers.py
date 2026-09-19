@@ -301,7 +301,8 @@ class OdooAdapter(LegacyBridge):
     def normalize_result(self, raw: Any) -> AdapterResult:
         if isinstance(raw, Mapping) and "status_code" in raw:
             status_code = int(raw["status_code"])
-            body = raw.get("body") if isinstance(raw.get("body"), Mapping) else {}
+            raw_body = raw.get("body")
+            body: Mapping[str, Any] = raw_body if isinstance(raw_body, Mapping) else {}
             reference = None
             for key in ("profile_id", "external_id", "ticket_id", "note_id", "task_id", "id"):
                 if body.get(key) is not None:
@@ -386,8 +387,9 @@ def provider_adapters(settings: Settings, *, http: httpx.AsyncClient | None) -> 
             crm_bridge = OdooCrmBridgeClient(settings, client=http)
         except Exception:  # noqa: BLE001 - CrmBridgeNotConfigured or a settings gap: CRM surfaces stay unavailable
             crm_bridge = None
-        legacy = OdooProviderAdapter(settings)
+        legacy: OdooProviderAdapter | None = OdooProviderAdapter(settings)
         try:
+            assert legacy is not None
             legacy._base_url()  # validates ODOO_INTEGRATION_BASE_URL without a request
             legacy._secret()
         except Exception:  # noqa: BLE001

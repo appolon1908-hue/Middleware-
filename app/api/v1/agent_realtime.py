@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -352,7 +352,7 @@ async def agent_websocket(websocket: WebSocket) -> None:
             code=4400 + min(exc.status_code, 99), reason="authentication denied"
         )
         return
-    redis = get_redis_client(websocket)
+    redis = get_redis_client(cast(Request, websocket))
     lock_key = f"agent-socket:{identity.tenant_id}:{identity.agent_id}"
     socket_id = str(uuid4())
     try:

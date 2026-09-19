@@ -321,7 +321,7 @@ async def submit_command(body: KernelCommandRequest, request: Request) -> JSONRe
 
     result = await platform.kernel.submit(command, principal, trace=request.state.trace_context)
     operation = result.operation
-    body = OperationAccepted(
+    accepted = OperationAccepted(
         operation_id=operation.command_id,
         command_id=operation.command_id,
         state=API_OPERATION_STATES[operation.state],
@@ -330,7 +330,7 @@ async def submit_command(body: KernelCommandRequest, request: Request) -> JSONRe
     )
     return _respond(
         200 if operation.duplicate else 202,
-        body,
+        accepted,
         correlation_id=operation.correlation_id,
         location=f"/platform/v1/operations/{operation.command_id}",
     )

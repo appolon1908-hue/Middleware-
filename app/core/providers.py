@@ -97,7 +97,10 @@ def _process_http(app) -> httpx.AsyncClient:
 
 
 def get_http_client(request: Request) -> httpx.AsyncClient:
-    """The process-wide outbound HTTP client. Handlers never open their own."""
+    """The process-wide outbound HTTP client. Handlers never open their own.
+
+    Typed ``Request`` for FastAPI's dependency introspection; a WebSocket (same
+    ``.app``) may be passed by direct callers (``cast(Request, websocket)``)."""
     runtime = getattr(request.app.state, "runtime", None)
     client = getattr(runtime, "http", None)
     if client is not None:

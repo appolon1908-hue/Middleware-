@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import asyncio
 import hashlib
 import hmac
@@ -291,7 +293,7 @@ async def browser_identity(
                 subject = proxy_subject
         if not isinstance(subject, str) or not subject:
             raise HTTPException(401, "identity subject missing")
-        user = await _keycloak_user(subject, get_provisioning_http_client(request))
+        user = await _keycloak_user(subject, get_provisioning_http_client(cast(Request, request)))
         attributes = user.get("attributes")
         if not isinstance(attributes, dict) or user.get("enabled") is not True:
             raise HTTPException(403, "active employee identity required")
@@ -331,7 +333,7 @@ async def browser_identity(
         )
         authoritative = await _odoo_identity(
             employee_id,
-            get_http_client(request),
+            get_http_client(cast(Request, request)),
             campaign_id or (campaigns[0] if campaigns else None),
             requested_endpoint
             if requested_endpoint is not None

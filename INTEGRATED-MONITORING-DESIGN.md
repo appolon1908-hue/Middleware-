@@ -285,7 +285,7 @@ Registered probes are read-only. Availability checks never place calls, send ema
 
 Keycloak provides human login and machine identities. Use Caddy for HTTPS and Kong for API authentication/rate policy, followed by Middleware audience, issuer, expiry, scope, role and tenant/campaign checks. Machine credentials live in OpenBao or the existing approved secret-injection mechanism; browser applications receive no telemetry backend credentials.
 
-The existing alert source uses tenant `codestra-platform`, audience `middleware-api`, and scopes `observability.alerts.write/read`; the delivery-event adapter uses `observability.alerts.events.write`. Keep these current names. New read scopes and sync scopes in the JSON are proposed additions, not claims about existing Keycloak roles.
+The existing alert source is the `alertmanager` client with tenant `codestra-platform`, audience `middleware-api`, and scopes `alerts.write/read`; the delivery-event adapter (`klyrow-alert-adapter`) uses `observability.alerts.events.write` and `observability.alerts.read`. Keep these current names. New read scopes and sync scopes in the JSON are proposed additions, not claims about existing Keycloak roles.
 
 Prometheus OSS is not a tenant-isolation boundary. Grafana folders and dashboard filters alone do not isolate datasource queries. Platform operators can access the shared operational backends; restricted campaign/application users must go through authorized query templates/projections or genuinely isolated datasource/store boundaries. For Loki/Tempo, derive backend tenant context from verified identity and use version-supported isolation; do not trust caller-supplied tenant headers. Recheck the tenant owning a trace before returning it.
 

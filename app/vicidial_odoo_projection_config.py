@@ -94,7 +94,7 @@ def _validate_hmac_path(raw: str, *, prefix: str, name: str) -> None:
     path = Path(raw)
     normalized = posixpath.normpath(raw.replace("\\", "/"))
     if (
-        not path.is_absolute()
+        not _BASE._absolute_like(path)
         or not prefix.startswith("/run/secrets/")
         or not prefix.endswith("-")
         or not normalized.startswith(prefix)

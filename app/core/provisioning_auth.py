@@ -30,7 +30,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 
 BEARER = HTTPBearer(auto_error=False)
 
@@ -58,17 +58,15 @@ def require_provisioning_scope(
             for item in settings.agent_provisioning_authorized_parties.split(",")
             if item.strip()
         )
-        if not all(
-            (settings.keycloak_issuer, settings.keycloak_audience,
-             settings.keycloak_jwks_url, parties)
-        ):
+        identity = settings.identity
+        if not identity.explicit or not parties:
             raise HTTPException(503, "provisioning identity authority is not configured")
         validator = KeycloakValidator(
-            issuer=settings.keycloak_issuer,
-            audience=settings.keycloak_audience,
-            jwks_url=settings.keycloak_jwks_url,
-            authorized_parties=parties,
-            required_scopes=frozenset({scope}),
+            **identity_validator_kwargs(
+                identity,
+                authorized_parties=parties,
+                required_scopes=frozenset({scope}),
+            )
         )
         try:
             claims = validator.validate(credential.credentials)

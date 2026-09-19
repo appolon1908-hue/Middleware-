@@ -23,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 
 
 router = APIRouter(prefix="/webphone-api/v1", tags=["webphone-staging"])
@@ -249,17 +249,7 @@ async def browser_identity(
                 scheme, separator, token = authorization.partition(" ")
             if scheme.lower() != "bearer" or not separator or not token.strip():
                 raise JWTAuthError("bearer authorization required")
-            validator = KeycloakValidator(
-                issuer=settings.keycloak_issuer,
-                audience=settings.keycloak_audience,
-                jwks_url=settings.keycloak_jwks_url,
-                authorized_parties=frozenset(
-                    value.strip()
-                    for value in settings.keycloak_authorized_parties.split(",")
-                    if value.strip()
-                ),
-                required_roles=frozenset(),
-            )
+            validator = KeycloakValidator(**identity_validator_kwargs(settings.identity))
             claims = validator.validate(token.strip())
             if claims.get("typ") not in {"ID", "Bearer"}:
                 raise JWTAuthError("browser identity token required")

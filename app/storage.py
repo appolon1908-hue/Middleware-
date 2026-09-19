@@ -14,6 +14,7 @@ from .models import EventEnvelope, IngressResult
 RUNTIME_SCHEMA_VERSION = 11
 DEFAULT_MAX_OUTBOX_ATTEMPTS = 8
 NATS_JETSTREAM_DESTINATION = "nats-jetstream"
+KLYROW_ODOO_PROJECTION_DESTINATION = "odoo-klyrow-projection-v1"
 ReconciliationAction = Literal["retry", "complete", "dead_letter"]
 
 
@@ -134,6 +135,8 @@ class InboxStore(Protocol):
         producer_client_id: str,
         body_sha256: str,
         semantic_sha256: str,
+        deduplication_sha256: str | None = None,
+        destination: str = NATS_JETSTREAM_DESTINATION,
     ) -> IngressResult: ...
 
     async def ready(self) -> bool: ...
@@ -158,13 +161,20 @@ class MemoryInboxStore:
         producer_client_id: str,
         body_sha256: str,
         semantic_sha256: str,
+        deduplication_sha256: str | None = None,
+        destination: str = NATS_JETSTREAM_DESTINATION,
     ) -> IngressResult:
         payload = envelope.model_dump(mode="json")
         if canonical_payload_sha256(payload) != semantic_sha256:
             raise EventLedgerIntegrityError(
                 "semantic hash does not match the canonical event payload"
             )
-        event_key = (envelope.tenant_id, envelope.event_id)
+        comparison_sha256 = deduplication_sha256 or semantic_sha256
+        event_key = (
+            (producer_client_id, envelope.event_id)
+            if deduplication_sha256 is not None
+            else (envelope.tenant_id, envelope.event_id)
+        )
         idempotency_key = (envelope.tenant_id, envelope.idempotency_key)
         event_existing = self._event_items.get(event_key)
         idem_existing = self._idempotency_items.get(idempotency_key)
@@ -180,8 +190,8 @@ class MemoryInboxStore:
 
         existing = event_existing or idem_existing
         if existing:
-            old_semantic_hash, result = existing
-            if old_semantic_hash != semantic_sha256:
+            old_comparison_hash, result = existing
+            if old_comparison_hash != comparison_sha256:
                 raise ReplayConflict(
                     "event/idempotency identity was reused with a different semantic payload"
                 )
@@ -194,7 +204,7 @@ class MemoryInboxStore:
             duplicate=False,
             correlation_id=envelope.correlation_id,
         )
-        item = (semantic_sha256, result)
+        item = (comparison_sha256, result)
         self._event_items[event_key] = item
         self._idempotency_items[idempotency_key] = item
         tenant_sequence = self._ledger_counts.get(envelope.tenant_id, 0) + 1
@@ -584,8 +594,10 @@ class PostgresInboxStore:
         "middleware_outbox_attempt_events_immutable",
     }
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, owns_pool: bool = True) -> None:
         self.pool = pool
+        # A pool shared through RuntimeContainer is closed by the container.
+        self.owns_pool = owns_pool
 
     @classmethod
     async def connect(cls, database_url: str) -> "PostgresInboxStore":
@@ -693,6 +705,8 @@ class PostgresInboxStore:
         producer_client_id: str,
         body_sha256: str,
         semantic_sha256: str,
+        deduplication_sha256: str | None = None,
+        destination: str = NATS_JETSTREAM_DESTINATION,
     ) -> IngressResult:
         payload = envelope.model_dump(mode="json")
         calculated_semantic_sha = canonical_payload_sha256(payload)
@@ -706,9 +720,98 @@ class PostgresInboxStore:
             separators=(",", ":"),
             sort_keys=True,
         )
+        comparison_sha256 = deduplication_sha256 or semantic_sha256
         now = datetime.now(timezone.utc)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
+                if deduplication_sha256 is not None:
+                    await conn.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                        f"wire-event:{producer_client_id}:{envelope.event_id}",
+                    )
+                    source_existing = await conn.fetchrow(
+                        """
+                        SELECT event_id, tenant_id, body_sha256, correlation_id,
+                               event_type, idempotency_key, payload
+                        FROM middleware_inbox
+                        WHERE source_client_id=$1 AND event_id=$2
+                        ORDER BY received_at ASC
+                        LIMIT 1
+                        """,
+                        producer_client_id,
+                        envelope.event_id,
+                    )
+                    if source_existing is not None:
+                        if source_existing["body_sha256"] != comparison_sha256:
+                            raise ReplayConflict(
+                                "source event identity was reused with a different raw payload"
+                            )
+                        # A matching replay is also the bounded reconciliation
+                        # signal for an inbox row whose projection intent was
+                        # lost or deliberately removed. Rebuild only from the
+                        # authenticated, already-persisted inbox payload; the
+                        # current retry has a different received_at value and
+                        # must not replace durable evidence.
+                        stored_payload = source_existing["payload"]
+                        stored_payload_value = (
+                            json.loads(stored_payload)
+                            if isinstance(stored_payload, str)
+                            else dict(stored_payload)
+                        )
+                        stored_payload_json = json.dumps(
+                            stored_payload_value,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        )
+                        projection_existing = await conn.fetchrow(
+                            """
+                            SELECT event_type, payload
+                            FROM middleware_outbox
+                            WHERE tenant_id=$1 AND destination=$2
+                              AND idempotency_key=$3
+                            FOR UPDATE
+                            """,
+                            source_existing["tenant_id"],
+                            destination,
+                            source_existing["idempotency_key"],
+                        )
+                        if projection_existing is None:
+                            await conn.execute(
+                                """
+                                INSERT INTO middleware_outbox (
+                                    tenant_id, destination, event_type, payload,
+                                    idempotency_key
+                                ) VALUES ($1,$2,$3,$4::jsonb,$5)
+                                """,
+                                source_existing["tenant_id"],
+                                destination,
+                                source_existing["event_type"],
+                                stored_payload_json,
+                                source_existing["idempotency_key"],
+                            )
+                        else:
+                            projection_payload = projection_existing["payload"]
+                            projection_payload_value = (
+                                json.loads(projection_payload)
+                                if isinstance(projection_payload, str)
+                                else dict(projection_payload)
+                            )
+                            if (
+                                projection_existing["event_type"]
+                                != source_existing["event_type"]
+                                or projection_payload_value != stored_payload_value
+                            ):
+                                raise EventLedgerIntegrityError(
+                                    "durable projection does not match its accepted inbox event"
+                                )
+                        return IngressResult(
+                            event_id=source_existing["event_id"],
+                            tenant_id=source_existing["tenant_id"],
+                            status="duplicate",
+                            duplicate=True,
+                            correlation_id=source_existing["correlation_id"],
+                        )
                 row = await conn.fetchrow(
                     """
                     INSERT INTO middleware_inbox (
@@ -793,7 +896,7 @@ class PostgresInboxStore:
                         ) VALUES ($1,$2,$3,$4::jsonb,$5)
                         """,
                         envelope.tenant_id,
-                        NATS_JETSTREAM_DESTINATION,
+                        destination,
                         envelope.event_type,
                         payload_json,
                         envelope.idempotency_key,
@@ -807,7 +910,8 @@ class PostgresInboxStore:
                     )
                 existing_rows = await conn.fetch(
                     """
-                    SELECT event_id, tenant_id, idempotency_key, semantic_sha256, correlation_id
+                    SELECT event_id, tenant_id, idempotency_key, body_sha256,
+                           semantic_sha256, correlation_id
                     FROM middleware_inbox
                     WHERE (tenant_id=$1 AND event_id=$2)
                        OR (tenant_id=$1 AND idempotency_key=$3)
@@ -827,7 +931,12 @@ class PostgresInboxStore:
                         "event and idempotency identities refer to different accepted events"
                     )
                 existing = existing_rows[0]
-                if existing["semantic_sha256"] != semantic_sha256:
+                stored_comparison_sha256 = (
+                    existing["body_sha256"]
+                    if deduplication_sha256 is not None
+                    else existing["semantic_sha256"]
+                )
+                if stored_comparison_sha256 != comparison_sha256:
                     raise ReplayConflict(
                         "event/idempotency identity was reused with a different semantic payload"
                     )
@@ -887,7 +996,8 @@ class PostgresInboxStore:
             return False
 
     async def close(self) -> None:
-        await self.pool.close()
+        if self.owns_pool:
+            await self.pool.close()
 
 
 @dataclass(frozen=True)

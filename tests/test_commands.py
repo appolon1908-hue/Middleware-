@@ -23,7 +23,7 @@ from app.commands import (
 from app.main import create_app
 from app.provider_canary import provider_evidence_digest
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.storage import MemoryInboxStore
 
 

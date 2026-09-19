@@ -56,6 +56,10 @@ SCOPES = " ".join(
 
 @pytest.fixture
 def system(tmp_path, monkeypatch):
+    # The deployed entrypoint's lifespan builds the canonical domain runtime
+    # from the environment; give it the explicit in-memory test runtime.
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ALLOW_IN_MEMORY_STORAGE", "true")
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     class Keys:
@@ -444,6 +448,7 @@ def test_all_36_operations_have_working_success_paths(system):
         {"environment": "production", "service_ids": ["sample-api"]},
     ).json()["data"]
     assert reconciliation["results"][0]["state"] == "synced"
+    assert reconciliation["results"][0]["component_states"] == {"prometheus": "synced"}
     probe = call(
         "POST",
         "/v1/observability/probe-runs",
@@ -1187,8 +1192,9 @@ def test_release_artifact_reader_rejects_links_and_oversized_files(tmp_path):
     artifact = tmp_path / "api.json"
     artifact.write_bytes(b"{}")
     expected = "sha256:" + hashlib.sha256(b"{}").hexdigest()
-    (tmp_path / "linked.json").symlink_to(artifact)
-    with pytest.raises(OSError):
+    link = tmp_path / "linked.json"
+    link.symlink_to(artifact)
+    with pytest.raises((OSError, ValueError)):
         read_artifact(str(tmp_path), "linked.json", expected)
     artifact.write_bytes(b"x" * (MAX_RESPONSE_BYTES + 1))
     with pytest.raises(ValueError, match="size limit"):

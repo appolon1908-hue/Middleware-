@@ -135,9 +135,22 @@ def test_invalid_scope_and_browser_session_are_rejected(monkeypatch):
     )
 
 
+def _explicit_identity(monkeypatch) -> None:
+    # The browser facade only trusts an explicitly configured identity authority.
+    monkeypatch.setattr(settings, "keycloak_issuer", "https://auth-staging.codestra.co/realms/codestra")
+    monkeypatch.setattr(settings, "keycloak_audience", "middleware-api")
+    monkeypatch.setattr(
+        settings,
+        "keycloak_jwks_url",
+        "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
+    )
+    monkeypatch.setattr(settings, "keycloak_authorized_parties", "codestra-agent-desktop")
+
+
 def test_keycloak_gateway_proxies_only_validated_identity(monkeypatch):
     monkeypatch.setattr(settings, "webphone_staging_provisioning_enabled", True)
     monkeypatch.setattr(settings, "webphone_keycloak_enabled", True)
+    _explicit_identity(monkeypatch)
     monkeypatch.setattr(
         webphone.KeycloakValidator,
         "validate",
@@ -232,6 +245,7 @@ def test_keycloak_gateway_proxies_only_validated_identity(monkeypatch):
 def test_keycloak_gateway_denies_wrong_campaign_and_missing_origin(monkeypatch):
     monkeypatch.setattr(settings, "webphone_staging_provisioning_enabled", True)
     monkeypatch.setattr(settings, "webphone_keycloak_enabled", True)
+    _explicit_identity(monkeypatch)
     monkeypatch.setattr(
         webphone.KeycloakValidator,
         "validate",

@@ -30,8 +30,13 @@ def parse_bool(value: str | None, *, name: str, default: bool) -> bool:
     raise ProjectionConfigurationError(f"{name} must be an explicit boolean")
 
 
+def _absolute_like(path: str | Path) -> bool:
+    raw = str(path).replace("\\", "/")
+    return raw.startswith("/") or Path(raw).is_absolute()
+
+
 def _read_private_text(path: Path, *, minimum_bytes: int = 1) -> str:
-    if not path.is_absolute():
+    if not _absolute_like(path):
         raise ProjectionConfigurationError("secret paths must be absolute")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -334,7 +339,7 @@ class ProjectionSettings:
                 "VICIDIAL_ODOO_ACTIVATION_ID is forbidden "
                 "by the runtime profile"
             )
-        if not self.state_path.is_absolute():
+        if not _absolute_like(self.state_path):
             raise ProjectionConfigurationError(
                 "projection state path must be absolute"
             )
@@ -366,7 +371,7 @@ class ProjectionSettings:
         )
         if (
             self.nats_credentials_file is None
-            or not self.nats_credentials_file.is_absolute()
+            or not _absolute_like(self.nats_credentials_file)
         ):
             raise ProjectionConfigurationError(
                 "enabled projection requires an absolute "

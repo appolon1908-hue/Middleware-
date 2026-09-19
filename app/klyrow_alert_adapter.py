@@ -12,7 +12,7 @@ from urllib.parse import quote, urlsplit
 
 import httpx
 
-from .config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 

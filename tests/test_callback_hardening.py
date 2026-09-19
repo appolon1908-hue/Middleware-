@@ -6,12 +6,27 @@ from app.entrypoints.integration_api import app
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _route_methods(routes, prefix: str = "") -> set[tuple[str, str]]:
+    """Flatten routers mounted through ``include_router`` into (path, method)."""
+    methods: set[tuple[str, str]] = set()
+    for route in routes:
+        original = getattr(route, "original_router", None)
+        if original is not None:
+            context = getattr(route, "include_context", None)
+            methods |= _route_methods(
+                original.routes, prefix + (getattr(context, "prefix", "") or "")
+            )
+            continue
+        path = getattr(route, "path", None)
+        if path is None:
+            continue
+        for method in getattr(route, "methods", None) or ():
+            methods.add((prefix + path, method))
+    return methods
+
+
 def test_complete_callback_api_surface():
-    methods = {
-        (route.path, method)
-        for route in app.routes
-        for method in getattr(route, "methods", set())
-    }
+    methods = _route_methods(app.routes)
     required = {
         ("/api/v1/control/callbacks", "POST"),
         ("/api/v1/callbacks/{callback_id}", "GET"),

@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from .commands import CommandError
 from .commands import MemoryCommandStore, PostgresCommandStore
-from .config import Settings
+from app.core.config import Settings
 from .control_plane_auth import caller_for_authorization
 from .models import EventEnvelope
 from .observability_alert_contract import (
@@ -44,7 +44,7 @@ from .observability_incidents import (
     decode_cursor,
     encode_cursor,
 )
-from .runtime import Runtime, build_runtime
+from app.core.runtime import RuntimeContainer as Runtime, build_runtime_container as build_runtime
 from .security import (
     AuthorizationError,
     RequestValidationError,
@@ -242,14 +242,17 @@ def create_app(
         )
 
     @app.get("/health")
+    @app.get("/platform/v1/health")
     async def health() -> dict[str, str]:
         return {"status": "healthy", "service": "middleware-observability-alerts"}
 
     @app.head("/health")
+    @app.head("/platform/v1/health")
     async def health_head() -> Response:
         return Response(status_code=200)
 
     @app.get("/readiness")
+    @app.get("/platform/v1/readiness")
     async def readiness(request: Request) -> JSONResponse:
         report = await request.app.state.runtime.readiness()
         return JSONResponse(
@@ -299,6 +302,7 @@ def create_app(
         )
         return Response(content=body, media_type="text/plain; version=0.0.4")
 
+    @app.post("/internal/v1/alerts/alertmanager")
     @app.post("/v1/integrations/alertmanager/events")
     @app.post("/v1/observability/alerts", deprecated=True)
     async def submit_alerts(request: Request) -> JSONResponse:

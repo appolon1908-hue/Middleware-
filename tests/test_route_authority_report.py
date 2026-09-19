@@ -1,4 +1,4 @@
-"""The route authority report (config/route-authority.v1.json) is generated
+"""The route authority report (config/route-authority-report.v1.json) is generated
 from the canonical integration application and must not drift; no mutating
 operation may reach an external provider outside the command kernel."""
 
@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT = ROOT / "config" / "route-authority.v1.json"
+REPORT = ROOT / "config" / "route-authority-report.v1.json"
 GENERATOR = ROOT / "scripts" / "generate_route_authority_report.py"
 ALLOWED = {"READ_ONLY", "KERNEL_WRAPPER", "INTERNAL_EVENT_INGRESS", "DURABLE_OUTBOX_INTENT", "DIRECT_INTERNAL_SERVICE", "DENIED_LEGACY"}
 KERNEL_ROUTES = {

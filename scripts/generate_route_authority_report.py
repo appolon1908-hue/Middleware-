@@ -25,7 +25,7 @@ Classification is derived from the handler source (kernel calls, outbound
 transports) with the reviewed overrides in
 ``config/route-authority-overrides.v1.json``. ``DIRECT_EFFECT_BYPASSES``
 counts mutating operations that reach an external provider outside the
-kernel; the report is committed as ``config/route-authority.v1.json`` and
+kernel; the report is committed as ``config/route-authority-report.v1.json`` and
 ``tests/test_route_authority_report.py`` fails when it drifts or the bypass
 count is not zero.
 """
@@ -46,7 +46,7 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("ALLOW_IN_MEMORY_STORAGE", "true")
 
-OUTPUT = ROOT / "config" / "route-authority.v1.json"
+OUTPUT = ROOT / "config" / "route-authority-report.v1.json"
 OVERRIDES = ROOT / "config" / "route-authority-overrides.v1.json"
 EDGE_CONTRACT = ROOT / "deploy" / "public-api-route-contract.json"
 
@@ -262,7 +262,7 @@ def render(report: dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail when the committed report differs")
-    parser.add_argument("--write", action="store_true", help="write config/route-authority.v1.json")
+    parser.add_argument("--write", action="store_true", help="write config/route-authority-report.v1.json")
     args = parser.parse_args()
     report = build()
     text = render(report)

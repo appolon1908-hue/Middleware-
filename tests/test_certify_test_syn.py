@@ -14,10 +14,31 @@ from scripts import certify_test_syn as cert
 
 SOURCE_SHA = "a" * 40
 IMAGE_DIGEST = "sha256:" + ("b" * 64)
+
+
+def _synthetic_jwt(claims: dict[str, str], signature: str) -> str:
+    """JWT-shaped fixture assembled at import time: unsigned, unverifiable, never a credential."""
+
+    def segment(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    return ".".join(
+        (
+            segment(b'{"alg":"RS256"}'),
+            segment(json.dumps(claims, separators=(",", ":")).encode("utf-8")),
+            segment(signature.encode("utf-8")),
+        )
+    )
+
+
 TOKENS = {
-    "monitoring": "eyJhbGciOiJSUzI1NiJ9.eyJhenAiOiJtb25pdG9yaW5nLXJlYWRvbmx5In0.bW9uaXRvcmluZy1zaWduYXR1cmUtdmFsdWU",
-    "producer": "eyJhbGciOiJSUzI1NiJ9.eyJhenAiOiJvZG9vLWludGVncmF0aW9uIn0.cHJvZHVjZXItc2lnbmF0dXJlLXZhbHVl",
-    "operator": "eyJhbGciOiJSUzI1NiJ9.eyJhenAiOiJwbGF0Zm9ybS1vcGVyYXRvciJ9.b3BlcmF0b3Itc2lnbmF0dXJlLXZhbHVl",
+    "monitoring": _synthetic_jwt(
+        {"azp": "monitoring-readonly"}, "monitoring-signature-value"
+    ),
+    "producer": _synthetic_jwt({"azp": "odoo-integration"}, "producer-signature-value"),
+    "operator": _synthetic_jwt(
+        {"azp": "platform-operator"}, "operator-signature-value"
+    ),
     "grafana": "glsa_testsyn_readonly_0123456789abcdef_0123456789",
     "webhook": "staging-webhook-secret-at-least-thirty-two-bytes-long",
 }

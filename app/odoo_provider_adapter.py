@@ -14,7 +14,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 from jsonschema import Draft202012Validator, FormatChecker
 
-from .config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 

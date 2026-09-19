@@ -9,7 +9,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from app.config import ConfigurationError
+from app.core.config import ConfigurationError
 from app.klyrow_email_adapter import KlyrowEmailAdapter, KlyrowEmailAdapterError
 from app.temporal_workflows import CommandExecutionRequest
 

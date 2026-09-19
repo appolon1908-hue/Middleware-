@@ -236,11 +236,12 @@ for _domain in ("odoo", "crm", "telephony", "social", "marketing", "ai"):
 
 # Legacy n8n operation aliases. The canonical Middleware edge contract
 # classifies every /v1/integrations/n8n/* path as ``denied``: Kong and Caddy
-# return 404 for them and the deployed ``app.entrypoints.integration_api``
-# never mounts this router. They remain only on the in-process monolith
-# factory until the published sunset so existing callers keep their
-# deprecation metadata; new use is prohibited.
+# return 404 for them and the deployed application never mounts this router
+# (``app.router_registry.LEGACY_MONOLITH_ONLY_ROUTERS``). They remain only on
+# the in-process monolith until the published sunset so existing callers keep
+# their deprecation metadata; new use is prohibited.
 _LEGACY_ALIAS_SUNSET = "Wed, 30 Jun 2027 23:59:59 GMT"
+legacy_n8n_router = APIRouter(tags=["domain-control-legacy-n8n"])
 
 
 def _legacy_alias_headers(successor: str) -> dict[str, str]:
@@ -251,7 +252,7 @@ def _legacy_alias_headers(successor: str) -> dict[str, str]:
     }
 
 
-@router.get("/v1/integrations/n8n/operations", deprecated=True)
+@legacy_n8n_router.get("/v1/integrations/n8n/operations", deprecated=True)
 async def n8n_operations(
     request: Request,
     limit: int = Query(50, ge=1, le=100),
@@ -270,14 +271,16 @@ async def n8n_operations(
     return response
 
 
-@router.post("/v1/integrations/n8n/operations/{operation_id}/cancel", deprecated=True)
+@legacy_n8n_router.post(
+    "/v1/integrations/n8n/operations/{operation_id}/cancel", deprecated=True
+)
 async def n8n_cancel(
     operation_id: UUID, body: OperationMutationRequest, request: Request
 ):
     return await _mutate_any(operation_id, body, request, "cancel")
 
 
-@router.post(
+@legacy_n8n_router.post(
     "/v1/integrations/n8n/operations/{operation_id}/reconcile", deprecated=True
 )
 async def n8n_reconcile(

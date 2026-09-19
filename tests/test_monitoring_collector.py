@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import threading
 from datetime import datetime, timedelta, timezone
@@ -14,7 +15,25 @@ from app.monitoring import collector
 from app.monitoring.collector import CollectorConfig, CollectorError, run
 from scripts.monitoring_collector import main
 
-FAKE_BEARER = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJjb2xsZWN0b3IiLCJhdWQiOiJtaWRkbGV3YXJlLWFwaSJ9.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU"
+
+def _synthetic_jwt(claims: dict[str, str], signature: str) -> str:
+    """JWT-shaped fixture assembled at import time: unsigned, unverifiable, never a credential."""
+
+    def segment(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    return ".".join(
+        (
+            segment(b'{"alg":"RS256"}'),
+            segment(json.dumps(claims, separators=(",", ":")).encode("utf-8")),
+            segment(signature.encode("utf-8")),
+        )
+    )
+
+
+FAKE_BEARER = _synthetic_jwt(
+    {"sub": "collector", "aud": "middleware-api"}, "signature-signature-signature"
+)
 GRAFANA_TOKEN = "glsa_readonly_collector_0123456789abcdef_0123456789"
 
 

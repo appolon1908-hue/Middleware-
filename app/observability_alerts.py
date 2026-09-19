@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from .commands import CommandError
 from .commands import MemoryCommandStore, PostgresCommandStore
-from .config import Settings
+from app.core.config import Settings
 from .control_plane_auth import caller_for_authorization
 from .models import EventEnvelope
 from .observability_alert_contract import (
@@ -44,7 +44,7 @@ from .observability_incidents import (
     decode_cursor,
     encode_cursor,
 )
-from .runtime import Runtime, build_runtime
+from app.core.runtime import RuntimeContainer as Runtime, build_runtime_container as build_runtime
 from .security import (
     AuthorizationError,
     RequestValidationError,

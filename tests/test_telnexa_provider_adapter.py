@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from app.config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from app.telnexa_provider_adapter import TelnexaProviderAdapterError, TelnexaSmsAdapter
 from app.temporal_workflows import CommandExecutionRequest
 

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import ai_jobs
 from app.core.config import settings
-from app.core.jwt_auth import JWTAuthError, KeycloakValidator
+from app.core.jwt_auth import JWTAuthError, KeycloakValidator, identity_validator_kwargs
 from app.db.session import get_session
 
 
@@ -53,16 +53,7 @@ class Tenant:
 
 @lru_cache(maxsize=1)
 def _validator() -> KeycloakValidator:
-    return KeycloakValidator(
-        issuer=settings.keycloak_issuer,
-        audience=settings.keycloak_audience,
-        jwks_url=settings.keycloak_jwks_url,
-        authorized_parties=frozenset(
-            value.strip()
-            for value in settings.keycloak_authorized_parties.split(",")
-            if value.strip()
-        ),
-    )
+    return KeycloakValidator(**identity_validator_kwargs(settings.identity))
 
 
 def tenant(

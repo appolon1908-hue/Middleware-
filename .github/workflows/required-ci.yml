@@ -232,6 +232,14 @@ jobs:
             python tests/integration/campaign_identity_concurrency.py \
             | tee campaign-identity-concurrency.txt
 
+          # Re-establish and certify every runtime migration authority after
+          # tests that intentionally create/drop isolated runtime tables.
+          python -m scripts.migrate_runtime \
+            | tee runtime-migration.txt
+
+          python -m scripts.migrate_runtime --verify-only \
+            | tee runtime-migration-verify.txt
+
       - name: Verify rollback by isolated restoration
         shell: bash
         env:
@@ -384,7 +392,14 @@ jobs:
           REDIS_URL='redis://127.0.0.1:1/15' audit_case redis-failure \
             'postgresql+asyncpg://middleware_ci:ci-only-password@127.0.0.1:5432/middleware_rehearsal' \
             503 8105
-          KEYCLOAK_JWKS_URL='http://127.0.0.1:1/certs.json' audit_case keycloak-failure \
+
+          # Preserve the approved synthetic-CI identity URL while making its
+          # dependency unavailable. This tests runtime readiness failure
+          # without weakening configuration authority.
+          kill "${jwks_pid}"
+          wait "${jwks_pid}" || true
+
+          audit_case keycloak-failure \
             'postgresql+asyncpg://middleware_ci:ci-only-password@127.0.0.1:5432/middleware_rehearsal' \
             503 8106
           python -m scripts.audit_release_endpoints \
@@ -407,6 +422,8 @@ jobs:
             pytest-full.txt \
             campaign-extension-concurrency.txt \
             campaign-identity-concurrency.txt \
+            runtime-migration.txt \
+            runtime-migration-verify.txt \
             middleware-rehearsal.dump \
             restoration.sha256 \
             application-startup.txt \
@@ -441,6 +458,8 @@ jobs:
             pytest-full.txt
             campaign-extension-concurrency.txt
             campaign-identity-concurrency.txt
+            runtime-migration.txt
+            runtime-migration-verify.txt
             middleware-rehearsal.dump
             restoration.sha256
             application-startup.txt

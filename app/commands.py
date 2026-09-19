@@ -653,8 +653,10 @@ class PostgresCommandStore:
     }
     REQUIRED_TRIGGERS = {"middleware_command_audit_immutable", "middleware_operation_mutations_immutable"}
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, owns_pool: bool = True) -> None:
         self.pool = pool
+        # A pool shared through RuntimeContainer is closed by the container.
+        self.owns_pool = owns_pool
 
     @classmethod
     async def connect(cls, database_url: str) -> "PostgresCommandStore":
@@ -1230,7 +1232,8 @@ class PostgresCommandStore:
             return False
 
     async def close(self) -> None:
-        await self.pool.close()
+        if self.owns_pool:
+            await self.pool.close()
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 import httpx
 from jsonschema import Draft202012Validator, FormatChecker
 
-from .config import ConfigurationError
+from app.core.config import ConfigurationError
 from .temporal_workflows import ActivityResult, CommandExecutionRequest
 
 

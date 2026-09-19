@@ -489,7 +489,22 @@ def test_campaign_reader_is_pinned_to_dedicated_clients_and_environment(monkeypa
     monkeypatch.setattr(integrations.settings, "odoo_campaign_reader_client_ids", "reader-a, reader-b")
     monkeypatch.setattr(integrations.settings, "keycloak_authorized_parties", "agent-ui-client")
     monkeypatch.setattr(integrations.settings, "environment", "staging")
+
+    # An implicit (derived) identity is never trusted by the integration routes.
+    with pytest.raises(integrations.HTTPException) as denied:
+        integrations._authenticate_odoo("Bearer x", "odoo.campaigns.read")
+    assert denied.value.status_code == 401
+    assert not captured
+
+    monkeypatch.setattr(integrations.settings, "keycloak_issuer", "https://auth-staging.codestra.co/realms/codestra")
+    monkeypatch.setattr(integrations.settings, "keycloak_audience", "middleware-api")
+    monkeypatch.setattr(
+        integrations.settings,
+        "keycloak_jwks_url",
+        "https://auth-staging.codestra.co/realms/codestra/protocol/openid-connect/certs",
+    )
     integrations._authenticate_odoo("Bearer x", "odoo.campaigns.read")
+    assert captured["issuer"] == "https://auth-staging.codestra.co/realms/codestra"
     assert captured["authorized_parties"] == frozenset({"reader-a", "reader-b"})
     assert "agent-ui-client" not in captured["authorized_parties"]
     assert captured["required_environment"] == "staging"

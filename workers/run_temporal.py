@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from temporalio.worker import Worker
 
-from app.config import ConfigurationError, Settings
+from app.core.config import ConfigurationError, Settings
 from app.commands import PostgresCommandStore
 from app.klyrow_alert_adapter import KlyrowAlertAdapter
 from app.klyrow_email_adapter import KlyrowEmailAdapter

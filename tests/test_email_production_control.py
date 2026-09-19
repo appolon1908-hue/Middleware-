@@ -12,7 +12,7 @@ from app.email_production_control import (
     MemoryEmailProductionPolicyStore,
 )
 from app.main import create_app
-from app.config import Settings
+from app.core.config import Settings
 
 
 def _settings(*, enabled: bool = True):

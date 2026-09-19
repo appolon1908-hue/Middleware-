@@ -408,7 +408,7 @@ def read_grafana(http: Http, base: str) -> Reading:
         )
     status, dashboards = http.json(base + "/api/search?type=dash-db&limit=5000")
     uids = (
-        sorted(d.get("uid") for d in dashboards if isinstance(d, dict) and d.get("uid"))
+        sorted(str(d["uid"]) for d in dashboards if isinstance(d, dict) and d.get("uid"))
         if status == 200 and isinstance(dashboards, list)
         else []
     )

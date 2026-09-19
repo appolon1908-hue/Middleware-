@@ -4,9 +4,11 @@ from app.core.auth import BearerAuthError, verify_bearer
 
 
 def test_application_imports_with_readiness_response_types():
+    from app.application import APPLICATION_TITLE
     from app.main import app
 
-    assert app.title == "Codestra Middleware"
+    # One factory, one title: the monolith is the canonical application.
+    assert app.title == APPLICATION_TITLE == "Codestra Middleware API"
 
 
 def test_bearer_validation_accepts_only_exact_secret():

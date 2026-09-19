@@ -178,7 +178,7 @@ def build_documents() -> tuple[dict[str, Any], dict[str, Any]]:
     """Build the enriched OpenAPI document and completion matrix in memory."""
     # These imports follow the explicit repository-root path setup above so this
     # file remains directly executable from any working directory.
-    from app.config import Settings
+    from app.core.config import Settings
     from app.main import create_app
 
     settings = Settings.from_env(

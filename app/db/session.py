@@ -1,17 +1,70 @@
-from collections.abc import AsyncIterator
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from app.core.config import settings
+"""The single SQLAlchemy engine of the Middleware process.
 
-engine = create_async_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_size=settings.database_pool_size,
-    max_overflow=settings.database_max_overflow,
-    pool_timeout=settings.database_pool_timeout_seconds,
-    pool_recycle=settings.database_pool_recycle_seconds,
-    connect_args={"command_timeout": settings.database_command_timeout_seconds},
+The engine is created once from the canonical ``app.core.config.settings``
+and shared by every ORM router, worker and script through ``SessionFactory``
+and ``get_session``. ``RuntimeContainer`` (``app.core.runtime``) references
+this engine rather than creating another one, and disposes it on shutdown.
+
+``configure()`` exists for process bootstrap and tests that need the engine
+bound to a different DSN; it rebinds the module-level ``engine`` and
+``SessionFactory`` in place so consumers that imported those names keep
+working.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
-SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
+
+from app.core.config import Settings, settings
+
+
+def _build_engine(config: Settings, database_url: str | None = None) -> AsyncEngine:
+    return create_async_engine(
+        database_url or config.database_url,
+        pool_pre_ping=True,
+        pool_size=config.database_pool_size,
+        max_overflow=config.database_max_overflow,
+        pool_timeout=config.database_pool_timeout_seconds,
+        pool_recycle=config.database_pool_recycle_seconds,
+        connect_args={"command_timeout": config.database_command_timeout_seconds},
+    )
+
+
+engine: AsyncEngine = _build_engine(settings)
+SessionFactory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    engine, expire_on_commit=False
+)
+
+
+def get_engine() -> AsyncEngine:
+    """Return the process-wide engine."""
+    return engine
+
+
+def configure(config: Settings | None = None, *, database_url: str | None = None) -> AsyncEngine:
+    """Rebind the process-wide engine (and ``SessionFactory``) to ``config``.
+
+    The previous engine is left for the caller to dispose; ``RuntimeContainer``
+    does so on close. Consumers holding ``SessionFactory`` see the new engine
+    because the sessionmaker is reconfigured in place.
+    """
+    global engine
+    resolved = config or settings
+    engine = _build_engine(resolved, database_url)
+    SessionFactory.configure(bind=engine)
+    return engine
+
+
+async def dispose() -> None:
+    """Close every pooled connection of the process-wide engine."""
+    await engine.dispose()
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

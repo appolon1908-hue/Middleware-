@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 from unittest.mock import create_autospec
-from app.config import Settings
+from app.core.config import Settings
 from app.commands import PostgresCommandStore
 
 from workers import run_temporal

@@ -27,14 +27,11 @@ def iter_routes(routes, prefix=""):
                 yield method, prefix + path, getattr(route, "endpoint", None)
 
 
-# Pre-existing monolith duplicates (since #147), outside the campaign-control
-# change set. app.api.v1.control.event shadows lead_automation.receive_odoo_event
-# on /events/odoo and is itself shadowed by events.ingest_vicidial on
-# /events/vicidial. Pinned so a fix or a new duplicate both fail this test.
-KNOWN_MONOLITH_DUPLICATES = [
-    ("POST", "/api/v1/events/odoo"),
-    ("POST", "/api/v1/events/vicidial"),
-]
+# The monolith duplicates that existed since #147 (control.event shadowing
+# lead_automation.receive_odoo_event on /events/odoo and being shadowed by
+# events.ingest_vicidial on /events/vicidial) were removed with the single
+# application factory: the registry refuses any duplicate at build time.
+KNOWN_MONOLITH_DUPLICATES: list[tuple[str, str]] = []
 
 
 @pytest.mark.parametrize(
@@ -48,6 +45,29 @@ def test_no_duplicate_method_path_pairs(application, known):
     counts = Counter((method, path) for method, path, _endpoint in table)
     duplicates = sorted(key for key, count in counts.items() if count > 1)
     assert duplicates == sorted(known), duplicates
+
+
+def test_registry_refuses_duplicate_registrations():
+    from fastapi import APIRouter, FastAPI
+
+    from app.router_registry import DuplicateRouteError, assert_unique_routes
+
+    first = APIRouter()
+    second = APIRouter()
+
+    @first.get("/api/v1/example")
+    async def one():  # pragma: no cover - never called
+        return {}
+
+    @second.get("/api/v1/example")
+    async def two():  # pragma: no cover - never called
+        return {}
+
+    app = FastAPI()
+    app.include_router(first)
+    app.include_router(second)
+    with pytest.raises(DuplicateRouteError, match="GET /api/v1/example"):
+        assert_unique_routes(app)
 
 
 @pytest.mark.parametrize("application", [monolith_app, integration_app], ids=["main", "integration_api"])

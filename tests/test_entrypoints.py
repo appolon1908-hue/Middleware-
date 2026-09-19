@@ -18,8 +18,8 @@ from app.entrypoints import (
     vicidial_adapter,
     webphone_session_issuer,
 )
-from app.entrypoints import runtime
 from app.entrypoints.runtime import worker_app
+from app.core.config import CANONICAL_SCHEMA_HEAD
 
 
 def route_paths(app):
@@ -91,13 +91,19 @@ def test_integration_api_registers_the_exact_telnexa_callback_in_fresh_runtime()
 
 def test_api_runtime_health_and_correlation(monkeypatch):
     monkeypatch.setattr(settings, "middleware_secret", "unit-test-secret")
-    response = TestClient(event_gateway.app).get(
-        "/healthz", headers={"X-Correlation-ID": "synthetic-correlation"}
-    )
-    assert response.status_code == 200
-    assert response.headers["X-Correlation-ID"] != "synthetic-correlation"
-    UUID(response.headers["X-Correlation-ID"])
-    assert response.headers["Traceparent"].startswith("00-")
+    client = TestClient(event_gateway.app)
+    # A well-formed client correlation id is echoed for end-to-end tracing;
+    # anything else is replaced by a fresh UUID so log injection is impossible.
+    echoed = client.get("/healthz", headers={"X-Correlation-ID": "synthetic-correlation"})
+    assert echoed.status_code == 200
+    assert echoed.headers["X-Correlation-ID"] == "synthetic-correlation"
+    assert echoed.headers["Traceparent"].startswith("00-")
+    replaced = client.get("/healthz", headers={"X-Correlation-ID": "bad value with spaces"})
+    assert replaced.status_code == 200
+    assert replaced.headers["X-Correlation-ID"] != "bad value with spaces"
+    UUID(replaced.headers["X-Correlation-ID"])
+    generated = client.get("/healthz")
+    UUID(generated.headers["X-Correlation-ID"])
 
 
 def test_api_runtime_logs_trusted_kong_request_id(monkeypatch, caplog):
@@ -117,14 +123,26 @@ def test_api_runtime_logs_trusted_kong_request_id(monkeypatch, caplog):
 def test_api_runtime_readiness_fails_when_required_database_is_unavailable(
     monkeypatch,
 ):
-    def unavailable(_self):
-        raise RuntimeError("database unavailable")
+    from app.core import health
+
+    async def probe(_settings, *, engine=None):
+        return {"postgres": "unavailable", "redis": "online", "keycloak": "online"}
+
+    monkeypatch.setattr(health, "dependency_states", probe)
+    response = TestClient(integration_api.app).get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["database"] == "unavailable"
+
+
+def test_narrow_service_readiness_requires_database_when_declared(monkeypatch):
+    from app.core import health
+
+    async def probe(_settings, *, engine=None):
+        return {"postgres": "unavailable", "redis": "not_probed", "keycloak": "not_probed"}
 
     monkeypatch.setattr(settings, "health_require_database", True)
-    monkeypatch.setattr(
-        runtime, "engine", type("UnavailableEngine", (), {"connect": unavailable})()
-    )
-    response = TestClient(integration_api.app).get("/readyz")
+    monkeypatch.setattr(health, "dependency_states", probe)
+    response = TestClient(policy_engine.app).get("/readyz")
     assert response.status_code == 503
     assert response.json()["database"] == "unavailable"
 
@@ -136,18 +154,35 @@ def test_api_runtime_readiness_documents_optional_database(monkeypatch):
     assert response.json()["database"] == "not-required"
 
 
-def test_api_runtime_version_is_safe_and_immutable(monkeypatch):
-    monkeypatch.setenv("SOURCE_SHA", "a" * 40)
-    monkeypatch.setenv("RELEASE_ID", "release-20260823")
-    monkeypatch.setenv("IMAGE_DIGEST", "sha256:" + "b" * 64)
-    response = TestClient(integration_api.app).get("/version")
+def test_api_runtime_version_is_safe_and_immutable():
+    from app.application import create_app
+    from app.core.config import Settings
+
+    # Release labels come from the canonical settings (APP_SOURCE_SHA, with
+    # SOURCE_SHA accepted as the former entrypoint name), never from ad-hoc
+    # environment reads at request time.
+    app = create_app(
+        settings=Settings.from_env(
+            {
+                "APP_ENV": "test",
+                "ALLOW_IN_MEMORY_STORAGE": "true",
+                "SOURCE_SHA": "a" * 40,
+                "RELEASE_ID": "release-20260823",
+                "IMAGE_DIGEST": "sha256:" + "b" * 64,
+            }
+        ),
+        service="middleware-integration-api",
+    )
+    response = TestClient(app).get("/version")
     assert response.status_code == 200
-    assert response.json() == {
-        "service": "middleware-integration-api",
-        "source_sha": "a" * 40,
-        "release_id": "release-20260823",
-        "image_digest": "sha256:" + "b" * 64,
-    }
+    body = response.json()
+    assert body["service"] == "middleware-integration-api"
+    assert body["source_sha"] == "a" * 40
+    assert body["git_sha"] == "a" * 40
+    assert body["release_id"] == "release-20260823"
+    assert body["image_digest"] == "sha256:" + "b" * 64
+    assert body["schema_head"] == CANONICAL_SCHEMA_HEAD
+    assert "://" not in response.text and "secret" not in response.text.lower()
 
 
 def test_api_runtime_capabilities_read_back_fail_closed_settings(monkeypatch):
@@ -183,7 +218,7 @@ def test_canonical_broad_event_flags_default_closed_and_require_conjunction(
     monkeypatch,
 ):
     canonical = (
-        "send_events",
+        "broad_event_send_enabled",
         "broad_event_delivery_enabled",
         "production_n8n_enabled",
         "n8n_production_workflows_enabled",
@@ -202,7 +237,7 @@ def test_broad_event_activation_fails_closed_without_exact_bounded_scope(
     monkeypatch,
 ):
     canonical = (
-        "send_events",
+        "broad_event_send_enabled",
         "broad_event_delivery_enabled",
         "production_n8n_enabled",
         "n8n_production_workflows_enabled",
@@ -220,7 +255,7 @@ def test_broad_event_activation_fails_closed_without_exact_bounded_scope(
 
 def test_broad_event_activation_accepts_only_bounded_internal_scope(monkeypatch):
     canonical = (
-        "send_events",
+        "broad_event_send_enabled",
         "broad_event_delivery_enabled",
         "production_n8n_enabled",
         "n8n_production_workflows_enabled",

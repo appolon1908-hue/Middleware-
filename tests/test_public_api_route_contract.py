@@ -11,7 +11,7 @@ import yaml
 
 from app.core import route_policy
 from app.appolon_factory import create_app as create_appolon_app
-from app.config import Settings as AppolonSettings
+from app.core.config import Settings as AppolonSettings
 from app.entrypoints.integration_api import app as integration_app
 from app.main import app as main_app
 

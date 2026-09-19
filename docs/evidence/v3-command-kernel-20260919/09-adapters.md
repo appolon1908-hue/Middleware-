@@ -1,0 +1,5 @@
+# 09 — Adapter fabric
+
+Contract (app/platform/adapter.py): adapter_id, validate_config, capabilities, readiness, execute, status, readback, reconcile, cancel, normalize_result, classify_error, redact. Unsupported operations return UNSUPPORTED explicitly. Adapters receive AdapterContext (tenant, command, correlation, attempt, timeout, environment, deployment sha, shared httpx client, secret references, trace context, persisted payload) and never read the environment, open pools/clients, decide authorization or bypass safety (static test over app/platform/**).
+
+Registered adapters: development/test — TEST_SYN fixture + no-effect fixtures for odoo-19, klyrow-email, telnexa-sms, vicidial-restricted, kyqra-crawler, postly-social, provisioning-service, n8n-automation; staging/preproduction — TEST_SYN + the provider bridges that validate their configuration (Odoo: legacy lead upsert transport + #286 CRM bridge client; Klyrow email; Telnexa SMS; VICIdial bounded calling; Postly social) + the N8N executor over the reservation transport; production — none until a separate mission. Conformance: tests/test_platform_adapter_conformance.py (74 tests over 11 subjects).

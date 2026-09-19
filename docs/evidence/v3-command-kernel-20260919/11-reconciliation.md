@@ -1,0 +1,3 @@
+# 11 — Reconciliation
+
+app/platform/reconciler.py (middleware-reconciler process = app/entrypoints/reconciliation_worker.py, drains up to 200 decisions per cycle before the legacy report): lease a quarantined adapter-command row → adapter.reconcile (readback) → MATCHED → completed (evidence persisted, outbox complete); NOT_FOUND → queued + retry of the same row (provably no effect); MISMATCH → parked with evidence, dead-lettered after the reconciliation budget (6 claims, counted in middleware_control_audit); UNAVAILABLE/UNSUPPORTED → released for the next cycle, dead-lettered after the budget. Never a provider write because a readback failed. Metrics: reconciliation_backlog, reconciliation_decisions_total.

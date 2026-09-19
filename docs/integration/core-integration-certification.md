@@ -82,3 +82,8 @@ Not met, by design of the mission:
 - PRs #257 / #259 / #269 unresolved.
 - Middleware V3 final SHA not frozen; Kong/Keycloak V3 contracts pending.
 - `PRODUCTION_GO=NO`.
+
+## Middleware integration-branch run record (locked image `mw-ci:locked-aeb1dceb`)
+
+- `f8b1755` (app/ unchanged vs `main` 9593e26): empty-DB regression **3383 passed, 152 skipped, 0 failed** (the 42 additional skips are `tests/cross_repo` without sibling repositories inside the container), Alembic 1 head `0066…`, upgrade → downgrade `0027` → re-upgrade OK.
+- `5ee98ec` (tip): `validate_platform_control_plane` PASS, staging-intake observability PASS, migration authority PASS (`sha256:b2270941…`), `generate_api_contracts --check` MATCH, edge contract MATCH (92), `DUPLICATE_ROUTES=0` in all three profiles, Dockerfile `EXPOSE 8095`, ruff PASS, mypy (`--platform linux`, 11 changed files) PASS.

@@ -315,8 +315,11 @@ def read_odoo_paths(path: Path) -> dict[str, dict[str, Any]]:
         # Calls routed through the private provisioning-service client model use its base URL.
         if 'env["codestra.private.provisioning.service"]' in text:
             keys.add("CODESTRA_PROVISIONING_URL")
+        # Literal paths, paths appended to a configured base inside f-strings or
+        # %-formats (f"{base}/api/v1/…", "%s/control/callbacks/%s"), and route decorators.
         for found in re.findall(
-            r"""["'](/(?:api|v1|v2|platform)/[A-Za-z0-9/_{}<>:.%-]+)["']""", text
+            r"""["'](?:\{[^{}]*\}|%s)?(/(?:api|v1|v2|platform|control)/[A-Za-z0-9/_{}<>:.%-]+)""",
+            text,
         ):
             normalised = re.sub(r"<[^>]+>|%s|\{[^}]+\}", "{}", found).rstrip("/")
             hits.setdefault(normalised, set()).add(posix)
@@ -324,12 +327,51 @@ def read_odoo_paths(path: Path) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for k, v in hits.items():
         keys = sorted(url_keys.get(k, ()))
+        joined = "\n".join(
+            (path / f).read_text(encoding="utf-8", errors="ignore") for f in sorted(v)
+        )
         result[k] = {
             "files": sorted(v),
             "direction": "inbound"
             if all("/controllers/" in f for f in v)
             else "outbound",
             "url_config_keys": keys,
+            # How the referencing modules authenticate and which edge headers they send.
+            "auth": (
+                "keycloak-client-credentials"
+                if re.search(r"client_credentials|token_url|TOKEN_URL", joined)
+                else "static-bearer-file+hmac"
+                if re.search(r"_TOKEN_FILE", joined) and "hmac" in joined
+                else "static-bearer-file"
+                if re.search(r"_TOKEN_FILE", joined)
+                else "shared-api-key"
+                if re.search(r"api_key|service_secret|service_token", joined)
+                else "unknown"
+            ),
+            "headers": sorted(
+                h
+                for h in (
+                    "Idempotency-Key",
+                    "X-Correlation-ID",
+                    "traceparent",
+                    "tracestate",
+                    "X-Tenant-ID",
+                )
+                if re.search(re.escape(h), joined, re.IGNORECASE)
+            ),
+            "kind": (
+                "EVENT"
+                if "/events" in k
+                else "RESULT"
+                if "result" in k
+                else "CALLBACK"
+                if "callback" in k
+                else "READ"
+                if re.search(
+                    r"/(status|health|projections|mappings|traces|capabilities)\b", k
+                )
+                else "COMMAND"
+            ),
             "target_service": (
                 "provisioning-service"
                 if keys
@@ -341,6 +383,40 @@ def read_odoo_paths(path: Path) -> dict[str, dict[str, Any]]:
             ),
         }
     return result
+
+
+def read_odoo_direct_provider_paths(path: Path) -> list[dict[str, Any]]:
+    """Odoo modules that reach a provider without Middleware: an ir.mail_server pinned to a
+    provider SMTP host, or an HTTP call to a provider host. Read from source, not names."""
+    findings: list[dict[str, Any]] = []
+    for file in (path / "custom-addons").rglob("*.py"):
+        posix = file.relative_to(path).as_posix()
+        if "/tests/" in posix:
+            continue
+        text = file.read_text(encoding="utf-8", errors="ignore")
+        for host in re.findall(
+            r"""smtp_host\s*(?:!=|==|=)\s*["']([a-z0-9.-]+\.[a-z]{2,})["']""", text
+        ):
+            findings.append(
+                {
+                    "module": posix.split("/")[1],
+                    "file": posix,
+                    "kind": "SMTP",
+                    "host": host,
+                }
+            )
+        for url in re.findall(
+            r"""https?://[a-z0-9.-]*(?:klyrow|telnexa|vicidial)[a-z0-9.-]*""", text
+        ):
+            findings.append(
+                {
+                    "module": posix.split("/")[1],
+                    "file": posix,
+                    "kind": "HTTP",
+                    "host": url,
+                }
+            )
+    return sorted(findings, key=lambda f: (f["module"], f["file"], f["host"]))
 
 
 def read_middleware_registry() -> dict[tuple[str, str], set[str]]:
@@ -431,6 +507,7 @@ def build(root: Path) -> dict[str, Any]:
         k: v["files"] for k, v in odoo_refs.items() if v["direction"] == "inbound"
     }
     n8n_targets = read_n8n_targets(paths["N8N"])
+    odoo_direct = read_odoo_direct_provider_paths(paths["Odoo"])
     registry = read_middleware_registry()
     registry_by_template: dict[str, set[str]] = {}
     for (_, route_path), profiles in registry.items():
@@ -545,6 +622,31 @@ def build(root: Path) -> dict[str, Any]:
         rows.append(entry)
 
     shared_rows = [r for r in rows if r["PUBLIC_PRIVATE"] == "PUBLIC"]
+
+    def resolve_outbound(p: str) -> str:
+        """Odoo call sites that append a path to a configured /api/v1 base (for example
+        ``{base}/control/callbacks``) are compared against the contract as /api/v1 + path."""
+        if p in contract_templates or p in registry_by_template:
+            return p
+        candidate = "/api/v1" + p
+        if candidate in contract_templates or candidate in registry_by_template:
+            return candidate
+        # A trailing dynamic segment may stand for a literal operation name
+        # ("/control/callbacks/{}/{}" → "/api/v1/control/callbacks/{}/start" …).
+        pattern = re.compile("^" + re.escape(candidate).replace(r"\{\}", "[^/]+") + "$")
+        matches = sorted(
+            t for t in registry_by_template if pattern.match(t.replace("{}", "x"))
+        )
+        if matches:
+            registry_by_template[candidate] = set().union(
+                *(registry_by_template[t] for t in matches)
+            )
+            if all(t in contract_templates for t in matches):
+                contract_templates.add(candidate)
+            return candidate
+        return p
+
+    odoo_resolved = {p: resolve_outbound(p) for p in odoo_outbound}
     v3_rows = [
         {
             "METHOD": method,
@@ -647,34 +749,41 @@ def build(root: Path) -> dict[str, Any]:
         "ODOO_OUTBOUND_TARGETS": {
             p: {
                 "files": files,
+                "resolved_path": odoo_resolved[p],
                 "classification": (
                     "OTHER_SERVICE:" + odoo_meta[p]["target_service"]
                     if odoo_meta[p]["target_service"] != "middleware"
                     else "EDGE_CONTRACT"
-                    if p in contract_templates
+                    if odoo_resolved[p] in contract_templates
                     else "MIDDLEWARE_"
-                    + "+".join(sorted(registry_by_template[p])).upper()
+                    + "+".join(sorted(registry_by_template[odoo_resolved[p]])).upper()
                     + "_ONLY"
-                    if p in registry_by_template
+                    if odoo_resolved[p] in registry_by_template
                     else "NOT_SERVED_BY_MIDDLEWARE"
                 ),
                 "url_config_keys": odoo_meta[p]["url_config_keys"],
-                "caddy_to_kong": caddy.routes_to_kong(p.replace("{}", "x")),
+                "kind": odoo_meta[p]["kind"],
+                "auth": odoo_meta[p]["auth"],
+                "headers": odoo_meta[p]["headers"],
+                "caddy_to_kong": caddy.routes_to_kong(
+                    odoo_resolved[p].replace("{}", "x")
+                ),
             }
             for p, files in sorted(odoo_outbound.items())
         },
         "ODOO_INBOUND_CONTROLLERS": dict(sorted(odoo_inbound.items())),
+        "ODOO_DIRECT_PROVIDER_PATHS": odoo_direct,
         "ODOO_OUTBOUND_NOT_IN_EDGE_CONTRACT": sorted(
             p
             for p in odoo_outbound
-            if p not in contract_templates
+            if odoo_resolved[p] not in contract_templates
             and odoo_meta[p]["target_service"] == "middleware"
         ),
         "ODOO_OUTBOUND_NOT_SERVED_BY_MIDDLEWARE": sorted(
             p
             for p in odoo_outbound
-            if p not in contract_templates
-            and p not in registry_by_template
+            if odoo_resolved[p] not in contract_templates
+            and odoo_resolved[p] not in registry_by_template
             and odoo_meta[p]["target_service"] == "middleware"
         ),
         "MIDDLEWARE_REGISTRY_OPERATIONS": len(registry),
@@ -793,16 +902,26 @@ def render_markdown(matrix: dict[str, Any]) -> str:
         "",
         "## Odoo → Middleware outbound targets (from `custom-addons`, non-test, non-controller)",
     ]
-    lines.append("| PATH | CLASSIFICATION | CADDY_TO_KONG | URL_CONFIG_KEYS | FILES |")
-    lines.append("|---|---|---|---|---|")
+    lines.append(
+        "| PATH | RESOLVED | KIND | AUTH | HEADERS | CLASSIFICATION | CADDY_TO_KONG | URL_CONFIG_KEYS | FILES |"
+    )
+    lines.append("|---|---|---|---|---|---|---|---|---|")
     for path, meta in s["ODOO_OUTBOUND_TARGETS"].items():
         lines.append(
-            f"| `{path}` | {meta['classification']} | {meta['caddy_to_kong']} | "
+            f"| `{path}` | `{meta['resolved_path']}` | {meta['kind']} | {meta['auth']} | "
+            f"{', '.join(meta['headers']) or '—'} | {meta['classification']} | {meta['caddy_to_kong']} | "
             + ", ".join(f"`{k}`" for k in meta["url_config_keys"])
             + " | "
             + ", ".join(f"`{f}`" for f in meta["files"])
             + " |"
         )
+    lines += ["", "## Odoo direct provider paths (bypass Middleware; from source)"]
+    for item in s["ODOO_DIRECT_PROVIDER_PATHS"] or []:
+        lines.append(
+            f"- `{item['module']}`: {item['kind']} to `{item['host']}` (`{item['file']}`)"
+        )
+    if not s["ODOO_DIRECT_PROVIDER_PATHS"]:
+        lines.append("- none")
     lines += [
         "",
         "## Middleware → Odoo inbound controllers (Odoo `controllers/`; served by Odoo, not Middleware routes)",

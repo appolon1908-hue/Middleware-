@@ -630,7 +630,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "n8n-automation",
       "CAMPAIGN_REQUIRED": false,
@@ -669,7 +669,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "odoo-integration",
       "CAMPAIGN_REQUIRED": true,
@@ -708,7 +708,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "odoo-integration",
       "CAMPAIGN_REQUIRED": true,
@@ -747,7 +747,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "odoo-integration",
       "CAMPAIGN_REQUIRED": false,
@@ -766,7 +766,7 @@
       "KONG_AUTH": "odoo-service-jwt",
       "KONG_AZP": "odoo-integration",
       "KONG_IDENTITY_PROPAGATION": "OIDC_STRIP_AND_CONTRACT_METADATA",
-      "KONG_ROUTE": "middleware-ingress-odoo-integration-events-api-v1-odoo-events-post",
+      "KONG_ROUTE": "middleware-ingress-odoo-event",
       "KONG_SCOPE": "odoo.events.publish",
       "KONG_TENANT_POLICY": "CLAIM_ONLY_MIDDLEWARE_VALIDATES",
       "KONG_UPSTREAM": "middleware-integration-api:8095",
@@ -788,7 +788,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -827,7 +827,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -866,7 +866,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -908,7 +908,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -947,7 +947,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -986,7 +986,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1025,7 +1025,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1064,7 +1064,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1103,7 +1103,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1142,7 +1142,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1181,7 +1181,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1220,7 +1220,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1259,7 +1259,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1298,7 +1298,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": true,
@@ -1337,7 +1337,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": true,
@@ -1376,7 +1376,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": true,
@@ -1415,7 +1415,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": true,
@@ -1454,7 +1454,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -1493,7 +1493,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1532,7 +1532,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1571,7 +1571,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1610,7 +1610,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1649,7 +1649,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1688,7 +1688,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1727,7 +1727,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1766,7 +1766,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "production-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1805,7 +1805,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1844,7 +1844,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -1883,7 +1883,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "github-app",
       "CAMPAIGN_REQUIRED": false,
@@ -1924,7 +1924,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "browser-session",
       "CAMPAIGN_REQUIRED": false,
@@ -1963,7 +1963,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2002,7 +2002,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2041,7 +2041,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2080,7 +2080,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2119,7 +2119,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2158,7 +2158,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2197,7 +2197,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "observability-collector",
       "CAMPAIGN_REQUIRED": false,
@@ -2238,7 +2238,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2277,7 +2277,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2316,7 +2316,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2355,7 +2355,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2394,7 +2394,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2433,7 +2433,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2472,7 +2472,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2511,7 +2511,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2550,7 +2550,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2589,7 +2589,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2628,7 +2628,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2667,7 +2667,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2706,7 +2706,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "observability-collector",
       "CAMPAIGN_REQUIRED": false,
@@ -2747,7 +2747,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2786,7 +2786,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "platform-operator",
       "CAMPAIGN_REQUIRED": false,
@@ -2825,7 +2825,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2864,7 +2864,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2903,7 +2903,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2942,7 +2942,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -2981,7 +2981,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -3020,7 +3020,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/campaigns/actual-state",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -3059,7 +3059,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "",
       "CALLING_CLIENT": "authorized-provisioning-client",
       "CAMPAIGN_REQUIRED": false,
@@ -3098,7 +3098,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3139,7 +3139,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "approval_job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3180,7 +3180,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "all_declared_clients",
       "CAMPAIGN_REQUIRED": false,
@@ -3219,7 +3219,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "command_prefix_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3260,7 +3260,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "command_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3301,7 +3301,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "n8n-operations-automation",
       "CAMPAIGN_REQUIRED": false,
@@ -3342,7 +3342,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "all_declared_clients",
       "CAMPAIGN_REQUIRED": false,
@@ -3383,7 +3383,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "n8n-operations-automation",
       "CAMPAIGN_REQUIRED": false,
@@ -3426,7 +3426,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3468,7 +3468,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3510,7 +3510,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3552,7 +3552,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3594,7 +3594,7 @@
     },
     {
       "AUDIENCE": "middleware-api",
-      "CADDY_TO_KONG": false,
+      "CADDY_TO_KONG": true,
       "CALLBACK_PATH": "/api/v1/integration/automation-results",
       "CALLING_CLIENT": "job_family_client_only",
       "CAMPAIGN_REQUIRED": false,
@@ -3641,85 +3641,32 @@
     "AUTH_MISMATCHES": [],
     "AZP_MISMATCHES": [],
     "CADDY_CONTRACT_PREFIXES_MATCH_SITE": true,
-    "CADDY_FALLTHROUGH_ROUTES": [
-      "GET /api/v1/integrations/n8n/results/{event_id}",
-      "GET /api/v1/integrations/odoo/campaigns/{campaign_id}",
-      "GET /api/v1/integrations/odoo/campaigns/{campaign_id}/desired-state",
-      "POST /api/v1/odoo/events",
-      "GET /platform/v1/activity",
-      "GET /platform/v1/activity/{activity_id}",
-      "POST /platform/v1/agent-provisioning/requests",
-      "GET /platform/v1/agent-provisioning/requests/{request_id}",
-      "POST /platform/v1/agent-provisioning/requests/{request_id}/reactivate",
-      "POST /platform/v1/agent-provisioning/requests/{request_id}/reconcile",
-      "POST /platform/v1/agent-provisioning/requests/{request_id}/revoke",
-      "POST /platform/v1/agent-provisioning/requests/{request_id}/suspend",
-      "GET /platform/v1/agents/presence",
-      "GET /platform/v1/agents/{user_id}/presence",
-      "GET /platform/v1/calls",
-      "GET /platform/v1/calls/{call_id}",
-      "GET /platform/v1/campaigns",
-      "GET /platform/v1/campaigns/{campaign_id}",
-      "GET /platform/v1/campaigns/{campaign_id}/channels",
-      "GET /platform/v1/campaigns/{campaign_id}/health",
-      "GET /platform/v1/campaigns/{campaign_id}/members",
-      "GET /platform/v1/email/identities",
-      "POST /platform/v1/email/production/activate",
-      "GET /platform/v1/email/production/audit",
-      "POST /platform/v1/email/production/authorize",
-      "POST /platform/v1/email/production/kill-switch",
-      "GET /platform/v1/email/production/quotas",
-      "GET /platform/v1/email/production/readiness",
-      "POST /platform/v1/email/production/revoke",
-      "GET /platform/v1/email/production/status",
-      "GET /platform/v1/hosts",
-      "GET /platform/v1/hosts/{host_id}",
-      "POST /platform/v1/integrations/github/events",
-      "GET /platform/v1/me/presence",
-      "GET /platform/v1/queues",
-      "GET /platform/v1/queues/{queue_id}",
-      "GET /platform/v1/queues/{queue_id}/calls",
-      "GET /platform/v1/queues/{queue_id}/members",
-      "GET /platform/v1/queues/{queue_id}/metrics",
-      "GET /platform/v1/repositories",
-      "POST /platform/v1/runtime/observations",
-      "POST /platform/v1/services/{service_id}/contract-refresh",
-      "GET /platform/v1/services/{service_id}/coverage",
-      "GET /platform/v1/services/{service_id}/dependencies",
-      "GET /platform/v1/services/{service_id}/deployments",
-      "GET /platform/v1/services/{service_id}/endpoints",
-      "POST /platform/v1/services/{service_id}/telemetry-profile",
-      "GET /platform/v1/session/context",
-      "POST /platform/v1/session/context/select",
-      "GET /platform/v1/sms/identities",
-      "POST /platform/v1/sync/reconciliations",
-      "GET /platform/v1/sync/reconciliations/{reconciliation_id}",
-      "GET /platform/v1/sync/status",
-      "POST /platform/v1/telemetry/heartbeats",
-      "GET /platform/v1/telephony/assignments",
-      "GET /platform/v1/tenants",
-      "GET /platform/v1/tenants/authorized",
-      "GET /platform/v1/tenants/{tenant_id}",
-      "GET /platform/v1/tenants/{tenant_id}/campaigns",
-      "GET /platform/v1/tenants/{tenant_id}/health",
-      "GET /platform/v1/users/{employee_id}",
-      "GET /platform/v1/users/{employee_id}/campaigns",
-      "GET /platform/v1/users/{employee_id}/entitlements",
-      "POST /v2/automation/approvals",
-      "GET /v2/automation/approvals/{approval_id}",
-      "GET /v2/automation/capabilities/{capability}",
-      "POST /v2/automation/commands",
-      "GET /v2/automation/commands/{command_id}",
-      "POST /v2/automation/dead-letters/{dead_letter_id}/replay",
-      "POST /v2/automation/jobs/claim",
-      "POST /v2/automation/jobs/reconcile",
-      "GET /v2/automation/jobs/{job_id}",
-      "POST /v2/automation/jobs/{job_id}/complete",
-      "POST /v2/automation/jobs/{job_id}/fail",
-      "POST /v2/automation/jobs/{job_id}/heartbeat",
-      "POST /v2/automation/jobs/{job_id}/steps"
+    "CADDY_FALLTHROUGH_ROUTES": [],
+    "CADDY_HEADER_UP_DELETED": [
+      "X-Admin",
+      "X-Anonymous-Consumer",
+      "X-Authenticated-Campaign",
+      "X-Authenticated-Client",
+      "X-Authenticated-Email",
+      "X-Authenticated-Role",
+      "X-Authenticated-Subject",
+      "X-Authenticated-Tenant",
+      "X-Authenticated-User",
+      "X-Authenticated-UserID",
+      "X-Codestra-Gateway-Secret",
+      "X-Codestra-Scopes",
+      "X-Codestra-Tenant",
+      "X-Consumer-Custom-ID",
+      "X-Consumer-ID",
+      "X-Consumer-Username",
+      "X-Credential-Identifier",
+      "X-Email",
+      "X-Internal-Service",
+      "X-Roles",
+      "X-Scopes",
+      "X-User-ID",
+      "X-Username"
     ],
-    "CADDY_HEADER_UP_DELETED": [],
     "CADDY_HEADER_UP_SET": [
       "Host",
       "X-Real-IP"
@@ -3733,7 +3680,12 @@
       "/api/v1/health*",
       "/api/v1/callbacks*",
       "/api/v1/automation/policy-check",
-      "/api/v1/integrations/n8n/results",
+      "/api/v1/integration/campaign-actions",
+      "/api/v1/integrations/n8n/results*",
+      "/api/v1/integrations/odoo*",
+      "/api/v1/odoo*",
+      "/platform/v1*",
+      "/v2/automation*",
       "/v1/integrations/n8n*",
       "/v1/admin/system*",
       "/v1/crm*",
@@ -3752,7 +3704,7 @@
     ],
     "CADDY_REQUIRED_HEADERS_BLOCKED": [],
     "CADDY_SITE_HAS_LEGACY_CATCHALL": true,
-    "CADDY_STRIPS_CLIENT_IDENTITY_HEADERS": false,
+    "CADDY_STRIPS_CLIENT_IDENTITY_HEADERS": true,
     "DENIED_ROWS": 10,
     "KEYCLOAK_AUDIENCE_MISSING": [],
     "KEYCLOAK_CLIENTS": [
@@ -3792,7 +3744,10 @@
     ],
     "KEYCLOAK_CLIENT_SCOPES": {
       "health.read": "config/client-scopes/health.read.json",
-      "metrics.read": "config/client-scopes/metrics.read.json"
+      "metrics.read": "config/client-scopes/metrics.read.json",
+      "platform.command": "config/client-scopes/platform.command.json",
+      "platform.command.read": "config/client-scopes/platform.command.read.json",
+      "platform.command.replay": "config/client-scopes/platform.command.replay.json"
     },
     "KEYCLOAK_ROUTES_WITHOUT_ISSUER": 44,
     "KEYCLOAK_SCOPE_NOT_ISSUED": [
@@ -3836,13 +3791,13 @@
     "KONG_DENIED_ROUTES": 10,
     "KONG_LEGACY_HOST_ENABLED": false,
     "KONG_MISSING_ROUTES": [],
-    "KONG_PINNED_CONTRACT": "{\"generator\": \"scripts/generate_middleware_routes.py\", \"hashRule\": \"sha256 over json.dumps(contract, sort_keys=True, separators=(',', ':')).encode('utf-8')\", \"schema\": \"codestra.middleware.public-api-route-contract.v2\", \"sha256\": \"7580123dead97ea342c704a57a3c8eed9f5dce69aab247d4b693db96bc7334d5\", \"source\": \"appolon1908-hue/Middleware-:deploy/public-api-route-contract.json\", \"vendoredCopy\": \"config/middleware-public-api-route-contract.v1.json\"}",
+    "KONG_PINNED_CONTRACT": "{\"generator\": \"scripts/generate_middleware_routes.py\", \"hashRule\": \"sha256 over json.dumps(contract, sort_keys=True, separators=(',', ':')).encode('utf-8')\", \"schema\": \"codestra.middleware.public-api-route-contract.v2\", \"sha256\": \"c13554ebededa3ba6c39d0408adcd93f33baa941cac905907f6d63d390d93fab\", \"source\": \"appolon1908-hue/Middleware-:deploy/public-api-route-contract.json\", \"vendoredCopy\": \"config/middleware-public-api-route-contract.v1.json\"}",
     "KONG_PROVIDER_EFFECTS_ENABLED": false,
     "KONG_STABLE_ROUTES": 80,
     "KONG_UPSTREAM_NON_CANONICAL": [],
-    "KONG_VENDORED_CONTRACT_HASH": "7580123dead97ea342c704a57a3c8eed9f5dce69aab247d4b693db96bc7334d5",
+    "KONG_VENDORED_CONTRACT_HASH": "c13554ebededa3ba6c39d0408adcd93f33baa941cac905907f6d63d390d93fab",
     "KONG_VENDORED_CONTRACT_ROWS": 92,
-    "KONG_VENDORED_CONTRACT_STALE": true,
+    "KONG_VENDORED_CONTRACT_STALE": false,
     "METHOD_MISMATCHES": [],
     "MIDDLEWARE_CONTRACT_HASH": "c13554ebededa3ba6c39d0408adcd93f33baa941cac905907f6d63d390d93fab",
     "MIDDLEWARE_CONTRACT_ROWS": 92,
@@ -3870,6 +3825,14 @@
       ]
     },
     "N8N_TARGETS_NOT_IN_CONTRACT": [],
+    "ODOO_DIRECT_PROVIDER_PATHS": [
+      {
+        "file": "custom-addons/codestra_klyrow_smtp/models/ir_mail_server.py",
+        "host": "mail.klyrow.com",
+        "kind": "SMTP",
+        "module": "codestra_klyrow_smtp"
+      }
+    ],
     "ODOO_INBOUND_CONTROLLERS": {
       "/api/v1/integration/agents/{}": [
         "custom-addons/call_center_campaign/controllers/integration_api.py"
@@ -3958,6 +3921,8 @@
     },
     "ODOO_OUTBOUND_NOT_IN_EDGE_CONTRACT": [
       "/api/v1/campaign-designs/preview",
+      "/api/v1/recordings/{}/playback-url",
+      "/control/callbacks/{}/{}",
       "/v1/calls/originate",
       "/v1/communications/messages",
       "/v1/telephony/calls/originate",
@@ -3966,30 +3931,106 @@
     "ODOO_OUTBOUND_NOT_SERVED_BY_MIDDLEWARE": [],
     "ODOO_OUTBOUND_TARGETS": {
       "/api/v1/campaign-designs/preview": {
+        "auth": "static-bearer-file",
         "caddy_to_kong": false,
         "classification": "MIDDLEWARE_CONTROL-PLANE+INTEGRATION+MONOLITH_ONLY",
         "files": [
           "custom-addons/call_center_campaign/models/outbox.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID",
+          "X-Tenant-ID"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/api/v1/campaign-designs/preview",
         "url_config_keys": []
       },
       "/api/v1/odoo/events": {
-        "caddy_to_kong": false,
+        "auth": "static-bearer-file+hmac",
+        "caddy_to_kong": true,
         "classification": "EDGE_CONTRACT",
         "files": [
           "custom-addons/codestra_agent_onboarding/models/outbox_delivery.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "EVENT",
+        "resolved_path": "/api/v1/odoo/events",
         "url_config_keys": [
           "CODESTRA_MIDDLEWARE_ODOO_EVENTS_URL"
         ]
       },
-      "/platform/v1/agent-provisioning/requests": {
+      "/api/v1/recordings/{}/playback-url": {
+        "auth": "shared-api-key",
         "caddy_to_kong": false,
+        "classification": "MIDDLEWARE_MONOLITH_ONLY",
+        "files": [
+          "custom-addons/codestra_vicidial_crm/controllers/call_control.py",
+          "custom-addons/codestra_vicidial_recording/models/recording.py"
+        ],
+        "headers": [
+          "Idempotency-Key"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/api/v1/recordings/{}/playback-url",
+        "url_config_keys": [
+          "codestra.recording_api_internal_url",
+          "codestra.recording_middleware_url"
+        ]
+      },
+      "/control/callbacks": {
+        "auth": "keycloak-client-credentials",
+        "caddy_to_kong": true,
+        "classification": "EDGE_CONTRACT",
+        "files": [
+          "custom-addons/codestra_appointments/models/callback_sync.py"
+        ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "CALLBACK",
+        "resolved_path": "/api/v1/control/callbacks",
+        "url_config_keys": [
+          "CODESTRA_CALLBACK_API_BASE_URL",
+          "CODESTRA_CALLBACK_TOKEN_URL"
+        ]
+      },
+      "/control/callbacks/{}/{}": {
+        "auth": "keycloak-client-credentials",
+        "caddy_to_kong": true,
+        "classification": "MIDDLEWARE_CONTROL-PLANE+INTEGRATION+MONOLITH_ONLY",
+        "files": [
+          "custom-addons/codestra_appointments/models/callback_sync.py"
+        ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "CALLBACK",
+        "resolved_path": "/api/v1/control/callbacks/{}/{}",
+        "url_config_keys": [
+          "CODESTRA_CALLBACK_API_BASE_URL",
+          "CODESTRA_CALLBACK_TOKEN_URL"
+        ]
+      },
+      "/platform/v1/agent-provisioning/requests": {
+        "auth": "keycloak-client-credentials",
+        "caddy_to_kong": true,
         "classification": "EDGE_CONTRACT",
         "files": [
           "custom-addons/codestra_agent_onboarding/models/middleware_client.py",
           "custom-addons/codestra_middleware_bridge/models/agent_provisioning_transport.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/platform/v1/agent-provisioning/requests",
         "url_config_keys": [
           "CODESTRA_MIDDLEWARE_AGENT_PROVISIONING_TOKEN_URL",
           "CODESTRA_MIDDLEWARE_AGENT_PROVISIONING_URL",
@@ -3998,11 +4039,18 @@
         ]
       },
       "/v1/calls/originate": {
+        "auth": "keycloak-client-credentials",
         "caddy_to_kong": false,
         "classification": "MIDDLEWARE_CONTROL-PLANE+MONOLITH_ONLY",
         "files": [
           "custom-addons/codestra_vicidial_crm/models/middleware_client.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/v1/calls/originate",
         "url_config_keys": [
           "codestra.middleware.telephony_command_url",
           "codestra.middleware.telephony_originate_url",
@@ -4010,43 +4058,66 @@
         ]
       },
       "/v1/communications/messages": {
+        "auth": "keycloak-client-credentials",
         "caddy_to_kong": false,
         "classification": "MIDDLEWARE_CONTROL-PLANE+MONOLITH_ONLY",
         "files": [
           "custom-addons/codestra_email_middleware/transport.py",
           "custom-addons/codestra_sms_middleware/transport.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID",
+          "X-Tenant-ID"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/v1/communications/messages",
         "url_config_keys": [
           "CODESTRA_EMAIL_API_BASE_URL",
           "CODESTRA_SMS_API_BASE_URL"
         ]
       },
       "/v1/identities/{}/reconciliation": {
+        "auth": "unknown",
         "caddy_to_kong": false,
         "classification": "OTHER_SERVICE:provisioning-service",
         "files": [
           "custom-addons/codestra_identity_provisioning/models/provisioning.py"
         ],
+        "headers": [],
+        "kind": "COMMAND",
+        "resolved_path": "/v1/identities/{}/reconciliation",
         "url_config_keys": [
           "CODESTRA_PROVISIONING_URL"
         ]
       },
       "/v1/identities/{}/{}": {
+        "auth": "unknown",
         "caddy_to_kong": false,
         "classification": "OTHER_SERVICE:provisioning-service",
         "files": [
           "custom-addons/codestra_identity_provisioning/models/provisioning.py"
         ],
+        "headers": [],
+        "kind": "COMMAND",
+        "resolved_path": "/v1/identities/{}/{}",
         "url_config_keys": [
           "CODESTRA_PROVISIONING_URL"
         ]
       },
       "/v1/telephony/calls/originate": {
+        "auth": "keycloak-client-credentials",
         "caddy_to_kong": false,
         "classification": "MIDDLEWARE_CONTROL-PLANE+MONOLITH_ONLY",
         "files": [
           "custom-addons/codestra_vicidial_crm/models/middleware_client.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/v1/telephony/calls/originate",
         "url_config_keys": [
           "codestra.middleware.telephony_command_url",
           "codestra.middleware.telephony_originate_url",
@@ -4054,11 +4125,18 @@
         ]
       },
       "/v1/telephony/commands": {
+        "auth": "keycloak-client-credentials",
         "caddy_to_kong": false,
         "classification": "MIDDLEWARE_CONTROL-PLANE+MONOLITH_ONLY",
         "files": [
           "custom-addons/codestra_vicidial_crm/models/middleware_client.py"
         ],
+        "headers": [
+          "Idempotency-Key",
+          "X-Correlation-ID"
+        ],
+        "kind": "COMMAND",
+        "resolved_path": "/v1/telephony/commands",
         "url_config_keys": [
           "codestra.middleware.telephony_command_url",
           "codestra.middleware.telephony_originate_url",
@@ -4071,22 +4149,22 @@
       "Caddy": {
         "branch": "integration/kong-edge-20260919",
         "checkout": "crossrepo-20260919",
-        "head": "84c2b7b3bce6d90764eac5eab362aed973f56056"
+        "head": "1364fd61fe4ac780c686c722b00a4f0fb6839fb7"
       },
       "Keycloak": {
         "branch": "integration/middleware-identity-20260919",
         "checkout": "crossrepo-20260919",
-        "head": "b885519cfc1ed170da99b18953e763047083e1af"
+        "head": "9f20d7b7e65845e1358be3229854618e2947359f"
       },
       "Kong": {
         "branch": "integration/middleware-8095-20260919",
         "checkout": "middleware-8095-20260919",
-        "head": "5ac254c6fb04579615e4d60d25efcc911d42a2e3"
+        "head": "360aaadfd03781a45f7e4b844b5dba2fea6d68dc"
       },
       "Middleware-": {
         "branch": "integration/core-crossrepo-20260919",
         "checkout": "core-crossrepo-20260919",
-        "head": "9593e2679917f3d780a2bd4d0d14461aeefa6123"
+        "head": "47201614eb89253bafc0068a9159fb692d63d80c"
       },
       "N8N": {
         "branch": "integration/middleware-automation-contract-20260919",
@@ -4104,7 +4182,7 @@
     "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT": true,
     "V3_PENDING_ROUTES": [
       {
-        "CADDY_TO_KONG": false,
+        "CADDY_TO_KONG": true,
         "IN_MIDDLEWARE_CONTRACT": false,
         "KEYCLOAK_SCOPE_ISSUED_BY": [],
         "KONG_ROUTE": "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT",
@@ -4113,7 +4191,7 @@
         "SCOPE": "platform.command"
       },
       {
-        "CADDY_TO_KONG": false,
+        "CADDY_TO_KONG": true,
         "IN_MIDDLEWARE_CONTRACT": false,
         "KEYCLOAK_SCOPE_ISSUED_BY": [],
         "KONG_ROUTE": "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT",
@@ -4122,7 +4200,7 @@
         "SCOPE": "platform.command.read"
       },
       {
-        "CADDY_TO_KONG": false,
+        "CADDY_TO_KONG": true,
         "IN_MIDDLEWARE_CONTRACT": false,
         "KEYCLOAK_SCOPE_ISSUED_BY": [],
         "KONG_ROUTE": "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT",
@@ -4131,7 +4209,7 @@
         "SCOPE": "platform.command.read"
       },
       {
-        "CADDY_TO_KONG": false,
+        "CADDY_TO_KONG": true,
         "IN_MIDDLEWARE_CONTRACT": false,
         "KEYCLOAK_SCOPE_ISSUED_BY": [],
         "KONG_ROUTE": "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT",
@@ -4140,7 +4218,7 @@
         "SCOPE": "platform.command"
       },
       {
-        "CADDY_TO_KONG": false,
+        "CADDY_TO_KONG": true,
         "IN_MIDDLEWARE_CONTRACT": false,
         "KEYCLOAK_SCOPE_ISSUED_BY": [],
         "KONG_ROUTE": "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT",
@@ -4149,7 +4227,7 @@
         "SCOPE": "platform.command.replay"
       },
       {
-        "CADDY_TO_KONG": false,
+        "CADDY_TO_KONG": true,
         "IN_MIDDLEWARE_CONTRACT": false,
         "KEYCLOAK_SCOPE_ISSUED_BY": [],
         "KONG_ROUTE": "V3_PENDING_FINAL_MIDDLEWARE_CONTRACT",

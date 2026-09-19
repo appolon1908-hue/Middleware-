@@ -7,6 +7,13 @@ USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libpcre2-8-0=10.42-1+deb12u1 \
  && rm -rf /var/lib/apt/lists/*
+# CPython 3.13.15 ships the tarfile hard-link-to-symlink filter bypass
+# (CVE-2026-82049); the correction is on the 3.13 branch but unreleased.
+# The applier is digest-pinned to the 3.13.15 stdlib and fails the build
+# on any other base, so it expires together with the .grype.yaml entry.
+COPY security/python313/apply_cve_2026_82049.py /tmp/apply_cve_2026_82049.py
+RUN python3 /tmp/apply_cve_2026_82049.py \
+ && rm /tmp/apply_cve_2026_82049.py
 
 FROM ${RUNTIME_BASE} AS runtime-dependencies
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
@@ -116,6 +123,11 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 \
     PYTEST_ADDOPTS="-p no:cacheprovider"
 RUN groupadd --system --gid 10001 middleware \
  && useradd --system --uid 10001 --gid middleware --home-dir /nonexistent middleware
+# Same CVE-2026-82049 correction as patched-final-base so tests run on the
+# stdlib the runtime ships.
+COPY security/python313/apply_cve_2026_82049.py /tmp/apply_cve_2026_82049.py
+RUN python3 /tmp/apply_cve_2026_82049.py \
+ && rm /tmp/apply_cve_2026_82049.py
 WORKDIR /app
 COPY requirements-test.txt ./
 RUN python -m pip install --require-hashes -r requirements-test.txt \

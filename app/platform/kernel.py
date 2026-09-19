@@ -238,6 +238,7 @@ class CommandKernel:
         replay_mode: ReplayMode | None = None,
         replay_of: UUID | None = None,
         trace: Mapping[str, str] | None = None,
+        required_scope: str | None = None,
     ) -> SubmitResult:
         started = time.perf_counter()
         family = _family(command.command_type)
@@ -259,7 +260,11 @@ class CommandKernel:
             self._policy_request(
                 command,
                 principal,
-                required_scope=SCOPE_COMMAND_REPLAY if replay_mode is ReplayMode.REEXECUTE else SCOPE_COMMAND,
+                required_scope=(
+                    SCOPE_COMMAND_REPLAY
+                    if replay_mode is ReplayMode.REEXECUTE
+                    else required_scope or SCOPE_COMMAND
+                ),
                 operator_required=replay_mode is ReplayMode.REEXECUTE,
             )
         )

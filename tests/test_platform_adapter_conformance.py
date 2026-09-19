@@ -21,7 +21,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from app.commands import CommandEnvelope, CommandOperation
+from app.commands import CommandEnvelope, CommandOperation, CommandState
 from app.platform.adapter import (
     ADAPTER_METHODS,
     AdapterConfigurationError,
@@ -225,7 +225,7 @@ def envelope(subject: Subject, **updates: Any) -> CommandEnvelope:
     return CommandEnvelope.model_validate(value)
 
 
-def operation(command: CommandEnvelope, *, state: str = "accepted", provider_operation_id: str | None = None) -> CommandOperation:
+def operation(command: CommandEnvelope, *, state: CommandState = "accepted", provider_operation_id: str | None = None) -> CommandOperation:
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc)

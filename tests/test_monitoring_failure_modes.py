@@ -16,18 +16,17 @@ Covers the mission's failure matrix from the Middleware side:
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 from datetime import datetime, timedelta
 
 import pytest
 
 from app.monitoring.routes import service_state
-from tests.test_integrated_monitoring import (  # noqa: F401 - fixture import
-    DIGEST,
-    observation,
-    system,
-)
+from tests.test_integrated_monitoring import DIGEST, observation, system
+
+# The fixtures are imported for pytest discovery and are then shadowed by the
+# test parameters that receive them; referencing them here keeps that explicit.
+SHARED_FIXTURES = (observation, system)
 
 OTHER = "sha256:" + "b" * 64
 

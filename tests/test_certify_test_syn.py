@@ -85,11 +85,12 @@ class Platform:
         self.dashboards = ["codestra-openbao", "codestra-middleware-operations"]
         self.scrape_port = 8095
         self.trace_polls = 0
-        self.correlation = None
-        self.trace_id = None
+        self.correlation: str | None = None
+        self.trace_id: str | None = None
         self.safety_after: dict | None = None
 
     def spans(self) -> dict:
+        assert self.trace_id is not None
         raw = bytes.fromhex(self.trace_id)
         batches = []
         for service in self.trace_services:
@@ -153,7 +154,7 @@ class Platform:
                         "duplicate": False,
                     },
                     headers={
-                        "X-Correlation-ID": self.correlation,
+                        "X-Correlation-ID": self.correlation or "",
                         "Via": "1.1 kong/3.9",
                         "Server": "Caddy",
                     },
@@ -166,9 +167,10 @@ class Platform:
                     "status": "duplicate",
                     "duplicate": True,
                 },
-                headers={"X-Correlation-ID": self.correlation},
+                headers={"X-Correlation-ID": self.correlation or ""},
             )
         if host == "tempo" and path.startswith("/api/traces/"):
+            assert self.trace_id is not None
             assert path.endswith(self.trace_id)
             self.trace_polls += 1
             if self.trace_polls <= self.trace_ready_after:
@@ -263,7 +265,7 @@ class Platform:
                 self.incidents.append(
                     {
                         "incident_id": f"00000000-0000-4000-8000-00000000000{len(self.incidents) + 1}",
-                        "alert_fingerprint": "fp-" + self.correlation[-8:],
+                        "alert_fingerprint": "fp-" + (self.correlation or "")[-8:],
                         "state": "open",
                         "severity": "informational",
                         "service": "test-syn",

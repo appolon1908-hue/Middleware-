@@ -8,7 +8,7 @@ The machine-readable registry is `config/repository-authorities.v1.json`.
 
 ## Middleware owns only the Middleware boundary
 
-`appolon1908-hue/Middleware-` owns:
+`ingtrader21-spec/Middleware-` owns:
 
 - cross-system command/event contracts and durable integration state;
 - authenticated Middleware APIs and workers;
@@ -27,7 +27,7 @@ Critical control-plane authorities are:
 
 | Component | Principal repository |
 |---|---|
-| Middleware | `appolon1908-hue/Middleware-` |
+| Middleware | `ingtrader21-spec/Middleware-` |
 | Caddy | `appolon1908-hue/Caddy` |
 | Kong | `appolon1908-hue/Kong` |
 | Keycloak | `appolon1908-hue/Keycloak` |

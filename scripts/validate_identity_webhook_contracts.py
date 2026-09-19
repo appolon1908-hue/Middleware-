@@ -229,7 +229,7 @@ EVENT_TYPE = re.compile(r"^codestra\.[a-z0-9_]+(?:\.[a-z0-9_]+)+$")
 CLIENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 WEBHOOK_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 WEBHOOK_PATH = re.compile(r"^/api/v1/[a-z0-9-]+(?:/[a-z0-9-]+)*$")
-REPOSITORY = re.compile(r"^appolon1908-hue/[A-Za-z0-9_.-]+$")
+REPOSITORY = re.compile(r"^(?:ingtrader21-spec|appolon1908-hue)/[A-Za-z0-9_.-]+$")
 ACCESS_FIELDS = {
     "schemaVersion",
     "upstreamContract",

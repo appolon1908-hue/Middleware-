@@ -4,7 +4,7 @@
   "contract_id": "codestra.automation-command-envelope-authority",
   "status": "ACCEPTED",
   "accepted_on": "2026-09-04",
-  "authority_repository": "appolon1908-hue/Middleware-",
+  "authority_repository": "ingtrader21-spec/Middleware-",
   "canonical_api": "/v2/automation/*",
   "identity": {
     "issuer": "https://auth.codestra.co/realms/codestra",

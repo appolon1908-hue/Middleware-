@@ -16,7 +16,10 @@ AUTHORITY_PATH = ROOT / "config/repository-authorities.v1.json"
 ALIAS_PATH = ROOT / "config/repository-name-aliases.v1.json"
 ADAPTER_PATH = ROOT / "config/adapter-registry.v2.json"
 
-REPOSITORY_RE = re.compile(r"^appolon1908-hue/[A-Za-z0-9._-]+$")
+# The canonical Middleware repository lives under ingtrader21-spec; the portfolio
+# repositories it references are still recorded under the appolon1908-hue owner
+# (GitHub redirects them) until each one is converged on its own.
+REPOSITORY_RE = re.compile(r"^(?:ingtrader21-spec|appolon1908-hue)/[A-Za-z0-9._-]+$")
 REGISTRY_KEYS = {
     "schema_version",
     "identity_key",
@@ -142,7 +145,7 @@ PROVIDER_CELLS = {
 # are still mutable attributes, but an authority cannot invent or reassign the
 # numeric identity of a component.
 EXPECTED_REPOSITORY_IDENTITIES = {
-    "middleware": (1347559071, "appolon1908-hue/Middleware-"),
+    "middleware": (1347559071, "ingtrader21-spec/Middleware-"),
     "caddy": (1350228103, "appolon1908-hue/Caddy"),
     "kong": (1347790742, "appolon1908-hue/Kong"),
     "keycloak": (1347523366, "appolon1908-hue/Keycloak"),
@@ -478,7 +481,7 @@ EXPECTED_REPOSITORY_RENAMES = {
     ),
 }
 EXPECTED_AUTHORITY_POLICY = {
-    "middleware_repository": "appolon1908-hue/Middleware-",
+    "middleware_repository": "ingtrader21-spec/Middleware-",
     "reference_repository": "appolon1908-hue/codestra-production-platform",
     "reference_repository_role": "historical-runtime-deployment-reconciliation-evidence-only",
     "owning_repository_is_principal": True,

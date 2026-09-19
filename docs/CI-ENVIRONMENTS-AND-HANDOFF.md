@@ -89,7 +89,7 @@ VICIdial/Asterisk       = appolon1908-hue/Vicidialer-Codestra
 Provisioning            = appolon1908-hue/codestra-provisioning-service
 SDK / connector kit     = appolon1908-hue/SDK-repository
 Social/Postiz           = appolon1908-hue/social.codestra.co
-Middleware              = appolon1908-hue/Middleware-
+Middleware              = ingtrader21-spec/Middleware-
 ```
 
 Independent products such as MoneyBee, Beyvra, Breero, LARIM-A and the public Codestra site also remain in their dedicated repositories; Middleware may integrate with them but may not absorb their application source.

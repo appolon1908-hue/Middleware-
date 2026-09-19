@@ -2,7 +2,7 @@
 
 ## Decision
 
-Protected `main` in `appolon1908-hue/Middleware-` is the **only forward source**
+Protected `main` in `ingtrader21-spec/Middleware-` is the **only forward source**
 authority. Every future Middleware image admitted to staging or production must
 be built by `.github/workflows/release.yml` from the exact protected-main event
 SHA, must carry schema head `0057_platform_service_catalog`, and must be addressed by an
@@ -37,7 +37,7 @@ PSTN call.
 ## Current release state
 
 ```text
-FORWARD_REPOSITORY=appolon1908-hue/Middleware-
+FORWARD_REPOSITORY=ingtrader21-spec/Middleware-
 FORWARD_REF=refs/heads/main
 SOURCE_RESOLUTION=EXACT_PROTECTED_MAIN_EVENT_SHA
 STATIC_SHA_AUTHORITY=NO

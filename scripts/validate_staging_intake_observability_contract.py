@@ -153,12 +153,15 @@ EXPECTED_REGISTRY_ROUTERS = {
     "n8n_control_plane_router": ("n8n_control_plane", "router"),
     "appolon_operations_router": ("operations", "router"),
     "operations_dashboard_router": ("operations_dashboard", "router"),
+    # V3 command kernel: the six /platform/v1 kernel routes (app.platform.api).
+    "platform_kernel_router": ("platform.api", "router"),
     "odoo_event_router": ("webhook_api", "odoo_event_router"),
     "webhook_api_router": ("webhook_api", "router"),
 }
 EXPECTED_REGISTRY_TUPLES = {
     "CANONICAL_ROUTERS": frozenset(
         {
+            "platform_kernel_router",
             "automation_v2_router",
             "automation_router",
             "callbacks_router",

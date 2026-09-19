@@ -129,6 +129,9 @@ class RuntimeContainer:
     redis: Redis | None = None
     engine: AsyncEngine | None = None
     http: httpx.AsyncClient | None = None
+    # Outbound client for the provisioning service (its own CA bundle when
+    # configured); otherwise the same object as ``http``.
+    http_provisioning: httpx.AsyncClient | None = None
     # Whether readiness probes the identity authority. False only when the
     # identity is implicit (derived, not configured) in development/test, so a
     # local process never reports the production authority as a dependency.
@@ -253,9 +256,9 @@ class RuntimeContainer:
                 await self.engine.dispose()
             except Exception:
                 logger.warning("runtime_engine_dispose_failed", exc_info=True)
-        if self.http is not None:
+        for client in {id(c): c for c in (self.http, self.http_provisioning) if c is not None}.values():
             try:
-                await self.http.aclose()
+                await client.aclose()
             except Exception:
                 logger.warning("runtime_http_close_failed", exc_info=True)
 
@@ -276,12 +279,26 @@ def identity_probe_required(settings: Settings) -> bool:
 _probe_identity = identity_probe_required
 
 
-def _open_http() -> httpx.AsyncClient:
+def _open_http(verify: bool | str = True) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         timeout=httpx.Timeout(SHARED_HTTP_TIMEOUT_SECONDS),
         limits=httpx.Limits(max_connections=SHARED_HTTP_MAX_CONNECTIONS),
         follow_redirects=False,
+        verify=verify,
     )
+
+
+def _open_http_clients(settings: Settings) -> tuple[httpx.AsyncClient, httpx.AsyncClient]:
+    """The shared outbound client and the provisioning-service client (which
+    trusts the configured CA bundle when one is set)."""
+    http = _open_http()
+    ca_file = getattr(settings, "provisioning_service_ca_file", None)
+    if isinstance(ca_file, str) and ca_file.strip():
+        try:
+            return http, _open_http(verify=ca_file)
+        except (OSError, ValueError):
+            logger.warning("provisioning_ca_bundle_unusable", extra={"path": ca_file})
+    return http, http
 
 
 def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeContainer:
@@ -307,6 +324,7 @@ def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeConta
             settings, commands=commands, http=http, pool=None, service_id=SERVICE_INTEGRATION_API
         ),
         http=http,
+        http_provisioning=http_provisioning,
         communications=ProductionGatedCommunicationsService(
             store=MemoryCommunicationsStore(),
             commands=commands,
@@ -386,7 +404,7 @@ async def build_runtime_container(
             store=command_store,
             policies=command_policies(settings),
         )
-        http = _open_http()
+        http, http_provisioning = _open_http_clients(settings)
         container = RuntimeContainer(
             settings=settings,
             inbox=inbox,
@@ -397,6 +415,7 @@ async def build_runtime_container(
                 settings, commands=commands, http=http, pool=pool, service_id=SERVICE_INTEGRATION_API
             ),
             http=http,
+            http_provisioning=http_provisioning,
             communications=ProductionGatedCommunicationsService(
                 store=communications_store,
                 commands=commands,

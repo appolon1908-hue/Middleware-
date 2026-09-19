@@ -164,7 +164,7 @@ def test_keycloak_gateway_proxies_only_validated_identity(monkeypatch):
     monkeypatch.setattr(
         webphone,
         "_keycloak_user",
-        lambda subject: __import__("asyncio").sleep(
+        lambda subject, *_client: __import__("asyncio").sleep(
             0,
             result={
                 "enabled": True,
@@ -189,7 +189,7 @@ def test_keycloak_gateway_proxies_only_validated_identity(monkeypatch):
     monkeypatch.setattr(
         webphone,
         "_odoo_identity",
-        lambda employee_id, campaign_id=None, endpoint=None: __import__(
+        lambda employee_id, _client=None, campaign_id=None, endpoint=None: __import__(
             "asyncio"
         ).sleep(
             0,
@@ -206,7 +206,7 @@ def test_keycloak_gateway_proxies_only_validated_identity(monkeypatch):
     )
     calls = []
 
-    async def provisioning_call(method, path, body=None, query=None):
+    async def provisioning_call(_request, method, path, body=None, query=None):
         calls.append((method, path, body, query))
         return {
             "session_id": "00000000-0000-4000-8000-000000000001",
@@ -259,7 +259,7 @@ def test_keycloak_gateway_denies_wrong_campaign_and_missing_origin(monkeypatch):
     monkeypatch.setattr(
         webphone,
         "_keycloak_user",
-        lambda subject: __import__("asyncio").sleep(
+        lambda subject, *_client: __import__("asyncio").sleep(
             0,
             result={
                 "enabled": True,
@@ -282,7 +282,7 @@ def test_keycloak_gateway_denies_wrong_campaign_and_missing_origin(monkeypatch):
     monkeypatch.setattr(
         webphone,
         "_odoo_identity",
-        lambda employee_id, campaign_id=None, endpoint=None: __import__(
+        lambda employee_id, _client=None, campaign_id=None, endpoint=None: __import__(
             "asyncio"
         ).sleep(
             0,

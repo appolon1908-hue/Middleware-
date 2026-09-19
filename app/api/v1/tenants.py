@@ -23,6 +23,7 @@ from app.adapters.foundation.client import (
     FoundationUnavailable,
 )
 from app.core.config import settings
+from app.core.providers import get_http_client
 from app.core.platform_auth import PlatformPrincipal, require_platform_scope
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
@@ -69,19 +70,19 @@ async def list_tenants(
             "platform.tenants.read", allowed_roles=TENANT_DIRECTORY_ROLES
         )
     ),
+    http: httpx.AsyncClient = Depends(get_http_client),
 ) -> dict[str, Any]:
     """Return the real Foundation directory to authorized platform operators."""
     foundation = FoundationClient(settings)
-    async with httpx.AsyncClient(timeout=5.0) as http:
-        try:
-            records = await foundation.list_tenants(
-                http,
-                status=status,
-                limit=limit,
-                offset=offset,
-            )
-        except FoundationUnavailable as exc:
-            raise HTTPException(503, "codestra-foundation is unavailable") from exc
+    try:
+        records = await foundation.list_tenants(
+            http,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+    except FoundationUnavailable as exc:
+        raise HTTPException(503, "codestra-foundation is unavailable") from exc
     return {
         "tenants": [_tenant_out(record) for record in records],
         "pagination": {
@@ -99,16 +100,16 @@ async def list_authorized_tenants(
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
     ),
+    http: httpx.AsyncClient = Depends(get_http_client),
 ) -> dict[str, Any]:
     """Page through tenant grants carried by the verified machine token."""
     foundation = FoundationClient(settings)
     items: list[dict[str, str]] = []
     granted_ids = sorted(principal.tenant_ids)
-    async with httpx.AsyncClient(timeout=5.0) as http:
-        for tenant_id in granted_ids[offset : offset + limit]:
-            tenant = await _resolve_tenant(foundation, http, tenant_id)
-            if tenant is not None:
-                items.append(tenant)
+    for tenant_id in granted_ids[offset : offset + limit]:
+        tenant = await _resolve_tenant(foundation, http, tenant_id)
+        if tenant is not None:
+            items.append(tenant)
     return {
         "items": items,
         "pagination": {
@@ -126,11 +127,11 @@ async def get_tenant(
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
     ),
+    http: httpx.AsyncClient = Depends(get_http_client),
 ) -> dict[str, str]:
     require_tenant_match(principal, tenant_id)
     foundation = FoundationClient(settings)
-    async with httpx.AsyncClient(timeout=5.0) as http:
-        tenant = await _resolve_tenant(foundation, http, tenant_id)
+    tenant = await _resolve_tenant(foundation, http, tenant_id)
     if tenant is None:
         raise HTTPException(404, "tenant not found")
     return tenant

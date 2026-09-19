@@ -3,11 +3,12 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 import httpx
 
 from app.core.automation import canonical_hash
 from app.core.config import settings
+from app.core.providers import get_http_client
 
 router = APIRouter(tags=["n8n-target-attestation"])
 
@@ -15,6 +16,7 @@ router = APIRouter(tags=["n8n-target-attestation"])
 @router.get("/internal/n8n-target-attestation")
 async def n8n_target_attestation(
     nonce: Annotated[str, Header(alias="X-Codestra-Attestation-Nonce")],
+    client: httpx.AsyncClient = Depends(get_http_client),
 ) -> dict[str, str]:
     if not nonce or len(nonce) > 128:
         raise HTTPException(400, "invalid attestation nonce")
@@ -26,11 +28,10 @@ async def n8n_target_attestation(
     }
     if not all(required.values()):
         raise HTTPException(503, "n8n target evidence is incomplete")
-    async with httpx.AsyncClient(follow_redirects=False, timeout=3) as client:
-        try:
-            health = await client.get(settings.n8n_runtime_health_url)
-        except httpx.HTTPError as exc:
-            raise HTTPException(503, "n8n runtime health unavailable") from exc
+    try:
+        health = await client.get(settings.n8n_runtime_health_url, timeout=3, follow_redirects=False)
+    except httpx.HTTPError as exc:
+        raise HTTPException(503, "n8n runtime health unavailable") from exc
     if health.status_code != 200 or health.is_redirect:
         raise HTTPException(503, "n8n runtime health rejected")
     issued_at = datetime.now(UTC)

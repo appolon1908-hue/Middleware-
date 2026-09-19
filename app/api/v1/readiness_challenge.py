@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from fastapi import APIRouter, HTTPException, Request, Response
-from redis.asyncio import Redis
 
 from app.core.config import settings
+from app.core.providers import get_redis_client
 
 router = APIRouter(prefix="/api/v1/readiness", tags=["readiness-challenge"])
 PATH = "/api/v1/readiness/server-a/challenge"
@@ -126,7 +126,7 @@ async def server_a_challenge(request: Request, response: Response) -> dict[str, 
     if not secret or not hmac.compare_digest(signature, expected):
         _reject("signature is invalid")
 
-    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    redis = get_redis_client(request)
     replay_key = "codestra:readiness:nonce:" + hashlib.sha256(
         f"{key_id}:{nonce}".encode()
     ).hexdigest()
@@ -134,8 +134,6 @@ async def server_a_challenge(request: Request, response: Response) -> dict[str, 
         accepted = await redis.set(replay_key, request_id, ex=settings.readiness_ttl_seconds, nx=True)
     except Exception as exc:
         raise HTTPException(503, "replay protection is unavailable") from exc
-    finally:
-        await redis.aclose()
     if not accepted:
         _reject("request replay rejected")
 

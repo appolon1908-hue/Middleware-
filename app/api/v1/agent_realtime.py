@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.webphone import BrowserIdentity, browser_identity
 from app.core.config import settings
+from app.core.providers import get_redis_client
 from app.core.provisioning_auth import (
     ProvisioningPrincipal,
     require_provisioning_scope,
@@ -139,17 +140,13 @@ def transition_allowed(
     )
 
 
-async def _publish(event: AgentEventEnvelope, applied: bool) -> None:
-    redis = Redis.from_url(settings.redis_url, decode_responses=True)
-    try:
-        await redis.xadd(
-            f"agent-events:{event.extension}",
-            {"event": json.dumps(_document(event, applied), separators=(",", ":"))},
-            maxlen=10000,
-            approximate=True,
-        )
-    finally:
-        await redis.aclose()
+async def _publish(redis: Redis, event: AgentEventEnvelope, applied: bool) -> None:
+    await redis.xadd(
+        f"agent-events:{event.extension}",
+        {"event": json.dumps(_document(event, applied), separators=(",", ":"))},
+        maxlen=10000,
+        approximate=True,
+    )
 
 
 async def _authorize_agent_event(
@@ -248,6 +245,7 @@ async def _authorize_agent_event(
 @router.post("/api/v1/agent/events", status_code=202)
 async def ingest_agent_event(
     event: AgentEventEnvelope,
+    request: Request,
     db: AsyncSession = Depends(get_session),
     principal: ProvisioningPrincipal = Depends(
         require_provisioning_scope("identity.request")
@@ -322,7 +320,7 @@ async def ingest_agent_event(
         await db.rollback()
         raise HTTPException(409, "event identity or sequence conflict") from exc
     try:
-        await _publish(event, applied)
+        await _publish(get_redis_client(request), event, applied)
     except RedisError:
         return {
             "status": "persisted",
@@ -354,7 +352,7 @@ async def agent_websocket(websocket: WebSocket) -> None:
             code=4400 + min(exc.status_code, 99), reason="authentication denied"
         )
         return
-    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    redis = get_redis_client(websocket)
     lock_key = f"agent-socket:{identity.tenant_id}:{identity.agent_id}"
     socket_id = str(uuid4())
     try:
@@ -409,5 +407,5 @@ async def agent_websocket(websocket: WebSocket) -> None:
         try:
             if await redis.get(lock_key) == socket_id:
                 await redis.delete(lock_key)
-        finally:
-            await redis.aclose()
+        except RedisError:
+            pass

@@ -22,6 +22,8 @@ from uuid import UUID, uuid4
 
 from app.commands import (
     ADAPTER_COMMAND_DESTINATION,
+    ALLOWED_COMMAND_TRANSITIONS,
+    API_OPERATION_STATES,
     TEMPORAL_COMMAND_DESTINATION,
     CommandCapabilityDisabled,
     CommandConflict,
@@ -456,6 +458,25 @@ class CommandKernel:
             ),
             "canonical_port": 8095,
             "canonical_service": "middleware-integration-api",
+            "state_vocabulary": {
+                "persisted": dict(sorted(API_OPERATION_STATES.items())),
+                "public": sorted(set(API_OPERATION_STATES.values())),
+                "transitions": {state: sorted(targets) for state, targets in sorted(ALLOWED_COMMAND_TRANSITIONS.items())},
+                "completed_requires": "provider read-back MATCHED",
+            },
+            "idempotency": {
+                "authority": "middleware_commands UNIQUE(tenant_id, idempotency_key) + payload digest",
+                "binding": ["tenant_id", "authenticated_client_id", "command_type", "target", "capability", "idempotency_key", "payload"],
+                "exact_replay": "200 duplicate=true, no new intent",
+                "same_key_different_payload": "409 command_conflict",
+            },
+            "cancel": {"scope": SCOPE_COMMAND, "optimistic_concurrency": "expected_version", "ambiguous_outcome": "RECONCILIATION_REQUIRED"},
+            "replay": {"scope": SCOPE_COMMAND_REPLAY, "role": PLATFORM_OPERATOR_ROLE, "modes": [mode.value for mode in ReplayMode], "uncertain_outcome": "reconcile first"},
+            "readiness": {
+                "adapter_registry_valid": self.registry.validated,
+                "registered_adapters": list(self.registry.ids()),
+                "unowned_command_prefixes": list(self.registry.unowned_prefixes()),
+            },
         }
 
 

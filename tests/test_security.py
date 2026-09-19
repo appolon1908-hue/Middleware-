@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import ConfigurationError, Settings, WEBHOOK_PRODUCERS
+from app.core.config import ConfigurationError, Settings, WEBHOOK_PRODUCERS
 from app.security import (
     AuthorizationError,
     RequestValidationError,
@@ -156,7 +156,8 @@ def test_jetstream_dispatch_requires_matching_gate_and_authorization() -> None:
         )
 
 
-def test_production_jetstream_dispatch_requires_approved_identity() -> None:
+def production_jetstream_env() -> dict[str, str]:
+    """A JetStream activation that satisfies every transport-level rule."""
     env = {
         "APP_ENV": "production",
         "RUNTIME_PROFILE_ID": "codestra-middleware-production-v1",
@@ -186,11 +187,61 @@ def test_production_jetstream_dispatch_requires_approved_identity() -> None:
             "WEBHOOK_SECRET_"
             + producer.upper().replace("-", "_").replace(".", "_")
         ] = "x" * 32
+    return env
 
-    settings = Settings.from_env(env)
 
+# SEND_EVENTS gates the JetStream outbox transport only. The n8n broad-event
+# pipeline has its own first switch (BROAD_EVENT_SEND_ENABLED) and its own
+# conjunction; the two never imply each other.
+BROAD_EVENT_GATES = {
+    "BROAD_EVENT_SEND_ENABLED": "true",
+    "BROAD_EVENT_DELIVERY_ENABLED": "true",
+    "PRODUCTION_N8N_ENABLED": "true",
+    "N8N_PRODUCTION_WORKFLOWS_ENABLED": "true",
+    "CONTROLLED_BROAD_EVENT_ACTIVATION": "true",
+    "BROAD_EVENT_BUSINESS_UNIT_ALLOWLIST": "BU-TEST",
+    "BROAD_EVENT_CAMPAIGN_ALLOWLIST": "TEST_SYN",
+    "BROAD_EVENT_WORKFLOW_ALLOWLIST": "wf-test",
+    "BROAD_EVENT_TYPE_ALLOWLIST": "lead.created",
+    "BROAD_EVENT_ACTIVATION_HIGH_WATER_MARK": "2026-08-28T12:00:00Z",
+    "BROAD_EVENT_SUBMISSION_LIMIT": "1",
+}
+
+
+def test_production_jetstream_dispatch_requires_approved_identity() -> None:
+    settings = Settings.from_env(production_jetstream_env())
     assert settings.outbox_dispatch_enabled is True
     assert settings.production_activation_id == "CHG-20260828-EVENTS"
+    assert settings.broad_event_pipeline_enabled is False
+
+    without_activation = production_jetstream_env()
+    del without_activation["PRODUCTION_ACTIVATION_ID"]
+    with pytest.raises(ConfigurationError, match="PRODUCTION_ACTIVATION_ID"):
+        Settings.from_env(without_activation)
+
+    wrong_stream = {**production_jetstream_env(), "NATS_STREAM": "CODESTRA_STAGING_EVENTS"}
+    with pytest.raises(ConfigurationError, match="NATS_STREAM"):
+        Settings.from_env(wrong_stream)
+
+    plaintext = {
+        **production_jetstream_env(),
+        "NATS_URL": "nats://nats.middleware-production.svc.cluster.local:4222",
+    }
+    with pytest.raises(ConfigurationError, match="NATS_URL"):
+        Settings.from_env(plaintext)
+
+
+def test_jetstream_and_broad_event_gates_are_independent() -> None:
+    # A single broad-event switch without the rest fails closed regardless of
+    # SEND_EVENTS; the full set is refused because the n8n production-workflow
+    # effect is not implemented by this runtime.
+    with pytest.raises(ConfigurationError, match="broad-event activation"):
+        Settings.from_env({**production_jetstream_env(), "BROAD_EVENT_SEND_ENABLED": "true"})
+    with pytest.raises(
+        ConfigurationError,
+        match="not implemented by this runtime: N8N_PRODUCTION_WORKFLOWS_ENABLED",
+    ):
+        Settings.from_env({**production_jetstream_env(), **BROAD_EVENT_GATES})
 
 
 def test_staging_uses_an_isolated_jetstream_namespace() -> None:
@@ -213,9 +264,11 @@ def test_staging_uses_an_isolated_jetstream_namespace() -> None:
         ] = "x" * 32
 
     settings = Settings.from_env(env)
-
     assert settings.nats_dispatch_mode == "isolated"
     assert settings.nats_subject_prefix == "codestra.staging.events"
+
+    with pytest.raises(ConfigurationError, match="NATS_STREAM"):
+        Settings.from_env({**env, "NATS_STREAM": "CODESTRA_EVENTS"})
 
 
 def test_staging_rejects_production_jetstream_namespace() -> None:
@@ -530,5 +583,32 @@ def test_jwks_uri_is_pinned_to_canonical_issuer() -> None:
                 "APP_ENV": "test",
                 "ALLOW_IN_MEMORY_STORAGE": "true",
                 "KEYCLOAK_JWKS_URI": "http://attacker.invalid/jwks",
+            }
+        )
+
+
+def test_ci_readiness_identity_uses_canonical_jwks_url_alias() -> None:
+    settings = Settings.from_env(
+        {
+            "APP_ENV": "test",
+            "ALLOW_IN_MEMORY_STORAGE": "true",
+            "KEYCLOAK_ISSUER": "https://ci-identity.example.invalid/realm",
+            "KEYCLOAK_JWKS_URL": "http://127.0.0.1:8120/certs.json",
+        }
+    )
+    assert settings.issuer == "https://ci-identity.example.invalid/realm"
+    assert settings.jwks_uri == "http://127.0.0.1:8120/certs.json"
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_synthetic_ci_identity_is_forbidden_in_deployable_environments(
+    environment: str,
+) -> None:
+    with pytest.raises(ConfigurationError):
+        Settings.from_env(
+            {
+                "APP_ENV": environment,
+                "KEYCLOAK_ISSUER": "https://ci-identity.example.invalid/realm",
+                "KEYCLOAK_JWKS_URL": "http://127.0.0.1:8120/certs.json",
             }
         )

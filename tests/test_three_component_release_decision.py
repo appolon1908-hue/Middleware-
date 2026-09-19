@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -92,7 +93,7 @@ def make_fixture(tmp_path: Path) -> tuple[list[str], Path]:
         checksums(signed, "signing-SHA256SUMS", signed_files)
     output = tmp_path / "decision.json"
     command = [
-        "python3", str(SCRIPT), "--artifact-source-sha", SOURCE,
+        sys.executable, str(SCRIPT), "--artifact-source-sha", SOURCE,
         "--m05-workflow-sha", WORKFLOW_SHA, "--production-authority-run-id", "90",
         "--production-authority-sha256", authority_sha, "--candidate-run-id", "100",
         "--candidate-run-attempt", "1", "--signing-run-id", "110",

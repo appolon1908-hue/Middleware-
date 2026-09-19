@@ -19,11 +19,11 @@ from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from app.config import Settings
+from app.core.config import Settings
 from app.main import create_app
 from app.nats_transport import NatsJetStreamPublisher
 from app.replay import RedisReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.storage import (
     NATS_JETSTREAM_DESTINATION,
     PostgresInboxStore,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -171,8 +173,12 @@ def _release_repository(tmp_path: Path, marker: str = "release") -> tuple[Path, 
 
 
 def _fetch_exact(checkout: Path, sha: str, remote: str = "origin") -> subprocess.CompletedProcess[str]:
+    if os.name == "nt":
+        command = [sys.executable, str(ROOT / "scripts/security/fetch-exact-release-commit.py"), sha, remote]
+    else:
+        command = [str(ROOT / "scripts/security/fetch-exact-release-commit.sh"), sha, remote]
     return subprocess.run(
-        [str(ROOT / "scripts/security/fetch-exact-release-commit.sh"), sha, remote],
+        command,
         cwd=checkout,
         text=True,
         capture_output=True,

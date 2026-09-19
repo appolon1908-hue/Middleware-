@@ -1,10 +1,8 @@
-from dataclasses import replace
-
 from fastapi.testclient import TestClient
 from app.commands import CommandService, MemoryCommandStore
 from app.main import create_app
 from app.replay import MemoryReplayGuard
-from app.runtime import Runtime
+from app.core.runtime import RuntimeContainer as Runtime
 from app.storage import MemoryInboxStore
 from tests.test_commands import CommandTokenVerifier, enabled_policy
 from tests.test_commands import command_payload
@@ -21,7 +19,8 @@ REQUIRED={
 
 def _app(test_settings):
     commands=CommandService(MemoryCommandStore(),enabled_policy())
-    return create_app(settings=test_settings,runtime=Runtime(settings=test_settings,inbox=MemoryInboxStore(),replay=MemoryReplayGuard(),tokens=CommandTokenVerifier(),commands=commands))
+    # REQUIRED includes the deprecated /v1/integrations/n8n/* aliases (monolith only).
+    return create_app(settings=test_settings,runtime=Runtime(settings=test_settings,inbox=MemoryInboxStore(),replay=MemoryReplayGuard(),tokens=CommandTokenVerifier(),commands=commands),legacy_monolith=True)
 
 def test_required_control_routes_are_registered(test_settings):
     assert REQUIRED <= set(_app(test_settings).openapi()["paths"])
@@ -36,13 +35,7 @@ def test_system_safety_is_authenticated_and_fail_closed(test_settings):
         assert all(body[key] is False for key in ("LIVE_ADVERTISING_ENABLED","EXTERNAL_DELIVERY_ENABLED","SOCIAL_PUBLISHING_ENABLED","EXTERNAL_MODEL_CALLS_ENABLED","LIVE_SMS_DELIVERY","LIVE_EMAIL_DELIVERY","LIVE_PSTN_DIALING","N8N_EXTERNAL_PROVIDER_WRITES","PRODUCTION_DIALING"))
 
 def test_system_capabilities_report_effective_umbrella_state(test_settings):
-    settings=replace(
-        test_settings,
-        umbrella_controls={
-            **test_settings.umbrella_controls,
-            "LIVE_ADVERTISING_ENABLED":True,
-        },
-    )
+    settings=test_settings.replace(umbrella_live_advertising_enabled=True)
     with TestClient(_app(settings)) as client:
         response=client.get("/v1/system/capabilities",headers={"Authorization":"Bearer legacy-status-token","X-Tenant-ID":"tenant-1"})
     assert response.status_code==200
@@ -50,13 +43,7 @@ def test_system_capabilities_report_effective_umbrella_state(test_settings):
     assert response.json()["evidence"]=="effective_runtime"
 
 def test_policy_decision_never_treats_umbrella_switch_as_a_grant(test_settings):
-    settings=replace(
-        test_settings,
-        umbrella_controls={
-            **test_settings.umbrella_controls,
-            "LIVE_ADVERTISING_ENABLED":True,
-        },
-    )
+    settings=test_settings.replace(umbrella_live_advertising_enabled=True)
     headers={
         "Authorization":"Bearer legacy-command-token",
         "X-Tenant-ID":"tenant-1",

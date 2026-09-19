@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -14,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.odoo.webhooks import OdooWebhookAdapter
 from app.core.config import settings
+from app.core.security import SecurityError, verify_ingestion_signature
 from app.db.models import (
     AuditEvent,
     IdempotencyRecord,
@@ -39,6 +39,7 @@ DISPOSITION_MAP = {
     "DROP": "dropped",
     "NI": "not_interested",
 }
+_JSON_MEDIA_TYPE = "application/json"
 
 
 class StrictModel(BaseModel):
@@ -61,13 +62,59 @@ class TelnexaInboundSms(StrictModel):
     received_at: datetime
 
 
-def _verify_signature(body: bytes, supplied: str | None, secret: str) -> None:
+def _verify_signed_request(
+    body: bytes, timestamp: str | None, supplied: str | None, secret: str
+) -> None:
+    """Provider webhooks sign ``"{timestamp}." + body`` with the shared secret.
+
+    The timestamp is part of the MAC, so a captured request cannot be replayed
+    with a fresh timestamp once the ``signature_ttl_seconds`` window passes.
+    Same canonical form as ``/api/v1/events/vicidial``.
+    """
     if not secret:
         raise HTTPException(503, "webhook authentication is unavailable")
     candidate = (supplied or "").removeprefix("sha256=").lower()
-    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    if len(candidate) != 64 or not hmac.compare_digest(candidate, expected):
+    if len(candidate) != 64:
         raise HTTPException(403, "webhook signature is invalid")
+    try:
+        verify_ingestion_signature(
+            body,
+            timestamp or "",
+            candidate,
+            secret,
+            ttl=settings.signature_ttl_seconds,
+        )
+    except SecurityError as exc:
+        detail = {
+            "invalid signature timestamp": "webhook timestamp is invalid",
+            "expired signature": "webhook timestamp is outside the allowed window",
+        }.get(str(exc), "webhook signature is invalid")
+        raise HTTPException(403, detail) from exc
+
+
+async def _read_limited_json_body(request: Request) -> bytes:
+    content_type = request.headers.get("content-type", "")
+    if content_type.split(";", 1)[0].strip().lower() != _JSON_MEDIA_TYPE:
+        raise HTTPException(415, "webhook content type must be application/json")
+
+    maximum = settings.request_max_bytes
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            declared_length = int(declared)
+        except ValueError as exc:
+            raise HTTPException(400, "webhook content length is invalid") from exc
+        if declared_length < 0:
+            raise HTTPException(400, "webhook content length is invalid")
+        if declared_length > maximum:
+            raise HTTPException(413, "webhook payload exceeds the allowed size")
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > maximum:
+            raise HTTPException(413, "webhook payload exceeds the allowed size")
+        body.extend(chunk)
+    return bytes(body)
 
 
 def _parse(model: type[BaseModel], body: bytes) -> BaseModel:
@@ -113,7 +160,6 @@ async def _persist(
             await db.rollback()
             raise HTTPException(409, "idempotency key conflict")
         await db.commit()
-        response.headers["X-Idempotent-Replay"] = "true"
         return dict(existing.response)
 
     incoming = IntegrationEvent(
@@ -174,7 +220,7 @@ async def _persist(
             key_hash=key_hash,
             request_hash=request_hash,
             response=result,
-            status_code=200,
+            status_code=202,
             event_id=incoming.id,
             expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
@@ -193,7 +239,6 @@ async def _persist(
     except Exception as exc:
         await db.rollback()
         raise HTTPException(503, "durable persistence unavailable") from exc
-    response.headers["X-Idempotent-Replay"] = "false"
     return result
 
 
@@ -202,10 +247,11 @@ async def vicidial_call_result(
     request: Request,
     response: Response,
     signature: str | None = Header(default=None, alias="X-VICIdial-Signature"),
+    timestamp: str | None = Header(default=None, alias="X-VICIdial-Timestamp"),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    body = await request.body()
-    _verify_signature(body, signature, settings.vicidial_webhook_secret)
+    body = await _read_limited_json_body(request)
+    _verify_signed_request(body, timestamp, signature, settings.vicidial_webhook_secret)
     value = _parse(VicidialCallResult, body)
     assert isinstance(value, VicidialCallResult)
     disposition = DISPOSITION_MAP.get(value.disposition.upper())
@@ -213,7 +259,7 @@ async def vicidial_call_result(
         raise HTTPException(400, "VICIdial disposition is unsupported")
     payload = value.model_dump(mode="json")
     payload["disposition"] = disposition
-    return await _persist(
+    result = await _persist(
         db=db,
         response=response,
         provider="vicidial",
@@ -224,6 +270,8 @@ async def vicidial_call_result(
         odoo_intent=OdooWebhookAdapter.log_call_result(payload, disposition),
         body=body,
     )
+    response.status_code = 202
+    return result
 
 
 @router.post("/sms/inbound/")
@@ -231,14 +279,15 @@ async def telnexa_inbound_sms(
     request: Request,
     response: Response,
     signature: str | None = Header(default=None, alias="X-Telnexa-Signature"),
+    timestamp: str | None = Header(default=None, alias="X-Telnexa-Timestamp"),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    body = await request.body()
-    _verify_signature(body, signature, settings.telnexa_webhook_secret)
+    body = await _read_limited_json_body(request)
+    _verify_signed_request(body, timestamp, signature, settings.telnexa_webhook_secret)
     value = _parse(TelnexaInboundSms, body)
     assert isinstance(value, TelnexaInboundSms)
     payload = value.model_dump(mode="json", by_alias=True)
-    return await _persist(
+    result = await _persist(
         db=db,
         response=response,
         provider="telnexa",
@@ -249,3 +298,5 @@ async def telnexa_inbound_sms(
         odoo_intent=OdooWebhookAdapter.log_inbound_sms(payload),
         body=body,
     )
+    response.status_code = 202
+    return result

@@ -7,7 +7,7 @@ single-recipient Middleware envelope.
 
 For POST /v1/integrations/alertmanager/events, set
 X-Alertmanager-Native-Webhook: v4 and retain X-Tenant-ID and
-X-Source-Deployment. Keycloak must still authenticate alertmanager-service with
+X-Source-Deployment. Keycloak must still authenticate the `alertmanager` client with
 the middleware-api audience, the correct scope and the fixed tenant.
 The service derives an omitted transport key from sanitized validated content,
 tenant and deployment and generates an omitted correlation ID for each attempt.

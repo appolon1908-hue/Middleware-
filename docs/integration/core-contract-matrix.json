@@ -4164,7 +4164,7 @@
       "Middleware-": {
         "branch": "integration/core-crossrepo-20260919",
         "checkout": "core-crossrepo-20260919",
-        "head": "47201614eb89253bafc0068a9159fb692d63d80c"
+        "head": "7e90e8df667056f8b47b67cc7546b1d0d9c467bb"
       },
       "N8N": {
         "branch": "integration/middleware-automation-contract-20260919",

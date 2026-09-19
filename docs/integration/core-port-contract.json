@@ -1,0 +1,3770 @@
+{
+  "rows": [
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "port: 8095",
+      "file": ".codestra/service.yaml",
+      "line": "12",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "CI_ROUTE_CERTIFICATION_CONTAINER_LISTENER",
+      "context": "--base-url http://middleware-route-certification:8080",
+      "file": ".github/workflows/production-route-contract.yml",
+      "line": "73",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "uvicorn app.main:app --host 127.0.0.1 --port 8095 \\",
+      "file": ".github/workflows/required-ci.yml",
+      "line": "289",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "if curl --fail --silent http://127.0.0.1:8095/healthz \\",
+      "file": ".github/workflows/required-ci.yml",
+      "line": "294",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "curl --fail --silent http://127.0.0.1:8095/healthz \\",
+      "file": ".github/workflows/required-ci.yml",
+      "line": "300",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "curl --fail --silent http://127.0.0.1:8095/readyz \\",
+      "file": ".github/workflows/required-ci.yml",
+      "line": "302",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "EXPOSE 8095",
+      "file": "Dockerfile",
+      "line": "133",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "EXPOSE 8095",
+      "file": "Dockerfile",
+      "line": "164",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "CMD [\"uvicorn\", \"app.qwen_auth_verifier:create_app\", \"--factory\", \"--host\", \"0.0.0.0\", \"--port\", \"8095\", \"--no-server-header\", \"--no-date-he",
+      "file": "Dockerfile",
+      "line": "165",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "api.breero.com,/*,public clients,kong-gateway:8000,host-level Caddy to Kong,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "2",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "api.codestra.agency,/ws/agent and /api/v1/realtime/sessions,public authenticated clients,codestra-websocket-gateway-gateway-1:8080,host-leve",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "3",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "api.codestra.agency,other API routes,public API clients,kong-gateway:8000,host-level Caddy to Kong,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "4",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "crm.codestra.agency,/*,CRM users,codestra-odoo-1:8069,host-level Caddy Odoo route,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "6",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "n8n.codestra.agency,staff-private routes,staff operators,codestra-n8n-1:5678,host-level Caddy staff boundary,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "7",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "n8n.internal.codestra.agency,/.well-known/codestra-target/v1,approved middleware,codestra-middleware-integration-api-1:8095,codestra-n8n-int",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "8",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "n8n.internal.codestra.agency,/healthz and /readyz,approved middleware,codestra-n8n-1:5678,codestra-n8n-internal-proxy,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "9",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "n8n.internal.codestra.agency,POST /webhook/codestra/v1/events,approved middleware,codestra-n8n-1:5678,codestra-n8n-internal-proxy,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "10",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "odoo.internal.codestra.agency,POST /api/v1/integration/results,Odoo result worker,codestra-odoo-1:8069,codestra-odoo-internal-proxy,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "11",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "n8n-staging.codestra.agency,staff-private routes,staging operators,n8n-staging:5678,staging ingress stack,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "12",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "api.staging.internal.codestra.agency,/*,staging workloads,middleware-staging:8095,certified staging service network,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "13",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "auth.staging.internal.codestra.agency,/*,staging workloads,keycloak-staging:8080,certified staging identity network,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "15",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "odoo.staging.internal.codestra.agency,/*,staging workloads,odoo-staging:8069,certified staging service network,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "16",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "bridge-staging.codestra.agency,staging bridge routes,staging tests,middleware-staging:8095,staging ingress stack,REPLACED",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "17",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "middleware.internal.codestra.agency,POST /api/v1/events/vicidial,private VICIdial,codestra-middleware-1:8095,dedicated private-vicidial-ingr",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "18",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "middleware-staging.internal.codestra.agency,POST /api/v1/staging/events/vicidial,staging VICIdial,middleware-staging:8095,dedicated staging ",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "19",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "RETIRED_PROXY_OR_KEYCLOAK_EDGE_REFERENCE",
+      "context": "monitoring.codestra.co,health readiness alerts and dashboard,monitoring clients,codestra-monitoring-receiver-receiver-1:8080,host-level Cadd",
+      "file": "RETIRED_PROXY_DEPENDENCY_MATRIX.csv",
+      "line": "22",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "AGENT_DESKTOP_STATIC_SITE_LISTENER",
+      "context": ":8080 {",
+      "file": "agent_desktop/Caddyfile",
+      "line": "1",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "notes: str = Field(default=\"\", max_length=8000)",
+      "file": "app/api/v1/callbacks.py",
+      "line": "128",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "notes: str | None = Field(default=None, max_length=8000)",
+      "file": "app/api/v1/callbacks.py",
+      "line": "150",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "completion_notes: str | None = Field(default=None, max_length=8000)",
+      "file": "app/api/v1/callbacks.py",
+      "line": "152",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "sample_rate_hz: int = Field(ge=8000, le=192000)",
+      "file": "app/api/v1/recordings.py",
+      "line": "71",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "elevenlabs_telephony_output_format: str = \"ulaw_8000\"",
+      "file": "app/core/config.py",
+      "line": "517",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "if value != \"ulaw_8000\":",
+      "file": "app/core/config.py",
+      "line": "1998",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "port=int(os.getenv(\"PORT\", \"8095\")),",
+      "file": "app/entrypoints/runtime.py",
+      "line": "112",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "port=int(os.getenv(\"PORT\", \"8095\")),",
+      "file": "app/entrypoints/runtime.py",
+      "line": "239",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "METRICS_PORT = 8095",
+      "file": "app/entrypoints/scraper_odoo_delivery_worker.py",
+      "line": "10",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "# to the production Keycloak container codestra-identity-keycloak-1:8080.",
+      "file": "config/caddy/auth.codestra.co.caddy.example",
+      "line": "5",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "#   -> codestra-identity-keycloak-1:8080",
+      "file": "config/caddy/auth.codestra.co.caddy.example",
+      "line": "29",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "maxLength: 8000",
+      "file": "contracts/platform/integration-fabric-api.v2.yaml",
+      "line": "15074",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "maxLength: 8000",
+      "file": "contracts/platform/integration-fabric-api.v2.yaml",
+      "line": "15086",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "maxLength: 8000",
+      "file": "contracts/platform/integration-fabric-api.v2.yaml",
+      "line": "15549",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "BEYVRA_EMAIL_RUNTIME_LISTENER_SEPARATE_SERVICE",
+      "context": "CMD [\"uvicorn\", \"app.email.runtime:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8080\", \"--no-access-log\"]",
+      "file": "deploy/beyvra-email/Dockerfile",
+      "line": "19",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "BEYVRA_EMAIL_RUNTIME_LISTENER_SEPARATE_SERVICE",
+      "context": "test: [CMD, python, -c, \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/email/ready',timeout=2)\"]",
+      "file": "deploy/beyvra-email/compose.yaml",
+      "line": "15",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "PORT: \"8095\"",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "23",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "urllib.request.urlopen('http://127.0.0.1:8095/healthz', timeout=3);",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "120",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "urllib.request.urlopen('http://127.0.0.1:8095/readyz', timeout=3)",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "121",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "N8N_RUNTIME_HEALTH_URL: http://n8n:5678/healthz",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "203",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "MIDDLEWARE_N8N_TOKEN_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/token",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "204",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "N8N_SERVICE_JWKS_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/certs",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "211",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "ODOO_RESULTS_TOKEN_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/token",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "214",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "expose: [\"8095\"]",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "252",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "urllib.request.urlopen('http://127.0.0.1:8095/metrics', timeout=3)",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "260",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "ODOO_BASE_URL: http://odoo19-staging:8069",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "290",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "ODOO_TOKEN_URL: http://keycloak-staging:8080/realms/codestra/protocol/openid-connect/token",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "291",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "N8N_RUNTIME_BASE_URL: http://webhook:5678",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "327",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "ODOO_RESULTS_TOKEN_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/token",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "406",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "ODOO_RESULTS_TOKEN_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/token",
+      "file": "deploy/compose.runtime.yaml",
+      "line": "439",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "EXTERNAL_WEBHOOK_N8N_URL: http://webhook:5678/webhook/CodestraExternalWebhookCertV1/ingress/codestra-external-certification-v1",
+      "file": "deploy/external-webhook/compose.production.yaml",
+      "line": "34",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "reverse_proxy http://codestra-middleware-integration-api-1:8095 {",
+      "file": "deploy/internal-n8n-private/Caddyfile",
+      "line": "20",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "reverse_proxy http://codestra-n8n-1:5678 {",
+      "file": "deploy/internal-n8n-private/Caddyfile",
+      "line": "32",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "reverse_proxy http://codestra-n8n-1:5678 {",
+      "file": "deploy/internal-n8n-private/Caddyfile",
+      "line": "45",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "reverse_proxy http://codestra-n8n-1:5678 {",
+      "file": "deploy/internal-n8n-private/Caddyfile",
+      "line": "61",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "reverse_proxy middleware-integration-api:8095",
+      "file": "deploy/internal-n8n/Caddyfile",
+      "line": "7",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "reverse_proxy n8n:5678",
+      "file": "deploy/internal-n8n/Caddyfile",
+      "line": "13",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "reverse_proxy n8n:5678",
+      "file": "deploy/internal-n8n/Caddyfile",
+      "line": "19",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "reverse_proxy n8n:5678 {",
+      "file": "deploy/internal-n8n/Caddyfile",
+      "line": "31",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "reverse_proxy /api/v1/integration/results odoo:8069 {",
+      "file": "deploy/internal-n8n/Caddyfile",
+      "line": "45",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "reverse_proxy /web/health odoo:8069",
+      "file": "deploy/internal-n8n/Caddyfile",
+      "line": "48",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "- \"5678\"",
+      "file": "deploy/internal-n8n/compose.internal-n8n.yaml",
+      "line": "18",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "N8N_RUNTIME_HEALTH_URL: http://n8n:5678/healthz",
+      "file": "deploy/internal-n8n/compose.middleware-internal-n8n.yaml",
+      "line": "16",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "reverse_proxy http://codestra-odoo-1:8069 {",
+      "file": "deploy/internal-odoo/Caddyfile",
+      "line": "19",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "reverse_proxy http://codestra-odoo-1:8069 {",
+      "file": "deploy/internal-odoo/Caddyfile",
+      "line": "33",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "reverse_proxy http://codestra-odoo-1:8069 {",
+      "file": "deploy/internal-odoo/Caddyfile",
+      "line": "48",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "target: 8095",
+      "file": "deploy/klyrow/compose.server-a-receiver.yaml",
+      "line": "8",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "CADVISOR_EXPORTER_LISTENER",
+      "context": "static_configs: [{targets: [cadvisor:8080]}]",
+      "file": "deploy/monitoring/odoo-readiness/prometheus.yml",
+      "line": "17",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "static_configs: [{targets: [middleware-integration-api:8095]}]",
+      "file": "deploy/monitoring/odoo-readiness/prometheus.yml",
+      "line": "24",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"correlation_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "deploy/n8n/lead-automation/tests/test_workflow_contract.py",
+      "line": "43",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_OBSERVABILITY_ALERT_API_LISTENER",
+      "context": "- --port=8080",
+      "file": "deploy/observability-alerts/compose.core-production.yaml",
+      "line": "11",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_OBSERVABILITY_ALERT_API_LISTENER",
+      "context": "urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()",
+      "file": "deploy/observability-alerts/compose.core-production.yaml",
+      "line": "52",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_LEGACY_MONOLITH_CANARY_LISTENER",
+      "context": "- --port=8080",
+      "file": "deploy/production/compose.canary.yaml",
+      "line": "97",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_LEGACY_MONOLITH_CANARY_LISTENER",
+      "context": "urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()",
+      "file": "deploy/production/compose.canary.yaml",
+      "line": "111",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_LEGACY_MONOLITH_CANARY_LISTENER",
+      "context": "'import sys,urllib.request; r=urllib.request.urlopen(\"http://127.0.0.1:8080\"+sys.argv[1],timeout=5); assert r.status==200; sys.stdout.write(",
+      "file": "deploy/production/server/codestra-middleware-deploy",
+      "line": "582",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "reverse_proxy qwen-auth-verifier:8095 {",
+      "file": "deploy/qwen-auth-verifier/Caddyfile.production.snippet",
+      "line": "7",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "test: [CMD, python, -c, \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/healthz', timeout=2); urllib.request.urlopen('",
+      "file": "deploy/qwen-auth-verifier/compose.candidate.yaml",
+      "line": "36",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "test: [CMD, python, -c, \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/healthz', timeout=2); urllib.request.urlopen('",
+      "file": "deploy/qwen-auth-verifier/compose.candidate.yaml",
+      "line": "36",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "- \"8095\"",
+      "file": "deploy/qwen-auth-verifier/compose.production.yaml",
+      "line": "35",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "test: [CMD, python, -c, \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/healthz', timeout=2); urllib.request.urlopen('",
+      "file": "deploy/qwen-auth-verifier/compose.production.yaml",
+      "line": "40",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "test: [CMD, python, -c, \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8095/healthz', timeout=2); urllib.request.urlopen('",
+      "file": "deploy/qwen-auth-verifier/compose.production.yaml",
+      "line": "40",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "reverse_proxy middleware:8095 {",
+      "file": "deploy/qwen-worker/Caddyfile.private-worker-api.snippet",
+      "line": "7",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "SALES_SCRAPER_JWT_JWKS_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/certs",
+      "file": "deploy/scraper/compose.ingress.yaml",
+      "line": "12",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "reverse_proxy codestra-websocket-gateway-gateway-1:8080",
+      "file": "deploy/websocket-6101/Caddyfile.snippet",
+      "line": "26",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "reverse_proxy codestra-agent-desktop-sipjs-staging:8080",
+      "file": "deploy/websocket-6101/Caddyfile.snippet",
+      "line": "29",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/certs",
+      "file": "deploy/websocket-ha/compose.standby.yaml",
+      "line": "51",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "INTERNAL_EVENT_SOURCE_HEALTH_URL: http://middleware:8095/health",
+      "file": "deploy/websocket-ha/compose.standby.yaml",
+      "line": "54",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "ports: [\"127.0.0.1:31882:8080\"]",
+      "file": "deploy/websocket-ha/compose.standby.yaml",
+      "line": "67",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "test: [\"CMD\", \"python\", \"-c\", \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)\"]",
+      "file": "deploy/websocket-ha/compose.standby.yaml",
+      "line": "69",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert gateway[\"environment\"][\"INTERNAL_EVENT_SOURCE_HEALTH_URL\"] == \"http://middleware:8095/health\"",
+      "file": "deploy/websocket-ha/test_standby_compose.py",
+      "line": "24",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "assert gateway[\"ports\"] == [\"127.0.0.1:31882:8080\"]",
+      "file": "deploy/websocket-ha/test_standby_compose.py",
+      "line": "25",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('00000000-0000-4000-8000-000000000001','SITE-CODESTRA','codestra-co','Codestra.co','UNVERIFIED','staging','pending_verification',true),",
+      "file": "migrations/versions/0032_website_gateway_registry.py",
+      "line": "133",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('00000000-0000-4000-8000-000000000002','SITE-SOCIAL-CODESTRA','social-codestra-co','Social.codestra.co','UNVERIFIED','staging','pending_ver",
+      "file": "migrations/versions/0032_website_gateway_registry.py",
+      "line": "134",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('00000000-0000-4000-8000-000000000003','SITE-MOY-LOGISTICS','moy-logistics','Moy Logistics','UNVERIFIED','staging','pending_verification',t",
+      "file": "migrations/versions/0032_website_gateway_registry.py",
+      "line": "135",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('00000000-0000-4000-8000-000000000004','SITE-MONEYBEE','moneybee','MoneyBee','UNVERIFIED','staging','pending_verification',true),",
+      "file": "migrations/versions/0032_website_gateway_registry.py",
+      "line": "136",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('00000000-0000-4000-8000-000000000005','SITE-SENIOR-CITIZEN-PRODUCTS','senior-citizen-products','Senior Citizen Products','UNVERIFIED','sta",
+      "file": "migrations/versions/0032_website_gateway_registry.py",
+      "line": "137",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('00000000-0000-4000-8000-000000000006','SITE-CALDERON-FARM','calderon-farm','Calderon Farm','UNVERIFIED','staging','pending_verification',t",
+      "file": "migrations/versions/0032_website_gateway_registry.py",
+      "line": "138",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "VALUES ('43000000-0000-4000-8000-000000000001',",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "22",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000010','identity','Staging Identity',true),",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "29",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000020','odoo','Staging Odoo',true)",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "30",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000011','43000000-0000-4000-8000-000000000010','oauth.token','v1'),",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "36",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000011','43000000-0000-4000-8000-000000000010','oauth.token','v1'),",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "36",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000021','43000000-0000-4000-8000-000000000020','odoo.results.create','v1')",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "37",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000021','43000000-0000-4000-8000-000000000020','odoo.results.create','v1')",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "37",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000012','identity','oauth.token','v1','internal://identity/oauth-token/v1','sha256:0000000000000000000000000",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "44",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000022','odoo','odoo.results.create','v1','internal://odoo/results-create/v1','sha256:0000000000000000000000",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "45",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000013','43000000-0000-4000-8000-000000000011',1,",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "56",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000013','43000000-0000-4000-8000-000000000011',1,",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "56",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "'http://keycloak-staging:8080','/realms/codestra/protocol/openid-connect/token','POST',",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "57",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000023','43000000-0000-4000-8000-000000000021',1,",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "62",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000023','43000000-0000-4000-8000-000000000021',1,",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "62",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "'http://odoo19-staging:8069','/api/v1/integration/results','POST','application/json','oauth2_client_secret',",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "63",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000014','43000000-0000-4000-8000-000000000013','staging'),",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "73",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000014','43000000-0000-4000-8000-000000000013','staging'),",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "73",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000024','43000000-0000-4000-8000-000000000023','staging')",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "74",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('43000000-0000-4000-8000-000000000024','43000000-0000-4000-8000-000000000023','staging')",
+      "file": "migrations/versions/0043_staging_odoo_delivery_routes.py",
+      "line": "74",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "VALUES ('49000000-0000-4000-8000-000000000001',",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "20",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000013','43000000-0000-4000-8000-000000000011',2,",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "32",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000013','43000000-0000-4000-8000-000000000011',2,",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "32",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "'http://keycloak:8080','/realms/codestra/protocol/openid-connect/token','POST',",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "33",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000023','43000000-0000-4000-8000-000000000021',2,",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "38",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000023','43000000-0000-4000-8000-000000000021',2,",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "38",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000014','49000000-0000-4000-8000-000000000013','production','','',''),",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "50",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000014','49000000-0000-4000-8000-000000000013','production','','',''),",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "50",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000024','49000000-0000-4000-8000-000000000023','production','ORG-CODESTRA','BU-400-COD','CMP-400-COD')",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "51",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "('49000000-0000-4000-8000-000000000024','49000000-0000-4000-8000-000000000023','production','ORG-CODESTRA','BU-400-COD','CMP-400-COD')",
+      "file": "migrations/versions/0050_production_odoo_result_routes.py",
+      "line": "51",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "SELECT '54000000-0000-4000-8000-000000000021', service_id,",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "37",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "VALUES ('54000000-0000-4000-8000-000000000022','odoo',",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "45",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "VALUES ('54000000-0000-4000-8000-000000000023','54000000-0000-4000-8000-000000000021',1,",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "57",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "VALUES ('54000000-0000-4000-8000-000000000023','54000000-0000-4000-8000-000000000021',1,",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "57",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "VALUES (CAST(:binding AS uuid),'54000000-0000-4000-8000-000000000023',",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "78",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "binding=f\"54000000-0000-4000-8000-0000000000{suffix}\",",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "82",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "op.execute(\"DELETE FROM integration_endpoint_version WHERE endpoint_version_id='54000000-0000-4000-8000-000000000023'\")",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "90",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "op.execute(\"DELETE FROM integration_schema_version WHERE schema_version_id='54000000-0000-4000-8000-000000000022'\")",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "91",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "op.execute(\"DELETE FROM integration_endpoint WHERE endpoint_id='54000000-0000-4000-8000-000000000021'\")",
+      "file": "migrations/versions/0054_campaign_action_delivery.py",
+      "line": "92",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"61000000-0000-4000-8000-000000000011\", \"odoo.observability.kpis.create\", \"kpis.create\", \"POST\", \"/api/v1/integration/observability/kpis\", ",
+      "file": "migrations/versions/0061_kyyow_observability_odoo.py",
+      "line": "18",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"61000000-0000-4000-8000-000000000012\", \"odoo.observability.incidents.upsert\", \"incidents.upsert\", \"POST\", \"/api/v1/integration/observabili",
+      "file": "migrations/versions/0061_kyyow_observability_odoo.py",
+      "line": "19",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"61000000-0000-4000-8000-000000000013\", \"odoo.observability.kpis.read\", \"kpis.read\", \"GET\", \"/api/v1/integration/observability/kpis\", \"odoo",
+      "file": "migrations/versions/0061_kyyow_observability_odoo.py",
+      "line": "20",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"61000000-0000-4000-8000-000000000014\", \"odoo.observability.incidents.read\", \"incidents.read\", \"GET\", \"/api/v1/integration/observability/in",
+      "file": "migrations/versions/0061_kyyow_observability_odoo.py",
+      "line": "21",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"61000000-0000-4000-8000-000000000015\", \"odoo.observability.sync.read\", \"sync.read\", \"GET\", \"/api/v1/integration/observability/sync-status\"",
+      "file": "migrations/versions/0061_kyyow_observability_odoo.py",
+      "line": "22",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "\"http://odoo19-staging:8069\",",
+      "file": "migrations/versions/0061_kyyow_observability_odoo.py",
+      "line": "146",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "LEGACY_0054_ENDPOINT_VERSION_ID = \"54000000-0000-4000-8000-000000000023\"",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "40",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"66000000-0000-4000-8000-000000000011\", \"automation_results.apply\", \"odoo.automation_results.apply\", \"POST\", \"/api/v1/integration/automatio",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "44",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"66000000-0000-4000-8000-000000000012\", \"provider_activities.create\", \"odoo.provider_activities.create\", \"POST\", \"/api/v1/integration/provi",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "45",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"66000000-0000-4000-8000-000000000013\", \"campaign.actual_state.write\", \"odoo.campaign.actual_state.write\", \"POST\", \"/api/v1/integration/cam",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "46",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"66000000-0000-4000-8000-000000000014\", \"campaigns.read\", \"odoo.campaigns.read\", \"POST\", \"/api/v1/integration/campaigns/read\", \"odoo.campai",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "47",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"66000000-0000-4000-8000-000000000015\", \"desired_state.read\", \"odoo.desired_state.read\", \"POST\", \"/api/v1/integration/desired-state/read\", ",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "48",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "(\"staging\", \"http://odoo19-staging:8069\", \"secret://staging/odoo-results-client\", \"codestra-odoo-integration\", \"staging-internal\", 66, 1, Fa",
+      "file": "migrations/versions/0066_reconcile_odoo_campaign_scope.py",
+      "line": "55",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "--hash=sha256:0530a5fbad9c9e4ee3f2b33b148c6a64d47bbad8000ea63704fa8260f4cf728e \\",
+      "file": "requirements-connector-runtime.txt",
+      "line": "818",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert contract[\"listener_port\"] == 8095",
+      "file": "scripts/audit_release_endpoints.py",
+      "line": "55",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"command_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "scripts/certify_production_route_contract.py",
+      "line": "80",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "CANONICAL_UPSTREAM = \"middleware-integration-api:8095\"",
+      "file": "scripts/cross_repo_contract_matrix.py",
+      "line": "40",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\"Kong\": \"Kong.worktrees/middleware-8095-20260919\",",
+      "file": "scripts/cross_repo_contract_matrix.py",
+      "line": "44",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "'grep -R -n -E \"18103|codestra-identity-keycloak-1:8080\" /etc/caddy /config 2>/dev/null | head -80' || true",
+      "file": "scripts/discover_auth_codestra_edge.sh",
+      "line": "81",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "printf 'EXPECTED_PRODUCTION_KEYCLOAK=codestra-identity-keycloak-1:8080\\n'",
+      "file": "scripts/discover_auth_codestra_edge.sh",
+      "line": "95",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "upstream=\"middleware-integration-api:8095\",",
+      "file": "scripts/generate_public_api_route_contract.py",
+      "line": "195",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "upstream=\"middleware-integration-api:8095\",",
+      "file": "scripts/generate_public_api_route_contract.py",
+      "line": "226",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "upstream=\"odoo:8069\",",
+      "file": "scripts/generate_public_api_route_contract.py",
+      "line": "258",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\"listener_port\": 8095,",
+      "file": "scripts/generate_public_api_route_contract.py",
+      "line": "298",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\"path\": \"caddy -> kong -> middleware-integration-api:8095\",",
+      "file": "scripts/generate_public_api_route_contract.py",
+      "line": "304",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "email_command_id = \"00000000-0000-4000-8000-000000000102\"",
+      "file": "tests/integration/test_email_unknown_outcome_reconciliation.py",
+      "line": "92",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"command_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/integration/test_postgres_redis.py",
+      "line": "449",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"command_id\": \"00000000-0000-4000-8000-000000000091\",",
+      "file": "tests/integration/test_postgres_redis.py",
+      "line": "561",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"command_id\": \"00000000-0000-4000-8000-000000000002\",",
+      "file": "tests/integration/test_postgres_redis.py",
+      "line": "618",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"command_id\": \"00000000-0000-4000-8000-000000000003\",",
+      "file": "tests/integration/test_postgres_redis.py",
+      "line": "643",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "command_id=\"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/integration/test_temporal_workflows.py",
+      "line": "256",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "command_id=\"00000000-0000-4000-8000-000000000099\",",
+      "file": "tests/integration/test_temporal_workflows.py",
+      "line": "290",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"operation_id\": \"00000000-0000-4000-8000-000000000098\",",
+      "file": "tests/integration/test_temporal_workflows.py",
+      "line": "316",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "command_id=\"00000000-0000-4000-8000-000000000098\",",
+      "file": "tests/integration/test_temporal_workflows.py",
+      "line": "335",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "email_command_id = \"00000000-0000-4000-8000-000000000002\"",
+      "file": "tests/integration/test_temporal_workflows.py",
+      "line": "375",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "command_id=\"00000000-0000-4000-8000-000000000003\",",
+      "file": "tests/integration/test_temporal_workflows.py",
+      "line": "431",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"sample_rate_hz\": 8000,",
+      "file": "tests/recording/test_api_contract.py",
+      "line": "43",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"sample_rate_hz\": 8000,",
+      "file": "tests/recording/test_recording_pipeline.py",
+      "line": "34",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"reverse_proxy qwen-auth-verifier:8095\" in text",
+      "file": "tests/security/test_qwen_verifier_production_deployment.py",
+      "line": "88",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "or \"00000000-0000-4000-8000-000000000001\"",
+      "file": "tests/test_ai_job_platform.py",
+      "line": "226",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "or \"00000000-0000-4000-8000-000000000002\"",
+      "file": "tests/test_ai_job_platform.py",
+      "line": "231",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "322",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000002\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "323",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000003\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "327",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000002\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "328",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "332",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000004\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "333",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000010\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "348",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"00000000-0000-4000-8000-000000000010\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "379",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"/internal/api/v1/ai/worker/jobs/00000000-0000-4000-8000-000000000010/heartbeat\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "389",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"/internal/api/v1/ai/worker/jobs/00000000-0000-4000-8000-000000000010/cancellation-check\",",
+      "file": "tests/test_ai_worker_queue_runtime.py",
+      "line": "390",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "assert sum(map(len, rows)) == 8000",
+      "file": "tests/test_appointments.py",
+      "line": "71",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"event_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_breero_integration_contract.py",
+      "line": "17",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"aggregate_id\": \"00000000-0000-4000-8000-000000000002\",",
+      "file": "tests/test_breero_integration_contract.py",
+      "line": "20",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "id=\"018f0000-0000-7000-8000-000000000001\",",
+      "file": "tests/test_callbacks.py",
+      "line": "158",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "original_id = \"00000000-0000-4000-8000-000000000010\"",
+      "file": "tests/test_calling_api.py",
+      "line": "40",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "hangup_id = UUID(\"00000000-0000-4000-8000-000000000011\")",
+      "file": "tests/test_calling_api.py",
+      "line": "41",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"command_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_canonical_contracts.py",
+      "line": "45",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"message_id\": \"00000000-0000-4000-8000-000000000020\",",
+      "file": "tests/test_canonical_contracts.py",
+      "line": "202",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"client_reference\": \"00000000-0000-4000-8000-000000000020\",",
+      "file": "tests/test_canonical_contracts.py",
+      "line": "211",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\"servicePort\": 8095,",
+      "file": "tests/test_certify_edge_integration.py",
+      "line": "223",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"billingAccountId\": \"00000000-0000-4000-8000-000000000010\",",
+      "file": "tests/test_communications_sms.py",
+      "line": "150",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "{\"output_format\": \"ulaw_8000\"},",
+      "file": "tests/test_elevenlabs_tts_api.py",
+      "line": "138",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "assert configured.elevenlabs_telephony_output_format == \"ulaw_8000\"",
+      "file": "tests/test_elevenlabs_tts_policy.py",
+      "line": "59",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"elevenlabs_canary_voice_id\", \"voice?output_format=ulaw_8000\"),",
+      "file": "tests/test_elevenlabs_tts_policy.py",
+      "line": "72",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"elevenlabs_browser_output_format\", \"ulaw_8000\"),",
+      "file": "tests/test_elevenlabs_tts_policy.py",
+      "line": "73",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "output_format=\"ulaw_8000\",",
+      "file": "tests/test_elevenlabs_tts_provider.py",
+      "line": "194",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "assert observed == \"ulaw_8000\"",
+      "file": "tests/test_elevenlabs_tts_provider.py",
+      "line": "199",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "assert \"reverse_proxy /api/v1/integration/results odoo:8069\" in source",
+      "file": "tests/test_internal_n8n_workflow.py",
+      "line": "53",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "assert \"reverse_proxy /web/health odoo:8069\" in source",
+      "file": "tests/test_internal_n8n_workflow.py",
+      "line": "54",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "ODOO_HTTP",
+      "context": "assert \"http://codestra-odoo-1:8069\" in caddy",
+      "file": "tests/test_internal_n8n_workflow.py",
+      "line": "66",
+      "port": "8069",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"target: 8095\" in SOURCE",
+      "file": "tests/test_klyrow_server_a_receiver.py",
+      "line": "11",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"correlation_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_lead_automation.py",
+      "line": "26",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"correlation_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_lead_odoo_apply.py",
+      "line": "48",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "assert normalize_phone(\"020 1234 5678\") is None",
+      "file": "tests/test_lead_reconciliation.py",
+      "line": "20",
+      "port": "5678",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "TEST_FIXTURE",
+      "context": "source.replace(\"    expose:\", '    ports: [\"8080:8080\"]\\n    expose:'),",
+      "file": "tests/test_observability_alert_contract_validation.py",
+      "line": "239",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "TEST_FIXTURE",
+      "context": "source.replace(\"    expose:\", '    ports: [\"8080:8080\"]\\n    expose:'),",
+      "file": "tests/test_observability_alert_contract_validation.py",
+      "line": "239",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"GET\", \"/v1/operations/00000000-0000-4000-8000-000000000001\"),",
+      "file": "tests/test_odoo_sms_readback.py",
+      "line": "58",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"POST\", \"/v1/operations/00000000-0000-4000-8000-000000000001/cancel\"),",
+      "file": "tests/test_odoo_sms_readback.py",
+      "line": "59",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"POST\", \"/v1/operations/00000000-0000-4000-8000-000000000001/reconcile\"),",
+      "file": "tests/test_odoo_sms_readback.py",
+      "line": "60",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"GET\", \"/v1/communications/messages/00000000-0000-4000-8000-000000000001\"),",
+      "file": "tests/test_odoo_sms_readback.py",
+      "line": "62",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "command_id=\"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_platform_control_plane.py",
+      "line": "172",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "TENANT_ID = \"00000000-0000-4000-8000-000000000042\"",
+      "file": "tests/test_provider_canaries.py",
+      "line": "24",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert rows[key][\"upstream\"] == \"middleware-integration-api:8095\", key",
+      "file": "tests/test_public_api_route_contract.py",
+      "line": "146",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert contract()[\"listener_port\"] == 8095",
+      "file": "tests/test_public_api_route_contract.py",
+      "line": "154",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "event_id = \"00000000-0000-4000-8000-000000000001\"",
+      "file": "tests/test_publisher_auth.py",
+      "line": "16",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "141",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "first = distinct_job(\"00000000-0000-4000-8000-000000000001\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "335",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "second = distinct_job(\"00000000-0000-4000-8000-000000000002\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "336",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "third = distinct_job(\"00000000-0000-4000-8000-000000000003\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "337",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "distinct_job(\"00000000-0000-4000-8000-000000000001\"),",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "377",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "distinct_job(\"00000000-0000-4000-8000-000000000002\"),",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "378",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "first = distinct_job(\"00000000-0000-4000-8000-000000000001\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "399",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "second = distinct_job(\"00000000-0000-4000-8000-000000000002\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "401",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "coding = distinct_job(\"00000000-0000-4000-8000-000000000001\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "421",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "incompatible = distinct_job(\"00000000-0000-4000-8000-000000000002\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "423",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "first = distinct_job(\"00000000-0000-4000-8000-000000000001\")",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "460",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "api = ConcurrentAPI([first, distinct_job(\"00000000-0000-4000-8000-000000000002\")])",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "462",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "distinct_job(\"00000000-0000-4000-8000-00000000000a\"),",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "481",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "distinct_job(\"00000000-0000-4000-8000-00000000000b\"),",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "482",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "f\"00000000-0000-4000-8000-00000000000{suffix}\",",
+      "file": "tests/test_qwen_polling_worker.py",
+      "line": "520",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"reverse_proxy middleware-event-gateway:8095\" in private",
+      "file": "tests/test_readiness_challenge.py",
+      "line": "163",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert contract[\"listener_port\"] == 8095",
+      "file": "tests/test_release_endpoint_audit.py",
+      "line": "15",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "def test_default_runtime_is_the_canonical_integration_api_on_8095() -> None:",
+      "file": "tests/test_runtime_compose.py",
+      "line": "78",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"EXPOSE 8095\" in runtime_stage",
+      "file": "tests/test_runtime_compose.py",
+      "line": "82",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"127.0.0.1:8095/health\" in runtime_stage",
+      "file": "tests/test_runtime_compose.py",
+      "line": "83",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert '\"--port\", \"8095\"' in runtime_stage",
+      "file": "tests/test_runtime_compose.py",
+      "line": "85",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"http://127.0.0.1:8095/metrics\" in block",
+      "file": "tests/test_scraper_ingress_contract.py",
+      "line": "79",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert \"http://middleware-integration-api:8095\" in router_text",
+      "file": "tests/test_social_n8n_phase_n2.py",
+      "line": "95",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "fixed_uuid = uuid.UUID(\"00000000-0000-4000-8000-000000000009\")",
+      "file": "tests/test_staging_acceptance.py",
+      "line": "85",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\"https://authorization.internal.codestra.agency:8095\",",
+      "file": "tests/test_vicidial_mtls_client.py",
+      "line": "195",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"session_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_webphone.py",
+      "line": "38",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"browser_session_binding\": \"00000000-0000-4000-8000-000000000002\",",
+      "file": "tests/test_webphone.py",
+      "line": "39",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"session_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "tests/test_webphone.py",
+      "line": "212",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"browser_session_binding\": \"00000000-0000-4000-8000-000000000002\",",
+      "file": "tests/test_webphone.py",
+      "line": "225",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 CMD [\"python\", \"-c\", \"import urllib.request; urllib.request.urlopen('",
+      "file": "websocket_gateway/Dockerfile",
+      "line": "26",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "CMD [\"/opt/venv/bin/python\", \"-m\", \"uvicorn\", \"app:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8080\", \"--ws-ping-interval\", \"25\", \"--ws-ping-timeo",
+      "file": "websocket_gateway/Dockerfile",
+      "line": "28",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "jwks_url = os.getenv(\"KEYCLOAK_JWKS_URL\", \"http://keycloak:8080/realms/codestra/protocol/openid-connect/certs\")",
+      "file": "websocket_gateway/app.py",
+      "line": "74",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "event_source_health_url = os.getenv(\"INTERNAL_EVENT_SOURCE_HEALTH_URL\", \"http://middleware:8095/health\")",
+      "file": "websocket_gateway/app.py",
+      "line": "84",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "\"import os,httpx; t=open('/run/secrets/internal_token').read().strip(); r=httpx.post('http://codestra-websocket-gateway-gateway-1:8080/inter",
+      "file": "websocket_gateway/browser_certify.mjs",
+      "line": "15",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "INTERNAL_API = os.getenv(\"INTERNAL_API\", \"http://codestra-websocket-gateway-gateway-1:8080\")",
+      "file": "websocket_gateway/certify.py",
+      "line": "19",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/codestra/protocol/openid-connect/certs",
+      "file": "websocket_gateway/compose.yaml",
+      "line": "39",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "INTERNAL_EVENT_SOURCE_HEALTH_URL: http://middleware:8095/health",
+      "file": "websocket_gateway/compose.yaml",
+      "line": "44",
+      "port": "8095",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "WEBSOCKET_GATEWAY_INTERNAL_LISTENER",
+      "context": "const publish=event=>execFileSync(\"docker\",[\"exec\",\"-e\",`EVENT_JSON=${JSON.stringify(event)}`,\"codestra-websocket-certifier\",\"python\",\"-c\",\"",
+      "file": "websocket_gateway/recovery_certify.mjs",
+      "line": "13",
+      "port": "8080",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "tenant_id: str = \"00000000-0000-4000-8000-000000000001\",",
+      "file": "worker/qwen_polling_worker.py",
+      "line": "168",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "workspace_id: str = \"00000000-0000-4000-8000-000000000002\",",
+      "file": "worker/qwen_polling_worker.py",
+      "line": "169",
+      "port": "8000",
+      "repository": "Middleware-"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=codestra-middleware-integration-api-1 name=codestra-callback-api",
+      "file": "config/kong-callback-routes.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=telephony.internal.invalid / host=codestra-middleware-integration-api-1 name=codestra-calling-api",
+      "file": "config/kong-calling-routes.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=middleware-integration-api name=codestra-campaign-automation-api",
+      "file": "config/kong-campaign-automation-routes.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "host=appolon-middleware-integration-api note=PR #30 read-only topology evidence bound the /v1/integrations/n8n aliases to this runtime. Thos",
+      "file": "config/kong-community-n8n-egress.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=middleware-integration-api role=CANONICAL_PUBLIC_API note=PR #105 canonical alias bound by the authority v2, the generated manifests, t",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=codestra-middleware-integration-api-1 role=CANONICAL_PUBLIC_API_CONTAINER_NAME note=Docker container name of the same 8095 listener; th",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "host=appolon-middleware-integration-api role=RETIRED_DENIED_PR105 note=Retired by PR #105 (canonical contract denies the /v1/integrations/n8",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=codestra-middleware-event-gateway-1 role=LEGACY_EVENT_GATEWAY",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-callback-api lifecycle=CANONICAL disposition=KEEP purpose=Odoo callback read/control endpoints on the canonical Middlewar",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-campaign-automation-api lifecycle=CANONICAL disposition=KEEP purpose=Issue #58 canonical campaign routes: n8n policy chec",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-campaign-automation-api@staging lifecycle=CANONICAL disposition=KEEP purpose=Staging overlay of the campaign automation s",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-middleware-intake lifecycle=CANONICAL disposition=KEEP purpose=SDK intake writes (leads, survey responses) for the sdk-in",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-middleware-n8n-control-plane lifecycle=RETIRE_CANDIDATE disposition=DELETE purpose=n8n automation command submission and ",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-middleware-n8n-control-plane@staging lifecycle=RETIRE_CANDIDATE disposition=DELETE purpose=Staging overlay of the n8n con",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-calling-api lifecycle=CANONICAL disposition=KEEP purpose=Telephony command, operation readback, cancel, reconcile and rea",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "serviceId=moneybee-api lifecycle=CANONICAL disposition=KEEP purpose=MoneyBee borrower identity bootstrap. / host=moneybee-api",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "serviceId=provider-control-middleware lifecycle=PREPARED_DISABLED disposition=KEEP purpose=Prepared, disabled provider-control command route",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "serviceId=codestra-n8n-editor lifecycle=PROPOSED disposition=KEEP purpose=Keycloak browser-flow protection in front of the n8n Community Edi",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "5678",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "serviceId=codestra-sms-standby lifecycle=STANDBY disposition=KEEP purpose=Private standby rehearsal of the SMS command surface with delivery",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "serviceId=codestra-email-standby lifecycle=STANDBY disposition=KEEP purpose=Private standby rehearsal of the email command surface with deli",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "serviceId=codestra-sms-webhook-standby lifecycle=STANDBY disposition=KEEP purpose=Private standby rehearsal of signed SMS webhook ingest. / ",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "serviceId=codestra-email-webhook-standby lifecycle=STANDBY disposition=KEEP purpose=Private standby rehearsal of signed email webhook ingest",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-website-api lifecycle=TRANSITIONAL disposition=REFACTOR purpose=Legacy website API on the legacy host; upstream fail-clos",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=breero-production-api lifecycle=TRANSITIONAL disposition=REFACTOR purpose=Tenant product API for api.breero.com; upstream fail-clo",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "serviceId=codestra-crm-api lifecycle=LEGACY disposition=DEPRECATE purpose=Legacy shared-key CRM API through the service auth adapter. / host",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "serviceId=codestra-sms-api lifecycle=LEGACY disposition=DEPRECATE purpose=Legacy shared-key SMS API through the service auth adapter. / host",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "serviceId=codestra-email-api lifecycle=LEGACY disposition=DEPRECATE purpose=Legacy shared-key email API through the email reseller adapter. ",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "serviceId=codestra-sms-dlr lifecycle=LEGACY disposition=DEPRECATE purpose=Legacy Telnexa delivery-receipt ingest through the SMS API adapter",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-webhooks lifecycle=LEGACY disposition=DEPRECATE purpose=Legacy shared-key webhook ingest into the Middleware event gatewa",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_TEST_UPSTREAM_RETIRE_CANDIDATE",
+      "context": "serviceId=codestra-gateway-test lifecycle=RETIRE_CANDIDATE disposition=DELETE purpose=Test upstream left in production; retirement candidate",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_TRANSITIONAL_CERTIFICATION_PROBE",
+      "context": "serviceId=codestra-token-validator lifecycle=TRANSITIONAL disposition=DEPRECATE purpose=Read-only token-validation certification probe. / ho",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "serviceId=codestra-marketing lifecycle=DESIGN_ONLY disposition=REFACTOR purpose=Marketing platform stage-4 fragment upstream. / host=codestr",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "serviceId=codestra-ai lifecycle=DESIGN_ONLY disposition=REFACTOR purpose=AI platform stage-4 fragment upstream. / host=codestra-ai",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "serviceId=codestra-communication lifecycle=DESIGN_ONLY disposition=REFACTOR purpose=Communication platform stage-4 fragment upstream. / host",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "serviceId=codestra-social lifecycle=DESIGN_ONLY disposition=REFACTOR purpose=Social platform stage-4 fragment upstream. / host=codestra-soci",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=middleware-integration-api lifecycle=CANONICAL disposition=KEEP purpose=Canonical Middleware public API edge (PR #105): the 80 sha",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=middleware-integration-api@staging lifecycle=CANONICAL disposition=KEEP purpose=Staging twin of the canonical Middleware public AP",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=codestra-platform-api lifecycle=TRANSITIONAL disposition=REFACTOR purpose=PR #104 read-side platform API (users, telephony, email,",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "serviceId=middleware-v3-command-api lifecycle=PREPARED_DISABLED disposition=KEEP purpose=Prepared, disabled Middleware V3 platform-kernel co",
+      "file": "config/kong-gateway-foundation.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=codestra-middleware-integration-api-1 name=codestra-middleware-intake",
+      "file": "config/kong-intake-routes.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=middleware-integration-api",
+      "file": "config/kong-middleware-authority.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "port: 8095",
+      "file": "config/kong-middleware-routes.production.yml",
+      "line": "6",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=middleware-integration-api name=middleware-v3-command-api",
+      "file": "config/kong-middleware-v3-command-routes.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "host=moneybee-api",
+      "file": "config/kong-moneybee-identity-routes.json",
+      "line": "json",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=middleware-integration-api name=codestra-middleware-n8n-control-plane",
+      "file": "config/kong-n8n-control-plane-routes.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "host=automation.codestra.co purpose=Keycloak browser-flow protection for the n8n Community Edition editor host. n8n Community Edition has no",
+      "file": "config/kong-n8n-editor-routes.json",
+      "line": "json",
+      "port": "5678",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=codestra-middleware-integration-api-1 name=codestra-platform-api",
+      "file": "config/kong-platform-api-read-routes.v1.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=breero-production-api-route / host=codestra-middleware-integration-api-1 name=breero-production-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=codestra-callback-control / host=codestra-middleware-integration-api-1 name=codestra-callback-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=codestra-callback-read / host=codestra-middleware-integration-api-1 name=codestra-callback-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=codestra-campaign-policy-check / host=codestra-middleware-integration-api-1 name=codestra-campaign-automation-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=codestra-campaign-result-submit / host=codestra-middleware-integration-api-1 name=codestra-campaign-automation-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "name=codestra-email-standby-route / host=codestra-kong-standby-auth name=codestra-email-standby",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "name=codestra-email-webhook-standby-route / host=codestra-kong-standby-auth name=codestra-email-webhook-standby",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "name=codestra-n8n-command-read / host=appolon-middleware-integration-api name=codestra-middleware-n8n-control-plane",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "name=codestra-n8n-command-submit / host=appolon-middleware-integration-api name=codestra-middleware-n8n-control-plane",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "name=codestra-sms-standby-route / host=codestra-kong-standby-auth name=codestra-sms-standby",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "name=codestra-sms-webhook-standby-route / host=codestra-kong-standby-auth name=codestra-sms-webhook-standby",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_TRANSITIONAL_CERTIFICATION_PROBE",
+      "context": "name=codestra-token-validation-certification / host=identity-certification name=codestra-token-validator",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=codestra-website-api-route / host=codestra-middleware-integration-api-1 name=codestra-website-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "name=crm-route / host=codestra-kong-service-auth-adapter-1 name=codestra-crm-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "name=email-route / host=codestra-email-reseller-api-1 name=codestra-email-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_TEST_UPSTREAM_RETIRE_CANDIDATE",
+      "context": "name=gateway-test-route / host=kong-test-upstream name=codestra-gateway-test",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "name=sms-dlr-telnexa-route / host=codestra-sms-api-api-1 name=codestra-sms-dlr",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "LEGACY_PROVIDER_ADAPTER_DEPRECATE",
+      "context": "name=sms-route / host=codestra-kong-service-auth-adapter-1 name=codestra-sms-api",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "name=webhooks-route / host=codestra-middleware-event-gateway-1 name=codestra-webhooks",
+      "file": "config/kong-production-route-inventory.v2.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "host=appolon-middleware-integration-api",
+      "file": "config/kong-provider-control-routes.v1.json",
+      "line": "json",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "url: http://codestra-marketing:8000",
+      "file": "config/marketing-stage4-routes.yaml",
+      "line": "4",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "url: http://codestra-ai:8000",
+      "file": "config/marketing-stage4-routes.yaml",
+      "line": "14",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "url: http://codestra-communication:8000",
+      "file": "config/marketing-stage4-routes.yaml",
+      "line": "22",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "url: http://codestra-social:8000",
+      "file": "config/marketing-stage4-routes.yaml",
+      "line": "30",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co purpose=Keycloak -> Caddy -> Kong -> Middleware edge certification for campaign TEST_SYN only. Same service, plugins an",
+      "file": "config/staging/kong-campaign-automation-routes.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "port: 8095",
+      "file": "config/staging/kong-middleware-routes.staging.yml",
+      "line": "6",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "host=api.codestra.co / host=middleware-integration-api name=codestra-middleware-n8n-control-plane",
+      "file": "config/staging/kong-n8n-control-plane-routes.json",
+      "line": "json",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "CMD [\"uvicorn\", \"standby_auth:app\", \"--app-dir\", \"/app\", \"--host\", \"0.0.0.0\", \"--port\", \"8080\", \"--no-server-header\", \"--no-access-log\"]",
+      "file": "deploy/kong-production-standby/auth-middleware/Dockerfile",
+      "line": "9",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "test: [CMD, python, -c, \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')\"]",
+      "file": "deploy/kong-production-standby/compose.standby.yaml",
+      "line": "31",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "KONG_PROXY_LISTEN: 0.0.0.0:8000",
+      "file": "deploy/kong/compose.kong.yaml",
+      "line": "59",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "# 127.0.0.1:8000 (CADDY_KONG_UPSTREAM in appolon1908-hue/Caddy). The Admin",
+      "file": "deploy/kong/compose.kong.yaml",
+      "line": "87",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "- \"127.0.0.1:8000:8000\"",
+      "file": "deploy/kong/compose.kong.yaml",
+      "line": "91",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "- \"127.0.0.1:8000:8000\"",
+      "file": "deploy/kong/compose.kong.yaml",
+      "line": "91",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "proxy_listen = 0.0.0.0:8000",
+      "file": "deploy/kong/kong.conf.example",
+      "line": "53",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "# contract names middleware-integration-api:8095 as the only shared-edge",
+      "file": "operations/community-n8n/collect_topology_evidence.py",
+      "line": "29",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "-e KONG_PROXY_LISTEN=0.0.0.0:8000 -e KONG_ADMIN_LISTEN=0.0.0.0:8001 \\",
+      "file": "operations/kong-database/least-privilege-rehearsal.sh",
+      "line": "57",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "\"port\": 8080, \"path\": None, \"retries\": 0,",
+      "file": "scripts/apply_kong_standby.py",
+      "line": "101",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"http://127.0.0.1:8000/v1/sms\",",
+      "file": "scripts/apply_kong_standby.py",
+      "line": "151",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "UPSTREAM_PORT = 8095",
+      "file": "scripts/generate_middleware_routes.py",
+      "line": "21",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "BASE = \"http://127.0.0.1:8000\"",
+      "file": "scripts/run_kong_standby_acceptance.py",
+      "line": "15",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert current[\"service_port\"] == 8095",
+      "file": "scripts/validate_community_n8n_egress.py",
+      "line": "48",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "print(\"CANONICAL_MIDDLEWARE_UPSTREAM=middleware-integration-api:8095\")",
+      "file": "scripts/validate_community_n8n_egress.py",
+      "line": "151",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\"port\": 8095,",
+      "file": "scripts/validate_kong_calling_policy.py",
+      "line": "142",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "binds the canonical 8095 upstream; the frozen contract, not this file, is the",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "594",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "if (svc.get(\"host\"), svc.get(\"port\")) != (\"middleware-integration-api\", 8095):",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "601",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "raise FoundationError(f\"{path}: V3 command routes must bind middleware-integration-api:8095\")",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "602",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "source=path, name=svc[\"name\"], protocol=\"http\", host=\"codestra-kong-standby-auth\", port=8080,",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "652",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "upstream_port=8080, plugins=STANDBY_PLUGINS, rate_per_minute=svc[\"ratePerMinute\"],",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "660",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "``appolon-middleware-integration-api:8080``): nothing activatable may target them.\"\"\"",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "1047",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "if b\"\\0\" in data[:8000]:",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "1875",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "what residue of the retired ``:8080`` alias the registry still records.\"\"\"",
+      "file": "scripts/validate_kong_foundation.py",
+      "line": "1894",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "if route[\"serviceHost\"] != \"middleware-integration-api\" or route[\"servicePort\"] != 8095:",
+      "file": "scripts/validate_middleware_edge_contract.py",
+      "line": "107",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "\"port\": 8080,",
+      "file": "scripts/validate_provider_control_routes.py",
+      "line": "30",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert current[\"service_port\"] == 8095",
+      "file": "tests/test_community_n8n_egress.py",
+      "line": "56",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "monkeypatch.setenv(\"HTTP_PROXY\", \"http://unselected-proxy.invalid:8080\")",
+      "file": "tests/test_kong_admin_channel.py",
+      "line": "492",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert contract[\"listener_port\"] == 8095",
+      "file": "tests/test_kong_campaign_edge_certification.py",
+      "line": "82",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert route[\"servicePort\"] == 8095",
+      "file": "tests/test_kong_campaign_edge_certification.py",
+      "line": "105",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "8095,",
+      "file": "tests/test_kong_campaign_edge_certification.py",
+      "line": "303",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert route[\"servicePort\"] == 8095",
+      "file": "tests/test_kong_canonical_route_contract.py",
+      "line": "51",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert INTAKE_AUTHORITY[\"service\"][\"port\"] == 8095",
+      "file": "tests/test_kong_canonical_route_contract.py",
+      "line": "70",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert N8N_AUTHORITY[\"service\"][\"port\"] == 8095",
+      "file": "tests/test_kong_canonical_route_contract.py",
+      "line": "102",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "@pytest.mark.parametrize(\"url\", [\"http://10.40.0.3:8443\", \"http://twilio-adapter:8080\", \"http://codestra-control-plane:9999\"])",
+      "file": "tests/test_kong_foundation.py",
+      "line": "265",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "methods=(\"GET\",), plugins=(\"jwt\",), upstream_host=host, upstream_port=8080)",
+      "file": "tests/test_kong_foundation.py",
+      "line": "288",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "# the n8n readback drift (8080 -> 8095) is declared since PR #105; use a route",
+      "file": "tests/test_kong_foundation.py",
+      "line": "329",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "middleware-integration-api:8095), its 10 retired aliases are gateway-terminated",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "15",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "404s, the retired appolon-middleware-integration-api:8080 alias has no",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "16",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "assert all(str(p).startswith(\"127.0.0.1:8000:\") for p in compose[\"ports\"])",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "250",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "assert status[\"retiredAliases\"] == [\"appolon-middleware-integration-api:8080\"]",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "260",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "a for a in aliases if a[\"host\"] == \"middleware-integration-api\" and a[\"port\"] == 8095]",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "276",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert service[\"upstream\"][\"port\"] in (8095, 8096, 443), service[\"serviceId\"]",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "289",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert drift[(entry[\"routeId\"], \"upstream_port\")][\"desired\"] == 8095",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "299",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "assert route.upstream_port != 8080, entry[\"routeId\"]",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "302",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert (route.upstream_host, route.upstream_port) == (\"middleware-integration-api\", 8095)",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "325",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert (service[\"host\"], service[\"port\"], service[\"retries\"]) == (\"middleware-integration-api\", 8095, 0)",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "343",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert rules[\"middlewareListenerSplit\"][\"canonicalPublicApiListener\"] == 8095",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "459",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_VALIDATOR_OR_TEST_REFERENCE",
+      "context": "expect_failure(repo, \"declares port=8080 but registry says 8095\")",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "637",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "expect_failure(repo, \"declares port=8080 but registry says 8095\")",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "637",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "document[\"services\"][0].update(host=\"appolon-middleware-integration-api\", port=8080)",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "642",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "service[\"upstream\"].update(host=\"appolon-middleware-integration-api\", port=8080)",
+      "file": "tests/test_kong_identity_security.py",
+      "line": "646",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert row[\"servicePort\"] == 8095, key",
+      "file": "tests/test_kong_middleware_contract_v2.py",
+      "line": "62",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert (service[\"host\"], service[\"port\"]) == (\"middleware-integration-api\", 8095)",
+      "file": "tests/test_kong_middleware_contract_v2.py",
+      "line": "103",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "bind only the canonical middleware-integration-api:8095 upstream, keep business",
+      "file": "tests/test_kong_middleware_v3_pending.py",
+      "line": "5",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert (contract[\"service\"][\"host\"], contract[\"service\"][\"port\"]) == (\"middleware-integration-api\", 8095)",
+      "file": "tests/test_kong_middleware_v3_pending.py",
+      "line": "58",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert service[\"upstream\"] == {\"protocol\": \"http\", \"host\": \"middleware-integration-api\", \"port\": 8095}",
+      "file": "tests/test_kong_middleware_v3_pending.py",
+      "line": "87",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert (route.upstream_host, route.upstream_port) == (\"middleware-integration-api\", 8095)",
+      "file": "tests/test_kong_middleware_v3_pending.py",
+      "line": "108",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "(lambda d: d[\"service\"].__setitem__(\"port\", 8080), \"retired 8080 upstream\"),",
+      "file": "tests/test_kong_middleware_v3_pending.py",
+      "line": "119",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_RETIRED_ALIAS_DENIED",
+      "context": "(lambda d: d[\"service\"].__setitem__(\"port\", 8080), \"retired 8080 upstream\"),",
+      "file": "tests/test_kong_middleware_v3_pending.py",
+      "line": "119",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert spec[\"service\"][\"port\"] == 8095",
+      "file": "tests/test_kong_n8n_control_plane.py",
+      "line": "77",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert route[\"servicePort\"] == 8095",
+      "file": "tests/test_kong_n8n_control_plane.py",
+      "line": "130",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert routes[name][\"service\"][\"port\"] == 8095",
+      "file": "tests/test_kong_production_inventory.py",
+      "line": "38",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "assert service['ports'] == ['127.0.0.1:8000:8000']",
+      "file": "tests/test_kong_read_only_capture.py",
+      "line": "32",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "assert service['ports'] == ['127.0.0.1:8000:8000']",
+      "file": "tests/test_kong_read_only_capture.py",
+      "line": "32",
+      "port": "8000",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "'port': 8095, 'connect_timeout': 5000, 'read_timeout': 10000, 'write_timeout': 10000,",
+      "file": "tests/test_kong_read_only_capture.py",
+      "line": "84",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "assert route[\"servicePort\"] == 8095",
+      "file": "tests/test_kong_route_authority_hardening.py",
+      "line": "231",
+      "port": "8095",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_STANDBY_AUTH_FIXTURE",
+      "context": "require(not config.get(\"ExposedPorts\") or set(config[\"ExposedPorts\"]) <= {\"8080/tcp\"}, \"unexpected_exposed_ports\")",
+      "file": "tools/verify_standby_image.py",
+      "line": "58",
+      "port": "8080",
+      "repository": "Kong"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "# Kong data-plane listener. Kong repository source exercises the proxy data plane on 127.0.0.1:8000.",
+      "file": "config/runtime-values.example",
+      "line": "4",
+      "port": "8000",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "CADDY_KONG_UPSTREAM=127.0.0.1:8000",
+      "file": "config/runtime-values.example",
+      "line": "5",
+      "port": "8000",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "# is the private n8n editor; Caddy must never point this host directly at :5678.",
+      "file": "config/runtime-values.example",
+      "line": "25",
+      "port": "5678",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "- --upstream=http://n8n:5678",
+      "file": "deploy/community-n8n/compose.security.yaml",
+      "line": "46",
+      "port": "5678",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "-e CADDY_KONG_UPSTREAM=127.0.0.1:8000",
+      "file": "scripts/validate-ci.sh",
+      "line": "18",
+      "port": "8000",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "\"--upstream=http://n8n:5678\",",
+      "file": "scripts/validate_community_n8n.py",
+      "line": "30",
+      "port": "5678",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "MIDDLEWARE_CANONICAL_INTEGRATION_API",
+      "context": "\":8095\",",
+      "file": "scripts/validate_repository.py",
+      "line": "116",
+      "port": "8095",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "\":5678\",",
+      "file": "scripts/validate_repository.py",
+      "line": "184",
+      "port": "5678",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"dial\": \"kong:8000\",",
+      "file": "tests/test_caddy_readonly_validator.py",
+      "line": "24",
+      "port": "8000",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "self.assertIn(\"kong:8000\", rendered)",
+      "file": "tests/test_caddy_readonly_validator.py",
+      "line": "32",
+      "port": "8000",
+      "repository": "Caddy"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "KEYCLOAK_HTTP_PORT=8080",
+      "file": ".env.example",
+      "line": "9",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "--base-url http://middleware-intake-staging:8080 \\",
+      "file": ".github/workflows/runtime-preflight.yml",
+      "line": "253",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "- \"127.0.0.1:${KEYCLOAK_HTTP_PORT:-8080}:8080\"",
+      "file": "compose.yaml",
+      "line": "89",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "- \"127.0.0.1:${KEYCLOAK_HTTP_PORT:-8080}:8080\"",
+      "file": "compose.yaml",
+      "line": "89",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "reverse_proxy 127.0.0.1:8080 {",
+      "file": "deploy/caddy/auth.codestra.co.caddy",
+      "line": "11",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"-p\", \"127.0.0.1::8080\", \"-p\", \"127.0.0.1::9000\", \"-v\", str(realm) + \":/opt/keycloak/data/import/codestra.json:ro\",",
+      "file": "scripts/rehearse-release-pg17.py",
+      "line": "55",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "printf 'auth.codestra.co { reverse_proxy 127.0.0.1:8080 }\\n' >\"$test_root/runtime/auth.codestra.co.caddy\"",
+      "file": "scripts/test-runtime-preflight.sh",
+      "line": "53",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"127.0.0.1:${KEYCLOAK_HTTP_PORT:-8080}:8080\",",
+      "file": "scripts/validate-runtime-security.py",
+      "line": "198",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"127.0.0.1:${KEYCLOAK_HTTP_PORT:-8080}:8080\",",
+      "file": "scripts/validate-runtime-security.py",
+      "line": "198",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"middleware-intake-staging:8080\",",
+      "file": "scripts/validate-workflows-core.py",
+      "line": "333",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"http://127.0.0.1:8080\",",
+      "file": "tests/test_stage6_monitoring_reconcile.py",
+      "line": "230",
+      "port": "8080",
+      "repository": "Keycloak"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "text = \"\\n\".join(block)[:8000]",
+      "file": ".github/workflows/odoo-addons-ci.yml",
+      "line": "120",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "text = \"\\n\".join(block)[:8000]",
+      "file": ".github/workflows/odoo-addons-ci.yml",
+      "line": "200",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_TOKEN_ENDPOINT_GUARD",
+      "context": "and parsed.port == 8080",
+      "file": "custom-addons/call_center_campaign/controllers/integration_api.py",
+      "line": "109",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "private = \"http://keycloak:8080/realms/test/protocol/openid-connect/certs\"",
+      "file": "custom-addons/call_center_campaign/tests/test_integration_api.py",
+      "line": "53",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_TOKEN_ENDPOINT_GUARD",
+      "context": "and token.port == 8080",
+      "file": "custom-addons/codestra_appointments/models/callback_sync.py",
+      "line": "92",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "middleware_callback_uuid=\"018f0000-0000-7000-8000-000000000099\",",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "234",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"http://keycloak:8080/realms/codestra/protocol/openid-connect/token\"",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "282",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "TEST_FIXTURE",
+      "context": "values[\"CODESTRA_CALLBACK_TOKEN_URL\"] = \"http://auth.example.test:8080/token\"",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "293",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "\"http://keycloak:8080/realms/codestra/protocol/openid-connect/token\"",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "297",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "job._apply_result({\"id\": \"018f0000-0000-7000-8000-000000000001\",",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "320",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"018f0000-0000-7000-8000-000000000001\")",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "323",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "middleware_callback_uuid=\"018f0000-0000-7000-8000-000000000002\",",
+      "file": "custom-addons/codestra_appointments/tests/test_callback.py",
+      "line": "331",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"correlation_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "custom-addons/codestra_lead_automation/tests/test_multicompany_isolation.py",
+      "line": "100",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"correlation_id\": \"00000000-0000-4000-8000-000000000001\",",
+      "file": "custom-addons/codestra_lead_automation/tests/test_service_auth.py",
+      "line": "37",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "self.lead_ref = \"00000000-0000-5000-8000-000000006198\"",
+      "file": "custom-addons/codestra_odoo_certification/tests/test_mutations.py",
+      "line": "15",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "const BACKOFF = [1000, 2000, 4000, 8000, 15000, 30000];",
+      "file": "custom-addons/codestra_vicidial_crm/static/src/js/calling_realtime.js",
+      "line": "5",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "r\"(?i)\\b(?:psycopg2?|asyncpg|pg8000)\\s*\\.\\s*(?:connect|create_pool)\\s*\\(|\"",
+      "file": "scripts/generate_reconciliation_ledgers.py",
+      "line": "405",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "r\"from\\s+(?:psycopg2?|asyncpg|pg8000)\\s+import\\s+[^\\n]*\\b(?:connect|create_pool)\\b|\"",
+      "file": "scripts/generate_reconciliation_ledgers.py",
+      "line": "406",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "FORBIDDEN_DB_MODULES = {\"asyncpg\", \"pg8000\", \"psycopg\", \"psycopg2\", \"sqlalchemy\"}",
+      "file": "scripts/validate_integration_boundary.py",
+      "line": "33",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "\"pg8000.connect(\": \"external PostgreSQL connection\",",
+      "file": "scripts/validate_integration_boundary.py",
+      "line": "44",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "(\"TOKEN_URL\", \"http://keycloak:8080/token\"),",
+      "file": "tests/security/test_email_middleware_transport.py",
+      "line": "37",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT",
+      "context": "(\"TOKEN_URL\", \"http://keycloak:8080/token\"),",
+      "file": "tests/security/test_sms_middleware_transport.py",
+      "line": "30",
+      "port": "8080",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "other = \"00000000-0000-4000-8000-000000000000\"",
+      "file": "tests/security/test_telephony_command_envelope.py",
+      "line": "379",
+      "port": "8000",
+      "repository": "Odoo"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "N8N_PORT: \"5678\"",
+      "file": "deploy/compose/compose.staging.yml",
+      "line": "39",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "- \"5678\"",
+      "file": "deploy/compose/compose.staging.yml",
+      "line": "113",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "- \"fetch('http://127.0.0.1:5678/healthz/readiness').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\"",
+      "file": "deploy/compose/compose.staging.yml",
+      "line": "119",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "- \"5678\"",
+      "file": "deploy/compose/compose.staging.yml",
+      "line": "130",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "- \"fetch('http://127.0.0.1:5678/healthz/readiness').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\"",
+      "file": "deploy/compose/compose.staging.yml",
+      "line": "136",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "\"N8N_PORT\": \"5678\",",
+      "file": "scripts/policy_compose.py",
+      "line": "53",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "if not _health_contains(main, \"http://127.0.0.1:5678/healthz/readiness\"):",
+      "file": "scripts/policy_compose.py",
+      "line": "316",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "if not _health_contains(webhook, \"http://127.0.0.1:5678/healthz/readiness\"):",
+      "file": "scripts/policy_compose.py",
+      "line": "318",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "KONG_PROXY_LISTENER",
+      "context": "(\"GET\", \"/v2/automation/commands/00000000-0000-4000-8000-000000000010\"),",
+      "file": "tests/test_community_runtime_policy.py",
+      "line": "142",
+      "port": "8000",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "\"fetch('http://127.0.0.1:5678/healthz/readiness')\",",
+      "file": "tests/test_compose_semantics.py",
+      "line": "72",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "\"fetch('http://127.0.0.1:5678/healthz/readiness')\",",
+      "file": "tests/test_compose_semantics.py",
+      "line": "83",
+      "port": "5678",
+      "repository": "N8N"
+    },
+    {
+      "classification": "N8N_HTTP",
+      "context": "self.assertIn(\"http://127.0.0.1:5678/healthz/readiness\", compose)",
+      "file": "tests/test_policy_guards.py",
+      "line": "453",
+      "port": "5678",
+      "repository": "N8N"
+    }
+  ],
+  "schema": "codestra.core-port-contract.v1",
+  "summary": {
+    "BY_CLASSIFICATION": {
+      "AGENT_DESKTOP_STATIC_SITE_LISTENER": 1,
+      "BEYVRA_EMAIL_RUNTIME_LISTENER_SEPARATE_SERVICE": 2,
+      "CADVISOR_EXPORTER_LISTENER": 1,
+      "CI_ROUTE_CERTIFICATION_CONTAINER_LISTENER": 1,
+      "KEYCLOAK_HTTP_LISTENER_OR_TOKEN_ENDPOINT": 33,
+      "KEYCLOAK_TOKEN_ENDPOINT_GUARD": 2,
+      "KONG_PROXY_LISTENER": 181,
+      "KONG_STANDBY_AUTH_FIXTURE": 13,
+      "KONG_TEST_UPSTREAM_RETIRE_CANDIDATE": 2,
+      "KONG_TRANSITIONAL_CERTIFICATION_PROBE": 2,
+      "KONG_VALIDATOR_OR_TEST_REFERENCE": 7,
+      "LEGACY_PROVIDER_ADAPTER_DEPRECATE": 8,
+      "MIDDLEWARE_CANONICAL_INTEGRATION_API": 130,
+      "MIDDLEWARE_LEGACY_MONOLITH_CANARY_LISTENER": 3,
+      "MIDDLEWARE_OBSERVABILITY_ALERT_API_LISTENER": 2,
+      "MIDDLEWARE_RETIRED_ALIAS_DENIED": 14,
+      "N8N_HTTP": 33,
+      "ODOO_HTTP": 16,
+      "RETIRED_PROXY_OR_KEYCLOAK_EDGE_REFERENCE": 1,
+      "TEST_FIXTURE": 3,
+      "WEBSOCKET_GATEWAY_INTERNAL_LISTENER": 11
+    },
+    "CANONICAL_8080": 0,
+    "MIDDLEWARE_8080_AS_CANONICAL": [],
+    "REPOSITORIES": {
+      "Caddy": "1364fd61fe4ac780c686c722b00a4f0fb6839fb7",
+      "Keycloak": "9f20d7b7e65845e1358be3229854618e2947359f",
+      "Kong": "360aaadfd03781a45f7e4b844b5dba2fea6d68dc",
+      "Middleware-": "7e90e8df667056f8b47b67cc7546b1d0d9c467bb",
+      "N8N": "dd100d8ebd17f7eb90871522e74863dedbccd2e9",
+      "Odoo": "1bad5819889ec83f0c5ab261f2d2fad3be2a4720"
+    },
+    "TOTAL": 466,
+    "UNCLASSIFIED": []
+  }
+}

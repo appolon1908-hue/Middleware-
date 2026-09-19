@@ -42,6 +42,7 @@ from app.core.health import RuntimeState, register_health_routes
 from app.core.request_guard import RequestGuard, install_request_guard
 from app.core.runtime import RuntimeContainer
 from app.observability import MiddlewareObservability
+from app.platform.api import router as platform_kernel_router
 from app.router_registry import (
     APPOLON_ROUTERS,
     LEGACY_MONOLITH_ONLY_ROUTERS,
@@ -136,11 +137,13 @@ def create_app(
 
     # Control-plane routers verify a service JWT in every handler; the
     # deprecated n8n aliases are the same handlers under their legacy paths.
-    handler_authenticated: tuple = ()
+    # The kernel router verifies the Keycloak JWT as the first statement of
+    # every handler, on every profile.
+    handler_authenticated: tuple = (platform_kernel_router,)
     if profile in {AppProfile.CONTROL_PLANE, AppProfile.MONOLITH}:
-        handler_authenticated = APPOLON_ROUTERS
+        handler_authenticated = (platform_kernel_router,) + APPOLON_ROUTERS
     if profile is AppProfile.MONOLITH:
-        handler_authenticated = APPOLON_ROUTERS + LEGACY_MONOLITH_ONLY_ROUTERS
+        handler_authenticated = (platform_kernel_router,) + APPOLON_ROUTERS + LEGACY_MONOLITH_ONLY_ROUTERS
     install_request_guard(
         app,
         RequestGuard(

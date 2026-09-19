@@ -108,6 +108,7 @@ from app.integrations.postiz.routes import router as postiz_router
 from app.monitoring.routes import router as monitoring_router
 from app.n8n_control_plane import router as n8n_control_plane_router
 from app.operations import router as appolon_operations_router
+from app.platform.api import router as platform_kernel_router
 from app.operations_dashboard import router as operations_dashboard_router
 from app import provider_control_api as _provider_control_api  # noqa: F401  (registers control routes)
 from app.security import SecurityError
@@ -122,6 +123,8 @@ class DuplicateRouteError(RuntimeError):
 
 
 CANONICAL_ROUTERS: tuple[APIRouter, ...] = (
+    # The V3 command kernel: the six /platform/v1 kernel routes, on every profile.
+    platform_kernel_router,
     automation_v2_router,
     automation_router,
     callbacks_router,

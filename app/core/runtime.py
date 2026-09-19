@@ -6,7 +6,11 @@
 * one Redis client (the replay guard shares it, ``owns_client=False``),
 * the process-wide SQLAlchemy engine from :mod:`app.db.session`,
 * one :class:`~app.security.KeycloakJwtVerifier` built from the canonical
-  identity settings.
+  identity settings,
+* one outbound ``httpx.AsyncClient`` (every adapter and domain handler that
+  calls another service borrows it; nothing opens one per request),
+* the :class:`~app.platform.runtime.PlatformRuntime`: the command kernel,
+  policy gate, safety gate, adapter registry, execution bus and reconciler.
 
 Application code never opens a pool, client or engine of its own; it asks the
 container (``request.app.state.runtime``) or the providers in
@@ -28,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import asyncpg
+import httpx
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -40,7 +45,6 @@ from app.automation_v2 import (
     WorkflowRouter,
 )
 from app.commands import (
-    CommandPolicyRegistry,
     CommandService,
     MemoryCommandStore,
     PostgresCommandStore,
@@ -50,6 +54,7 @@ from app.communications import (
     MemoryCommunicationsStore,
     PostgresCommunicationsStore,
 )
+from app.core.bootstrap import SERVICE_INTEGRATION_API
 from app.core.config import Settings
 from app.email_production_control import (
     EmailProductionControlService,
@@ -59,6 +64,7 @@ from app.email_production_control import (
 )
 from app.realtime import MemoryRealtimeStore, PostgresRealtimeStore, RealtimeStore
 from app.replay import MemoryReplayGuard, RedisReplayGuard, ReplayGuard
+from app.platform.runtime import PlatformRuntime, build_platform_runtime, command_policies
 from app.security import KeycloakJwtVerifier, TokenVerifier
 from app.storage import InboxStore, MemoryInboxStore, PostgresInboxStore
 
@@ -72,6 +78,9 @@ logger = logging.getLogger("codestra.runtime")
 SHARED_POOL_MIN_SIZE = 1
 SHARED_POOL_MAX_SIZE = 20
 SHARED_POOL_COMMAND_TIMEOUT_SECONDS = 10
+# One outbound HTTP client per process; adapters and handlers borrow it.
+SHARED_HTTP_TIMEOUT_SECONDS = 10.0
+SHARED_HTTP_MAX_CONNECTIONS = 64
 
 
 class RuntimeStartupError(RuntimeError):
@@ -111,11 +120,15 @@ class RuntimeContainer:
     incidents: IncidentService | None = None
     automation: AutomationService | None = None
     realtime: RealtimeStore | None = None
+    # The V3 command kernel of this process (kernel, policy/safety gates,
+    # adapter registry, execution bus handler, reconciler, metrics).
+    platform: PlatformRuntime | None = None
     # Owned infrastructure. ``None`` for in-memory (test/development) runtimes
     # and for containers assembled by tests from fakes.
     pool: asyncpg.Pool | None = None
     redis: Redis | None = None
     engine: AsyncEngine | None = None
+    http: httpx.AsyncClient | None = None
     # Whether readiness probes the identity authority. False only when the
     # identity is implicit (derived, not configured) in development/test, so a
     # local process never reports the production authority as a dependency.
@@ -168,6 +181,9 @@ class RuntimeContainer:
         }
         if self.realtime is not None:
             checks["realtime_store"] = self.realtime.ready()
+        if self.platform is not None:
+            checks["adapter_registry"] = self.platform.registry_ready()
+            checks["platform_adapters"] = self.platform.adapters_ready()
         if self.engine is not None:
             checks["sql_engine"] = self._engine_ready()
         if self.pool is not None:
@@ -237,6 +253,11 @@ class RuntimeContainer:
                 await self.engine.dispose()
             except Exception:
                 logger.warning("runtime_engine_dispose_failed", exc_info=True)
+        if self.http is not None:
+            try:
+                await self.http.aclose()
+            except Exception:
+                logger.warning("runtime_http_close_failed", exc_info=True)
 
 
 # ----------------------------------------------------------------------
@@ -255,11 +276,20 @@ def identity_probe_required(settings: Settings) -> bool:
 _probe_identity = identity_probe_required
 
 
+def _open_http() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(SHARED_HTTP_TIMEOUT_SECONDS),
+        limits=httpx.Limits(max_connections=SHARED_HTTP_MAX_CONNECTIONS),
+        follow_redirects=False,
+    )
+
+
 def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeContainer:
     commands = CommandService(
         store=MemoryCommandStore(),
-        policies=CommandPolicyRegistry.load(),
+        policies=command_policies(settings),
     )
+    http = _open_http()
     automation = AutomationService(
         store=MemoryAutomationStore(),
         policy=AutomationPolicy.from_path(),
@@ -273,6 +303,10 @@ def _memory_container(settings: Settings, tokens: TokenVerifier) -> RuntimeConta
         replay=MemoryReplayGuard(),
         tokens=tokens,
         commands=commands,
+        platform=build_platform_runtime(
+            settings, commands=commands, http=http, pool=None, service_id=SERVICE_INTEGRATION_API
+        ),
+        http=http,
         communications=ProductionGatedCommunicationsService(
             store=MemoryCommunicationsStore(),
             commands=commands,
@@ -350,14 +384,19 @@ async def build_runtime_container(
 
         commands = CommandService(
             store=command_store,
-            policies=CommandPolicyRegistry.load(),
+            policies=command_policies(settings),
         )
+        http = _open_http()
         container = RuntimeContainer(
             settings=settings,
             inbox=inbox,
             replay=RedisReplayGuard(redis, owns_client=False),
             tokens=verifier,
             commands=commands,
+            platform=build_platform_runtime(
+                settings, commands=commands, http=http, pool=pool, service_id=SERVICE_INTEGRATION_API
+            ),
+            http=http,
             communications=ProductionGatedCommunicationsService(
                 store=communications_store,
                 commands=commands,

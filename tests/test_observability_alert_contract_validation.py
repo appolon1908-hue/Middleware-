@@ -67,7 +67,7 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
             validator.validate(self.contract_root)
 
     def test_current_contract_passes(self) -> None:
-        self.assertEqual(validator.validate(ROOT), (19, 18))
+        self.assertEqual(validator.validate(ROOT), (21, 18))
 
     def test_duplicate_json_key_fails_closed(self) -> None:
         path = self.contract_root / "config/observability-alert-policy.v1.json"
@@ -122,9 +122,9 @@ class ObservabilityAlertContractValidationTests(unittest.TestCase):
     def test_caller_shape_fails_closed(self) -> None:
         self.mutate_json(
             "config/control-plane-callers.v1.json",
-            lambda registry: registry["callers"].update({"alertmanager-service": []}),
+            lambda registry: registry["callers"].update({"alertmanager": []}),
         )
-        self.assert_rejected("invalid_caller:alertmanager-service")
+        self.assert_rejected("invalid_caller:alertmanager")
 
     def test_command_registry_entry_shape_fails_closed(self) -> None:
         self.mutate_json(

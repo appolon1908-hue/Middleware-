@@ -173,7 +173,7 @@ def webhook() -> dict[str, Any]:
 
 
 def headers(
-    client_id: str = "alertmanager-service",
+    client_id: str = "alertmanager",
     *,
     key: str = "alertmanager-webhook-v1",
 ) -> dict[str, str]:
@@ -283,7 +283,7 @@ def test_notification_content_contains_required_incident_evidence() -> None:
         alert=alert,
         group_key=parsed.group_key,
         receiver=parsed.receiver,
-        actor="service-account-alertmanager-service",
+        actor="service-account-alertmanager",
         correlation_id="corr-observability-alert-0001",
         incident_id=incident_id,
     )
@@ -306,7 +306,7 @@ def test_notification_content_can_preserve_persisted_first_seen_time() -> None:
         alert=alert,
         group_key=parsed.group_key,
         receiver=parsed.receiver,
-        actor="service-account-alertmanager-service",
+        actor="service-account-alertmanager",
         correlation_id="corr-observability-recurrence-0001",
         incident_id=incident_id,
         first_seen_at=persisted_first_seen,
@@ -445,7 +445,7 @@ def test_delivery_activation_queues_a_previously_state_only_warning() -> None:
         first = await disabled.ingest(
             group_key=webhook()["groupKey"],
             alert=item,
-            actor_id="service-account-alertmanager-service",
+            actor_id="service-account-alertmanager",
             correlation_id="activation-disabled-correlation-0001",
             source_deployment="alertmanager-test-1",
             request_idempotency_key="activation-disabled-request-0001",
@@ -456,7 +456,7 @@ def test_delivery_activation_queues_a_previously_state_only_warning() -> None:
         activated = await enabled.ingest(
             group_key=webhook()["groupKey"],
             alert=item,
-            actor_id="service-account-alertmanager-service",
+            actor_id="service-account-alertmanager",
             correlation_id="activation-enabled-correlation-0001",
             source_deployment="alertmanager-test-1",
             request_idempotency_key="activation-enabled-request-0001",
@@ -467,7 +467,7 @@ def test_delivery_activation_queues_a_previously_state_only_warning() -> None:
         replay = await enabled.ingest(
             group_key=webhook()["groupKey"],
             alert=item,
-            actor_id="service-account-alertmanager-service",
+            actor_id="service-account-alertmanager",
             correlation_id="activation-enabled-correlation-0001",
             source_deployment="alertmanager-test-1",
             request_idempotency_key="activation-enabled-request-0001",
@@ -1426,7 +1426,7 @@ def test_wrong_caller_and_environment_are_denied() -> None:
         assert wrong_environment.status_code == 403
 
 
-def native_headers(client_id: str = "alertmanager-service") -> dict[str, str]:
+def native_headers(client_id: str = "alertmanager") -> dict[str, str]:
     value = headers(client_id)
     value.pop("Idempotency-Key")
     value.pop("X-Correlation-ID")

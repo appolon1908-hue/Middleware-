@@ -11,7 +11,6 @@ from .commands import (
     OperationMutationRequest,
 )
 from .control_plane_auth import authorize_command
-from .email_production_control import router as email_production_router
 from .operations import (
     OperationApiState,
     OperationResponse,
@@ -27,7 +26,6 @@ from .telephony_api import router as calling_router
 router = APIRouter(tags=["domain-control"])
 router.include_router(calling_router)
 router.include_router(calling_compat_router)
-router.include_router(email_production_router)
 
 _PREFIXES = {
     "odoo": "crm.",
@@ -236,7 +234,24 @@ for _domain in ("odoo", "crm", "telephony", "social", "marketing", "ai"):
         )
 
 
-@router.get("/v1/integrations/n8n/operations")
+# Legacy n8n operation aliases. The canonical Middleware edge contract
+# classifies every /v1/integrations/n8n/* path as ``denied``: Kong and Caddy
+# return 404 for them and the deployed ``app.entrypoints.integration_api``
+# never mounts this router. They remain only on the in-process monolith
+# factory until the published sunset so existing callers keep their
+# deprecation metadata; new use is prohibited.
+_LEGACY_ALIAS_SUNSET = "Wed, 30 Jun 2027 23:59:59 GMT"
+
+
+def _legacy_alias_headers(successor: str) -> dict[str, str]:
+    return {
+        "Deprecation": "true",
+        "Sunset": _LEGACY_ALIAS_SUNSET,
+        "Link": f'<{successor}>; rel="successor-version"',
+    }
+
+
+@router.get("/v1/integrations/n8n/operations", deprecated=True)
 async def n8n_operations(
     request: Request,
     limit: int = Query(50, ge=1, le=100),
@@ -244,23 +259,27 @@ async def n8n_operations(
     state: OperationApiState | None = None,
     command_type: str | None = Query(None, min_length=1, max_length=180),
 ):
-    return await core_list_operations(
+    response = await core_list_operations(
         request=request,
         limit=limit,
         cursor=cursor,
         state=state,
         command_type=command_type,
     )
+    response.headers.update(_legacy_alias_headers("/v2/automation/commands"))
+    return response
 
 
-@router.post("/v1/integrations/n8n/operations/{operation_id}/cancel")
+@router.post("/v1/integrations/n8n/operations/{operation_id}/cancel", deprecated=True)
 async def n8n_cancel(
     operation_id: UUID, body: OperationMutationRequest, request: Request
 ):
     return await _mutate_any(operation_id, body, request, "cancel")
 
 
-@router.post("/v1/integrations/n8n/operations/{operation_id}/reconcile")
+@router.post(
+    "/v1/integrations/n8n/operations/{operation_id}/reconcile", deprecated=True
+)
 async def n8n_reconcile(
     operation_id: UUID, body: OperationMutationRequest, request: Request
 ):
@@ -281,7 +300,10 @@ async def _mutate_any(
         expected_version=body.expected_version,
         reason=body.reason,
     )
-    return JSONResponse(content=_operation_json(result))
+    return JSONResponse(
+        content=_operation_json(result),
+        headers=_legacy_alias_headers(f"/v2/automation/commands/{operation_id}"),
+    )
 
 
 async def _health(request: Request, provider: str):

@@ -337,6 +337,11 @@ class CallingGrant(StrictModel):
         return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _absolute_like(path: str | Path) -> bool:
+    raw = str(path).replace("\\", "/")
+    return raw.startswith("/") or Path(raw).is_absolute()
+
+
 def load_grant(environ: Mapping[str, str] | None = None) -> CallingGrant | None:
     """No policy path means disabled. Read a bounded, root-owned regular file.
 
@@ -348,10 +353,15 @@ def load_grant(environ: Mapping[str, str] | None = None) -> CallingGrant | None:
     if not name:
         return None
     path = Path(name)
-    if not path.is_absolute():
+    if not _absolute_like(path):
         raise CallingContractError("calling_policy_path_must_be_absolute")
+    if getattr(path, "is_symlink", lambda: False)():
+        raise CallingContractError("calling_policy_permissions_or_size_invalid")
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        flags = os.O_RDONLY
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        flags |= getattr(os, "O_NONBLOCK", 0)
+        fd = os.open(path, flags)
         with os.fdopen(fd, "rb") as stream:
             metadata = os.fstat(stream.fileno())
             if (

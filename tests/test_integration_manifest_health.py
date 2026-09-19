@@ -82,3 +82,24 @@ def test_actual_probe_logic_checks_all_dependency_clients(monkeypatch, failed):
     redis_context.ping.assert_awaited_once()
     redis_context.__aexit__.assert_awaited_once()
     http.get.assert_awaited_once()
+
+
+def test_domain_runtime_startup_failure_blocks_readiness(monkeypatch):
+    async def probe():
+        return {
+            "postgres": "online",
+            "redis": "online",
+            "keycloak": "online",
+        }
+
+    monkeypatch.setattr(runtime, "integration_dependency_states", probe)
+    monkeypatch.setattr(
+        integration_api.app.state,
+        "domain_runtime_startup_failed",
+        True,
+        raising=False,
+    )
+
+    response = TestClient(integration_api.app).get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["status"] == "not-ready"

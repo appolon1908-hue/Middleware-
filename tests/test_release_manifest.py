@@ -58,7 +58,7 @@ def test_generated_release_manifest_matches_json_schema(tmp_path: Path) -> None:
     assert value["image"]["reference"].endswith(IMAGE_DIGEST)
     assert value["promotion"]["staging_and_production_same_digest"] is True
     assert (
-        value["runtime"]["schema_or_migration_head"] == "0065_lifecycle_outcome_state"
+        value["runtime"]["schema_or_migration_head"] == "0066_reconcile_odoo_campaign_scope"
     )
 
 

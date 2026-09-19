@@ -122,6 +122,14 @@ class Runtime:
             await self.realtime.close()
 
 
+def _asyncpg_dsn(database_url: str) -> str:
+    """Return a DSN accepted by asyncpg without changing the configured URL."""
+    prefix = "postgresql+asyncpg://"
+    if database_url.startswith(prefix):
+        return "postgresql://" + database_url[len(prefix):]
+    return database_url
+
+
 async def build_runtime(settings: Settings) -> Runtime:
     tokens = KeycloakJwtVerifier(settings)
     command_policies = CommandPolicyRegistry.load()
@@ -164,20 +172,22 @@ async def build_runtime(settings: Settings) -> Runtime:
     assert settings.database_url is not None
     assert settings.redis_url is not None
 
-    inbox = await PostgresInboxStore.connect(settings.database_url)
+    database_url = _asyncpg_dsn(settings.database_url)
+
+    inbox = await PostgresInboxStore.connect(database_url)
     try:
         commands_store = await PostgresCommandStore.connect(
-            settings.database_url
+            database_url
         )
         try:
             automation_store = await PostgresAutomationStore.connect(
-                settings.database_url
+                database_url
             )
             try:
                 replay = await RedisReplayGuard.connect(settings.redis_url)
                 try:
                     realtime = await PostgresRealtimeStore.connect(
-                        settings.database_url
+                        database_url
                     )
                 except Exception:
                     await replay.close()
@@ -213,7 +223,7 @@ async def build_runtime(settings: Settings) -> Runtime:
     )
     try:
         communications_store = await PostgresCommunicationsStore.connect(
-            settings.database_url
+            database_url
         )
         runtime.communications = ProductionGatedCommunicationsService(
             store=communications_store,

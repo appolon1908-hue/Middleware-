@@ -35,6 +35,14 @@ def prepare_state_directory(
             "state directory uid and gid must be non-negative"
         )
 
+    if os.name == "nt":
+        if not path.is_dir() or path.is_symlink():
+            raise StateDirectoryInitializationError(
+                "state directory cannot be opened safely"
+            )
+        os.chmod(path, 0o700)
+        return
+
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     try:

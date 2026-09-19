@@ -340,8 +340,10 @@ async def create(
     body: CreateCallback,
     db: AsyncSession = Depends(get_session),
     p: Principal = Depends(principal),
-    key: str = Header(..., alias="Idempotency-Key"),
-    correlation: str = Header(..., alias="X-Correlation-ID"),
+    key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=180),
+    correlation: str = Header(
+        ..., alias="X-Correlation-ID", min_length=1, max_length=180
+    ),
 ):
     _scope(p, body.tenant_id, body.campaign_id)
     await _tenant_context(db, p)
@@ -633,8 +635,10 @@ async def patch_callback(
     body: Change,
     db: AsyncSession = Depends(get_session),
     p: Principal = Depends(principal),
-    key: str = Header(..., alias="Idempotency-Key"),
-    correlation: str = Header(..., alias="X-Correlation-ID"),
+    key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=180),
+    correlation: str = Header(
+        ..., alias="X-Correlation-ID", min_length=1, max_length=180
+    ),
 ):
     return await mutate(callback_id, "UPDATED", body, key, correlation, db, p)
 
@@ -821,8 +825,10 @@ def endpoint(path: str, target: str):
         body: Change,
         db: AsyncSession = Depends(get_session),
         p: Principal = Depends(principal),
-        key: str = Header(..., alias="Idempotency-Key"),
-        correlation: str = Header(..., alias="X-Correlation-ID"),
+        key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=180),
+        correlation: str = Header(
+            ..., alias="X-Correlation-ID", min_length=1, max_length=180
+        ),
     ):
         return await mutate(callback_id, target, body, key, correlation, db, p)
 

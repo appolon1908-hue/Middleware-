@@ -1,17 +1,23 @@
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+import logging
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import httpx
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.adapters.odoo.results import (
+    STALE_LEASE_MARGIN_SECONDS,
     OdooResultError,
     _build_odoo_client,
+    _record_delivery_failure,
     deliver_result,
     recover_stale_result_deliveries,
+    stale_recovery_statements,
 )
 from app.core.config import settings
+from app.core.endpoint_registry import ResolutionDenied
 from app.db.models import (
     IntegrationEvent,
     N8nRuntimeExecution,
@@ -124,6 +130,41 @@ def session_for(execution, runtime_result, delivery):
     return session
 
 
+def accepted_response(execution) -> httpx.Response:
+    return httpx.Response(
+        201,
+        json={
+            "persisted": True,
+            "idempotency_status": "NEW",
+            "result_public_id": str(PUBLIC_ID),
+            "correlation_id": execution.correlation_id,
+        },
+    )
+
+
+def recovery_session(
+    slowest_route_ms: int | None, rowcounts: list[int]
+) -> tuple[AsyncMock, list]:
+    """Fake session recording the recovery UPDATEs; scalar() answers the registry max."""
+    session = AsyncMock()
+    session.scalar.return_value = slowest_route_ms
+    executed: list = []
+
+    async def execute(statement):
+        executed.append(statement)
+        result = MagicMock()
+        result.rowcount = rowcounts[len(executed) - 1]
+        return result
+
+    session.execute.side_effect = execute
+    return session, executed
+
+
+def compiled_sql(statement) -> tuple[str, dict]:
+    compiled = statement.compile(dialect=postgresql.dialect())
+    return str(compiled), dict(compiled.params)
+
+
 def test_runtime_odoo_client_fails_closed_without_internal_ca(monkeypatch, tmp_path):
     secret = tmp_path / "client-secret"
     secret.write_text("s" * 64)
@@ -176,7 +217,8 @@ async def test_temporary_odoo_failure_retries_then_delivers_once(monkeypatch):
     accepted = await deliver_result(session, DELIVERY_ID, client=client)
     assert accepted["idempotency_status"] == "NEW"
     assert delivery.status == "DELIVERED"
-    assert delivery.attempts == 1
+    # attempts counts dispatches, so the successful second dispatch is attempt 2.
+    assert delivery.attempts == 2
     assert delivery.last_error_class is None
     assert delivery.odoo_result_inbox_id == str(PUBLIC_ID)
 
@@ -191,7 +233,25 @@ async def test_transport_failure_retains_durable_retry(monkeypatch):
     with pytest.raises(OdooResultError, match="unavailable"):
         await deliver_result(session, DELIVERY_ID, client=client)
     assert delivery.status == "RETRY"
+    assert delivery.attempts == 1
+    assert delivery.reserved_at is None
     assert delivery.last_error_class == "ODOO_TRANSPORT_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_unresolved_registry_route_is_a_retryable_failure_not_a_stuck_reservation(
+    monkeypatch,
+):
+    configure_mapping(monkeypatch)
+    execution, runtime_result, delivery = records()
+    session = session_for(execution, runtime_result, delivery)
+    client = SequenceClient([ResolutionDenied("NO_ACTIVE_ROUTE")])
+
+    with pytest.raises(OdooResultError, match="route resolution"):
+        await deliver_result(session, DELIVERY_ID, client=client)
+    assert delivery.status == "RETRY"
+    assert delivery.reserved_at is None
+    assert delivery.last_error_class == "ODOO_ROUTE_UNRESOLVED"
 
 
 @pytest.mark.asyncio
@@ -265,7 +325,7 @@ async def test_standard_campaign_actions_deliver_with_bound_receipt(monkeypatch)
                 },
             )
         ],
-        operation="campaign_actions.apply",
+        operation="automation_results.apply",
     )
     accepted = await deliver_result(session, DELIVERY_ID, client=client)
     assert accepted["receipt_id"] == "receipt-1"
@@ -350,8 +410,193 @@ async def test_provider_activity_delivers_to_bound_odoo_endpoint(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_stale_reservation_recovery_is_durable():
-    session = AsyncMock()
-    session.execute.return_value.rowcount = 1
-    assert await recover_stale_result_deliveries(session, lease_seconds=30) == 1
+async def test_successful_delivery_counts_one_attempt(monkeypatch):
+    configure_mapping(monkeypatch)
+    execution, runtime_result, delivery = records()
+    session = session_for(execution, runtime_result, delivery)
+    client = SequenceClient([accepted_response(execution)])
+
+    await deliver_result(session, DELIVERY_ID, client=client)
+    assert delivery.status == "DELIVERED"
+    assert delivery.attempts == 1
+    assert delivery.reserved_at is None
+
+
+@pytest.mark.asyncio
+async def test_attempts_count_dispatches_until_retry_limit_dead_letters(monkeypatch):
+    configure_mapping(monkeypatch)
+    monkeypatch.setattr(settings, "odoo_result_delivery_retry_limit", 3)
+    execution, runtime_result, delivery = records()
+    session = session_for(execution, runtime_result, delivery)
+    client = SequenceClient([httpx.ConnectError("outage")] * 3)
+
+    with pytest.raises(OdooResultError, match="unavailable"):
+        await deliver_result(session, DELIVERY_ID, client=client)
+    assert delivery.attempts == 1
+    assert delivery.status == "RETRY"
+    first_backoff = delivery.next_attempt_at
+
+    with pytest.raises(OdooResultError, match="unavailable"):
+        await deliver_result(session, DELIVERY_ID, client=client)
+    assert delivery.attempts == 2
+    assert delivery.status == "RETRY"
+    assert delivery.next_attempt_at is not None and first_backoff is not None
+    assert delivery.next_attempt_at - first_backoff >= timedelta(seconds=4)
+
+    with pytest.raises(OdooResultError, match="unavailable"):
+        await deliver_result(session, DELIVERY_ID, client=client)
+    assert delivery.attempts == 3
+    assert delivery.status == "DEAD_LETTER"
+    assert delivery.next_attempt_at is None
+    assert delivery.reserved_at is None
+    assert delivery.last_error_class == "ODOO_TRANSPORT_ERROR"
+
+    with pytest.raises(OdooResultError, match="not claimable"):
+        await deliver_result(session, DELIVERY_ID, client=client)
+    assert delivery.attempts == 3
+
+
+@pytest.mark.asyncio
+async def test_record_delivery_failure_never_changes_attempts(monkeypatch):
+    monkeypatch.setattr(settings, "odoo_result_delivery_retry_limit", 3)
+    execution, runtime_result, delivery = records()
+    session = session_for(execution, runtime_result, delivery)
+    delivery.status = "RESERVED"
+    delivery.reserved_at = datetime.now(UTC)
+    delivery.attempts = 2
+
+    await _record_delivery_failure(
+        session, DELIVERY_ID, error_class="HTTP_503", retryable=True
+    )
+    assert delivery.attempts == 2
+    assert delivery.status == "RETRY"
+    assert delivery.reserved_at is None
+    assert delivery.next_attempt_at is not None
+
+    delivery.status = "RESERVED"
+    delivery.attempts = 3
+    await _record_delivery_failure(
+        session, DELIVERY_ID, error_class="HTTP_503", retryable=True
+    )
+    assert delivery.attempts == 3
+    assert delivery.status == "DEAD_LETTER"
+    assert delivery.next_attempt_at is None
+
+    delivery.status = "RESERVED"
+    delivery.attempts = 1
+    await _record_delivery_failure(
+        session, DELIVERY_ID, error_class="HTTP_400", retryable=False
+    )
+    assert delivery.attempts == 1
+    assert delivery.status == "DEAD_LETTER"
+
+
+def test_stale_recovery_statements_split_on_retry_limit_without_counting():
+    now = datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
+    exhausted, requeued = stale_recovery_statements(now, 90, 3)
+
+    sql, params = compiled_sql(exhausted)
+    assert "attempts >=" in sql
+    assert "attempts + 1" not in sql
+    assert "SET attempts" not in sql and ", attempts=" not in sql
+    assert params["status"] == "DEAD_LETTER"
+    assert params["status_1"] == "RESERVED"
+    assert params["attempts_1"] == 3
+    assert params["reserved_at"] is None
+    assert params["next_attempt_at"] is None
+    assert params["last_error_class"] == "STALE_RESERVATION_EXHAUSTED"
+    assert params["reserved_at_1"] == now - timedelta(seconds=90)
+
+    sql, params = compiled_sql(requeued)
+    assert "attempts <" in sql
+    assert "attempts + 1" not in sql
+    assert "SET attempts" not in sql and ", attempts=" not in sql
+    assert params["status"] == "RETRY"
+    assert params["status_1"] == "RESERVED"
+    assert params["attempts_1"] == 3
+    assert params["reserved_at"] is None
+    assert params["next_attempt_at"] == now
+    assert params["last_error_class"] == "STALE_RESERVATION_RECOVERED"
+    assert params["reserved_at_1"] == now - timedelta(seconds=90)
+
+
+@pytest.mark.asyncio
+async def test_stale_reservation_recovery_is_durable(monkeypatch):
+    monkeypatch.setattr(settings, "odoo_result_delivery_retry_limit", 3)
+    session, executed = recovery_session(None, [1, 2])
+
+    assert await recover_stale_result_deliveries(session, lease_seconds=30) == 3
     session.commit.assert_awaited_once()
+    assert len(executed) == 2
+
+    exhausted_sql, exhausted = compiled_sql(executed[0])
+    requeued_sql, requeued = compiled_sql(executed[1])
+    assert "attempts >=" in exhausted_sql and "attempts <" in requeued_sql
+    assert "attempts + 1" not in exhausted_sql + requeued_sql
+    assert exhausted["status"] == "DEAD_LETTER"
+    assert exhausted["last_error_class"] == "STALE_RESERVATION_EXHAUSTED"
+    assert exhausted["next_attempt_at"] is None
+    assert requeued["status"] == "RETRY"
+    assert requeued["last_error_class"] == "STALE_RESERVATION_RECOVERED"
+    assert exhausted["attempts_1"] == requeued["attempts_1"] == 3
+    assert exhausted["reserved_at"] is None and requeued["reserved_at"] is None
+    # Without registry routes the configured lease is applied unchanged.
+    assert requeued["next_attempt_at"] - requeued["reserved_at_1"] == timedelta(
+        seconds=30
+    )
+
+
+@pytest.mark.asyncio
+async def test_stale_recovery_defaults_to_configured_lease(monkeypatch):
+    monkeypatch.setattr(settings, "odoo_result_delivery_lease_seconds", 75)
+    session, executed = recovery_session(None, [0, 0])
+
+    assert await recover_stale_result_deliveries(session) == 0
+    _, requeued = compiled_sql(executed[1])
+    assert requeued["next_attempt_at"] - requeued["reserved_at_1"] == timedelta(
+        seconds=75
+    )
+
+
+@pytest.mark.asyncio
+async def test_stale_recovery_lease_is_raised_to_registry_minimum(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "odoo_result_delivery_lease_seconds", 30)
+    # Slowest enabled Odoo route: 100.5s connect + request -> ceil to 101s.
+    session, executed = recovery_session(100_500, [0, 0])
+    expected = 101 + STALE_LEASE_MARGIN_SECONDS
+
+    with caplog.at_level(logging.WARNING, logger="codestra.odoo_results"):
+        assert await recover_stale_result_deliveries(session) == 0
+    session.scalar.assert_awaited_once()
+    _, requeued = compiled_sql(executed[1])
+    assert requeued["next_attempt_at"] - requeued["reserved_at_1"] == timedelta(
+        seconds=expected
+    )
+    warnings = [
+        record for record in caplog.records if record.levelno == logging.WARNING
+    ]
+    assert len(warnings) == 1
+    assert "30s" in warnings[0].getMessage()
+    assert f"{expected}s" in warnings[0].getMessage()
+
+
+@pytest.mark.asyncio
+async def test_stale_recovery_keeps_larger_configured_lease(monkeypatch, caplog):
+    session, executed = recovery_session(10_000, [0, 0])
+
+    with caplog.at_level(logging.WARNING, logger="codestra.odoo_results"):
+        assert await recover_stale_result_deliveries(session, lease_seconds=120) == 0
+    _, requeued = compiled_sql(executed[1])
+    assert requeued["next_attempt_at"] - requeued["reserved_at_1"] == timedelta(
+        seconds=120
+    )
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+
+
+@pytest.mark.asyncio
+async def test_stale_recovery_rejects_non_positive_lease():
+    session, _ = recovery_session(None, [0, 0])
+    with pytest.raises(ValueError, match="positive"):
+        await recover_stale_result_deliveries(session, lease_seconds=0)
+    session.execute.assert_not_awaited()
+    session.commit.assert_not_awaited()

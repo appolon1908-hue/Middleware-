@@ -23,7 +23,7 @@ COMMAND_TYPE = "observability.alert.email.send.v1"
 COMMAND_PREFIX = "observability.alert."
 COMMAND_TARGET = "klyrow-alert-email"
 COMMAND_CAPABILITY = "OBSERVABILITY_ALERT_EMAIL_DELIVERY"
-ALERTMANAGER_CLIENT_ID = "alertmanager-service"
+ALERTMANAGER_CLIENT_ID = "alertmanager"
 DELIVERY_CLIENT_ID = "klyrow-alert-adapter"
 OPERATOR_CLIENT_ID = "observability-operator"
 

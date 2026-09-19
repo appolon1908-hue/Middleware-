@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TextIO
@@ -91,12 +92,12 @@ def command(tmp_path: Path) -> tuple[list[str], dict[str, Path], Path, str]:
         "--sbom", str(files["sbom.json"]), "--trivy", str(files["trivy.json"]),
         "--grype", str(files["grype.json"]), "--provenance", str(files["provenance.json"]),
     ]
-    subprocess.run(["python3", str(GENERATOR), *common, "--output", str(output)], check=True)
+    subprocess.run([sys.executable, str(GENERATOR), *common, "--output", str(output)], check=True)
     return common, files, output, authority_sha
 
 
 def validate(common: list[str], output: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["python3", str(VALIDATOR), "--decision", str(output), "--schema", str(SCHEMA), *common], check=False, capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(VALIDATOR), "--decision", str(output), "--schema", str(SCHEMA), *common], check=False, capture_output=True, text=True)
 
 
 def test_exact_same_run_decision_passes(tmp_path: Path) -> None:
@@ -126,7 +127,7 @@ def test_generator_rejects_invalid_manifest_binding(
     authority_sha = hashlib.sha256(AUTHORITY.read_bytes()).hexdigest()
     result = subprocess.run(
         [
-            "python3", str(GENERATOR), "--source-sha", HEAD,
+            sys.executable, str(GENERATOR), "--source-sha", HEAD,
             "--image-digest", DIGEST, "--run-id", "12345", "--run-attempt", "1",
             "--authority", str(AUTHORITY), "--authority-sha256", authority_sha,
             "--authority-run-id", "9876", "--authority-artifact",

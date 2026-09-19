@@ -10,6 +10,9 @@ TELEPHONY_COMMAND_WORKER = (
     / "deploy"
     / "compose.telephony-command-worker.yaml.example"
 ).read_text(encoding="utf-8")
+RUNTIME_DOCKERFILE = (
+    Path(__file__).resolve().parents[1] / "Dockerfile.runtime"
+).read_text(encoding="utf-8")
 
 
 def _service_block(service_name: str) -> str:
@@ -70,6 +73,17 @@ def test_runtime_action_flags_default_fail_closed() -> None:
 
     for flag in false_flags:
         assert f'{flag}: "false"' in COMPOSE
+
+
+def test_default_runtime_is_the_canonical_integration_api_on_8095() -> None:
+    runtime_stage = RUNTIME_DOCKERFILE.split("FROM runtime-common AS runtime", 1)[1].split(
+        "FROM runtime-common AS worker", 1
+    )[0]
+    assert "EXPOSE 8095" in runtime_stage
+    assert "127.0.0.1:8095/health" in runtime_stage
+    assert "app.entrypoints.integration_api:app" in runtime_stage
+    assert '"--port", "8095"' in runtime_stage
+    assert "8080" not in runtime_stage
 
 
 def test_production_odoo_route_uses_canonical_governed_api_and_private_ca() -> None:

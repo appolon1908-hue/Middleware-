@@ -207,10 +207,11 @@ class Settings:
             "KEYCLOAK_ISSUER",
             "https://auth.codestra.co/realms/codestra",
         ).rstrip("/")
-        jwks = source.get(
-            "KEYCLOAK_JWKS_URI",
-            f"{issuer}/protocol/openid-connect/certs",
-        )
+        jwks = (
+            source.get("KEYCLOAK_JWKS_URL")
+            or source.get("KEYCLOAK_JWKS_URI")
+            or f"{issuer}/protocol/openid-connect/certs"
+        ).strip()
         effects = {
             name: _bool(source, name, False)
             for name in (
@@ -274,7 +275,7 @@ class Settings:
             image_digest=source.get("IMAGE_DIGEST", "unknown").strip(),
             schema_head=source.get(
                 "SCHEMA_HEAD",
-                "0065_lifecycle_outcome_state",
+                "0066_reconcile_odoo_campaign_scope",
             ).strip(),
             build_time=source.get("BUILD_TIME", "unknown").strip(),
             release_id=source.get("RELEASE_ID", "unknown").strip(),
@@ -474,11 +475,20 @@ class Settings:
             if self.app_env == "staging"
             else "https://auth.codestra.co/realms/codestra"
         )
-        if self.issuer != expected_issuer:
+        synthetic_ci_identity = (
+            self.app_env in {"development", "test"}
+            and self.issuer == "https://ci-identity.example.invalid/realm"
+            and self.jwks_uri == "http://127.0.0.1:8120/certs.json"
+        )
+
+        if not synthetic_ci_identity and self.issuer != expected_issuer:
             raise ConfigurationError(
                 f"KEYCLOAK_ISSUER must match the {self.app_env} identity authority"
             )
-        if self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs":
+        if (
+            not synthetic_ci_identity
+            and self.jwks_uri != f"{self.issuer}/protocol/openid-connect/certs"
+        ):
             raise ConfigurationError(
                 "KEYCLOAK_JWKS_URI must match the canonical issuer"
             )
@@ -706,8 +716,8 @@ class Settings:
                 "DATABASE_URL and REDIS_URL are required unless explicitly using "
                 "in-memory storage in test/development"
             )
-        if self.schema_head != "0065_lifecycle_outcome_state":
-            raise ConfigurationError("SCHEMA_HEAD must be 0065_lifecycle_outcome_state")
+        if self.schema_head != "0066_reconcile_odoo_campaign_scope":
+            raise ConfigurationError("SCHEMA_HEAD must be 0066_reconcile_odoo_campaign_scope")
         if self.app_env in {"staging", "production"}:
             if not SHA40.fullmatch(self.source_sha):
                 raise ConfigurationError(

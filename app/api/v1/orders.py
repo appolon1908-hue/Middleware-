@@ -92,7 +92,7 @@ async def reject_order(order_id: str,
     return record
 
 
-@router.post("/integrations/n8n/dispatch", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/orchestration/n8n/dispatch", status_code=status.HTTP_202_ACCEPTED)
 async def dispatch_order(order: OrderEnvelope,
                          x_timestamp: str | None = Header(default=None),
                          x_nonce: str | None = Header(default=None),
@@ -109,7 +109,7 @@ async def dispatch_order(order: OrderEnvelope,
     return {"accepted": True, "status": record["status"], "command_id": order.command_id, "trace_id": order.trace_id}
 
 
-@router.post("/integrations/n8n/results", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/orchestration/n8n/results", status_code=status.HTTP_202_ACCEPTED)
 async def receive_result(result: ResultEnvelope,
                          x_timestamp: str | None = Header(default=None),
                          x_nonce: str | None = Header(default=None),
@@ -124,7 +124,7 @@ async def receive_result(result: ResultEnvelope,
     return {"accepted": True, "status": record["status"], "order_id": result.order_id}
 
 
-@router.post("/integrations/n8n/errors", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/orchestration/n8n/errors", status_code=status.HTTP_202_ACCEPTED)
 async def receive_error(error: ErrorEnvelope,
                         x_timestamp: str | None = Header(default=None),
                         x_nonce: str | None = Header(default=None),
@@ -139,7 +139,7 @@ async def receive_error(error: ErrorEnvelope,
     return {"accepted": True, "status": record["status"], "order_id": error.order_id}
 
 
-@router.post("/integrations/n8n/progress", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/orchestration/n8n/progress", status_code=status.HTTP_202_ACCEPTED)
 async def receive_progress(progress: ProgressEnvelope,
                            x_timestamp: str | None = Header(default=None),
                            x_nonce: str | None = Header(default=None),
@@ -158,7 +158,7 @@ async def receive_progress(progress: ProgressEnvelope,
     return {"accepted": True, "status": record["status"], "order_id": progress.order_id}
 
 
-@router.post("/integrations/n8n/dead-letter", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/orchestration/n8n/dead-letter", status_code=status.HTTP_202_ACCEPTED)
 async def receive_dead_letter(dead_letter: DeadLetterEnvelope,
                               x_timestamp: str | None = Header(default=None),
                               x_nonce: str | None = Header(default=None),
@@ -175,7 +175,7 @@ async def receive_dead_letter(dead_letter: DeadLetterEnvelope,
     return {"accepted": True, "status": record["status"], "order_id": dead_letter.order_id}
 
 
-@router.post("/integrations/n8n/reconciliation", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/orchestration/n8n/reconciliation", status_code=status.HTTP_202_ACCEPTED)
 async def reconcile_order(order: OrderEnvelope,
                           x_timestamp: str | None = Header(default=None),
                           x_nonce: str | None = Header(default=None),

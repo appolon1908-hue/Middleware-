@@ -6,12 +6,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .api_inputs import authorization_header, required_header
-from .automation_v2 import v2_router
 from .commands import CommandCapabilityDisabled, CommandEnvelope
 from .odoo_provider_adapter import OdooProviderAdapter, OdooProviderAdapterError
 from .security import AuthorizationError, RequestValidationError, authorize_tenant
 from .storage import StorageError
 
+# Deprecated v1 aliases only. Their successor, /v2/automation/*, is mounted by
+# app.router_registry in every application factory, never nested here.
 router = APIRouter(tags=["n8n-control-plane"])
 
 _LEGACY_SUNSET = "Wed, 30 Jun 2027 23:59:59 GMT"
@@ -141,6 +142,3 @@ async def get_n8n_operation(command_id: UUID, request: Request) -> JSONResponse:
             ),
         },
     )
-
-
-router.include_router(v2_router)

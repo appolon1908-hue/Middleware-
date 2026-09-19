@@ -12,6 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "contracts" / "platform-control-plane.v1.json"
 HMAC_VECTOR_PATH = ROOT / "contracts" / "odoo-hmac-test-vector.v1.json"
 MAIN_PATH = ROOT / "app" / "main.py"
+# Route ownership: the v2 automation router is canonical and the deprecated
+# n8n aliases are a monolith-only group; both are mounted only through the
+# single router registry. The deployed integration entrypoint never mounts
+# the aliases, and the edge contract keeps them denied.
+REGISTRY_PATH = ROOT / "app" / "router_registry.py"
+DEPLOYED_ENTRYPOINT_PATH = ROOT / "app" / "entrypoints" / "integration_api.py"
+APP_ROOT = ROOT / "app"
+EDGE_CONTRACT_PATH = ROOT / "deploy" / "public-api-route-contract.json"
 N8N_PATH = ROOT / "app" / "n8n_control_plane.py"
 API_INPUTS_PATH = ROOT / "app" / "api_inputs.py"
 ODOO_PATH = ROOT / "app" / "odoo_provider_adapter.py"
@@ -33,6 +41,9 @@ def main() -> int:
     ]
     route_authority = json.loads(ROUTE_AUTHORITY_PATH.read_text(encoding="utf-8"))
     main_source = MAIN_PATH.read_text(encoding="utf-8")
+    registry_source = REGISTRY_PATH.read_text(encoding="utf-8")
+    deployed_source = DEPLOYED_ENTRYPOINT_PATH.read_text(encoding="utf-8")
+    edge_contract = json.loads(EDGE_CONTRACT_PATH.read_text(encoding="utf-8"))
     n8n_source = N8N_PATH.read_text(encoding="utf-8")
     api_inputs_source = API_INPUTS_PATH.read_text(encoding="utf-8")
     odoo_source = ODOO_PATH.read_text(encoding="utf-8")
@@ -84,7 +95,6 @@ def main() -> int:
             "@router.get("
             '"/v1/integrations/n8n/operations/{command_id}", deprecated=True)'
         ),
-        "router.include_router(v2_router)",
         'expected_client_id="n8n-automation"',
         'required_scope="middleware.request.forward"',
         'required_scope="middleware.status.read"',
@@ -99,6 +109,19 @@ def main() -> int:
     missing = [marker for marker in required_n8n_markers if marker not in n8n_source]
     if missing:
         fail("legacy n8n compatibility route drifted: " + ", ".join(missing))
+    # The v2 successor is mounted by the registry in every factory; nesting it
+    # inside the deprecated, edge-denied aliases would mount it twice and tie
+    # the canonical route set to the aliases' sunset.
+    forbidden_n8n_markers = (
+        "include_router(",
+        "automation_v2",
+    )
+    nested = [marker for marker in forbidden_n8n_markers if marker in n8n_source]
+    if nested:
+        fail(
+            "v2 automation router is nested in the legacy n8n aliases: "
+            + ", ".join(nested)
+        )
     required_input_markers = (
         "request.headers.getlist(name)",
         "if len(values) != 1",
@@ -110,8 +133,77 @@ def main() -> int:
     ]
     if missing_inputs:
         fail("shared API input validation drifted: " + ", ".join(missing_inputs))
-    if "app.include_router(n8n_control_plane_router)" not in main_source:
-        fail("legacy n8n compatibility router is not mounted")
+    # Route ownership (registry). 1. v2 is canonical; 3. the deprecated aliases
+    # are exactly the monolith-only group; 5. each is bound once, by the
+    # registry alone.
+    registry_markers = (
+        "from app.automation_v2 import v2_router as automation_v2_router",
+        "from app.n8n_control_plane import router as n8n_control_plane_router",
+        "LEGACY_MONOLITH_ONLY_ROUTERS = (n8n_control_plane_router,)",
+        "def mount_canonical_routers(app: FastAPI) -> None:",
+        "def mount_legacy_monolith_routers(app: FastAPI) -> None:",
+        "    for router in CANONICAL_ROUTERS:\n        app.include_router(router)",
+        (
+            "    for router in LEGACY_MONOLITH_ONLY_ROUTERS:\n"
+            "        app.include_router(router)"
+        ),
+    )
+    missing_registry = [m for m in registry_markers if m not in registry_source]
+    if missing_registry:
+        fail("router registry drifted: " + ", ".join(missing_registry))
+    canonical_tuple = registry_source.split("CANONICAL_ROUTERS = (", 1)[-1].split(
+        ")", 1
+    )[0]
+    if canonical_tuple.count("automation_v2_router,") != 1:
+        fail("automation v2 router must be bound exactly once in CANONICAL_ROUTERS")
+    if "n8n_control_plane_router" in canonical_tuple:
+        fail("legacy n8n compatibility router must not be canonical")
+    if registry_source.count("automation_v2_router,") != 1:
+        fail("automation v2 router is bound more than once by the registry")
+    if registry_source.count("app.include_router(") != 2:
+        fail("router registry mounts outside its two approved loops")
+    # 2./5. Neither router is imported or mounted by any other application
+    # module: the registry is the only owner, so v2 cannot be nested in the
+    # aliases or mounted twice, and the aliases cannot reach another factory.
+    foreign_owners: list[str] = []
+    for module in sorted(APP_ROOT.rglob("*.py")):
+        if module in {REGISTRY_PATH, N8N_PATH, APP_ROOT / "automation_v2.py"}:
+            continue
+        source = module.read_text(encoding="utf-8")
+        if "n8n_control_plane" in source or "v2_router" in source:
+            foreign_owners.append(module.relative_to(ROOT).as_posix())
+    if foreign_owners:
+        fail("n8n/v2 routers are owned outside the registry: " + ", ".join(foreign_owners))
+    # app.main exposes the aliases only through the registry.
+    for marker in ("mount_canonical_routers(app)", "mount_legacy_monolith_routers(app)"):
+        if marker not in main_source:
+            fail(f"monolith application does not call {marker}")
+    if "include_router(n8n_control_plane_router)" in main_source:
+        fail("legacy n8n compatibility router is mounted outside the registry")
+    # 4. The deployed integration API never mounts the aliases.
+    if "mount_canonical_routers(app)" not in deployed_source:
+        fail("deployed entrypoint does not mount the canonical routers")
+    for forbidden in ("mount_legacy_monolith_routers", "LEGACY_MONOLITH_ONLY_ROUTERS"):
+        if forbidden in deployed_source:
+            fail(f"deployed entrypoint mounts edge-denied n8n aliases: {forbidden}")
+    # 6. Retired aliases stay denied at the deployed edge; the v2 successor is
+    # the shared-edge route.
+    edge_classes = {
+        (row["method"], row["path"]): row["classification"]
+        for row in edge_contract["routes"]
+    }
+    for method, path in (
+        ("POST", "/v1/integrations/n8n/commands"),
+        ("GET", "/v1/integrations/n8n/operations/{command_id}"),
+    ):
+        if edge_classes.get((method, path)) != "denied":
+            fail(f"retired n8n alias is not denied at the edge: {method} {path}")
+    for method, path in (
+        ("POST", "/v2/automation/commands"),
+        ("GET", "/v2/automation/commands/{command_id}"),
+    ):
+        if edge_classes.get((method, path)) != "shared_edge":
+            fail(f"canonical automation route is not a shared edge route: {method} {path}")
 
     aliases = automation_authority.get("compatibility_aliases")
     if not isinstance(aliases, list) or len(aliases) != 2:

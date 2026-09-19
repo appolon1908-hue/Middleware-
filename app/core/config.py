@@ -200,10 +200,14 @@ class Settings(BaseSettings):
     n8n_workflow_package_sha256: str = ""
     n8n_target_ca_file: str = ""
     n8n_service_issuer: str = ""
-    n8n_service_audience: str = "codestra-middleware"
+    n8n_service_audience: str = "middleware-api"
     n8n_service_jwks_url: str = ""
     n8n_service_client_id: str = "codestra-n8n-production"
     n8n_campaign_service_client_id: str = "codestra-n8n-campaign-crm-production"
+    # Optional comma-separated list of n8n service clients accepted on the
+    # standard-result routes (submit + readback). Empty falls back to the
+    # single client above. Staging certification uses one client per scope.
+    n8n_campaign_service_client_ids: str = ""
     middleware_n8n_token_url: str = ""
     middleware_n8n_client_id: str = "codestra-middleware-production"
     middleware_n8n_client_secret_file: str = ""
@@ -216,6 +220,17 @@ class Settings(BaseSettings):
     odoo_service_private_key_file: str = ""
     odoo_result_delivery_enabled: bool = False
     test_syn_odoo_result_delivery_enabled: bool = False
+    # Odoo result delivery worker: attempts count dispatches; the reservation
+    # lease must exceed the slowest registry route (connect + request) plus a
+    # margin, and recovery never re-queues an exhausted delivery.
+    odoo_result_delivery_lease_seconds: int = 60
+    odoo_result_delivery_retry_limit: int = 3
+    # Odoo campaign-control saga (Odoo outbox -> adapter -> actual-state
+    # readback). Fail closed: disabled, synthetic adapter only.
+    odoo_campaign_saga_enabled: bool = False
+    odoo_campaign_saga_adapter: str = "synthetic"
+    odoo_campaign_saga_lease_seconds: int = 90
+    odoo_campaign_saga_retry_limit: int = 3
     test_syn_odoo_tenant_id: str = "TEST_SYN_TENANT"
     test_syn_odoo_workflow_code: str = "TEST_SYN_ROUTER"
     test_syn_odoo_workflow_version: str = "1"
@@ -320,6 +335,11 @@ class Settings(BaseSettings):
     keycloak_audience: str = ""
     keycloak_jwks_url: str = ""
     keycloak_authorized_parties: str = ""
+    # Service clients allowed to read campaign state through Middleware
+    # (GET /api/v1/integrations/odoo/campaigns/...). Separate from the
+    # interactive agent-UI clients in keycloak_authorized_parties; empty means
+    # no caller is authorized (fail closed).
+    odoo_campaign_reader_client_ids: str = ""
     keycloak_userinfo_url: str = ""
     provisioning_service_url: str = ""
     provisioning_service_token_url: str = ""

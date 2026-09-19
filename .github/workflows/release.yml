@@ -252,7 +252,7 @@ jobs:
           PY
           cosign sign --yes \
             --annotations "codestra.source_sha=$RELEASE_SOURCE_SHA" \
-            --annotations "codestra.schema_head=0065_lifecycle_outcome_state" \
+            --annotations "codestra.schema_head=0066_reconcile_odoo_campaign_scope" \
             "$RELEASE_IMAGE_REFERENCE"
           cosign attest --yes \
             --predicate "$RELEASE_SBOM_PATH" \

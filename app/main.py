@@ -8,7 +8,6 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
-from app.api.v1.automation import router as automation_router
 from app.campaign_design_api import router as campaign_design_router
 from app.api.v1.campaign_search import router as campaign_search_router
 from app.api.v1.commands import router as commands_router
@@ -41,39 +40,25 @@ from app.api.v1.tts import validate_readiness as validate_tts_readiness
 from app.api.v1.ai_commands import router as ai_commands_router
 from app.api.v1.webphone import router as webphone_router
 from app.api.v1.agent_realtime import router as agent_realtime_router
-from app.api.v1.callbacks import router as callbacks_router
-from app.api.v1.integrations import router as integrations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.provider_commands import router as provider_commands_router
 from app.api.v1.observability_sync import (
     is_observability_sync_route,
-    router as observability_sync_router,
 )
 from app.api.v1.platform import router as platform_router
-from app.api.v1.agent_provisioning import router as agent_provisioning_router
-from app.api.v1.agent_provisioning_reads import (
-    router as agent_provisioning_reads_router,
-)
-from app.api.v1.session_context import router as session_context_router
-from app.api.v1.calls import router as calls_router
-from app.api.v1.activity import router as activity_router
-from app.api.v1.presence import router as presence_router
-from app.api.v1.tenants import router as tenants_router
-from app.api.v1.campaigns import router as campaigns_router
-from app.api.v1.queues import router as queues_router
-from app.monitoring.routes import router as monitoring_router, is_monitoring_route
+from app.monitoring.routes import is_monitoring_route
 from app.integrations.postiz.routes import router as postiz_router
+from app.core import route_policy
 from app.core.auth import BearerAuthError, verify_bearer
 from app.core.config import settings
-from app.n8n_control_plane import router as n8n_control_plane_router
+from app.router_registry import mount_canonical_routers, mount_legacy_monolith_routers
 
 app = FastAPI(title="Codestra Middleware", version="0.2.0")
-app.include_router(n8n_control_plane_router)
+mount_canonical_routers(app)
+mount_legacy_monolith_routers(app)
 app.include_router(events_router)
-app.include_router(callbacks_router)
 app.include_router(control_router)
-app.include_router(automation_router)
 app.include_router(campaign_design_router)
 app.include_router(reports_router)
 app.include_router(operations_router)
@@ -100,9 +85,6 @@ app.include_router(orders_router)
 app.include_router(ai_router)
 app.include_router(provider_commands_router)
 app.include_router(platform_router)
-app.include_router(monitoring_router)
-app.include_router(observability_sync_router)
-app.include_router(integrations_router)
 app.include_router(postiz_router)
 app.include_router(campaign_search_router)
 app.include_router(registry_router)
@@ -111,15 +93,6 @@ app.include_router(recordings_router)
 app.include_router(sales_router)
 app.include_router(social_router)
 app.include_router(provider_webhooks_router)
-app.include_router(agent_provisioning_router)
-app.include_router(agent_provisioning_reads_router)
-app.include_router(session_context_router)
-app.include_router(calls_router)
-app.include_router(activity_router)
-app.include_router(presence_router)
-app.include_router(tenants_router)
-app.include_router(queues_router)
-app.include_router(campaigns_router)
 app.mount("/metrics", make_asgi_app())
 
 
@@ -192,15 +165,8 @@ N8N_TRANSITION_PATH = re.compile(
 RECORDING_EXPORTER_PATH = re.compile(
     r"^/api/v1/recordings(?:/reservations|/REC-[0-9a-f]{32}/(?:complete|failure))$"
 )
-CALLBACK_JWT_PATH = re.compile(r"^/api/v1/(?:control/)?callbacks(?:/.*)?$")
-N8N_SERVICE_JWT_ROUTES = frozenset(
-    {
-        ("POST", "/api/v1/automation/policy-check"),
-        ("POST", "/api/v1/campaign-designs/preview"),
-        ("POST", "/api/v1/campaign-designs/approvals"),
-        ("POST", "/api/v1/integrations/n8n/results"),
-    }
-)
+# Service-JWT route policy is shared with app.entrypoints.runtime; see
+# app/core/route_policy.py. Handlers on those routes verify the JWT themselves.
 
 
 def _is_ai_console_jwt_route(request: Request) -> bool:
@@ -257,8 +223,7 @@ async def control_request_guard(request: Request, call_next):
             request.method == "POST" and SOCIAL_WEBHOOK_PATH.fullmatch(request.url.path)
         )
         and not _is_ai_console_jwt_route(request)
-        and not CALLBACK_JWT_PATH.fullmatch(request.url.path)
-        and (request.method, request.url.path) not in N8N_SERVICE_JWT_ROUTES
+        and not route_policy.handler_authenticated(request.method, request.url.path)
         and not (is_monitoring_route(request) or is_observability_sync_route(request))
     ):
         try:

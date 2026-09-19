@@ -19,6 +19,7 @@ from app.entrypoints import (
     webphone_session_issuer,
 )
 from app.entrypoints.runtime import worker_app
+from app.core.config import CANONICAL_SCHEMA_HEAD
 
 
 def route_paths(app):
@@ -180,7 +181,7 @@ def test_api_runtime_version_is_safe_and_immutable():
     assert body["git_sha"] == "a" * 40
     assert body["release_id"] == "release-20260823"
     assert body["image_digest"] == "sha256:" + "b" * 64
-    assert body["schema_head"] == "0066_reconcile_odoo_campaign_scope"
+    assert body["schema_head"] == CANONICAL_SCHEMA_HEAD
     assert "://" not in response.text and "secret" not in response.text.lower()
 
 

@@ -88,7 +88,7 @@ Each app repo supplies a versioned `service.yaml` descriptor and a release-speci
 
 Use a stable `service_id` and separate `deployment_id`, `host_id`, `environment` and `instance_id`. Keep `repository_id` independent. Registration must identify actual origins from deployment configuration; do not derive a live URL from a repository name.
 
-Current `ServiceCreate` already supports service ID, owner, tenancy, type, repository, environments, health/metrics/OpenAPI paths, dependencies, data classification, SLO profile and alert profile. Its health default is `/health/ready`, while the incident service contract uses `/readiness`. Preserve actual paths in the catalog rather than renaming running services to fit an assumption. The current PATCH model updates only a subset of fields; broader descriptor changes need an explicit compatible API extension. [Service catalog source](https://github.com/appolon1908-hue/Middleware-/blob/main/app/api/v1/platform.py)
+Current `ServiceCreate` already supports service ID, owner, tenancy, type, repository, environments, health/metrics/OpenAPI paths, dependencies, data classification, SLO profile and alert profile. Its health default is `/health/ready`, while the incident service contract uses `/readiness`. Preserve actual paths in the catalog rather than renaming running services to fit an assumption. The current PATCH model updates only a subset of fields; broader descriptor changes need an explicit compatible API extension. [Service catalog source](https://github.com/ingtrader21-spec/Middleware-/blob/main/app/api/v1/platform.py)
 
 Proposed extension records: approved public/private origins; host bindings; liveness and readiness paths separately; collection owner per signal; contract digest; expected and observed Git SHA/image digest/config digest/migration head; last successful observation; dashboard IDs; probe target IDs; and a reason for each non-applicable signal. Host, library and exporter resources may need separate resource types because the current service type enum is limited.
 
@@ -179,7 +179,7 @@ There are three distinct inventories: existing Middleware routes confirmed in so
 | POST | `/platform/v1/provisioning/requests/{request_id}/apply` | Record/execute the governed apply transition |
 | POST | `/platform/v1/provisioning/requests/{request_id}/rollback` | Record/execute the governed rollback transition |
 
-The exact alert schemas remain in [alert-api.v1.openapi.yaml](https://github.com/appolon1908-hue/Middleware-/blob/main/contracts/observability/alert-api.v1.openapi.yaml). Preserve incident state, expected-version concurrency, delivery intent and replay behavior rather than replacing them with a second incident model.
+The exact alert schemas remain in [alert-api.v1.openapi.yaml](https://github.com/ingtrader21-spec/Middleware-/blob/main/contracts/observability/alert-api.v1.openapi.yaml). Preserve incident state, expected-version concurrency, delivery intent and replay behavior rather than replacing them with a second incident model.
 
 ### Extensions implemented in the review branch
 
@@ -293,9 +293,9 @@ OpenBao monitoring reads non-secret health and metrics only. It receives no unse
 
 ## 9. Alert delivery and monitoring the monitor
 
-Reuse the existing normal path: Prometheus → Alertmanager → `/v1/integrations/alertmanager/events` → durable Middleware incident/command/outbox → existing command executor/Temporal → Klyrow adapter → private email API → provider read-back. The current source policy fixes sender `alerts@codestra.co` and recipient `appolon@codestra.co`. No messages are sent by this design. [Alert delivery authority](https://github.com/appolon1908-hue/Middleware-/blob/main/docs/observability/ALERT-DELIVERY-ARCHITECTURE.md)
+Reuse the existing normal path: Prometheus → Alertmanager → `/v1/integrations/alertmanager/events` → durable Middleware incident/command/outbox → existing command executor/Temporal → Klyrow adapter → private email API → provider read-back. The current source policy fixes sender `alerts@codestra.co` and recipient `appolon@codestra.co`. No messages are sent by this design. [Alert delivery authority](https://github.com/ingtrader21-spec/Middleware-/blob/main/docs/observability/ALERT-DELIVERY-ARCHITECTURE.md)
 
-The status collector separately reconciles native Alertmanager inhibition/silence evidence through `/v1/integrations/alertmanager/status-events`. A firing/resolved webhook alone cannot reproduce all suppression state. Keep source deployment, occurrence start time and observation ordering intact. A provider timeout remains unknown/reconciliation-required until read-back proves the outcome. [Incident authority](https://github.com/appolon1908-hue/Middleware-/blob/main/docs/OBSERVABILITY-INCIDENTS-V1.md)
+The status collector separately reconciles native Alertmanager inhibition/silence evidence through `/v1/integrations/alertmanager/status-events`. A firing/resolved webhook alone cannot reproduce all suppression state. Keep source deployment, occurrence start time and observation ordering intact. A provider timeout remains unknown/reconciliation-required until read-back proves the outcome. [Incident authority](https://github.com/ingtrader21-spec/Middleware-/blob/main/docs/OBSERVABILITY-INCIDENTS-V1.md)
 
 Require `service`, `environment`, `severity`, `owner` and runbook metadata for production alert definitions. Reject incomplete rules in CI. If runtime alert labels are incomplete, retain the incident, mark its routing metadata invalid and route it to the platform fallback receiver under a restricted policy; never silently discard it or guess another tenant.
 
@@ -381,7 +381,7 @@ The repository names below were observed from GitHub. The group/profile is a pro
 | 24 | [klyrow-Website-](https://github.com/appolon1908-hue/klyrow-Website-) | Applications/websites | runtime-or-website |
 | 25 | [Odoo](https://github.com/appolon1908-hue/Odoo) | Platform/integrations | runtime-or-website |
 | 26 | [Keycloak](https://github.com/appolon1908-hue/Keycloak) | Platform/integrations | runtime-or-website |
-| 27 | [Middleware-](https://github.com/appolon1908-hue/Middleware-) | Platform/integrations | runtime-or-website |
+| 27 | [Middleware-](https://github.com/ingtrader21-spec/Middleware-) | Platform/integrations | runtime-or-website |
 | 28 | [N8N](https://github.com/appolon1908-hue/N8N) | Platform/integrations | runtime-or-website |
 | 29 | [Vicidialer-Codestra](https://github.com/appolon1908-hue/Vicidialer-Codestra) | Platform/integrations | runtime-or-website |
 | 30 | [Kong](https://github.com/appolon1908-hue/Kong) | Platform/integrations | runtime-or-website |
@@ -436,7 +436,7 @@ The native endpoint inventory is limited to the monitoring interfaces needed for
 
 ## 15. Implemented API boundary and the three new repositories
 
-The [Middleware implementation](https://github.com/appolon1908-hue/Middleware-/tree/feat/integrated-monitoring-36-operations/app/monitoring) registers all 36 extensions on the aggregate API, integration entrypoint and canonical application factory. The [generated OpenAPI](https://github.com/appolon1908-hue/Middleware-/blob/feat/integrated-monitoring-36-operations/contracts/observability/integrated-monitoring.openapi.json) specifies request schemas and response envelopes. The original 32 source-confirmed operations remain separate existing contracts.
+The [Middleware implementation](https://github.com/ingtrader21-spec/Middleware-/blob/main/app/monitoring) registers all 36 extensions on the aggregate API, integration entrypoint and canonical application factory. The [generated OpenAPI](https://github.com/ingtrader21-spec/Middleware-/blob/main/contracts/observability/integrated-monitoring.openapi.json) specifies request schemas and response envelopes. The original 32 source-confirmed operations remain separate existing contracts.
 
 The persistence migration is `0058_integrated_monitoring`, following `0057_platform_service_catalog`. Resource projections, ordered events and replay responses commit together. JWT signature, issuer, audience, authorized client, tenant, role and route scope are checked. Collector identities are bound to services and source deployments; campaign supervisors see only authorized campaign evidence. Browser telemetry is accepted through an authorized same-origin BFF identity.
 

@@ -5,7 +5,7 @@
 ```text
 Server: 65.109.65.169
 Role: Codestra Application Server A
-Repository: appolon1908-hue/Middleware-
+Repository: ingtrader21-spec/Middleware-
 Read-only checkout: /srv/codestra-middleware/repository
 Deployment account: middleware-deploy
 ```
@@ -130,7 +130,7 @@ install \
 rm -f /tmp/github-middleware-ed25519-known-host
 
 sudo -u middleware-deploy -H git ls-remote \
-  git@github-middleware:appolon1908-hue/Middleware-.git HEAD
+  git@github-middleware:ingtrader21-spec/Middleware-.git HEAD
 ```
 
 Do not add `middleware-deploy` to the `docker` group. Docker access is effectively root access. Future automation should invoke one root-owned, allowlisted deployment command through tightly restricted `sudo`.
@@ -145,7 +145,7 @@ install -d \
   /srv/codestra-middleware
 
 sudo -u middleware-deploy -H git clone \
-  git@github-middleware:appolon1908-hue/Middleware-.git \
+  git@github-middleware:ingtrader21-spec/Middleware-.git \
   /srv/codestra-middleware/repository
 
 sudo -u middleware-deploy -H \
@@ -304,7 +304,7 @@ export ARCHIVE=./codestra-middleware-source-export.tar.gz
 export WORKTREE=./codestra-middleware-import
 
 rm -rf "$WORKTREE"
-git clone git@github.com:appolon1908-hue/Middleware-.git "$WORKTREE"
+git clone git@github.com:ingtrader21-spec/Middleware-.git "$WORKTREE"
 tar -xzf "$ARCHIVE" -C "$WORKTREE"
 
 cd "$WORKTREE"

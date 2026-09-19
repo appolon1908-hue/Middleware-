@@ -7,7 +7,7 @@ enable a business/provider effect.
 
 ## Authority
 
-- Repository: `appolon1908-hue/Middleware-`
+- Repository: `ingtrader21-spec/Middleware-`
 - Source ref: protected `main`
 - Change authority: issue `#118`
 - Owner command: `/deploy-middleware-production-readonly v1`

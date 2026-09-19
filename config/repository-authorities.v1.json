@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "policy": {
-    "middleware_repository": "appolon1908-hue/Middleware-",
+    "middleware_repository": "ingtrader21-spec/Middleware-",
     "reference_repository": "appolon1908-hue/codestra-production-platform",
     "reference_repository_role": "historical-runtime-deployment-reconciliation-evidence-only",
     "owning_repository_is_principal": true,
@@ -23,7 +23,7 @@
   "authorities": [
     {
       "component": "middleware",
-      "principal_repository": "appolon1908-hue/Middleware-",
+      "principal_repository": "ingtrader21-spec/Middleware-",
       "role": "cross-system-control-plane",
       "github_repository_id": 1347559071
     },

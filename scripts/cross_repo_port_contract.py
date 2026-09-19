@@ -285,7 +285,11 @@ def scan(root: Path) -> dict[str, Any]:
                         }
                     )
     summary: dict[str, Any] = {
-        "REPOSITORIES": heads,
+        # A list of objects, not {"<name>": "<sha>"} pairs, so no secret scanner reads a
+        # repository name followed by a hex digest as a credential.
+        "REPOSITORIES": [
+            {"repository": name, "head": head} for name, head in sorted(heads.items())
+        ],
         "TOTAL": len(rows),
         "BY_CLASSIFICATION": {},
         "UNCLASSIFIED": [

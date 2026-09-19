@@ -27,6 +27,7 @@ from app.automation_v2 import AutomationService
 from app.commands import CommandService
 from app.communications import CommunicationsService
 from app.core.config import Settings
+from app.core.config import settings as process_settings
 from app.core.runtime import RuntimeContainer
 from app.db.session import get_session
 from app.realtime import RealtimeStore
@@ -119,14 +120,15 @@ def get_provisioning_http_client(request: Request) -> httpx.AsyncClient:
 
 def get_redis_client(request: Request) -> Redis:
     """The RuntimeContainer's Redis client; a process without one (in-memory
-    runtime, standalone entrypoint) gets one shared client per process."""
+    runtime, standalone entrypoint, router-only app) gets one shared client per
+    process, built from the process settings the handlers used to read."""
     runtime = getattr(request.app.state, "runtime", None)
     client = getattr(runtime, "redis", None)
     if client is not None:
         return client
     client = getattr(request.app.state, "redis", None)
     if client is None:
-        settings = get_settings(request)
+        settings = getattr(request.app.state, "settings", None) or process_settings
         if not settings.redis_url:
             raise StorageError("Redis is not configured")
         client = Redis.from_url(settings.redis_url, decode_responses=True)
